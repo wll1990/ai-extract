@@ -1,0 +1,47 @@
+# EditorConfig is awesome: https://EditorConfig.org
+
+root = true
+
+# 所有文件的通用设置
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Java
+[*.java]
+indent_size = 4
+max_line_length = 120
+
+# Python
+[*.py]
+indent_size = 4
+max_line_length = 100
+
+# TypeScript / JavaScript / JSX / TSX
+[*.{ts,tsx,js,jsx}]
+indent_size = 2
+max_line_length = 100
+
+# JSON / YAML / CSS / HTML
+[*.{json,yml,yaml,css,html}]
+indent_size = 2
+
+# Markdown
+[*.md]
+indent_size = 2
+trim_trailing_whitespace = false
+
+# XML (Maven / Spring配置)
+[*.xml]
+indent_size = 4
+
+# SQL
+[*.sql]
+indent_size = 2
+
+# 包管理文件
+[package.json]
+indent_size = 2

@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>SSE Test</title></head>
+<body>
+<h2>SSE Test</h2>
+<div id="status" style="padding:10px;background:#f0f0f0;margin:10px 0">等待...</div>
+<div id="output" style="white-space:pre-wrap;font-family:monospace;font-size:12px"></div>
+<script>
+async function testSSE() {
+  const status = document.getElementById('status');
+  const output = document.getElementById('output');
+
+  // 1. Login
+  status.textContent = '登录中...';
+  const loginRes = await fetch('http://localhost:8080/api/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ companyId: 'c0000000-0000-0000-0000-000000000001', account: 'admin', password: '123456' })
+  });
+  const loginJson = await loginRes.json();
+  const token = loginJson.data.token;
+  status.textContent = '已登录, SSE连接中...';
+
+  // 2. SSE
+  const res = await fetch('http://localhost:8080/api/v1/skills/60000000-0000-0000-0000-000000000001/chat', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + token,
+      'Accept': 'text/event-stream'
+    },
+    body: JSON.stringify({ message: '你好', mode: 'quick' })
+  });
+
+  status.textContent = '响应状态: ' + res.status + ' ' + res.statusText;
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) { status.textContent += ' (完成)'; break; }
+    const text = decoder.decode(value, { stream: true });
+    output.textContent += text;
+  }
+}
+testSSE().catch(e => { status.textContent = '错误: ' + e.message; });
+</script>
+</body></html>

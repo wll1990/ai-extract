@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分身分享 H5 · 视觉效果稿</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+/* Hallmark · component: app-mockup (3 phone screens) · genre: modern-minimal
+ * theme: project-tokens (locked · ai-extract frontend/src/app/globals.css light)
+ * pre-emit critique: P4 H5 E4 S5 R4 V4
+ * states: drawer open/close · sheet · streaming cursor · reduced-motion supported
+ */
+
+/* ===== 项目现有 token（原样取自 globals.css，勿改） ===== */
+:root {
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --card: rgba(255, 255, 255, 0.88);
+  --foreground: #1e293b;
+  --muted-foreground: #64748b;
+  --muted-foreground-2: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-light: rgba(37, 99, 235, 0.08);
+  --gradient-primary: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  --success: #16a34a;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --warning-text: #92400e;
+  --gold: #c8a45c;
+  --navy: #1e293b;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --cyan-ink: #0891b2;      /* talk 图标墨色（--gradient-primary 青端的可读深阶） */
+  --gold-ink: #8a6a2f;      /* 金色的可读深阶（浅底文字/描边用，徽标底仍用 --gold） */
+  --board-bg: #eef2f7;      /* 稿面背景（仅效果稿） */
+  --bezel: #0b1220;         /* 手机壳（仅效果稿） */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --shadow-md: 0 8px 20px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 18px 44px rgba(15, 23, 42, 0.12);
+  --shadow-xl: 0 28px 72px rgba(15, 23, 42, 0.16);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-pill: 999px;
+  /* 效果稿专用（项目无 space token，此处 4pt 阶梯仅服务本文件） */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;
+  --font-stack: 'Inter', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { overflow-x: clip; }
+body {
+  font-family: var(--font-stack);
+  background: var(--board-bg);
+  color: var(--foreground);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== 稿面骨架 ===== */
+.board-head {
+  padding: 28px 32px 8px;
+  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
+}
+.board-head h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.board-head .note { font-size: 13px; color: var(--muted-foreground); }
+.board-head .tokens { font-size: 12px; color: var(--muted-foreground-2); margin-left: auto; }
+.board {
+  display: flex; gap: 40px; flex-wrap: wrap;
+  justify-content: center; align-items: flex-start;
+  padding: 24px 32px 64px;
+}
+.slot { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.slot-label { font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+.slot-label b { color: var(--foreground); font-weight: 600; }
+.slot-hint {
+  font-size: 12px; color: var(--primary); background: var(--primary-light);
+  padding: 4px 12px; border-radius: var(--radius-pill);
+}
+
+/* ===== 手机壳（效果稿载体） ===== */
+.phone {
+  width: 375px; height: 740px;
+  background: var(--bezel); border-radius: 44px; padding: 10px;
+  box-shadow: var(--shadow-xl);
+}
+.screen {
+  position: relative; width: 100%; height: 100%;
+  background: var(--surface); border-radius: 36px;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.statusbar {
+  height: 34px; flex: none;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 22px; font-size: 12px; font-weight: 600;
+}
+.statusbar .sig { display: flex; align-items: center; gap: 7px; }
+.sig .bars { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; }
+.sig .bars i { width: 2.5px; background: currentColor; border-radius: 1px; }
+.sig .bars i:nth-child(1) { height: 4px; }
+.sig .bars i:nth-child(2) { height: 6px; }
+.sig .bars i:nth-child(3) { height: 8px; }
+.sig .bars i:nth-child(4) { height: 10px; }
+.sig .batt {
+  width: 21px; height: 10.5px; border: 1px solid currentColor; opacity: 0.9;
+  border-radius: 3px; position: relative; display: inline-block; padding: 1.5px;
+}
+.sig .batt::before { content: ''; display: block; height: 100%; width: 72%; background: currentColor; border-radius: 1px; }
+.sig .batt::after {
+  content: ''; position: absolute; right: -3.5px; top: 2.5px;
+  width: 2px; height: 4px; background: currentColor; border-radius: 0 1.5px 1.5px 0;
+}
+
+/* =====================================================================
+   ① 落地页
+===================================================================== */
+.landing { background: var(--bg); }
+.hero {
+  position: relative; flex: none;
+  background: var(--gradient-primary);
+  padding-bottom: 64px;
+}
+.hero .statusbar { color: rgba(255,255,255,0.92); }
+.hero::after { /* 柔光 */
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(120% 60% at 80% 0%, rgba(255,255,255,0.22), transparent 60%);
+  pointer-events: none;
+}
+.hero-body { position: relative; text-align: center; padding: 18px 24px 0; }
+.avatar-wrap { position: relative; width: 88px; height: 88px; margin: 0 auto; }
+.avatar {
+  width: 88px; height: 88px; border-radius: 50%;
+  border: 3px solid rgba(255,255,255,0.95);
+  background: linear-gradient(160deg, #dbeafe, #93c5fd);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 30px; font-weight: 600; color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+.gold-badge {
+  position: absolute; right: -4px; bottom: -2px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--gold); border: 2.5px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+.gold-badge svg { width: 15px; height: 15px; fill: #fff; }
+.hero-name { margin-top: 14px; font-size: 22px; font-weight: 600; color: #fff; letter-spacing: 0.01em; }
+.hero-title { margin-top: 5px; font-size: 13px; color: rgba(255,255,255,0.85); }
+
+.landing-card {
+  position: relative; margin: -44px 16px 0; flex: none;
+  background: var(--card); backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
+  text-align: center;
+}
+.landing-card .intro {
+  font-size: 14px; line-height: 1.7; color: var(--foreground);
+}
+.chips { margin-top: var(--sp-3); display: flex; flex-wrap: wrap; gap: var(--sp-2); justify-content: center; }
+.chip {
+  font-size: 12px; color: var(--primary); background: var(--primary-light);
+  padding: 5px 12px; border-radius: var(--radius-pill);
+}
+.mode-list { padding: var(--sp-5) var(--sp-4) 0; display: flex; flex-direction: column; gap: var(--sp-3); }
+.mode-card {
+  display: flex; align-items: center; gap: var(--sp-3);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 14px var(--sp-4);
+  box-shadow: var(--shadow-sm); cursor: pointer;
+  transition: transform 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+.mode-card:hover { box-shadow: var(--shadow-md); }
+.mode-card:active { transform: scale(0.98); }
+.mode-card.primary-pick { border-color: var(--primary); }
+.mode-ico {
+  flex: none; width: 42px; height: 42px; border-radius: var(--radius-lg);
+  display: flex; align-items: center; justify-content: center;
+}
+.mode-ico svg { width: 21px; height: 21px; }
+.ico-qa   { background: rgba(37, 99, 235, 0.10); }  .ico-qa svg   { stroke: var(--primary); }
+.ico-talk { background: rgba(6, 182, 212, 0.10); }  .ico-talk svg { stroke: var(--cyan-ink); }
+.ico-pk   { background: rgba(200, 164, 92, 0.14); } .ico-pk svg   { stroke: var(--gold-ink); }
+.mode-txt { flex: 1; text-align: left; }
+.mode-txt .t { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.mode-txt .t .rec {
+  font-size: 10px; font-weight: 500; color: var(--primary);
+  background: var(--primary-light); padding: 2px 7px; border-radius: var(--radius-pill);
+}
+.mode-txt .d { margin-top: 3px; font-size: 12px; color: var(--muted-foreground); }
+.mode-card .chev { color: var(--muted-foreground-2); flex: none; }
+.landing-foot { margin-top: auto; padding: var(--sp-4) var(--sp-6) var(--sp-6); text-align: center; }
+.landing-foot .login { font-size: 13px; color: var(--muted-foreground); }
+.landing-foot .login a { color: var(--primary); text-decoration: none; font-weight: 500; }
+.landing-foot .legal { margin-top: var(--sp-2); font-size: 11px; color: var(--muted-foreground-2); }
+
+/* =====================================================================
+   ② 聊天页
+===================================================================== */
+.topbar {
+  flex: none; background: rgba(255,255,255,0.92); backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.topbar-row {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 8px var(--sp-4) 6px;
+}
+.icon-btn {
+  width: 34px; height: 34px; border: none; background: transparent;
+  border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+  color: var(--foreground); cursor: pointer;
+}
+.icon-btn:hover { background: var(--surface); }
+.mini-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(160deg, #dbeafe, #93c5fd);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--primary);
+  position: relative; flex: none;
+}
+.online-dot {
+  position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--success); border: 2px solid #fff;
+}
+.peer { flex: 1; min-width: 0; }
+.peer .n { font-size: 15px; font-weight: 600; line-height: 1.2; }
+.peer .s { font-size: 11px; color: var(--muted-foreground); }
+.quota-pill {
+  flex: none; font-size: 12px; font-weight: 500;
+  color: var(--warning-text); background: var(--warning-bg);
+  padding: 4px 11px; border-radius: var(--radius-pill);
+}
+.seg {
+  margin: 2px var(--sp-4) 10px; padding: 3px;
+  background: var(--surface); border-radius: var(--radius-pill);
+  display: flex; gap: 2px;
+}
+.seg button {
+  flex: 1; border: none; background: transparent; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  color: var(--muted-foreground); padding: 7px 0;
+  border-radius: var(--radius-pill);
+  transition: color 150ms var(--ease-out);
+}
+.seg button.on {
+  background: var(--bg); color: var(--primary); font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+.msgs {
+  flex: 1; overflow: hidden;
+  padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4);
+}
+.msg { display: flex; gap: var(--sp-2); max-width: 88%; }
+.msg .m-ava {
+  flex: none; width: 26px; height: 26px; border-radius: 50%;
+  background: linear-gradient(160deg, #dbeafe, #93c5fd);
+  font-size: 11px; font-weight: 600; color: var(--primary);
+  display: flex; align-items: center; justify-content: center;
+}
+.bubble {
+  background: var(--bg); border-radius: var(--radius-lg);
+  border-top-left-radius: var(--radius-sm);
+  padding: 10px 13px; font-size: 14px; line-height: 1.65;
+  box-shadow: var(--shadow-sm);
+}
+.msg.me { align-self: flex-end; flex-direction: row-reverse; }
+.msg.me .bubble {
+  background: var(--primary); color: #fff;
+  border-radius: var(--radius-lg); border-top-right-radius: var(--radius-sm);
+}
+.src-row {
+  margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; color: var(--muted-foreground);
+}
+.src-row .fb { margin-left: auto; display: flex; gap: 10px; }
+.src-row .fb svg { width: 14px; height: 14px; stroke: var(--muted-foreground-2); cursor: pointer; }
+.src-row .fb svg:hover { stroke: var(--primary); }
+.cursor {
+  display: inline-block; width: 2px; height: 14px; margin-left: 2px;
+  background: var(--primary); vertical-align: -2px;
+  animation: blink 0.9s steps(1) infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.inputbar {
+  flex: none; background: var(--bg); border-top: 1px solid var(--border);
+  padding: 10px var(--sp-4) 22px; /* 22px ≈ safe-area */
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.inputbar .field {
+  flex: 1; height: 42px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+  padding: 0 var(--sp-4); font-size: 14px; color: var(--muted-foreground-2);
+  display: flex; align-items: center;
+}
+.send {
+  flex: none; width: 40px; height: 40px; border: none; cursor: pointer;
+  border-radius: 50%; background: var(--gradient-primary);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform 150ms var(--ease-out);
+}
+.send:active { transform: scale(0.92); }
+.send svg { width: 18px; height: 18px; fill: #fff; }
+
+/* ---- ☰ 历史抽屉 ---- */
+.drawer-mask {
+  position: absolute; inset: 0; background: rgba(15, 23, 42, 0.40);
+  opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease-out);
+  z-index: 20; border-radius: 36px;
+}
+.drawer {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 85%;
+  background: var(--bg); z-index: 21;
+  transform: translateX(-102%); transition: transform 220ms var(--ease-out);
+  box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column;
+  border-radius: 36px 0 0 36px;
+}
+.screen.drawer-open .drawer-mask { opacity: 1; pointer-events: auto; }
+.screen.drawer-open .drawer { transform: translateX(0); }
+.drawer-head {
+  padding: 48px var(--sp-4) var(--sp-3);
+  display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+.drawer-head .t { font-size: 16px; font-weight: 600; }
+.new-conv {
+  border: 1px solid var(--primary); color: var(--primary); background: var(--bg);
+  font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer;
+  padding: 5px 12px; border-radius: var(--radius-pill);
+}
+.conv-list { flex: 1; overflow: auto; padding: var(--sp-2); }
+.conv {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px; border-radius: var(--radius-lg); cursor: pointer;
+}
+.conv:hover { background: var(--surface); }
+.conv.active { background: var(--primary-light); }
+.conv .c-main { flex: 1; min-width: 0; }
+.conv .c-t { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .c-time { font-size: 11px; color: var(--muted-foreground-2); margin-top: 2px; }
+.mode-tag {
+  flex: none; font-size: 10px; font-weight: 500;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+}
+.tag-qa   { color: var(--primary); background: rgba(37, 99, 235, 0.10); }
+.tag-talk { color: var(--cyan-ink); background: rgba(6, 182, 212, 0.10); }
+.tag-pk   { color: var(--gold-ink); background: rgba(200, 164, 92, 0.14); }
+.drawer-foot {
+  padding: var(--sp-3) var(--sp-4) var(--sp-6);
+  border-top: 1px solid var(--border);
+  font-size: 12px; color: var(--muted-foreground);
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* =====================================================================
+   ③ 注册抽屉
+===================================================================== */
+.sheet-mask {
+  position: absolute; inset: 0; background: rgba(15, 23, 42, 0.40);
+  z-index: 30; border-radius: 36px;
+}
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 31;
+  background: var(--bg);
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+  box-shadow: var(--shadow-xl);
+  padding: 10px var(--sp-6) 26px;
+}
+.grab { width: 36px; height: 4px; background: var(--border-strong); border-radius: var(--radius-pill); margin: 0 auto; }
+.sheet-ico {
+  width: 52px; height: 52px; margin: var(--sp-5) auto 0;
+  border-radius: 50%; background: var(--gradient-primary);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-md);
+}
+.sheet-ico svg { width: 24px; height: 24px; stroke: #fff; }
+.sheet h3 { margin-top: var(--sp-3); text-align: center; font-size: 18px; font-weight: 600; }
+.sheet .sub {
+  margin-top: 6px; text-align: center;
+  font-size: 13px; line-height: 1.6; color: var(--muted-foreground);
+}
+.sheet .sub b { color: var(--foreground); font-weight: 500; }
+.form { margin-top: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
+.f-field {
+  height: 48px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  padding: 0 var(--sp-4); font-size: 14px;
+  display: flex; align-items: center; gap: 10px;
+}
+.f-field.focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); background: var(--bg); }
+.f-field .ph { color: var(--muted-foreground-2); }
+.f-field .val { color: var(--foreground); }
+.f-field .opt { margin-left: auto; font-size: 11px; color: var(--muted-foreground-2); }
+.submit {
+  margin-top: var(--sp-2); height: 48px; border: none; cursor: pointer;
+  border-radius: var(--radius-pill); background: var(--gradient-primary);
+  color: #fff; font-family: inherit; font-size: 15px; font-weight: 600;
+  box-shadow: var(--shadow-md);
+  transition: transform 150ms var(--ease-out), filter 150ms var(--ease-out);
+}
+.submit:hover { filter: brightness(1.05); }
+.submit:active { transform: scale(0.98); }
+.sheet .switch { margin-top: var(--sp-4); text-align: center; font-size: 13px; color: var(--muted-foreground); }
+.sheet .switch a { color: var(--primary); font-weight: 500; text-decoration: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .drawer-mask, .mode-card, .send, .submit { transition: none; }
+  .cursor { animation: none; }
+}
+@media (max-width: 1260px) { .board { gap: 28px; } }
+</style>
+</head>
+<body>
+
+<div class="board-head">
+  <h1>分身分享 H5 · 视觉效果稿</h1>
+  <span class="note">三屏可交互 · 示例数据 · 聊天屏点 ☰ 看历史抽屉</span>
+  <span class="tokens">token 来源：frontend/src/app/globals.css（浅色主题，未新增任何色值）</span>
+</div>
+
+<div class="board">
+
+  <!-- ═══════════ ① 落地页 ═══════════ -->
+  <div class="slot">
+    <div class="slot-label"><b>① 落地页</b> · 打开链接第一眼（无需登录）</div>
+    <div class="phone"><div class="screen landing">
+
+      <div class="hero">
+        <div class="statusbar"><span>9:41</span><span class="sig"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+        <div class="hero-body">
+          <div class="avatar-wrap">
+            <div class="avatar">张</div>
+            <div class="gold-badge" title="销冠">
+              <svg viewBox="0 0 24 24"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-1.8 11H4.8L3 7z"/></svg>
+            </div>
+          </div>
+          <div class="hero-name">张三</div>
+          <div class="hero-title">销售总监 · 10 年大客户销售经验</div>
+        </div>
+      </div>
+
+      <div class="landing-card">
+        <div class="intro">把 10 年大客户销售的实战打法，<br>浓缩成你随时可问的 AI 分身。</div>
+        <div class="chips">
+          <span class="chip">报价谈判</span><span class="chip">逼单成交</span>
+          <span class="chip">异议处理</span><span class="chip">大客户开发</span>
+        </div>
+      </div>
+
+      <div class="mode-list">
+        <div class="mode-card primary-pick">
+          <div class="mode-ico ico-qa">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-9 8.36c-1.2-.08-2.3-.4-3.3-.9L3 20l1.1-3.6A8.5 8.5 0 1121 11.5z"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-.8.6-1.5 1-1.5 2"/><circle cx="12" cy="16.4" r="0.4"/></svg>
+          </div>
+          <div class="mode-txt">
+            <div class="t">向他请教 <span class="rec">推荐</span></div>
+            <div class="d">销售难题直接问，答案带出处</div>
+          </div>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mode-card">
+          <div class="mode-ico ico-talk">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 10h8M8 14h5"/><path d="M4 6a2 2 0 012-2h12a2 2 0 012 2v9a2 2 0 01-2 2H9l-4 3.5V6z"/></svg>
+          </div>
+          <div class="mode-txt">
+            <div class="t">随便聊聊</div>
+            <div class="d">像老销售带新人一样自由对话</div>
+          </div>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+        <div class="mode-card">
+          <div class="mode-ico ico-pk">
+            <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/></svg>
+          </div>
+          <div class="mode-txt">
+            <div class="t">实战对练</div>
+            <div class="d">他扮演客户，练完逐轮点评</div>
+          </div>
+          <svg class="chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6l6 6-6 6"/></svg>
+        </div>
+      </div>
+
+      <div class="landing-foot">
+        <div class="login">已有账号？<a href="#">登录</a></div>
+        <div class="legal">内容由 AI 分身生成，仅供参考</div>
+      </div>
+
+    </div></div>
+  </div>
+
+  <!-- ═══════════ ② 聊天页 ═══════════ -->
+  <div class="slot">
+    <div class="slot-label"><b>② 聊天页</b> · 问答模式（游客，剩 3 条）</div>
+    <div class="phone"><div class="screen" id="chatScreen">
+
+      <div class="statusbar"><span>9:41</span><span class="sig"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+
+      <div class="topbar">
+        <div class="topbar-row">
+          <button class="icon-btn" onclick="document.getElementById('chatScreen').classList.add('drawer-open')" aria-label="历史对话">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          </button>
+          <div class="mini-avatar">张<span class="online-dot"></span></div>
+          <div class="peer">
+            <div class="n">张三</div>
+            <div class="s">销售总监 · AI 分身</div>
+          </div>
+          <span class="quota-pill">剩 3 条</span>
+        </div>
+        <div class="seg">
+          <button class="on">问答</button>
+          <button>聊天</button>
+          <button>对练</button>
+        </div>
+      </div>
+
+      <div class="msgs">
+        <div class="msg">
+          <div class="m-ava">张</div>
+          <div class="bubble">你好，我是张三的 AI 分身。报价、逼单、客户异议…销售上的事，直接问我。</div>
+        </div>
+        <div class="msg me">
+          <div class="bubble">客户总说我们比竞品贵 15%，怎么回？</div>
+        </div>
+        <div class="msg">
+          <div class="m-ava">张</div>
+          <div class="bubble">
+            先别急着降价。价格异议背后，八成是价值没讲透 —— 客户拿"采购价"比，你就带他算"三年总成本"。<br><br>
+            你可以这样说：「王总，您对比的是单价，咱们算笔账 —— 加上实施和售后响应，三年下来反而省 ▁▁」<span class="cursor"></span>
+            <div class="src-row">
+              <span>▸ 来源：《大客户报价策略》· 3 条锦囊</span>
+              <span class="fb">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 11v9M3 11h4l3.5-7a2 2 0 012 2V9h5.5a2 2 0 012 2.4l-1.2 6A2 2 0 0116.8 19H7"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(180deg)"><path d="M7 11v9M3 11h4l3.5-7a2 2 0 012 2V9h5.5a2 2 0 012 2.4l-1.2 6A2 2 0 0116.8 19H7"/></svg>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="inputbar">
+        <div class="field">输入消息…</div>
+        <button class="send" aria-label="发送">
+          <svg viewBox="0 0 24 24"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z"/></svg>
+        </button>
+      </div>
+
+      <!-- ☰ 历史抽屉 -->
+      <div class="drawer-mask" onclick="document.getElementById('chatScreen').classList.remove('drawer-open')"></div>
+      <div class="drawer">
+        <div class="drawer-head">
+          <span class="t">历史对话</span>
+          <button class="new-conv">＋ 新对话</button>
+        </div>
+        <div class="conv-list">
+          <div class="conv active">
+            <div class="c-main"><div class="c-t">价格异议怎么回应</div><div class="c-time">刚刚</div></div>
+            <span class="mode-tag tag-qa">问答</span>
+          </div>
+          <div class="conv">
+            <div class="c-main"><div class="c-t">首次拜访开场对练</div><div class="c-time">昨天 21:30</div></div>
+            <span class="mode-tag tag-pk">对练</span>
+          </div>
+          <div class="conv">
+            <div class="c-main"><div class="c-t">跟进节奏怎么把握</div><div class="c-time">7月16日</div></div>
+            <span class="mode-tag tag-talk">聊天</span>
+          </div>
+        </div>
+        <div class="drawer-foot">
+          <div class="mini-avatar" style="width:24px;height:24px;font-size:10px;">访</div>
+          访客 mQ2f · 注册后跨设备保留记录
+        </div>
+      </div>
+
+    </div></div>
+    <span class="slot-hint">点 ☰ 打开历史抽屉</span>
+  </div>
+
+  <!-- ═══════════ ③ 注册抽屉 ═══════════ -->
+  <div class="slot">
+    <div class="slot-label"><b>③ 注册抽屉</b> · 聊满 5 条后弹出（上下文不丢）</div>
+    <div class="phone"><div class="screen">
+
+      <div class="statusbar"><span>9:41</span><span class="sig"><span class="bars"><i></i><i></i><i></i><i></i></span><span class="batt"></span></span></div>
+
+      <!-- 背后的聊天页（压暗态） -->
+      <div class="topbar">
+        <div class="topbar-row">
+          <button class="icon-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg></button>
+          <div class="mini-avatar">张<span class="online-dot"></span></div>
+          <div class="peer"><div class="n">张三</div><div class="s">销售总监 · AI 分身</div></div>
+          <span class="quota-pill" style="color:var(--danger);background:var(--danger-bg);">0 条</span>
+        </div>
+        <div class="seg"><button class="on">问答</button><button>聊天</button><button>对练</button></div>
+      </div>
+      <div class="msgs">
+        <div class="msg me"><div class="bubble">那客户要是直接要底价呢？</div></div>
+      </div>
+      <div class="inputbar">
+        <div class="field">输入消息…</div>
+        <button class="send"><svg viewBox="0 0 24 24"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z"/></svg></button>
+      </div>
+
+      <div class="sheet-mask"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sheet-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 017.8-1.3"/></svg>
+        </div>
+        <h3>免费体验次数已用完</h3>
+        <div class="sub">注册后继续和张三聊，<b>这次对话和历史记录全部保留</b></div>
+        <div class="form">
+          <div class="f-field focus"><span class="val">wanglei2026</span></div>
+          <div class="f-field"><span class="ph">设置密码（至少 6 位）</span></div>
+          <div class="f-field"><span class="ph">昵称</span><span class="opt">选填</span></div>
+          <button class="submit">注册并继续聊天</button>
+        </div>
+        <div class="switch">已有账号？<a href="#">去登录</a></div>
+      </div>
+
+    </div></div>
+  </div>
+
+</div>
+</body>
+</html>

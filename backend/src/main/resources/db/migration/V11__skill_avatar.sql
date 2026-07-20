@@ -1,0 +1,2 @@
+ALTER TABLE skill ADD COLUMN IF NOT EXISTS avatar_url VARCHAR(500);
+COMMENT ON COLUMN skill.avatar_url IS '分身头像URL';

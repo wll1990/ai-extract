@@ -1,0 +1,932 @@
+"算力和数据自己发现规律"在你们系统里能做什么：
+
+你们是一个数据富矿——销冠对话被萃取成几万条颗粒，用户和分身聊了几千轮，每轮对练被逐条对比点评，每条 AI 回复都有 👍👎 反馈。现在这些数据只被"消费"（检索召回），没有被"挖掘"。
+
+"自己发现规律"就是把 LLM 的分析能力对准这些数据，定期自动跑、自动产出洞察：
+
+能发现的规律	数据来源	价值
+哪些销售技巧最有效	同类场景下 high-quality 颗粒的共性关键词 / 高分回应的共同模式	告诉萃取师"报价场景下最有效的三招是什么"
+知识盲区	knowledge_gap 表 + RAG 无匹配频次	"用户最常问但分身答不上的问题 Top 10"
+用户能力短板	对练 misses 字段聚类	"80% 的销售在异议处理环节缺乏有效追问"
+分身质量趋势	conversation_stats 的 ragHighCount / errorType 时序变化	"分身 A 最近一周引用质量下降，建议重新萃取"
+跨销冠的可迁移打法	不同分身同场景颗粒的语义聚类	"B2B 和 SaaS 领域销冠在初次拜访上的共同方法论"
+技术路线：Scheduler 定时扫 → SQL 聚合 + LLM 分析 → 写入 auto_insight 表 → admin 看板展示。复用现有的 pgvector、调度器模式、ChatStreamAdapter。
+
+探索 agent 回来后给你具体方案。
+
+我们还有主动和被动反馈机制
+Read page.tsx
+Bash Find service files using analytics/audit/stats models
+IN
+grep -rn "analytics\|Analytics\|adminAudit\|AdminAudit\|conversationStats\|ConversationStats\|feedbackLog\|FeedbackLog\|knowledgeGap\|KnowledgeGap\|grainRetrieve\|GrainRetrieve" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ --include="*.java" -l
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/GrainRetriever.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/SkillService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/SkillEvaluator.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/CAuthService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminGrainService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminInsightService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ShareService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ChatStreamService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/PracticeDemoService.java
+Read admin-insights.ts
+Read page.tsx
+The user is pointing out that the system also has active and passive feedback mechanisms that I should consider when thinking about "discovering patterns." Let me think about what they might mean:
+
+主动反馈: The explicit 👍👎 buttons on AI responses (feedback_log table)
+被动反馈: Could be implicit signals like whether the user continued the conversation, whether they asked follow-up questions, whether they abandoned the conversation, whether they copied/marked the response, etc.
+Actually wait, let me think more carefully. "主动反馈" likely means explicit user actions (clicking helpful/unhelpful, submitting ratings). "被动反馈" likely means implicit behavioral signals the system can infer without the user explicitly providing feedback — like conversation duration, whether the user asked clarifying follow-ups, whether practice scores improved over time, RAG match quality, etc.
+
+This is a really important distinction because:
+
+主动反馈 (explicit): feedback_log table, practice evaluation scores (hits/misses), grain helpful/unhelpful counts
+被动反馈 (implicit): conversation_stats (duration, token usage, RAG tiers), message patterns (did user rephrase twice meaning the first answer was poor?), practice improvement over time, knowledge_gap frequency, grain retrieval frequency and similarity scores
+The beauty of "被动反馈" is scale — every single conversation generates passive signals without requiring any user action. These can be mined at scale to discover patterns that explicit feedback alone couldn't reveal.
+
+I should factor both into the exploration and eventual plan. Let me wait for the agents to complete and then incorporate this layer.
+
+Read AdminService.java
+Bash Search for LLM analysis/model params in Java code
+IN
+grep -rn -i "temperature\|max.token\|model\|top_p\|frequency_penalty\|presence_penalty\|llm\|chat.*option" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main --include="*.java" --include="*.yml" --include="*.yaml" 2>/dev/null | grep -iv "import\|package" | head -60
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml:44:          model: deepseek-chat
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml:45:          temperature: 0.7
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml:46:          max-tokens: 2048
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/DomainConfigLoader.java:98:    public String resolveDomain(com.aiextract.model.Skill skill) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:16:public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UUID> {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:18:    Page<SkillMaterial> findBySkillIdOrderByCreatedAtDesc(UUID skillId, Pageable pageable);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:20:    List<SkillMaterial> findBySkillIdAndStatus(UUID skillId, String status);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:22:    List<SkillMaterial> findBySkillId(UUID skillId);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:24:    List<SkillMaterial> findByStatusIn(List<String> statuses);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:25:    List<SkillMaterial> findByStatusInAndSkillIdIn(List<String> statuses, List<UUID> skillIds);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:29:    List<SkillMaterial> findPendingParseTasks(@Param("timeout") LocalDateTime timeout);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:34:    List<SkillMaterial> findPendingCleaningTasks(@Param("timeout") LocalDateTime timeout);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:37:    Optional<SkillMaterial> findByFileUrl(String fileUrl);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:41:    @Query("UPDATE SkillMaterial m SET m.lockedBy = :workerId, m.lockedAt = CURRENT_TIMESTAMP WHERE m.id = :id AND m.lockedBy IS NULL")
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:46:    @Query("UPDATE SkillMaterial m SET m.lockedBy = NULL, m.lockedAt = NULL WHERE m.id = :id")
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/AiConfig.java:16:    public ChatClient chatClient(ChatModel chatModel) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/AiConfig.java:17:        return ChatClient.builder(chatModel).build();
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminConversationController.java:22:    private final SkillMessageRepository messageRepository;
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminConversationController.java:45:                        com.aiextract.model.Skill::getId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminConversationController.java:51:                        com.aiextract.model.User::getId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminConversationController.java:52:                        com.aiextract.model.User::getName,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminConversationController.java:82:    public ApiResponse<List<SkillMessage>> getConversationMessages(@PathVariable UUID conversationId) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java:118:        List<com.aiextract.model.ExperienceGrain> grains = "best".equals(sort)
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java:144:        List<com.aiextract.model.KnowledgeGap> gaps = knowledgeGapRepository
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java:172:        org.springframework.data.domain.Page<com.aiextract.model.FeedbackLog> logs;
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java:203:        com.aiextract.model.KnowledgeGap gap = knowledgeGapRepository
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java:225:        List<com.aiextract.model.ConversationStats> list = new ArrayList<>(stats.getContent());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMessageRepository.java:10:public interface SkillMessageRepository extends JpaRepository<SkillMessage, UUID> {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMessageRepository.java:11:    List<SkillMessage> findByConversationIdOrderByCreatedAtAsc(UUID conversationId);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMessageRepository.java:15:    @Query("SELECT m.conversationId, COUNT(m) FROM SkillMessage m WHERE m.conversationId IN :ids GROUP BY m.conversationId")
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMessageRepository.java:22:    @Query("SELECT COUNT(m) FROM SkillMessage m, SkillConversation c " +
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:78:                        com.aiextract.model.Skill::getSpaceId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:79:                        com.aiextract.model.Skill::getStatus, (a, b) -> a));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:82:        List<com.aiextract.model.User> owners = userRepository.findAllById(userIds);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:85:                        com.aiextract.model.User::getId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:86:                        com.aiextract.model.User::getName, (a, b) -> a));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:89:                        com.aiextract.model.User::getId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:90:                        com.aiextract.model.User::getRole, (a, b) -> a));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:173:    private String extractOneliner(com.aiextract.model.Report report) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:199:    private int countSteps(com.aiextract.model.Report report) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:221:            List<com.aiextract.model.ExperienceGrain> grains = grainRepository.findByReportId(reportId);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/SpaceController.java:223:                    .map(com.aiextract.model.ExperienceGrain::getSceneTag)
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:27:    private final SkillMaterialRepository materialRepository;
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:44:        Map<String, Object> skillMap = new LinkedHashMap<>();
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:45:        skillMap.put("id", skill.getId().toString());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:46:        skillMap.put("status", skill.getStatus());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:47:        skillMap.put("displayName", skill.getDisplayName());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:48:        skillMap.put("ownerName", skill.getOwnerName());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:49:        skillMap.put("ownerTitle", skill.getOwnerTitle());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:50:        skillMap.put("department", skill.getDepartment());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:51:        skillMap.put("seniority", skill.getSeniority());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:52:        skillMap.put("tags", skill.getTags());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:53:        skillMap.put("targetScenarios", skill.getTargetScenarios());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:54:        skillMap.put("limitations", skill.getLimitations());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:55:        skillMap.put("publishNotes", skill.getPublishNotes());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:56:        skillMap.put("createdAt", skill.getCreatedAt() != null ? skill.getCreatedAt().toString() : null);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:57:        data.put("skill", skillMap);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:271:        List<com.aiextract.model.ReportHistory> list = historyRepository.findBySkillIdOrderByGeneratedAtDesc(skillId);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminAuditController.java:402:        SkillMaterial material = materialRepository.findById(grain.getSourceMaterialId()).orElse(null);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/model/Skill.java:53:    @Column(name = "model_name", length = 100)
+Bash Search for usageCount field in models
+IN
+grep -rn "usageCount\|usage_count" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/ --include="*.java"
+
+OUT
+(Bash completed with no output)
+对！这两层反馈是自动发现规律的核心原料——
+
+层	数据	能发现什么
+被动反馈（隐式，量大）	用户是否追问同一问题（上一轮 RAG 失败）、对话时长 vs 轮次、对练 matchLevel 分布、消息语义相似度（是否重复问）、knowledge_gap 频次	哪个场景 AI 回答最差、哪类问题用户总是反复问、对练哪一关通过率最低
+主动反馈（显式，精准）	feedback_log 的 👍👎、对练逐轮 hits/misses、颗粒 helpfulCount/unhelpfulCount	哪些颗粒"真的有用"vs"只是被召回了"、销冠哪句话术被用户验证最有效
+两轨交叉分析（比如"被动反馈差+主动反馈也差"=确凿问题；"被动差但主动没人反馈"=沉默痛点），比只看单一信号准得多。
+
+探索 agent 正在深挖 feedback_log、knowledge_gap、对练评价的持久化细节，回来给你完整方案。
+
+Read Space.java
+Read page.tsx
+Bash Find recordEvent calls in CAuthService
+IN
+grep -rn "recordEvent" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/CAuthService.java
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/CAuthService.java:91:        recordEvent("guest_registered", user);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/CAuthService.java:153:    private void recordEvent(String eventType, AppUser user) {
+Bash Search for material processing/analysis pipeline in Java
+IN
+grep -rn -i "material.*process\|material.*analyz\|材料.*分析\|素材.*处理\|素材.*分析\|material.*pipelin\|material.*stage\|material.*step" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java --include="*.java" 2>/dev/null | grep -iv "import\|package" | head -40
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/model/ExpertSkill.java:74:     * 元访谈转录文本 / 素材原始内容，供分析管道处理
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/model/SkillMaterial.java:106:     * 素材状态：uploaded=已上传 / cleaning=清洗中 / analyzing=分析中 / analyzed=已分析 / extracted=已提取 / rejected=已拒绝 / failed=访谈清洗失败 / discarded=已废弃
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningScheduler.java:29: * 素材处理调度器（解析 → 清洗 → 向量化）
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningScheduler.java:31: * <p>多节点安全：乐观锁 + Redis skill 锁保证同一人的素材串行处理。
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningScheduler.java:198:     * 统一素材处理管道：清洗 → 颗粒落库 → 向量化 → 终态标记 → skill 状态推进 → 报告标脏。
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningScheduler.java:264:    /** 单素材清洗（material 锁 + skill 锁，业务管道统一走 processMaterial） */
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:694:        material.setStatus("analyzed");
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:740:        log.info("情境标注完成, materialId={}: stage={}, persona={}, industry={}",
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:741:                materialId, context.buyingStage(), context.buyerPersona(), context.industrySignals());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:756:        self.updateMaterialStatus(materialId, "analyzing", null);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExpertAnalysisScheduler.java:17: * 萃取师材料异步分析调度器
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java:61:        // 素材处理中
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java:62:        List<SkillMaterial> processingMaterials =
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java:63:                materialRepository.findByStatusIn(List.of("cleaning", "analyzing"));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java:66:            item.put("type", "material_processing");
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java:68:            item.put("status", "素材处理中");
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/InterviewTranscriptExtractor.java:29: * MaterialCleaningScheduler.processMaterial() 统一管道
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/InterviewTranscriptExtractor.java:67:     *   <li>调用 MaterialCleaningScheduler.processMaterial() 统一管道</li>
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExpertService.java:179:        log.info("萃取师材料已上传（待调度分析）, expertId: {}", expert.getId());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExpertService.java:327:            log.info("萃取师材料分析完成, expertId: {}", expertId);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExpertService.java:329:            log.error("萃取师材料分析失败, expertId: {}", expertId, e);
+Now I have all the information needed. Here is the structured summary.
+
+结构化摘要：ai-extract 项目现状分析
+1. 现有分析/洞察能力
+文件位置（关键文件）：
+
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminInsightService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/AdminService.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminController.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/controller/AdminInsightController.java
+AdminInsightService 中的统计/分析方法
+方法	说明
+getSkillOverview(skillId)	单分身概览：近7天对话量、活跃用户数、满意率（从 conversation_stats + feedback_log 聚合）
+getGlobalOverview()	全局看板：4路 CompletableFuture 并行查询（对话统计按skill聚合、反馈按skill聚合、知识缺口按skill聚合、颗粒按space聚合），汇总得到 totalConversations / activeUsers / satisfactionRate / hitRate / totalGrains / totalOpenGaps / totalSkills，并产出每个分身的健康度行（含告警规则）
+告警规则（每个分身自动判定）：
+
+openGaps >= 10 -> "缺口爆发"
+conversations == 0 -> "不活跃"
+反馈 >= 5 且好评率 < 60% -> "满意率低"
+RAG使用 >= 10 且命中率 < 50% -> "命中率低"
+AdminInsightController 中的 REST 端点（按 skillId）
+端点	方法	说明
+GET /admin/insights/{skillId}/overview	getOverview()	单分身概览
+GET /admin/insights/{skillId}/scene-top	getSceneTop()	场景提问TOP5（从 grain_retrieve_log 按 scene_tag 聚合）
+GET /admin/insights/{skillId}/rag-distribution	getRagDistribution()	RAG匹配分布：高匹配/参考/无匹配
+GET /admin/insights/{skillId}/grains-top?sort=best|worst	getGrainsTop()	颗粒帮助性排行榜（👍/👎）
+GET /admin/insights/{skillId}/knowledge-gaps	getKnowledgeGaps()	知识缺口列表（按次数降序）
+GET /admin/insights/{skillId}/feedback-logs	getFeedbackLogs()	反馈审查分页列表（可按rating筛选）
+GET /admin/insights/{skillId}/random-sample	getRandomSample()	对话抽样：最近200条中随机20条
+PUT /admin/insights/knowledge-gaps/{gapId}	resolveKnowledgeGap()	标记缺口为resolved/ignored
+GET /admin/insights/overview	getGlobalOverview()	全局数据看板 v1
+AdminService / AdminController 中的数据汇总接口
+端点	说明
+GET /admin/dashboard	工作台仪表盘 — 返回 stats（spaceCount/reportCount/grainCount/materialCount）+ pending（待审核分身列表、素材处理中）+ recent（最近5份报告）
+GET /admin/spaces	空间分页列表（支持keyword搜索），返回空间ID/所属用户/标题/报告数/状态/创建时间
+GET /admin/scene-coverage	场景覆盖地图 — 按sceneTag聚合所有颗粒，计算每个标签的报告数量、平均评分、覆盖等级（sufficient/moderate/empty）
+GET /admin/users	用户列表（含关联spaceId）
+GET /admin/config / PUT /admin/config	企业配置读写（logo/品牌色/公司名）
+POST /admin/invite	生成萃取邀请码和链接
+"知识分布" 和 "场景覆盖" 的计算方式
+知识分布（spaces 页面 / space detail 页面）： 在 SpaceService.getSpaceDetail() 中，从 ExperienceGrain 表按 sceneTag 做 groupingBy + counting，按 count 降序排列。前端展示为标签云，字号按数量占比分三档（>=80% 主色大标签、>=50% 浅色中标签、其余灰色小标签）。数据源是 grainDistribution: [{tag, count}]。
+
+场景覆盖（explore 页面）： 由 AdminService.getSceneCoverage() 实现。遍历所有颗粒按 sceneTag 分组，统计每个标签的 reportCount（去重报告数）、avgRating（关联报告评分均值）、coverage 等级（reportCount >= 3 -> sufficient, >= 1 -> moderate, 0 -> empty）。同时对照 StatusConstants.SCENE_TAGS（框架预设标签集），保证框架标签即使数据为空也会显示。
+
+explore 页面的知识分布条形图： 前端 explore/page.tsx 从报告列表提取所有 sceneTags，统计每个标签出现次数，归一化后显示为纯 CSS 水平进度条（非图表库），取 TOP 8。
+
+2. AI 服务能力现状
+文件位置：
+
+/Users/wanglei/Documents/opc-project/ai-extract/ai-service/main.py
+/Users/wanglei/Documents/opc-project/ai-extract/ai-service/routers/internal.py
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ChatStreamAdapter.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/AiConfig.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/PromptLoader.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/DomainConfig.java
+Python AI 服务（ai-service）能力边界
+仅做文件解析，不包含任何 LLM 调用或 NLP 分析。 FastAPI 应用只暴露一个内部 REST 端点：
+
+
+POST /internal/parse-file
+Request: { file_path: string, file_name: string }
+Response: { text: string, file_type: string, size: int, needs_manual?: bool }
+支持格式：txt/md/docx/pdf/pptx/xlsx/csv/html/png/jpg/mp3/wav。图片和音频返回占位提示+Base64前200字符，标记 needs_manual: true。依赖仅包括 fastapi/uvicorn/pydantic/python-docx/python-pptx/PyPDF2/beautifulsoup4/pandas -- 无任何 LLM SDK。
+
+Java 后端通过 WebClient 调这个服务做文件解析。
+
+ChatStreamAdapter -- LLM 调用适配器
+这是所有 LLM 调用的统一出口（Spring AI ChatClient 封装）：
+
+
+// 非流式调用（同步，用于萃取管线）
+String chat(String prompt)
+
+// 流式调用（SSE，用于实时对话）
+Flux<Map<String, Object>> chatStream(List<Map<String, String>> messages, Map<String, Object> context)
+底层模型：DeepSeek-chat，通过 Spring AI OpenAI 兼容客户端调用，API Base = https://api.deepseek.com
+参数： 不走 OpenAI 兼容的 system/user/assistant 消息格式。chat() 只用 prompt().user(prompt).call() -- 全文作为单条 user 消息发送（system prompt 已被 Java 端手动拼进正文）。chatStream() 将消息列表手动拼成 指令：...用户：...助手：...助手： 的文本格式后发单条 user prompt。
+没有暴露 temperature/top_p/max_tokens 等参数 -- 全部依赖 DeepSeek 默认值和 prompt 内控制。
+日志： 每次调用记录 REQ（前500字）和 RSP（全文 + 耗时），流式记录每chunk长度 + 总合并结果。
+PromptLoader -- Prompt 模板管理
+三层加载 + 双层缓存（L1 ConcurrentHashMap + L2 Redis TTL 1小时）：
+
+加载优先级：外部目录 (PROMPTS_DIR env) domain/{domain}/{name} -> 外部目录 {name} -> classpath domain/{domain}/{name} -> classpath {name}
+外部文件通过 mtime 检测变更自动刷新
+支持 {变量名} 占位符替换
+领域感知：format(name, vars, domain) 自动注入 domain.id/name/role_label 等7个领域变量
+缓存管理：invalidate(name) 同时清本地和 Redis
+DomainConfig -- 领域配置
+YAML 文件管理（classpath 或外部目录 domain/），领域 ID 用点号分层（如 sales.b2b_enterprise -> domain/sales/b2b_enterprise.yml），支持 extends 递归继承。配置包含：
+
+domain：角色标签、知识单元命名
+acceptance：准入标准（最小文本长度、中文比例、销售关键词密度、AI信号检测等）
+precheck：预检规则（关键词群组、异议模式、噪声模式、场景映射）
+pipeline：萃取维度、场景分类法、输出字段
+chat：对话模式配置、练习意图、人设字段
+MaterialCleaningService -- 11 层清洗管道（含大量 LLM 调用）
+每一层的 LLM 使用情况：
+
+层	名称	是否用 LLM	Prompt 文件
+Layer 0	情境标注	是，chat()	material_context_tag.md
+Layer 1+2+3	规则清洗（格式化噪声 / 业务噪声过滤 / 文本规范化）	否（纯规则）	N/A
+Layer 4	AI 语义提取	是，chat() + 并行（每5个chunk一批）	material_extract_full.md / material_extract_short.md
+Layer 5	场景归类	是，chat() 批量	classify_scenes.md
+Layer 6	对抗验证	是，chat() 分批（每批10条）	material_verify.md
+Layer 7	同标签合并去重	是，chat() (>10条颗粒时触发)	material_merge.md
+Layer 8	模式发现	是，chat() (>=8条颗粒时触发)	material_pattern.md
+Layer 9	FAQ 提取	是，chat()	material_faq.md
+Layer 10	叙事重放+策略关联	是，chat()	material_narrative.md
+Layer 11	画像生成	是，chat() 异步	material_profile.md
+总结：11层中8层涉及 LLM 调用，全部通过 chatStreamAdapter.chat(prompt) 同步调用，prompt 均从 PromptLoader 加载。已存在"分析/总结/聚类/提取/验证/发现/生成画像"的完整 LLM 使用模式。
+
+3. pgvector 使用现状
+文件位置：
+
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/GrainRetriever.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/DashScopeEmbeddingService.java
+项目	详情
+Embedding 模型	DashScope text-embedding-v4，1024 维
+API 端点	https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding
+授权	ai.qwen.api-key (QWEN_API_KEY)
+批量API	embedBatch(texts) 内部按每批10条分片调用
+向量列	experience_grain.embedding column = VECTOR(1024)
+检索算子	pgvector <=> (cosine_distance)
+检索流程	两步：1) ANN检索 via HNSW索引 ORDER BY g.embedding <=> ?::vector LIMIT topK*3，返回余弦相似度；2) Java端 weight 重排 relevance = similarity * weight，最终截断到 topK
+topK 默认值	由调用方传入，无硬编码默认值（GrainRetriever.retrieve(question, spaceId, topK) 签名）
+颗粒文本拼接	grainToText(): sceneTag + sceneDescription + expertThought + standardScript + commonMistakes 空格拼接
+embedding 生成时机	素材清洗完成时，MaterialCleaningScheduler 通过 embedGrains() 调用 embeddingService.embedBatch()，用原生 SQL UPDATE ... SET embedding = ?::vector 写入
+是否对 conversation 消息做 embedding	否。 SkillMessage 表没有 embedding 列，只有 grain_id 外键关联。对话的 RAG 检索仅在用户发消息时实时 embed 用户 query 去检索颗粒，消息本身不存储向量。ConversationStats 记录检索匹配统计但不存向量。
+4. 调度/定时任务机制
+关键文件：
+
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExpertAnalysisScheduler.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningScheduler.java
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/scheduler/DataCleanupScheduler.java
+两种调度器模式对比
+模式 A：ExpertAnalysisScheduler（乐观锁抢占）
+
+
+@Component
+public class ExpertAnalysisScheduler {
+    @Lazy @Autowired private ExpertAnalysisScheduler self;  // 自注入代理
+    private final String workerId = hostname + threadId;
+
+    @Scheduled(fixedDelay = 30_000)
+    public void scanAndProcess() {
+        // 1. 查 pending 状态 + 锁超时(5分钟)的任务
+        // 2. 逐条 tryLock（UPDATE WHERE locked_by IS NULL -- REQUIRES_NEW 短事务）
+        // 3. 抢占成功 -> 执行业务逻辑（独立事务）
+        // 4. 失败 -> resetToPending（标记回 pending 等下次重试）
+        // 5. finally -> releaseLock（短事务）
+    }
+
+    @Transactional(propagation = REQUIRES_NEW)
+    public boolean tryLock(UUID taskId);   // 乐观锁DB UPDATE
+    @Transactional(propagation = REQUIRES_NEW)
+    public void releaseLock(UUID taskId);  // 释放锁
+    @Transactional(propagation = REQUIRES_NEW)
+    public void resetToPending(UUID taskId); // 失败回退
+}
+模式 B：MaterialCleaningScheduler（乐观锁 + Redis 分布式锁 + 线程池分离）
+
+
+@Component
+public class MaterialCleaningScheduler {
+    @Lazy @Autowired private MaterialCleaningScheduler self;
+    private final String workerId;
+
+    // 双阶段扫描
+    @Scheduled(fixedDelay = 30_000)
+    public void scanAndProcess() {
+        scanAndParse();  // 解析阶段
+        scanAndClean();  // 清洗阶段
+    }
+
+    // 解析：material 级 DB 乐观锁 + parseExecutor 线程池
+    // 清洗：material 级 DB 乐观锁 + skill 级 Redis 锁 + cleanExecutor 线程池
+    // clean 管道：processMaterial() 无事务（AI调用在事务外），
+    //   颗粒落库、向量化、终态标记均通过 self.saveGrains() 等短事务方法
+}
+共同模式要素：
+
+@Component + @Scheduled(fixedDelay = 30_000)
+@Lazy @Autowired self 自注入代理（解决 @Transactional 内部调用不回滚问题）
+workerId = hostname + threadId 用于多节点识别
+LOCK_TIMEOUT_MINUTES = 5 防止死锁
+锁操作使用 @Transactional(propagation = REQUIRES_NEW) 独立短事务
+业务逻辑在事务外执行（AI/HTTP调用），状态更新走 self 调用的短事务方法
+新增一个"自动发现"调度器需要遵循的模式：
+
+定义 Entity + Repository（带 findPendingXxxTasks(timeout) + tryLock/releaseLock 查询）
+创建 Scheduler 类：@Component + @Lazy @Autowired self + @Scheduled(fixedDelay = ...)
+实现 scanAndProcess() 扫描 -> 乐观锁抢占 -> 执行 -> 释放锁 的循环
+锁操作用 REQUIRES_NEW，业务逻辑在事务外
+如需串行化（同一资源互斥）用 Redis 锁（setIfAbsent + TTL）
+DataCleanupScheduler 是最简单的模式： 纯 @Scheduled(cron = "...") + Repository 直接调，无锁机制（清理操作天然幂等）。
+
+5. 前端 Dashboard/图表能力
+文件位置：
+
+/Users/wanglei/Documents/opc-project/ai-extract/frontend/package.json
+/Users/wanglei/Documents/opc-project/ai-extract/frontend/src/components/admin/SceneBarChart.tsx
+/Users/wanglei/Documents/opc-project/ai-extract/frontend/src/components/admin/RagPieChart.tsx
+/Users/wanglei/Documents/opc-project/ai-extract/frontend/src/components/admin/StatCards.tsx
+Chart 库依赖
+从 package.json：
+
+
+"recharts": "^2.12.7",    // React 图表库
+"@nivo/bar": "^0.99.0",   // 条形图
+"@nivo/core": "^0.99.0",  // Nivo 核心库
+"@nivo/pie": "^0.99.0"    // 环形/饼图
+两个图表库并存：recharts 和 @nivo。
+
+Admin 页面的图表展示
+页面	图表组件	库	数据源
+admin dashboard (/admin)	StatCards (4列汇总卡片)	纯 Tailwind CSS	GET /admin/dashboard
+admin insights 全局 (/admin/insights)	StatCard (6列汇总卡片) + 健康度表格 + 告警列表	纯 Tailwind CSS	GET /admin/insights/overview
+单分身详情 (/admin/insights/{skillId})	SceneBarChart (水平柱状图，场景提问TOP5) + RagPieChart (环形图，RAG匹配分布) + StatCards + GrainRankTable + KnowledgeGapPanel	@nivo/bar + @nivo/pie	多个 /admin/insights/{skillId}/* 端点
+Chart 组件详情：
+
+SceneBarChart (@nivo/bar ResponsiveBar)：水平柱状图，高度220px，显示场景TOP5提问次数，颜色 #165DFF（蓝色），自定义 tooltip 浮层
+
+RagPieChart (@nivo/pie ResponsivePie)：环形图 (innerRadius=0.55)，显示三种 RAG 匹配分布（高匹配#22C55E绿 / 参考#EAB308黄 / 无匹配#9CA3AF灰），右侧图例，无弧标签
+
+StatCards：纯 Tailwind CSS 四列网格，支持趋势箭头和百分比变化
+
+Explore 页面搜索/筛选
+纯客户端实现（explore/page.tsx）：
+
+关键词搜索： 调用 getReports(keyword) 后端模糊查询报告标题
+场景标签筛选： 从报告数据中提取所有 sceneTags 生成标签按钮，点选后在客户端 filter(r => r.sceneTags.includes(activeTag))
+排序： 客户端切换评分降序或浏览数降序
+知识分布条形图： 纯 CSS div 水平进度条（非图表库），从报告标签统计，TOP8 展示
+Spaces 页面
+spaces/page.tsx 用三个纯 Tailwind 数字卡片展示总计报告数/锦囊数/就绪分身数，列表用 Tailwind 卡片展示每个空间（头像首字母 + 名称 + 报告数 + 锦囊数 + 状态徽标）。无图表库使用。
+
+Read CAuthService.java (lines 76-125)
+Bash Find services using report history
+IN
+grep -rn "report_history\|reportHistory\|ReportHistory" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ --include="*.java" -l
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/ExtractionReportService.java
+Bash Search for scene-tag/buying-stage auto-labeling in MaterialCleaningService
+IN
+grep -rn "sceneTag\|scene_tag\|buyingStage\|buyerPersona\|industrySignals\|情境标注\|阶段标注\|buying_stage\|buyer_persona" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java 2>/dev/null | head -20
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:377:    // ---- 情境标注（Layer 0）----
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:397:                    (String) map.get("buying_stage"),
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:398:                    (String) map.get("buyer_persona"),
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:403:            log.warn("情境标注失败，使用默认值: {}", e.getMessage());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:481:                                c.sceneTag(), c.insight(), materialId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:519:        // 按 sceneTag 分组
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:522:            grouped.computeIfAbsent(c.sceneTag(), k -> new ArrayList<>()).add(c);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:594:            grainBlock.append(String.format("[%d] %s: %s | %s\n", i, c.sceneTag(),
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:701:     * 完整清洗管道（情境标注 → 规则清洗 → AI提取 → 场景归类 → 对抗验证）
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:738:        // ── Layer 0: 情境标注（一次 AI 调用）──
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:740:        log.info("情境标注完成, materialId={}: stage={}, persona={}, industry={}",
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:741:                materialId, context.buyingStage(), context.buyerPersona(), context.industrySignals());
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:796:                "buyingStage", context.buyingStage() != null ? context.buyingStage() : "",
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:797:                "buyerPersona", context.buyerPersona() != null ? context.buyerPersona() : "",
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:800:                "industrySignals", context.industrySignals() != null ? context.industrySignals() : ""));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:1100:    public record GrainCandidate(String sceneTag, ExtractedInsight insight, UUID sourceMaterialId,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:1102:    record ContextTags(String buyingStage, String buyerPersona, String competitiveContext,
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:1103:                       String dealSizeHint, String industrySignals) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:1110:                    buyingStage != null ? buyingStage : "未知",
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java:1111:                    buyerPersona != null ? buyerPersona : "未知",
+I now have a thorough picture. Let me compile the comprehensive data asset report.
+
+AI-Extract 项目数据资产全景报告
+1. 对话数据
+1.1 skill_conversation（对话会话）
+表定义 (V1__init.sql)
+
+字段	类型	说明
+id	UUID PK	会话ID
+skill_id	UUID NOT NULL	所属分身ID
+user_id	UUID NOT NULL	对话用户ID
+title	VARCHAR(200)	由首条消息前30字生成
+mode	VARCHAR(20)	qa / practice / quick / discuss / talk
+created_at	TIMESTAMP	
+updated_at	TIMESTAMP	
+索引: idx_skill_conv_skill (skill_id), idx_skill_conv_user (user_id)
+
+关键点: mode 字段区分了5种对话模式，其中 practice 是对练数据的关键标识。user_id 是无外键扁平列，可存放 user.id 或 app_user.id。
+
+1.2 skill_message（对话消息）
+表定义 (V1__init.sql)
+
+字段	类型	说明
+id	UUID PK	消息ID
+conversation_id	UUID NOT NULL	所属会话ID
+role	VARCHAR(20) NOT NULL	user / assistant / system
+role_label	VARCHAR(20)	角色展示名：我 / 销冠 / 客户
+content	TEXT NOT NULL	消息内容
+grain_id	UUID	关联的经验颗粒ID（关键关联字段）
+report_id	UUID	关联的报告ID
+created_at	TIMESTAMP	
+索引: idx_skill_msg_conv (conversation_id)
+
+关键点: grain_id 是消息与颗粒的直接关联桥梁，可用于统计"哪些颗粒被引用最多"。消息层面没有 sceneTag 或意图标注字段，场景标签在 grain_retrieve_log 和 feedback_log 层间接关联。
+
+1.3 conversation_stats（对话统计，V4）
+表定义 -- "每次AI回复一条记录，是飞轮所有报表的单一数据源"
+
+字段	类型	说明
+id	UUID PK	
+skill_id	UUID NOT NULL	分身ID
+conversation_id	UUID NOT NULL	对话ID（同会话多条记录共享）
+user_id	UUID	
+mode	VARCHAR(20)	qa/discuss/talk/practice/enterprise
+rag_high_count	INT	high 阈值以上匹配数
+rag_ref_count	INT	ref 阈值区间匹配数
+rag_none_count	INT	RAG 空结果次数
+rag_avg_similarity	DOUBLE	本轮平均相似度
+feedback_up	INT	对话结束后回填的赞数
+feedback_down	INT	对话结束后回填的踩数
+error_type	VARCHAR(20)	NULL/timeout/error/cancelled
+is_test	BOOLEAN	Admin 测试过滤标记
+llm_duration_ms	INT	LLM 生成耗时
+total_duration_ms	INT	端到端耗时
+索引: idx_cs_skill_time (skill_id, created_at DESC), idx_cs_conv (conversation_id), idx_cs_skill_mode (skill_id, mode)
+
+数据量级预估: 每次 AI 回复一行。日活100用户 x 人均10轮 = 1000行/天。写策略是 doFinally 回调必写（含异常）。
+
+1.4 feedback_log（用户反馈，V3）
+字段	类型	说明
+skill_id / conversation_id / message_id / user_id	UUID	多维关联
+grain_id	UUID NULLABLE	NULL = 无匹配颗粒时的打分
+rating	VARCHAR(10)	up / down
+query	TEXT	用户提问原文
+ai_response	VARCHAR(500)	AI 回答前500字
+rag_score	DOUBLE	回答时的RAG平均匹配度
+source	VARCHAR(20)	user=实时 / backfill=存量迁移
+索引: idx_fl_skill_time, idx_fl_grain (partial, grain_id IS NOT NULL), idx_fl_rating (skill_id, rating)
+
+V9 backfill: 将 experience_grain 的 helpful_count/unhelpful_count 按每类最多100条迁移到 feedback_log（source='backfill'）。
+
+1.5 grain_retrieve_log（RAG检索日志，V5）
+字段	类型	说明
+original_query	TEXT	用户原始提问
+rewritten_query	TEXT	LLM 改写后的查询
+grain_id	UUID	命中的颗粒ID
+scene_tag	VARCHAR(100)	颗粒的场景标签（冗余存储）
+similarity	DOUBLE	余弦相似度(0~1)
+tier	VARCHAR(10)	high / ref / NULL
+position	INT	排名(1-based)
+索引: idx_grl_skill_time, idx_grl_grain, idx_grl_conv
+
+数据量级: 每次检索返回5条颗粒，每条约5行。日活100 x 10轮 x 5 = 5000行/天。30天自动清理（每天凌晨3点）。
+
+1.6 knowledge_gap（知识缺口，V2）
+字段	类型	说明
+query	TEXT	用户提问原文
+scene_tag	VARCHAR(100)	系统推测的场景标签
+attempted_query_count	INT	累计出现次数
+status	VARCHAR(20)	open / reviewing / resolved / ignored
+resolved_by / resolved_at / note		处理记录
+索引: idx_kg_skill_status, idx_kg_skill_time, idx_kg_space
+
+1.7 对话数据的场景/意图标注小结
+没有直接存储场景标签（sceneTag）的对话级字段。场景关联通过以下间接路径：
+
+skill_message.grain_id -> experience_grain.scene_tag
+grain_retrieve_log.scene_tag（冗余存储，聚合查询 countBySkillIdGroupBySceneTag）
+knowledge_gap.scene_tag（系统推测）
+feedback_log.grain_id -> 颗粒场景
+2. 经验颗粒数据
+2.1 experience_grain（经验颗粒）
+字段	类型	可用于排名的字段
+scene_tag	VARCHAR(50)	场景分组维度
+scene_description	TEXT	
+expert_thought	TEXT	
+standard_script	TEXT	
+common_mistakes	TEXT	
+applicable_condition	TEXT	
+embedding	VECTOR(1024)	语义检索
+weight	FLOAT (0.1-2.0)	权重
+quality_score	DOUBLE (0-5)	对抗验证综合分 -- 排名核心字段
+difficulty_level	VARCHAR	beginner/intermediate/advanced/master
+helpful_count	INT	用户赞数 -- 排名核心字段
+unhelpful_count	INT	用户踩数 -- 排名核心字段
+status	VARCHAR	active/deprecated
+source_type	VARCHAR(20)	file_upload / interview
+source_material_id	UUID	溯源到素材
+source_interview_id	UUID	溯源到访谈
+verification_notes	JSONB	五维评分：specificity/reproducibility/causality/distinctiveness/falsifiability
+edited_content	TEXT	管理员编辑后版本
+索引: idx_grain_space (space_id), idx_grain_scene (scene_tag), HNSW 向量索引 idx_grain_embedding_hnsw, idx_experience_grain_space_status (space_id, status)
+
+已有的排名查询 (ExperienceGrainRepository):
+
+findTopBySpaceIdOrderByHelpfulCountDesc -- helpful 降序 Top N
+findTopBySpaceIdOrderByUnhelpfulCountDesc -- unhelpful 降序 Top N
+countBySpaceIdAndUnhelpfulCountGreaterThanEqual -- 低质量颗粒统计
+注意: 原始 schema 中没有 usageCount 字段。实际使用的是 helpful_count + unhelpful_count。颗粒的"被引用频次"需要通过 grain_retrieve_log.grain_id 或 skill_message.grain_id 聚合统计。
+
+2.2 grain_edit_history（颗粒编辑历史，V10）
+字段	说明
+grain_id	被编辑的颗粒
+field_name	字段名（expertThought/standardScript/commonMistakes/applicableCondition/sceneTag/weight）
+old_value / new_value	新旧值
+edited_by	修改人
+edit_note	修改原因
+索引: idx_geh_grain (grain_id, created_at DESC)
+
+可用于: 分析颗粒的优化频率和方向，识别"哪些字段经常被改"。
+
+3. 练习/对练数据
+3.1 PracticeDemoService 的核心方法
+方法	返回数据结构	持久化？
+matchGrains	GrainMatch{level(EXACT/SEMANTIC/PROFILE_GUESS/NO_DATA/NON_BUSINESS), grains[], maxCosine}	不持久化 -- 实时计算
+evaluateDemo (验收)	verdict/verdictText/traceCoverage/skillCoverage/uncoveredTags/risks/roundReviews/suggestion	持久化 -- 写入 skill_evaluation (mode='acceptance_report')
+evaluatePracticeResponse (单轮对练)	championAnswer/comparison/hits/misses/technique/grains/matchLevel/fullAnswer/isLastRetry	不持久化 -- 返回给前端
+scorePractice (多轮总结)	techniqueDetails/tryNext/relatedScenes/retryCount/totalRounds/roundDetails/suggestion	不持久化 -- 返回给前端
+summarizeQa (问答总结)	totalQuestions/traceableRate/coveredTags/uncoveredTags/roundDetails/suggestion	不持久化 -- 返回给前端
+autoDemo (自动演示)	SSE事件流(customer + avatar)	不持久化
+3.2 skill_evaluation（持久化的评估记录）
+表定义 (V1__init.sql)
+
+字段	说明
+skill_id / conversation_id	关联
+mode	qa / practice / auto_evaluate / acceptance_report
+score	综合评分 0-100
+style_score / consistency_score / behavior_score / script_reuse_score	四维评分
+score_detail	JSONB 详细评分
+strengths / improvements	JSONB 数组
+demo_script / edited_response	示范话术
+evaluator_id / edited_by	
+索引: idx_eval_skill (skill_id)
+
+对练评估数据的持久化路径: evaluateDemo -> skill_evaluation (mode='acceptance_report', strengths=skillCoverage, improvements=risks, scoreDetail=完整结果JSON)。
+
+hits/misses/technique 等单轮评价数据并未单独持久化，仅在 scorePractice 多轮总结中通过 techniqueDetails 聚合返回给前端。如果需要历史对练分析，当前只能从 skill_evaluation.score_detail JSONB 中解析。
+
+4. 用户行为数据
+4.1 analytics_event（前端埋点，V7）
+当前已记录的事件类型（从代码中统计）:
+
+event_type	来源	event_data 格式
+recommendation_show	前端	推荐问题曝光信息
+recommendation_click	前端	{"question": "xxx", "skill_id": "xxx"}
+mode_switch	前端	{"from_mode": "qa", "to_mode": "talk"}
+conversation_end	前端	{"duration_seconds": 120, "total_rounds": 8}
+guest_created	ShareService	{"shareCode": "xxx"}
+share_visit	ShareService	{"shareCode": "xxx"}
+guest_registered	CAuthService	{"sourceShareId": "xxx"}
+索引: idx_ae_skill_time (skill_id, created_at DESC), idx_ae_type (event_type)
+
+数据保留: 30天自动清理（每天凌晨3:30）。analytics_event 表本身没有按 event_type 做聚合查询的 Repository 方法 -- 当前只用于写入和定时删除，尚未做任何分析查询。
+
+4.2 admin_audit_log（管理员操作审计，V8）
+action 类型 (DDL注释): edit_grain / deprecate_grain / create_grain / resolve_gap / edit_domain / edit_prompt
+
+target_type: grain / gap / prompt / domain
+
+索引: idx_aal_admin_time (admin_id, created_at DESC), idx_aal_target (target_type, target_id)
+
+注意: V8 注释标注"Phase 3 开始写入"，说明目前可能尚未大量使用。
+
+4.3 app_user + skill_share（C端用户体系，V14）
+app_user.source_share_id -- 用户来源归因，游客注册后 UUID 不变
+skill_share.channel -- 渠道标识（本期恒为 "default"，二期多渠道发码统计转化）
+skill_share.enabled -- 共享开关
+5. 萃取管线数据
+5.1 skill_material（素材）的状态流转
+完整状态集合 (V13 扩展后):
+
+
+uploaded -> cleaning -> cleaned -> analyzing -> analyzed -> extracted
+                    \-> rejected  (准入不通过)
+                    \-> failed    (访谈转录清洗失败)
+                                                       \-> discarded
+额外字段:
+
+material_type: dialogue(对话) / monologue(独白/心得) / interview(访谈)
+retry_count: 失败重试次数，上限3次
+locked_by / locked_at: 分布式处理锁
+parsed_content: 解析后的文本内容
+extraction_metadata: 萃取元数据JSON (含 context/patterns/faq/narrative/verifiedCount/rejectedCount)
+version / replaces_material_id: 版本管理
+索引: idx_material_skill (skill_id), idx_skill_material_status_locked (status, locked_at)
+
+5.2 extraction_drop_log（萃取淘汰明细，V15）
+字段	说明
+material_id	所属素材
+stage	dedup / verification / verification_skipped
+chunk_index	被丢 chunk 序号
+content_preview	被丢内容摘要
+collided_grain_id	撞上的存量颗粒
+similarity	Jaccard 相似度(NUMERIC 4,3)
+detail	AI 打分 JSON / 批次信息
+索引: idx_drop_log_material (material_id), idx_drop_log_space_stage (space_id, stage)
+
+5.3 report（萃取报告）与颗粒的关联
+report.id <- experience_grain.report_id (1:N)
+report.session_id -> interview_session.id (访谈来源)
+report.content_json -- 六章结构JSON
+5.4 report_history（报告生成历史）
+字段	说明
+skill_id	
+version	版本号
+material_ids	关联素材ID列表JSON
+grain_count	本次生成颗粒数
+metadata	JSON
+6. 现有统计/聚合能力
+6.1 AdminInsightService（数据看板）
+方法	数据源	产出指标
+getSkillOverview(skillId)	conversation_stats + feedback_log	近7天对话量、活跃用户数、满意率
+getGlobalOverview()	4路并行批量查询	全局对话量/用户数/命中率/满意率/颗粒数/缺口数 + 每个分身的健康度行(含4级告警)
+告警阈值: 缺口>=10"缺口爆发"、对话0"不活跃"、反馈>=5且赞率<60%"满意率低"、RAG>=10且命中<50%"命中率低"
+
+6.2 AdminInsightController 提供的 API
+API 端点	数据源	说明
+GET /{skillId}/overview	conversation_stats + feedback_log	概览
+GET /{skillId}/scene-top	grain_retrieve_log	场景提问TOP5
+GET /{skillId}/rag-distribution	conversation_stats	RAG高/参/无分布
+GET /{skillId}/grains-top?sort=best/worst	experience_grain	颗粒赞/踩排行榜
+GET /{skillId}/knowledge-gaps	knowledge_gap	缺口列表
+GET /{skillId}/feedback-logs	feedback_log	反馈审查（分页+rating筛选）
+GET /{skillId}/random-sample	conversation_stats	随机抽样20条
+GET /overview	AdminInsightService	全局看板
+6.3 AdminService
+getDashboard(): space/report/grain/material 计数 + 待审核列表 + 素材处理中 + 最近报告
+getSceneCoverage(): 按 scene_tag 分组，统计 reportCount、avgRating、coverage(sufficient/moderate/empty)
+6.4 AdminAuditController
+GET /admin/skills/{skillId}/audit-dashboard: 聚合返回分身审核所需全部数据 -- skill/画像/颗粒摘要(五维均分+质量分布+场景分组)/素材/评分/萃取结果
+POST /admin/skills/{skillId}/practice-evaluate: 对练单轮评估
+POST /admin/skills/{skillId}/practice-score: 多轮成长总结
+POST /admin/skills/{skillId}/evaluate-demo: 验收报告
+6.5 "自动发现/推荐/洞察/趋势"相关代码扫描结果
+目前没有任何"自动发现规律"的代码。现有的能力都在"人工驱动的统计报表"层面：
+
+能力	自动化程度
+看板健康度告警	规则引擎（硬编码阈值）
+颗粒排行榜	DB 排序查询，人工查看
+知识缺口列表	被动记录，人工处理
+验收报告 verdict	规则驱动（覆盖率>=60%等） + AI 生成建议文案
+推荐问题生成	generateRecommendedQuestions -- 基于配置模板的格式化（非数据驱动推荐）
+对练练习角度	AI 从颗粒中提取 3-5 个角度
+对练成长总结	AI 分析技法掌握状态
+7. 跨维度关联分析可行性矩阵
+以下是当前数据模型中立即可用的关键关联路径：
+
+关联路径	连接键	可回答的问题
+conversation_stats -> feedback_log	skill_id + conversation_id	"哪些对话的RAG命中率低但用户满意度高？"
+skill_message -> experience_grain	grain_id	"哪些颗粒被引用最多？按mode分组"
+grain_retrieve_log -> experience_grain	grain_id	"哪些颗粒被检索到但从未被引用？检索命中但未进入消息"
+feedback_log -> experience_grain	grain_id	"哪些颗粒好评/差评集中爆发？按时间趋势"
+knowledge_gap -> experience_grain	scene_tag	"缺口场景与现有颗粒场景的重叠度"
+extraction_drop_log -> skill_material	material_id	"哪些阶段淘汰率最高？单素材丢了多少候选"
+grain_edit_history -> experience_grain	grain_id	"哪些颗粒修改频率最高？编辑前后的质量分变化"
+analytics_event -> conversation_stats	conversation_id	"模式切换是否影响满意率？"
+analytics_event -> skill	skill_id	"推荐点击与对话量转化率"
+skill_evaluation -> skill	skill_id	"对练评估趋势、四维分变化"
+当前缺失的关键连接:
+
+skill_message 缺少 scene_tag 和 conversation_stats_id 字段，无法直接从消息反查该轮的 RAG 质量
+analytics_event 没有按 event_type 做聚合查询的 Repository 方法
+conversation_stats 与 skill_message 之间没有直接外键，只能通过 conversation_id 间接关联
+对练评估的单轮数据（hits/misses/technique）没有独立持久化表，只能从 skill_evaluation.score_detail JSONB 解析
+没有"颗粒使用频次"(usageCount)的预聚合字段，需通过 grain_retrieve_log 或 skill_message 实时聚合
+Bash Search for LLM analysis-specific config in backend
+IN
+grep -rn -i "analysis.*model\|analy.*config\|llm.*param\|temperature\|max.token\|chat.*option\|chat.*model\|openai.*model\|deepseek.*model" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main --include="*.java" --include="*.yml" --include="*.yaml" 2>/dev/null | grep -iv "import\|package\|logger\|log\." | head -30
+
+OUT
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml:45:          temperature: 0.7
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml:46:          max-tokens: 2048
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:29:    List<SkillMaterial> findPendingParseTasks(@Param("timeout") LocalDateTime timeout);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/repository/SkillMaterialRepository.java:34:    List<SkillMaterial> findPendingCleaningTasks(@Param("timeout") LocalDateTime timeout);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/AiConfig.java:16:    public ChatClient chatClient(ChatModel chatModel) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/config/AiConfig.java:17:        return ChatClient.builder(chatModel).build();
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/QualityAnalyzer.java:18:    public List<CheckItem> analyze(String text, PreCheckConfig config) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/MaterialPreChecker.java:58:        AcceptanceResult contentResult = contentAnalyzer.checkAcceptance(text, accConfig);
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/MaterialPreChecker.java:124:        allChecks.addAll(structureAnalyzer.analyze(text, preConfig, roleLabel, counterpartyLabel));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/MaterialPreChecker.java:125:        allChecks.addAll(contentAnalyzer.analyze(text, preConfig));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/MaterialPreChecker.java:126:        allChecks.addAll(qualityAnalyzer.analyze(text, preConfig));
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/ContentAnalyzer.java:99:    public List<CheckItem> analyze(String text, PreCheckConfig config) {
+/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/precheck/StructureAnalyzer.java:27:    public List<CheckItem> analyze(String text, PreCheckConfig config, String roleLabel, String counterpartyLabel) {
+Bash Find discoverPatterns method line number
+IN
+grep -n "discoverPatterns" /Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/java/com/aiextract/service/MaterialCleaningService.java 2>/dev/null
+
+OUT
+588:    private PatternSummary discoverPatterns(List<GrainCandidate> candidates, String domain) {
+777:        PatternSummary patterns = discoverPatterns(verified, domain);
+Read MaterialCleaningService.java (lines 587-636)
+以下是完整的搜索分析报告。
+
+一、现有后台功能清单（admin 每个子页面）
+通过目录结构和代码阅读，确认 /frontend/src/app/admin/ 下共有 10 个一级功能页面（部分含子页面）：
+
+路由	页面名称	作用说明
+/admin	工作台	管理员首页，显示 4 个核心统计数据（空间数/报告数/颗粒数/素材数）、待处理事项列表（分身审核提醒、素材处理中提醒）、最近活动时间线。调用 /admin/dashboard API。
+/admin/insights	数据看板（全局）	跨所有分身的全局数据看板 v1。6 个汇总卡片（本周对话量、活跃用户、满意率、知识命中率、颗粒总数、待处理缺口）+ 分身健康度对比表（每个分身的对话量/满意率/命中率/缺口数/颗粒数/最近活跃/告警状态）+ 告警中心。点分身行可下钻到单分身详情。
+/admin/insights/[skillId]	单分身数据详情	从全局看板下钻进入。展示该分身的概览卡片、场景提问 TOP5 柱状图、RAG 匹配分布饼图、颗粒点赞/踩排行表、知识缺口列表。含 3 个子页：/feedback(反馈审查)、/test(测试对话)
+/admin/tuning	分身调优	管理员日常深度工作入口。选择分身后展示三个 Tab：颗粒管理（👍排行榜 + 👎排行榜，点入可查看/编辑/废弃颗粒）、知识缺口（高频未匹配问题列表，支持补充颗粒并标记解决）、反馈审查。
+/admin/skills	分身管理	所有 AI 分身列表，按状态分组展示（已激活/审核中/已废弃），支持创建、查看、审核、管理素材、共享、停用/激活。含子页：/upload(上传素材)、/[id]/audit(审核)、/[id]/materials(素材列表)、/[id]/profile(画像)、/[id]/materials/[materialId](素材分析详情)。
+/admin/materials	素材管理	以分身为维度列出所有已创建的分身，每个分身可进入素材列表或审核页。顶部有"+ 上传素材"快捷入口。
+/admin/experts	萃取师经验库管理	D3 萃取师管理页。综合 Skill 管理（共识/独家/矛盾统计 + 综合指令预览 + 重新生成）、萃取师卡片网格（按状态筛选：已激活/待审核/分析中/待分析/失败）、支持上传材料、萃取师访谈、提取法则、审核法则、重新激活、删除。含子页：/interview(萃取师访谈)。
+/admin/conversations	对话历史	分页列表展示所有对话会话，含用户、分身名称、对话模式、消息数、时间。点"回放"可查看完整对话内容。含子页：/[id](对话回放)。
+/admin/coverage	场景地图	场景覆盖率热力图。3 个汇总卡片（充足/待充实/空白），每个场景显示经验报告数量条状图及覆盖状态标签，帮助管理员发现哪些场景缺乏知识覆盖。
+/admin/users	用户管理	企业内用户列表（CRUD），含姓名、账号、角色、创建时间。支持创建新用户。
+/admin/im	IM 渠道配置	管理飞书、企业微信、微信、钉钉四个渠道的 App ID/Secret/Webhook URL 配置，支持启用/停用、测试连接、关联分身 Skill。
+/admin/grains/[grainId]	颗粒详情	查看单个颗粒完整内容（专家思考、标准话术、常见错误、适用条件、质量评分、点赞/踩数）。支持编辑和标记废弃。
+/admin/grains/new	新增颗粒	从知识缺口页跳入，预填分身 ID，手动填写场景标签/描述/专家思考/话术等，保存后自动向量化。
+二、已存在的"自动洞察"痕迹
+结论：已有基础的"数据看板"(insights)功能，但完全是 SQL 聚合查询的被动统计，没有真正的"自动发现规律"能力。
+
+2.1 已有的洞察类 API（全部是 SQL 聚合，非 AI 驱动）
+后端 AdminInsightController.java (+ AdminInsightService.java) 提供以下 API：
+
+GET /admin/insights/overview -- 全局看板（对话量/用户数/满意率/命中率/颗粒总数/缺口统计 + 分身健康度表 + 告警规则）
+GET /admin/insights/{skillId}/overview -- 单分身概览（聚合 conversation_stats + feedback_log）
+GET /admin/insights/{skillId}/scene-top -- 场景提问 TOP5（从检索日志按 sceneTag GROUP BY）
+GET /admin/insights/{skillId}/rag-distribution -- RAG 匹配分布（高/参考/无匹配 三类百分比）
+GET /admin/insights/{skillId}/grains-top -- 颗粒点赞/踩排行榜
+GET /admin/insights/{skillId}/knowledge-gaps -- 知识缺口列表（用户问过但 RAG 没匹配到的 query）
+GET /admin/insights/{skillId}/feedback-logs -- 反馈审查列表（分页）
+GET /admin/insights/{skillId}/random-sample -- 对话抽样（随机 20 条供管理员审查）
+2.2 告警规则（硬编码阈值，非机器学习）
+在 AdminInsightService.java 第 172-176 行，有 4 条简单告警规则：
+
+
+if (gaps >= 10) alerts.add("缺口爆发");
+if (convs == 0) alerts.add("不活跃");
+if (total >= 5 && up/total < 0.6) alerts.add("满意率低");
+if (ragTotal >= 10 && hitRate < 0.5) alerts.add("命中率低");
+2.3 素材清洗管道中的"模式发现"（Layer 8）
+MaterialCleaningService.java 第 586-624 行有 discoverPatterns() 方法，它在素材清洗管道中是 Layer 8 步骤。它在候选颗粒 >= 8 条时，调用 AI（通过 material_pattern.md prompt 模板）从颗粒集合中提炼 核心心法(coreHabits)、差异化特征(differentiators)、方法论名称(methodologyName) 和 一句话介绍(oneliner)。这个结果被存入素材的 extractionMetadata 中，供前端审核页面展示。
+
+但这是单素材级别的"模式提炼"，不是跨素材/跨分身的"自动发现规律"。
+
+2.4 文档层面的讨论
+在 docs/知识飞轮-产品全景.md 中提到了"知识飞轮"概念（素材上传->AI 萃取->用户使用->数据洞察->反馈收集），有"数据洞察"节点的设计意图，但没有对应的代码实现。
+
+文档中搜索"自动发现"、"规律"、"洞察"等关键词，结果为 0 命中。说明这些概念在文档阶段也尚未被正式规划为功能点。
+
+三、素材处理中是否已有"自动标签"或"意图分类"能力
+结论：有基础的"情境标注"和"场景归类"，但没有"自动标签"或"意图识别"能力。
+
+3.1 已有的自动分类/标注能力
+Layer 0 -- 情境标注 (tagContext)
+
+位置：MaterialCleaningService.java 第 377-406 行
+调用 material_context_tag.md prompt，让 AI 从对话文本中提取：
+buying_stage（购买阶段）
+buyer_persona（买方角色）
+competitive_context（竞争态势）
+deal_size_hint（预估单量）
+industry_signals（行业信号）
+一次 AI 调用，LLM 返回 JSON
+Layer 4 -- 场景归类 (classifyScenesBatch)
+
+AI 提取洞察后，LLM 为每个颗粒自动分配 sceneTag（场景标签）
+按 sceneTag 分组，同标签颗粒合并去重
+素材类型检测 (detectMaterialType)
+
+位置：MaterialNoiseCleaner.java
+基于文件名和内容特征，自动检测素材类型（文本/表格/转录等），用于选择不同的清洗策略
+3.2 不存在的功能
+自动打标签（标签体系）：没有自由标签(tag)的自动生成和管理体系。只有固定的领域场景标签(sceneTag)和上下文字段。
+自动分类（多分类体系）：没有内容自动分类到多个维度的能力。
+意图识别：SkillChatRequest.java 中的 mode 字段注释写"不传则自动识别"，但后端代码中仅在 ChatStreamService.java 中有简单的关键词匹配来判断 quick/discuss/practice 三种模式，没有基于 AI 的意图识别。
+3.3 素材清洗管道全貌
+素材进入后的完整管道（11 层）：
+
+
+上传 -> 预检(Gate 1) -> Layer 0 情境标注 -> Layer 1+2+3 规则清洗 
+-> Layer 4+5 AI 提取 -> Layer 6 对抗验证 -> Layer 7 同标签合并去重 
+-> Layer 8 模式发现 -> Layer 9 FAQ 提取 -> Layer 10 叙事重放 -> Layer 11 画像生成
+四、LLM 调用的参数配置现状
+4.1 application.yml 中的全局配置
+文件：/Users/wanglei/Documents/opc-project/ai-extract/backend/src/main/resources/application.yml
+
+
+spring:
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
+          max-tokens: 2048
+这是 全局默认配置，由 Spring AI 的 ChatClient 自动使用。
+
+4.2 .env 中的环境变量
+文件：/Users/wanglei/Documents/opc-project/ai-extract/.env
+
+
+DEEPSEEK_API_KEY=YOUR_DEEPSEEK_API_KEY
+QWEN_API_KEY=YOUR_QWEN_API_KEY
+LLM_API_BASE=https://api.deepseek.com
+LLM_MODEL=deepseek-chat
+QWEN_API_KEY 用于向量嵌入（DashScope embedding）。
+
+4.3 Skill 模型级别的配置
+Skill 表有 model_name 和 model_config 字段（见 Skill.java 第 53 行），允许每个分身在创建时指定独立的模型名称和配置。但在素材清洗管道中，模型名是硬编码的 "deepseek-chat"（MaterialCleaningService.java 第 153、187 行），没有从 Skill 的 modelName 动态获取。
+
+4.4 没有的配置
+没有 analysis 专用的 model 参数：没有区分"分析用 model" vs "对话用 model"
+没有 analysis temperature 配置：所有 AI 调用（对话、清洗、提取、验证、模式发现）统一使用全局的 temperature: 0.7
+没有 max-tokens 按场景区分：清洗管道中的大量 AI 提取调用都受全局 2048 限制
+没有 top_p / frequency_penalty / presence_penalty 等参数
+ai-service (Python) 仅为文件解析服务（txt/md/docx/pdf/pptx/xlsx/image/audio），其 .env.example 虽有 LLM_MODEL 变量但 main.py 中未实际使用 LLM
+4.5 AI 调用入口点
+后端通过 ChatStreamAdapter.java 封装所有 LLM 调用，AiConfig.java 构建单个 ChatClient bean（单模型、单参数配置），所有业务场景（对话、访谈、清洗、提取、验证、模式发现）共用这同一个 client。
+
+总结
+维度	现状
+后台功能	10 个一级页面，覆盖分身管理、数据看板、调优、素材管理、萃取师管理、对话历史、场景地图、用户管理、IM 渠道
+自动洞察	仅有 SQL 聚合统计 + 硬编码告警阈值的被动"数据看板"，没有真正的 AI 自动发现规律
+自动标签	有"情境标注"（购买阶段/角色/行业）和"场景归类"（sceneTag），但没有自由标签体系
+意图分类	chat mode 仅关键词匹配，无 AI 意图识别
+模式发现	素材清洗管道已有 Layer 8 模式发现（提炼心法/差异化/方法论），但仅限单素材级别
+LLM 配置	全局单一配置（model=deepseek-chat, temp=0.7, max_tokens=2048），无场景区分，无 analysis 专用参数
+知识飞轮	文档中有概念设计（数据->洞察->行动），但代码中未实现闭环
+Excellent, the first agent has returned with very detailed findings. Key insights:
+
+AdminInsightService already has basic analytics — single-skill overview, global overview with alert rules
+8 of 11 cleaning layers already use LLM for analysis — the pattern for LLM-powered analysis exists
+pgvector is 1024-dim DashScope, only grains have embeddings — conversations don't
+Scheduler pattern is well-established — ExpertAnalysisScheduler with optimistic locking
+Frontend has recharts + nivo already — dashboard infrastructure exists
+Waiting for the other two agents to complete. The data asset and "auto discovery" exploration agents should give me the full picture.
+
+第一个 agent 回来了，发现很关键：AdminInsightService 已经有告警规则（openGaps ≥ 10 告警、满意率 < 60% 告警、RAG 命中率 < 50% 告警）；11 层清洗管道中 8 层已有 LLM 分析模式；前端已部署 recharts + nivo 图表库。等剩下两个 agent 数据就齐了。
+
+Two agents have returned. Let me wait for the third one (exploring admin pages and "auto discovery" traces) before summarizing and launching the Plan agent.
+
+Actually, the second agent's findings are very detailed. Let me absorb the key facts:
+
+Data assets are rich: conversation_stats is the "flywheel single source of truth", feedback_log has grain_id linking, knowledge_gap tracks blind spots, grain_retrieve_log tracks retrieval history, extraction_drop_log (V15) tracks what was dropped and why.
+
+Practice evaluation data is NOT persisted at round level: Only skill_evaluation (acceptance_report) stores aggregate results. Individual round hits/misses/technique are ephemeral.
+
+Active and passive feedback exists: feedback_log (explicit 👍👎) + knowledge_gap (implicit, queries the AI can't answer) + conversation_stats.rag_none_count (implicit, RAG failures).
+
+AdminInsightService already has alert rules and dashboard endpoints.
+
+analytics_event only has write logic, no consumption/queries yet — a whole data source unused.
+
+Key missing cross-dimension links: no scene_tag on messages, no conversation_stats_id on messages, no usageCount on grains.
+
+Let me wait for the third agent.
+
+数据全景回来了，很详细。等第三个探索回来凑齐了再启动架构 agent 出方案。
+
+All three exploration agents have returned. Now I have a comprehensive picture of the data landscape. Let me now design the "auto-discover patterns" feature.
+
+The key finding is that the platform already has ALL the raw materials:
+
+A rich data layer (conversation stats, feedback, knowledge gaps, grain retrieval logs, practice evaluations)
+An existing AI analysis pipeline (8 layers of LLM calling in MaterialCleaningService)
+A scheduler pattern to follow (ExpertAnalysisScheduler with optimistic locking)
+Frontend chart libraries already installed (recharts, nivo)
+An existing insights dashboard that could be extended
+What's missing: automated pattern discovery that mines across all these data sources.
+
+Now let me launch a Plan agent to design the implementation, feeding it all three exploration results.
+
+三路齐了。数据全景很厚——系统已有 rich data layer（conversation_stats、feedback_log、knowledge_gap、grain_retrieve_log、skill_evaluation）、8 层 LLM 分析先例（MaterialCleaningService 清洗管道）、调度器模板（ExpertAnalysisScheduler 乐观锁）、现成图表库（recharts + nivo）、以及一个已有告警规则的 insights dashboard。
+
+缺的只是跨数据源的自动化挖掘与自然语言洞察生成。我把三份报告喂给架构 agent 出方案：

@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mvn compile *)",
+      "Bash(docker-compose up *)",
+      "Bash(curl -s -X POST http://localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' -d '{\"companyId\":\"c0000000-0000-0000-0000-000000000001\",\"account\":\"admin\",\"password\":\"123456\"}')",
+      "Bash(curl -s http://localhost:8080/api/v1/admin/scene-coverage -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJjb21wYW55SWQiOiJjMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoic3VwZXJfYWRtaW4iLCJ1c2VySWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE3Njk3NDMyNzQsImV4cCI6MTc2OTgyOTY3NH0.plgEvdprQb6d1StlXjtFpMqkITdGU6t4LqhWEd-aq6Q')",
+      "Bash(python3 -m json.tool)",
+      "Bash(curl -sv http://localhost:8080/api/v1/admin/scene-coverage -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJjb21wYW55SWQiOiJjMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoic3VwZXJfYWRtaW4iLCJ1c2VySWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJpYXQiOjE3Njk3NDMyNzQsImV4cCI6MTc2OTgyOTY3NH0.plgEvdprQb6d1StlXjtFpMqkITdGU6t4LqhWEd-aq6Q')",
+      "Bash(docker-compose logs *)",
+      "Bash(mvn package *)",
+      "Bash(mvn -f /Users/wanglei/Documents/opc-project/ai-extract/backend/pom.xml compile)",
+      "Bash(mvn -f /Users/wanglei/Documents/opc-project/ai-extract/backend/pom.xml clean compile)",
+      "Bash(mvn -f /Users/wanglei/Documents/opc-project/ai-extract/backend/pom.xml package -DskipTests -q)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'  {c[\\\\\"title\\\\\"]}: owner={c[\\\\\"ownerName\\\\\"]}'\\) for c in d['data']['content']]\")",
+      "Bash(curl -sv -X POST http://localhost:8080/api/v1/interviews -H \"Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJjb21wYW55SWQiOiJjMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEiLCJyb2xlIjoic3BhY2Vfb3duZXIiLCJ1c2VySWQiOiIwMDAwMDAwMC0wMDAwLT...\" -H 'Content-Type: application/json' -d '{\"spaceId\":\"s0000000-0000-0000-0000-000000000001\",\"topic\":\"test\"}')",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'hasActive={d[\\\\\"hasActive\\\\\"]} count={len\\(d[\\\\\"sessions\\\\\"]\\)}'\\)\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\);items=d[\\\\\"data\\\\\"][\\\\\"content\\\\\"];[print\\(f'  {i[\\\\\"name\\\\\"]}: status={i[\\\\\"status\\\\\"]} grains={i[\\\\\"grainCount\\\\\"]}'\\) for i in items]\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\(f'code={d[\\\\\"code\\\\\"]} name={d[\\\\\"data\\\\\"][\\\\\"name\\\\\"]} status={d[\\\\\"data\\\\\"][\\\\\"status\\\\\"]}'\\)\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'status={d[\\\\\"status\\\\\"]} grains={d[\\\\\"grainCount\\\\\"]} active={d[\\\\\"status\\\\\"]==\\\\\"active\\\\\"}'\\)\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'status={d[\\\\\"status\\\\\"]}'\\)\")",
+      "Bash(python3 -c \"import sys,json;print\\(json.load\\(sys.stdin\\)['data']['token']\\)\")",
+      "Bash(xargs -I{} curl -s http://localhost:8080/api/v1/admin/experts -H \"Authorization: Bearer {}\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];[print\\(f'  {e[\\\\\"id\\\\\"][:10]}... type={e[\\\\\"type\\\\\"]} name={e[\\\\\"name\\\\\"]}'\\) for e in d]\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'FINAL: status={d[\\\\\"status\\\\\"]} grainCount={d[\\\\\"grainCount\\\\\"]}'\\)\")",
+      "Bash(docker-compose config *)",
+      "Bash(curl -s -X POST http://localhost:8000/internal/chat -H 'Content-Type: application/json' -d '{\"messages\":[{\"role\":\"system\",\"content\":\"你是一个测试助手。回答简短。\"},{\"role\":\"user\",\"content\":\"说你好\"}],\"context\":{\"currentPhase\":\"opening\"},\"stream\":true}')",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'phase={d[\\\\\"currentPhase\\\\\"]} status={d[\\\\\"status\\\\\"]}'\\)\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'phase={d[\\\\\"currentPhase\\\\\"]} status={d[\\\\\"status\\\\\"]} collectCase={d[\\\\\"collectStatus\\\\\"][\\\\\"caseStory\\\\\"]} steps={d[\\\\\"collectStatus\\\\\"][\\\\\"steps\\\\\"]} boundary={d[\\\\\"collectStatus\\\\\"][\\\\\"boundary\\\\\"]}'\\)\")",
+      "Bash(python3 -c \"import sys,json;d=json.load\\(sys.stdin\\)['data'];print\\(f'status={d[\\\\\"status\\\\\"]} reportId={d.get\\(\\\\\"reportId\\\\\",\\\\\"null\\\\\"\\)}'\\)\")",
+      "Bash(python3)",
+      "Bash(docker-compose build *)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker compose *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

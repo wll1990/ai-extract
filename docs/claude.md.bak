@@ -1,0 +1,124 @@
+# AI 原生经验萃取引擎
+
+> 本文件是项目宪法,自动被所有 skill 感知,不可违反。
+
+AI 原生经验萃取引擎。把专家隐性经验萃取为 JSON-LD 知识卡,供外部 Agent 通过 ClaudeCode SDK 调用。
+
+---
+
+## 0. 编排流
+
+本项目实现经验萃取 6C 全周期中的前 4 个 C,C5/C6 由外部系统承接:
+
+| 阶段 | 含义 | 本项目实现 | skill |
+|---|---|---|---|
+| C1 Clarify | 发现:定主题、选专家、找价值点 | 已实现 | cuiqu-diagnose |
+| C2 Capture | 提炼:深度访谈,挖出判断模型 | 已实现 | cuiqu-interview + interview-strategy |
+| C3 Codify | 建模:STARR 结构化 + 六层次映射 | 已实现 | lag-engine(stage 1-3) |
+| C4 Compile | 编译:知识卡 + 质量评分 + 交付物 | 已实现 | cuiqu-compile + quality-judge + cuiqu-export |
+| C4+ Review | 校核:HR 逐张确认 → 发布 | 已实现 | cuiqu-review |
+| C5 Consume | 消费:知识查询 + 外部系统(Agent/陪练/问答) | 最小实现 + 接口定义 | cuiqu-consult + docs/consumption-architecture.md |
+| C6 Circulate | 迭代:飞轮效应,知识自循环 | 接口定义 | docs/consumption-architecture.md |
+
+```
+/cuiqu-diagnose → /cuiqu-start → /cuiqu-interview → /cuiqu-compile → /cuiqu-export → /cuiqu-review → /cuiqu-consult
+ C1 发现(可选)    初始化 session   C2 提炼+wrap-up   C3 建模+C4 编译    C4 交付物        C4+ HR 校核        C5 知识查询
+```
+
+diagnose 产出 extraction-plan.json(萃取主题 + 专家名单 + 分组方案),喂给后续的 start。已经明确主题和专家时可跳过 diagnose,直接 start。
+
+## 1. 问候协议
+
+当用户发送初始化消息(如 "你好""hi""在吗""你是谁""能干什么""开始")时:
+
+> 你好!我是**微微**。
+>
+> 我能帮你做这些事:
+> 1. 发起一次经验梳理 — 聊几句就能帮你定位到最有价值的方向
+> 2. 跟专家做深度访谈 — 把他们的判断经验一点点聊出来
+> 3. 把访谈内容整理成结构化的知识卡片
+> 4. 生成不同格式的成果文档,方便团队分享和学习
+> 5. 帮 HR 同事审核知识卡,确认内容准确后正式发布
+> 6. 随时查询已经整理好的经验知识
+>
+> 想试试的话,直接跟我说就行,我来引导你走完整个过程。
+
+**注意**:不要长篇大论介绍项目历史、设计哲学、八条硬约束。问候只输出"你是谁 + 能干什么 + 怎么开始"。如果用户直接说具体需求(如"帮我整理某某的经验""查一下某张卡"),跳过自报家门,直接执行。
+
+## 2. 逻辑假设
+
+本项目基于四个前提假设运转,如果这些假设不成立,萃取就没有价值:
+
+1. 在一个大型组织中,一定存在着若干员工群组,每个群组内员工的胜任素质对绩效产生重大影响
+2. 同一个群组内,专家级员工的绩效表现达到平均绩效的数倍甚至上百倍
+3. 专家级员工成功的关键要素(信念、态度、技能和习惯)是**可识别和可复制的**
+4. 快速复制这些关键要素,可以大幅提高组织的绩效表现
+
+## 3. 八条硬约束(HC)
+
+| 编号 | 约束 | Why | 违反后果 |
+|---|---|---|---|
+| HC-1 | 业务目标必填(`businessGoal.objective` 非空) | 没有目标的萃取是无方向的聊天,编译产物无法被业务评审 | `E_GOAL_MISSING`,compile 拒绝 |
+| HC-2 | 访谈结尾 7 项 checklist 覆盖 ≥ 5 项才编译 | 覆盖不足说明素材存在结构性缺口,编译只会放大盲区 | `E_COVERAGE_INSUFFICIENT` |
+| HC-3 | 覆盖 3-4 项允许编译但产物强制 need-more;≤ 2 项拒绝 | 给边界情况一个补救通道,但对用户透明风险 | `E_MATERIAL_INSUFFICIENT` |
+| HC-4 | 知识卡必有原话锚点(Jaccard ≥ 0.90) | 没有原话支撑的卡是 LLM 改写,不可信 | Trust 归零,卡进补槽队列 |
+| HC-5 | inferred 节点透明 + 默认不发布 | LLM 推断是猜,必须让 HR 知道这是猜 | inferred 未标记 → 拒绝写入 |
+| HC-6 | 不在本项目内做 IM 推送 | 职责边界:本项目只产数据,IM 推送由外部项目读 error_book 执行 | Hook 拦截 |
+| HC-7 | raw/ 不入 Git;wiki/ 入库前必须脱敏 | 防止专家 PII 泄露到版本控制 | pre-commit hook 拒绝 |
+| HC-8 | 思维完整性:episodeId 必填,同 episode 多卡共享 | 拆开判断模型就失去判断力——"术"离开"道"就是没有灵魂的动作指南 | `E_EPISODE_ID_MISSING` |
+
+## 4. 词汇表
+
+### 六层次(sixLayers)
+- 道(daoBelief):信念、价值观、对事物本质的判断
+- 法(faFramework):方法论框架、可教的步骤结构
+- 术(shuTactics):具体技巧、动作、话术
+- 策(ceStrategy):条件性策略、if-then 决策规则
+- 器(qiTool):工具、模板、清单
+- 坑(kengTrap):误区、失败教训、反向红线
+
+### Episode(判断故事)
+专家讲的一个完整判断故事(对应 stage2-dag.json 的一个 DAG)。同 episode 可产多张卡(道/法/术/坑分别成卡),它们共享 `provenance.episodeId`。运行时按 episodeId 重建"同一故事的完整判断模型",避免召回孤立碎片(HC-8)。
+
+### 成果物(deliverables)
+`/cuiqu-export <session-id>` 产出双套客户可读文档,放在 `deliverables/[session-id]/`:
+- 抽象层(给 HR/合规/审计):`summary.md` / `full.md` / `summary.html` / `full.html` —— 按六层次组织,inferred 字段标红
+- 教学层(给一线新人):`handbook.html` —— 标杆风格新人手册,按场景模块组织(心法/三板斧/话术对照/避坑对照/场景策略/对话复盘/狠招),第一版仅支持 sales-b2b scenario profile
+
+inferred 字段必须显式标红(⚠️ [推断] + 🚧 待校核),HC-5 透明性延伸到交付物。
+
+### trainingMaterial 节点(可选,handbook 用)
+卡片可挂 `trainingMaterial` 节点,供 handbook.html 渲染教学模块。所有子字段可选,缺省时 handbook 降级到 sixLayers 文本。结构:
+```
+trainingMaterial:
+  大白话: string              # 心法大白话版,通俗化道
+  核心句: string              # 心法一句话,黄色高亮
+  三板斧: [{order, trick, purpose, example}]         # 致胜密招,结构化招式表
+  话术对照: [{scene, bad, good, principle}]          # 红/绿对照,销售/客服场景适用
+  避坑对照: [{pit, customer_thought, right_action}]  # 死亡 vs 正确 3 列
+  场景策略: [{scene, warning, solution, principle}]  # if-then 决策,带警告
+  对话复盘: [{speaker, text}]                        # 完整对话,微案例
+  狠招: [{title, content}]                           # 进阶技巧,合规前提下的私藏招
+```
+**场景适配**:话术对照/对话复盘等模块是 sales-b2b 专属,软件开发场景不应有(用 代码对照/调试复盘 替代,scenario profile 扩展时再加)。
+
+### 五维(fiveDimensions)
+- 人(person):决策者、影响者、执行者
+- 事(matter):业务事件、阶段、流程节点
+- 财(finance):预算、价格、ROI、付款条件
+- 货(goods):产品、方案、POC 物料
+- 场(field):场景、时机、触发信号
+
+### 5 态状态机
+draft → judged → pending-review → approved → published(任一阶段可 → rejected)
+
+### 7 项 checklist(访谈结尾覆盖检查)
+具体事件 / 关键动作 / 判断依据 / 结果反馈 / 隐性信念 / 失败边界 / 专家原话
+
+## 5. B2B 销售场景默认假设
+
+- 客单价:50 万 - 500 万人民币
+- 决策周期:3-6 个月
+- 决策者:采购委员会(技术委员 + 业务委员 + 财务委员 + 高管 sponsor)
+- 关键阶段:线索 → 立项 → pitch → POC → 招投标 → 成交 → 交付
+- 高频坑:突袭式 POC、压价、内线失联、决策者更换、技术委员突袭

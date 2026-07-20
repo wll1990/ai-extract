@@ -1,0 +1,106 @@
+/**
+ * SSE流式读取工具 - 简化版
+ */
+import { getToken } from './storage';
+export type SseEventType = 'chunk' | 'heartbeat' | 'phase_change' | 'collect_update' | 'done' | 'error' | 'source';
+export interface SseEvent { type: SseEventType; content?: string; message?: string; reportId?: string; reportTitle?: string; }
+export interface SseCallbacks {
+  onChunk?: (content: string) => void;
+  onPhaseChange?: (phase: string) => void;
+  onCollectUpdate?: (module: string) => void;
+  onDone?: () => void;
+  onError?: (message: string) => void;
+  onAbort?: () => void;
+  onSource?: (reportId: string, reportTitle: string) => void;
+}
+export interface SseConnectOptions {
+  url: string; method?: 'POST'; body?: unknown;
+  headers?: Record<string, string>; signal?: AbortSignal; timeout?: number;
+}
+
+export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks): AbortController {
+  const controller = new AbortController();
+  const signal = options.signal || controller.signal;
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json', Accept: 'text/event-stream', ...options.headers,
+  };
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const fetchOptions: RequestInit = { method: options.method || 'POST', headers, signal };
+  if (options.body) fetchOptions.body = JSON.stringify(options.body);
+
+  fetch(options.url, fetchOptions)
+    .then(async (response) => {
+      if (!response.ok) { callbacks.onError?.(`HTTP ${response.status}`); return; }
+      const reader = response.body?.getReader();
+      if (!reader) { callbacks.onError?.('不支持流式读取'); return; }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          buffer += text;
+
+          // 按双换行分割完整的SSE事件
+          let idx: number;
+          while ((idx = buffer.indexOf('\n\n')) !== -1) {
+            const eventStr = buffer.substring(0, idx);
+            buffer = buffer.substring(idx + 2);
+
+            // 尝试多种 SSE 格式匹配
+            // 格式1: data: {"type":"chunk","content":"..."}
+            // 格式2: data:{"type":"chunk","content":"..."}
+            // 格式3: 多行 data: (SSE 标准允许 data 后换行再跟 JSON)
+            const lines = eventStr.split('\n').filter(l => l.trim());
+            let jsonStr: string | null = null;
+
+            for (const line of lines) {
+              // 去掉 data: 前缀（可能有空格也可能没有）
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data:')) {
+                const afterData = trimmed.substring(5).trim();
+                if (afterData.startsWith('{')) {
+                  jsonStr = afterData;
+                  break;
+                }
+              } else if (trimmed.startsWith('{')) {
+                // 无 data: 前缀，直接是 JSON
+                jsonStr = trimmed;
+                break;
+              }
+            }
+
+            if (jsonStr) {
+              try {
+                const event = JSON.parse(jsonStr);
+                if (event.type === 'chunk') callbacks.onChunk?.(event.content || '');
+                else if (event.type === 'phase_change') callbacks.onPhaseChange?.(event.content || event.phase || '');
+                else if (event.type === 'collect_update') callbacks.onCollectUpdate?.(event.content || event.module || '');
+                else if (event.type === 'source') callbacks.onSource?.(event.reportId || '', event.reportTitle || '');
+                else if (event.type === 'done') callbacks.onDone?.();
+                else if (event.type === 'error') callbacks.onError?.(event.message || '');
+              } catch (parseErr) {
+                console.warn('[SSE] JSON parse failed:', parseErr, 'raw:', jsonStr);
+              }
+            } else {
+              // 没有匹配到 JSON，记录原始事件便于调试
+              console.warn('[SSE] No JSON found in event:', eventStr);
+            }
+          }
+        }
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') callbacks.onError?.('连接中断，请检查网络');
+      }
+    })
+    .catch((err) => {
+      if (err.name !== 'AbortError') callbacks.onError?.('网络错误，请检查连接');
+    });
+
+  return controller;
+}

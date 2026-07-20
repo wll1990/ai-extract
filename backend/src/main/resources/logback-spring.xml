@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <!-- 控制台 -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%X{traceId}] [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 文件：全部日志 -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/ai-extract.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/ai-extract.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId}] [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- 文件：错误日志 -->
+    <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/ai-extract-error.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>ERROR</level>
+        </filter>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/ai-extract-error.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>20MB</maxFileSize>
+            <maxHistory>60</maxHistory>
+        </rollingPolicy>
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId}] [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Spring 框架日志 -->
+    <logger name="org.springframework" level="INFO"/>
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.flywaydb" level="INFO"/>
+
+    <!-- 业务日志 — 默认INFO，关键模块DEBUG -->
+    <logger name="com.aiextract" level="INFO"/>
+
+    <!-- ===== 核心业务（开发期 DEBUG） ===== -->
+    <logger name="com.aiextract.service.SkillService" level="DEBUG"/>
+    <logger name="com.aiextract.service.InterviewService" level="DEBUG"/>
+    <logger name="com.aiextract.service.PracticeDemoService" level="DEBUG"/>
+    <logger name="com.aiextract.service.PracticeAnalyzer" level="DEBUG"/>
+    <logger name="com.aiextract.service.SkillEvaluator" level="DEBUG"/>
+
+    <!-- 素材清洗 -->
+    <logger name="com.aiextract.service.MaterialCleaningService" level="DEBUG"/>
+    <logger name="com.aiextract.service.MaterialCleaningScheduler" level="DEBUG"/>
+
+    <!-- 萃取师 -->
+    <logger name="com.aiextract.service.ExpertAnalysisScheduler" level="DEBUG"/>
+    <logger name="com.aiextract.service.ExpertService" level="DEBUG"/>
+
+    <!-- 调度器 -->
+    <logger name="com.aiextract.service.GrainRetriever" level="DEBUG"/>
+
+    <!-- AI 调用适配器 — 始终保持 INFO，避免 LLM 请求/响应刷屏 -->
+    <logger name="com.aiextract.service.ChatStreamAdapter" level="INFO"/>
+
+    <!-- Spring AI 日志 -->
+    <logger name="org.springframework.ai" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="FILE"/>
+        <appender-ref ref="ERROR_FILE"/>
+    </root>
+</configuration>

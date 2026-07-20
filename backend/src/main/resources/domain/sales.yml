@@ -1,0 +1,295 @@
+# ============================================================
+# 领域配置：销售
+# 此文件是预检引擎 + Prompt 变量注入的单一数据源
+# 新增领域 = 复制此文件 + 修改值，零代码改动
+# ============================================================
+
+domain:
+  id: sales
+  name: 销售
+  role_label: 销冠
+  counterparty_label: 客户
+  skill_label: 销售技巧
+  knowledge_unit: 锦囊
+  knowledge_unit_plural: 条销冠锦囊
+
+# ── 准入标准（Gate 1：硬性拒绝）──
+acceptance:
+  min_text_length: 50
+  chinese_ratio_min: 0.70
+  sales_keyword_density_min: 0.005
+  first_person_ratio_min: 0.01
+  theoretical_ratio_max: 0.30
+  marketing_ratio_max: 0.15
+  duplicate_similarity_max: 0.90
+
+  # 销售关键词库（准入用，覆盖所有场景的关键词全集）
+  sales_keywords:
+    - 报价, 底价, 折扣, 砍价, 贵了, 便宜, 预算, 费用, 价格, 优惠, 降价, 性价比
+    - 竞品, 替代方案, 别家, 对比, 选型, 竞争对手, 比较
+    - 客户, 销售, 成交, 签约, 合同, 打款, 审批, 采购, 立项
+    - 谈判, 异议, 顾虑, 担心, 风险, 不放心, 考虑考虑
+    - 需求, 痛点, 方案, 演示, demo, 试用, POC, 案例, 标杆
+    - 回访, 续约, 增购, 转介绍, 满意度, 维护
+    - 逼单, 催单, 月底, 季度, 业绩, 冲刺
+
+  # 业务白名单 — BusinessNoiseFilter 保护这些词所在的行不被删除
+  business_whitelist:
+    - 报价, 合同, 付款, 交付, 实施, 验收, 上线, 定制
+    - 需求, 方案, 演示, 试用, 招标, 竞标, 预算, 审批
+    - 痛点, ROI, 差异化, 竞品, 决策链, 关键人, 时间节点
+    - 降本增效, 风险, 合规, 定制开发, 售后服务, SLA
+    - 核心系统, 数据中台, 私有部署, 混合云, 信创, 等保
+
+  # 营销广告信号词
+  marketing_signals:
+    - 限时, 免费, 优惠, 立即, 点击, 扫码, 领取, 抢购, 秒杀, 拼团
+    - 名额有限, 最后一天, 错过不再, 仅限今日
+
+  # AI 生成信号词（标记但不自动拒绝）
+  ai_signals:
+    - 作为一个人工智能, 根据我的训练数据, 作为AI, 基于我的知识库
+
+# ── 预检引擎配置（Gate 2：打分不拒绝）──
+precheck:
+  # 结构维度阈值
+  min_dialogue_turns: 3
+  min_customer_ratio: 0.20
+  # 内容维度阈值
+  business_density_threshold: 0.02
+  # 质量维度阈值
+  noise_ratio_max: 0.50
+  chinese_ratio_warn: 0.80
+  duplicate_similarity_warn: 0.70
+
+  # 预检反馈文案 — 消Java硬编码
+  labels:
+    counterparty_role: 客户方
+    dialogue_structure: 客户-销售对话
+    objection_term: 客户异议信号
+    business_content: 实质销售内容
+    domain_scenario: 销售场景
+
+  # 业务关键词库 — 按场景分组，带权重
+  keyword_groups:
+    - name: 价格谈判
+      weight: 3
+      keywords:
+        - 报价, 底价, 折扣, 砍价, 贵了, 便宜, 预算不够, 费用, 多少钱
+        - 价格, 优惠, 降价, 性价比, 太贵, 能不能便宜点, 超出预算
+    - name: 竞品对比
+      weight: 3
+      keywords:
+        - 竞品, 替代方案, 别家, 对比, 选型, 他们也, 另一家, 比较
+        - 市场上, 同类产品, 竞争对手, 正在看, 也在评估
+    - name: 异议处理
+      weight: 3
+      keywords:
+        - 顾虑, 担心, 风险, 不放心, 考虑考虑, 再看看, 有疑问
+        - 犹豫, 不确定, 可能需要, 暂时不, 觉得没必要
+    - name: 决策推进
+      weight: 2
+      keywords:
+        - 签约, 合同, 打款, 走流程, 审批, 定下来, 启动, 推进
+        - 拍板, 确认, 下单, 采购, 立项
+    - name: 需求挖掘
+      weight: 2
+      keywords:
+        - 痛点, 需求, 目标, KPI, 考核, 指标, 降本增效, 效率
+        - 问题, 困难, 挑战, 瓶颈, 差距
+    - name: 方案演示
+      weight: 2
+      keywords:
+        - 方案, 演示, demo, 试用, POC, 案例, 标杆, 参考
+        - 架构, 技术方案, 实施, 落地
+    - name: 关系建立
+      weight: 1
+      keywords:
+        - 信任, 关系, 人脉, 引荐, 介绍, 朋友, 熟人
+
+  # 客户异议信号 — 正则匹配
+  objection_patterns:
+    - pattern: "(太贵|贵了|超预算|预算有限|能不能便宜|打折|给个折扣|便宜点)"
+      signal: price_objection
+      label: 价格异议
+    - pattern: "(别家|竞品|对比|选型|正在看|也找了|比较一下|市场上)"
+      signal: competitive_threat
+      label: 竞品威胁
+    - pattern: "(考虑|再说|不急|再看看|回去商量|商量一下|暂时不|以后再说)"
+      signal: stalling
+      label: 拖延信号
+    - pattern: "(不放心|风险|万一|出了事|保障|售后|服务不好)"
+      signal: trust_concern
+      label: 信任顾虑
+    - pattern: "(老板|领导|上面|汇报|开会讨论|审批|走流程|流程太慢)"
+      signal: internal_blocker
+      label: 内部阻碍
+
+  # 噪音检测词库
+  noise_patterns:
+    greeting:
+      - 你好, 您好, 早上好, 下午好, 晚上好, 好久不见
+      - 最近怎么样, 忙不忙, 吃饭了吗
+    chitchat:
+      - 你们公司真大, 这个装修挺好的, 路上堵车
+      - 孩子多大了, 周末去哪玩, 最近股市, 世界杯
+    echo:
+      - 嗯嗯, 好的好的, 行, 可以, 没问题, 对, 是的, 确实
+      - 有道理, 明白了, 了解了, 收到, 好嘞, OK, ok
+    closing:
+      - 感谢您的时间, 下次再聊, 保持联系, 随时联系
+      - 不打扰您了, 您先忙, 有问题随时找我
+    filler:
+      - 我想说的是, 就是说呢, 怎么说呢, 说白了就是
+      - 其实吧, 我觉得吧, 说实话, 讲真的
+
+  # 场景标签检测
+  scene_mapping:
+    - scene: 价格谈判
+      keywords: [报价, 底价, 折扣, 砍价, 贵了, 便宜, 预算, 费用]
+    - scene: 竞品对比
+      keywords: [竞品, 替代方案, 别家, 对比, 选型, 另一家]
+    - scene: 异议处理
+      keywords: [顾虑, 担心, 风险, 不放心, 考虑考虑, 再看看]
+    - scene: 决策推进
+      keywords: [签约, 合同, 打款, 审批, 定下来, 启动]
+    - scene: 需求挖掘
+      keywords: [痛点, 需求, KPI, 降本增效, 目标]
+    - scene: 方案演示
+      keywords: [方案, demo, 演示, 试用, POC, 案例, 标杆]
+    - scene: 客户维护
+      keywords: [回访, 续约, 增购, 转介绍, 满意度]
+    - scene: 催单逼单
+      keywords: [月底, 季度, 业绩, 冲, 赶紧, 抓紧, 最后]
+
+# ── 萃取流水线用 ──
+pipeline:
+  context_dimensions:
+    - key: stage
+      label: 购买阶段
+      values:
+        - value: awareness
+          label: 问题认知
+        - value: consideration
+          label: 方案评估
+        - value: decision
+          label: 决策签约
+        - value: implementation
+          label: 实施落地
+        - value: renewal
+          label: 续约增购
+    - key: persona
+      label: 对话对象
+      values:
+        - value: economic_buyer
+          label: 决策者/老板
+        - value: technical_evaluator
+          label: 技术/IT
+        - value: champion
+          label: 内部支持者
+        - value: user
+          label: 使用者
+        - value: procurement
+          label: 采购
+    - key: competitive
+      label: 竞争态势
+      values:
+        - value: greenfield
+          label: 无竞品
+        - value: competitive
+          label: 有竞品
+        - value: replacement
+          label: 替换现有供应商
+        - value: internal_build
+          label: 客户自研
+        - value: unknown
+          label: 未知
+    - key: deal_size
+      label: 单子规模
+      values:
+        - value: smb
+          label: 中小（<10万）
+        - value: mid_market
+          label: 中端（10-100万）
+        - value: enterprise
+          label: 大单（>100万）
+        - value: unknown
+          label: 未知
+
+  scene_taxonomy:
+    - 破冰建立信任
+    - 需求挖掘诊断
+    - 方案演示讲解
+    - 价格谈判博弈
+    - 异议处理化解
+    - 竞品对比分析
+    - 决策推动逼单
+    - 售后客户维护
+
+  extraction_role: 销冠行为模式分析专家
+  extraction_task: 发现那些"不说不会想到、说了恍然大悟"的销售技巧
+
+  extraction_output_fields:
+    - key: scene_description
+      label: 场景描述
+      max_chars: 50
+    - key: expert_thought
+      label: 销冠的思考逻辑
+      max_chars: 150
+    - key: standard_script
+      label: 标准话术
+      max_chars: 200
+    - key: common_mistakes
+      label: 常见错误
+      max_chars: 100
+    - key: applicable_condition
+      label: 适用条件
+      max_chars: 100
+
+  # 素材类型标签（供 prompt 用）
+  material_type_labels:
+    dialogue: 销售对话
+    monologue: 经验分享
+    interview: 专家访谈
+
+# ── Chat 提示词用 ──
+chat:
+  modes:
+    qa:
+      label: 请教销冠
+      description: AI 教你怎么说、为什么这么说
+      placeholder: 问我任何销售问题...
+      icon: 💬
+    talk:
+      label: 自由对话
+      description: 茶水间碰到销冠
+      icon: ☕
+    practice:
+      label: 场景对练
+      description: AI 扮演客户，模拟实战对话
+      icon: 🎯
+      role_swap: 我扮演客户，你来扮演销售
+
+  practice_intents:
+    - key: icebreak
+      label: 破冰寒暄
+    - key: discovery
+      label: 需求探询
+    - key: presentation
+      label: 方案呈现
+    - key: objection
+      label: 异议处理
+    - key: closing
+      label: 逼单促成
+    - key: avoidance
+      label: 回避转移
+
+  persona_fields:
+    - personality
+    - speaking_style
+    - background
+    - common_phrases
+    - knowledge_domains
+    - skill_tags
+    - target_scenarios
+    - communication_preferences

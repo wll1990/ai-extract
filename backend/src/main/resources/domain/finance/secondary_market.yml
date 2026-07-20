@@ -1,0 +1,7 @@
+# 二级市场研究 — 继承金融一级
+extends: finance
+
+domain:
+  id: finance.secondary_market
+  name: 二级市场研究
+  role_label: 研究员

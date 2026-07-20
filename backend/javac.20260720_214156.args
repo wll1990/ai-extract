@@ -1,0 +1,6 @@
+-d
+/tmp/out
+-proc:none
+-cp
+
+src/main/java/com/aiextract/service/ExpertService.java

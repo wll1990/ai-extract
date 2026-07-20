@@ -1,0 +1,6 @@
+# B2B 大客户销售 — 当前默认销售领域
+extends: sales
+
+domain:
+  id: sales.b2b_enterprise
+  name: B2B 大客户销售

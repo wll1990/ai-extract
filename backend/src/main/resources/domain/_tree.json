@@ -1,0 +1,16 @@
+[
+  {
+    "id": "sales",
+    "name": "销售",
+    "children": [
+      { "id": "sales.b2b_enterprise", "name": "B2B 大客户销售" }
+    ]
+  },
+  {
+    "id": "finance",
+    "name": "金融",
+    "children": [
+      { "id": "finance.secondary_market", "name": "二级市场研究" }
+    ]
+  }
+]

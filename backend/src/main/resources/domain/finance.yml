@@ -1,0 +1,199 @@
+# ============================================================
+# 领域配置：金融
+# 所有金融子领域的父级配置
+# ============================================================
+
+domain:
+  id: finance
+  name: 金融
+  role_label: 分析师
+  counterparty_label: 市场
+  skill_label: 投资研究能力
+  knowledge_unit: 投资洞察
+  knowledge_unit_plural: 条投资洞察
+
+acceptance:
+  min_text_length: 200
+  chinese_ratio_min: 0.70
+  sales_keyword_density_min: 0.003
+  first_person_ratio_min: 0.02
+  theoretical_ratio_max: 0.30
+  marketing_ratio_max: 0.15
+  duplicate_similarity_max: 0.90
+  business_whitelist:
+    - 估值, PE, PB, DCF, 折现, 安全边际, ROE, 毛利率, 净利率, 现金流
+    - 行业景气, 供需格局, 竞争格局, 护城河, 商业模式, 管理层
+    - 买入, 卖出, 止损, 仓位, 催化剂, 预期差, 回撤, 波动率
+    - 宏观经济, 货币政策, 利率, 通胀, GDP, PMI, CPI, 美联储
+    - 研报, 调研, 路演, 反路演, 电话会, 业绩会, 策略会
+  sales_keywords:
+    - 估值, PE, PB, DCF, 折现, 安全边际, ROE, 毛利率, 净利率, 现金流
+    - 行业景气, 供需格局, 竞争格局, 护城河, 商业模式, 管理层
+    - 买入, 卖出, 止损, 仓位, 催化剂, 预期差, 回撤, 波动率
+    - 宏观经济, 货币政策, 利率, 通胀, GDP, PMI, CPI
+  marketing_signals: []
+  ai_signals:
+    - 作为一个人工智能
+    - 根据我的训练数据
+    - 作为AI
+
+precheck:
+  min_dialogue_turns: 0
+  min_customer_ratio: 0
+  business_density_threshold: 0.01
+  noise_ratio_max: 0.50
+  chinese_ratio_warn: 0.80
+  duplicate_similarity_warn: 0.70
+  labels:
+    counterparty_role: 市场方
+    dialogue_structure: 投资分析内容
+    objection_term: 关键信号
+    business_content: 实质投资研究内容
+    domain_scenario: 投资研究场景
+  keyword_groups:
+    - name: 行业研究
+      weight: 3
+      keywords:
+        - 行业景气, 供需格局, 产能周期, 竞争格局, 集中度, 壁垒
+        - 政策驱动, 技术变革, 国产替代, 出海, 全球化
+    - name: 公司分析
+      weight: 3
+      keywords:
+        - 护城河, 管理层, 商业模式, 现金流, ROE, 毛利率, 净利率
+        - 成长性, 天花板, 第二曲线, 转型, 并购
+    - name: 估值定价
+      weight: 3
+      keywords:
+        - PE, PB, PS, DCF, 估值倍数, 折现率, 终值, 安全边际
+        - 相对估值, 绝对估值, 历史分位, 国际比较
+    - name: 交易决策
+      weight: 2
+      keywords:
+        - 买入, 卖出, 持有, 加仓, 减仓, 止损, 止盈, 仓位
+        - 催化剂, 预期差, 市场情绪, 资金流向, 技术面
+    - name: 风险控制
+      weight: 2
+      keywords:
+        - 回撤, 波动率, 相关性, 黑天鹅, 尾部风险, 压力测试
+        - 流动性, 集中度, 杠杆, 对冲, 套保
+    - name: 宏观判断
+      weight: 1
+      keywords:
+        - 宏观经济, 货币政策, 利率, 通胀, GDP, PMI, CPI
+        - 美联储, 央行, 降息, 加息
+  objection_patterns: []
+  noise_patterns:
+    greeting: []
+    chitchat: []
+    echo:
+      - 综上, 整体来看, 总的来看, 总结一下
+    closing: []
+    filler:
+      - 值得注意的是, 需要关注的是, 我们认为, 我们的判断是
+  scene_mapping:
+    - scene: 行业研究
+      keywords: [行业景气, 供需格局, 产能周期, 竞争格局, 政策驱动]
+    - scene: 公司分析
+      keywords: [护城河, 管理层, 商业模式, 现金流, ROE, 成长性]
+    - scene: 估值定价
+      keywords: [PE, PB, DCF, 估值, 折现, 安全边际]
+    - scene: 交易决策
+      keywords: [买入, 卖出, 加仓, 止损, 催化剂, 预期差]
+    - scene: 风险控制
+      keywords: [回撤, 波动率, 黑天鹅, 压力测试, 流动性]
+    - scene: 宏观判断
+      keywords: [宏观经济, 货币政策, 利率, 通胀, GDP, PMI]
+
+pipeline:
+  context_dimensions:
+    - key: asset_class
+      label: 资产类别
+      values:
+        - value: equity
+          label: 权益
+        - value: fixed_income
+          label: 固收
+        - value: commodity
+          label: 商品
+        - value: macro
+          label: 宏观
+    - key: research_type
+      label: 研究类型
+      values:
+        - value: industry
+          label: 行业研究
+        - value: company
+          label: 公司深度
+        - value: strategy
+          label: 策略报告
+        - value: flash_note
+          label: 快评
+  scene_taxonomy:
+    - 行业研究
+    - 公司分析
+    - 估值定价
+    - 交易决策
+    - 风险控制
+    - 宏观判断
+  extraction_role: 买方研究员行为模式分析专家
+  extraction_task: 发现研究员的分析框架、判断逻辑和决策依据
+  extraction_output_fields:
+    - key: scene_description
+      label: 研究场景
+      max_chars: 50
+    - key: expert_thought
+      label: 研究员的判断逻辑
+      max_chars: 150
+    - key: standard_script
+      label: 分析框架
+      max_chars: 200
+    - key: common_mistakes
+      label: 常见误区
+      max_chars: 100
+    - key: applicable_condition
+      label: 适用条件
+      max_chars: 100
+  material_type_labels:
+    dialogue: 投资交流
+    monologue: 研究报告
+    interview: 专家访谈
+
+chat:
+  modes:
+    qa:
+      label: 请教研究员
+      description: AI 解析投资逻辑和研究方法
+      placeholder: 问我任何投资研究问题...
+      icon: "💬"
+    talk:
+      label: 聊聊市场
+      description: 和研究员聊聊行情
+      icon: "☕"
+    practice:
+      label: 投资推演
+      description: 市场情景 → 你来判断
+      icon: "🎯"
+      role_swap: 我描述市场情景，你来做出投资判断
+      opening_context: 突发的市场重大事件快讯
+  practice_intents:
+    - key: industry_analysis
+      label: 行业分析
+    - key: company_deep_dive
+      label: 公司深度
+    - key: valuation_judgment
+      label: 估值判断
+    - key: trade_decision
+      label: 交易决策
+    - key: risk_assessment
+      label: 风险评估
+    - key: macro_view
+      label: 宏观判断
+  persona_fields:
+    - personality
+    - speaking_style
+    - background
+    - common_phrases
+    - knowledge_domains
+    - skill_tags
+    - target_scenarios
+    - communication_preferences

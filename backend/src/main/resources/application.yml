@@ -1,0 +1,148 @@
+spring:
+  application:
+    name: ai-extract
+
+  # ---- PostgreSQL 主库 ----
+  datasource:
+    url: jdbc:postgresql://${PG_HOST:localhost}:${PG_PORT:5432}/${PG_DATABASE:aiextract}
+    username: ${PG_USER:wanglei}
+    password: ${PG_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  # ---- JPA / Hibernate ----
+  jpa:
+    hibernate:
+      ddl-auto: validate         # 生产环境只用 validate，表结构由 Flyway 管理
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  # ---- Flyway 数据库迁移 ----
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: false   # 关闭校验，避免 CI 环境 provider 差异告警
+
+  # ---- Redis（分布式锁 / 缓存） ----
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:}
+      password: ${REDIS_PASSWORD:}
+
+  # ---- JSON 序列化 ----
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+  # ---- AI 大模型（DeepSeek） ----
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY}
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7        # 0=确定性最高 1=创意最高
+          max-tokens: 2048
+
+    # ---- pgvector 向量存储 ----
+    vectorstore:
+      pgvector:
+        host: ${PG_HOST:localhost}
+        port: ${PG_PORT:5432}
+        database: ${PG_DATABASE:aiextract}
+        username: ${PG_USER:wanglei}
+        password: ${PG_PASSWORD:}
+        initialize-schema: true
+        index-type: hnsw          # HNSW 图索引：构建慢但查询快，适合读多写少
+        distance-type: cosine_distance
+        dimensions: 1024          # DashScope text-embedding-v4 输出维度
+
+  # ---- @Async 线程池（向量化 / AI 调用） ----
+  task:
+    execution:
+      pool:
+        core-size: 2
+        max-size: 4
+        queue-capacity: 100
+        thread-name-prefix: embedding-
+
+  # ---- 文件上传 ----
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# ---- 服务端口 & 上下文路径 ----
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+# ---- 本地 AI 服务（FastAPI 侧边服务，如噪音清洗专用模型） ----
+ai:
+  service:
+    url: http://localhost:8000
+  # ---- 通义千问 / DashScope 嵌入服务 ----
+  qwen:
+    api-key: ${QWEN_API_KEY}
+
+# ---- JWT 认证 ----
+jwt:
+  secret: ${JWT_SECRET}
+  expiration: 86400000           # 24 小时（毫秒）
+
+# ---- 文件存储（local / oss / s3） ----
+storage:
+  type: local
+  local:
+    path: ./data/files
+
+# ============================================================
+# 业务配置
+# ============================================================
+app:
+  # ---- 分身分享 & C 端游客体系 ----
+  share:
+    guest-message-limit: 5        # 游客免费消息额度（跨会话全局计数）
+    guest-token-ttl-days: 7       # 游客 token 有效期（天），每次访问滑动续期
+    c-user-token-ttl-days: 30     # C 端注册用户 token 有效期（天）
+    guest-create-per-ip-hour: 20  # 单 IP 每小时可创建的游客数（防批量薅额度）
+    guest-msg-per-min: 6          # 单游客每分钟可发送的消息数（防脚本刷 AI 成本）
+
+  # ---- 实战对练模式 ----
+  evaluation:
+    auto-evaluate-turns: 12       # 自动评估前需完成的对话轮数
+    auto-demo-rounds: 10          # ProductDemoModal 自动演示轮数
+
+  # ---- Practice 对练追问策略 ----
+  practice:
+    max-retries-per-angle: 2      # 同一角度最多追问次数
+    question-templates:           # 追问话术模板，%s 替换为反例标签
+      - "在「%s」方面，你是怎么应对的？"
+      - "能分享一个「%s」的真实案例吗？"
+      - "遇到「%s」的问题，最关键的步骤是什么？"
+      - "「%s」时，有没有特别有效的具体话术？"
+      - "如果「%s」失败了，复盘时最常发现什么原因？"
+
+  # ---- 报告生成门槛 ----
+  report:
+    min-grains: 10                # 触发报告生成的最小活跃颗粒数
+    min-scenes: 3                 # 触发报告生成的最小场景覆盖数
+
+  # ---- 自动发现引擎（知识缺口 → 洞察 → 候选颗粒） ----
+  insight:
+    embed-batch-size: 20          # 每天凌晨嵌入处理批大小
+    cluster-threshold: 0.15       # 余弦距离聚类阈值（< 此值视为同类缺口）
+    min-attempts: 5               # 触发洞察的最低累计提问次数
+
+# ---- 日志 ----
+logging:
+  level:
+    org.springframework.security: INFO

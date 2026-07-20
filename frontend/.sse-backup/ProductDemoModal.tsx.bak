@@ -1,0 +1,872 @@
+'use client';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { getToken } from '@/lib/storage';
+import { API_BASE } from '@/lib/api/client';
+import type { GrainTrace } from '@/lib/api/audit';
+
+// ---- Types ----
+
+interface ScenarioInfo {
+  tag: string; description: string; grainCount: number;
+  avgScore?: number; grains: Array<{ id: string; standardScript: string; expertThought: string; }>;
+}
+
+interface Props {
+  skillId: string;
+  skill: { ownerName?: string; ownerTitle?: string; department?: string; seniority?: string; displayName?: string; };
+  profile?: { personality?: string; speakingStyle?: string; background?: string; };
+  scenarioGrains: Record<string, Array<{ id: string; sceneTag: string; sceneDescription: string; qualityScore?: number; expertThought: string; standardScript: string; commonMistakes: string; }>>;
+  isPublished?: boolean;
+  onClose: () => void;
+}
+
+type Phase = 'scenes' | 'mode-select' | 'chat' | 'evaluate';
+type Mode = 'practice' | 'qa' | 'demo' | 'debug';
+
+interface ChatMessage {
+  role: 'customer' | 'avatar'; content: string; sceneTag?: string;
+  grains?: GrainTrace[]; matchLevel?: string; levelLabel?: string;
+  championAnswer?: string; comparison?: string; hits?: string[]; misses?: string[]; offTopic?: boolean;
+  technique?: string; isRetry?: boolean;
+}
+
+// ---- Match styles ----
+
+const MATCH_STYLES: Record<string, { icon: string; border: string; bg: string; text: string; label: string }> = {
+  EXACT: { icon: '📋', border: 'border-green-300', bg: 'bg-green-50', text: 'text-green-700', label: '精确命中' },
+  SEMANTIC: { icon: '🔗', border: 'border-blue-300', bg: 'bg-blue-50', text: 'text-blue-700', label: '语义相关' },
+  PROFILE_GUESS: { icon: '💡', border: 'border-yellow-300', bg: 'bg-yellow-50', text: 'text-yellow-700', label: '画像推断' },
+  NO_DATA: { icon: '⚠️', border: 'border-red-300', bg: 'bg-red-50', text: 'text-red-700', label: '数据不足' },
+  NON_BUSINESS: { icon: '🚫', border: 'border-border-strong', bg: 'bg-surface', text: 'text-muted-foreground', label: '非业务' },
+};
+
+// ---- Component ----
+
+export default function ProductDemoModal({ skillId, skill, profile, scenarioGrains, isPublished, onClose }: Props) {
+  const [phase, setPhase] = useState<Phase>('scenes');
+  const [mode, setMode] = useState<Mode>('practice');
+  const [currentScene, setCurrentScene] = useState<ScenarioInfo | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [streamText, setStreamText] = useState('');
+  const [recQuestions, setRecQuestions] = useState<string[]>([]);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalResult, setEvalResult] = useState<any>(null);
+  const [currentAngle, setCurrentAngle] = useState(1);
+  const [totalAngles, setTotalAngles] = useState(0);
+  const [practiceAngles, setPracticeAngles] = useState<string[]>([]);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const retryRef = useRef(false);
+
+  const name = skill.ownerName || skill.displayName || '未命名';
+
+  // Build scenario list from data
+  const sceneList: ScenarioInfo[] = Object.entries(scenarioGrains || {})
+    .map(([tag, grains]) => ({
+      tag,
+      description: grains[0]?.sceneDescription || '',
+      grainCount: grains.length,
+      avgScore: grains.reduce((s, g) => s + (g.qualityScore || 0), 0) / (grains.length || 1),
+      grains: grains.map(g => ({ id: g.id, standardScript: g.standardScript, expertThought: g.expertThought })),
+    }))
+    .sort((a, b) => (b.avgScore || 0) - (a.avgScore || 0));
+
+  const sceneTags = sceneList.map(s => ({ tag: s.tag, count: s.grainCount, description: s.description }));
+
+  useEffect(() => { chatRef.current?.scrollTo(0, chatRef.current.scrollHeight); }, [messages, streamText]);
+  useEffect(() => { return () => abortRef.current?.abort(); }, []);
+
+  // ====== API helpers ======
+  const fetchToken = () => getToken() || '';
+  const authHeaders = () => ({ 'Content-Type': 'application/json', Authorization: `Bearer ${fetchToken()}` });
+
+  // SSE: chat / practice respond
+  const sseChat = async (endpoint: string, body: unknown, onChunk: (t: string) => void) => {
+    const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body), signal: abortRef.current?.signal });
+    const reader = res.body?.getReader(); if (!reader) return;
+    const dec = new TextDecoder(); let buf = '', full = '';
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buf += dec.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+      while (buf.includes('\n\n')) {
+        const i = buf.indexOf('\n\n'); const block = buf.substring(0, i); buf = buf.substring(i + 2);
+        const m = block.match(/data:\s*(\{[\s\S]*\})/);
+        if (m) { try { const e = JSON.parse(m[1]); if (e.type === 'chunk' || e.type === 'content') { full += (e.content || ''); onChunk(full); } else if (e.type === 'done') return; } catch {} }
+      }
+    }
+    if (full) onChunk(full);
+  };
+
+  // ====== Opening generators ======
+  // AI 生成客户开场白（不硬编码）
+  const generateCustomerOpening = async (scene: ScenarioInfo): Promise<string> => {
+    try {
+      const res = await fetch(`${API_BASE}/admin/skills/${skillId}/practice-opening`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ sceneTag: scene.tag }),
+      });
+      const json = await res.json();
+      if (json.code === 200 && json.data) return json.data;
+    } catch (e) { console.error('opening error', e); }
+    return `你好，我是公司采购负责人，最近在考虑「${scene.tag}」相关的事情，想听听你的建议。`;
+  };
+
+  // ====== Select scene → go to mode-select ======
+  const selectScene = (scene: ScenarioInfo) => {
+    setCurrentScene(scene); setPhase('mode-select');
+    fetch(`${API_BASE}/admin/skills/${skillId}/recommended-questions?sceneTag=${encodeURIComponent(scene.tag)}`, { headers: authHeaders() })
+      .then(r => r.json()).then(d => { if (d.data) setRecQuestions(d.data); }).catch(() => {});
+  };
+
+  // ====== Start mode ======
+  const startMode = (m: Mode) => {
+    abortRef.current?.abort(); abortRef.current = new AbortController();
+    setMode(m); setMessages([]); setStreamText(''); setEvalResult(null); setPhase('chat');
+    if (!currentScene) return;
+
+    if (m === 'practice') {
+      setCurrentAngle(1);
+      // 获取练习角度列表
+      fetch(`${API_BASE}/admin/skills/${skillId}/practice-angles?sceneTag=${encodeURIComponent(currentScene.tag)}`, { headers: authHeaders() })
+        .then(r => r.json()).then(d => {
+          if (d.code === 200 && d.data) { setPracticeAngles(d.data); setTotalAngles(d.data.length); }
+        }).catch(() => {});
+      setStreamText('生成客户开场...');
+      generateCustomerOpening(currentScene).then(opening => {
+        setStreamText('');
+        setMessages([{ role: 'avatar', content: opening, sceneTag: currentScene.tag, levelLabel: '🎭 客户开场' }]);
+      });
+    } else if (m === 'qa') {
+      // 拉取所有场景的推荐问题
+      fetch(`${API_BASE}/admin/skills/${skillId}/recommended-questions`, { headers: authHeaders() })
+        .then(r => r.json()).then(d => { if (d.data) setRecQuestions(d.data); }).catch(() => {});
+      const tags = sceneTags.slice(0, 2).map(t => t.tag).join('、');
+      setMessages([{ role: 'avatar', content: `你好，我是${name}的AI分身。我擅长${tags}等场景。有什么想问的？`, levelLabel: '💡 开场白' }]);
+    } else if (m === 'demo' || m === 'debug') {
+      startAutoDemo(currentScene, m === 'debug');
+    }
+  };
+
+  // ====== Auto demo SSE ======
+  const startAutoDemo = (scene: ScenarioInfo, interactive: boolean) => {
+    setAutoRunning(true); setMessages([]);
+    const ctrl = new AbortController(); abortRef.current = ctrl;
+    const mode = interactive ? 'full' : 'quick';
+    fetch(`${API_BASE}/admin/skills/${skillId}/auto-demo`, { method: 'POST', headers: authHeaders(), signal: ctrl.signal, body: JSON.stringify({ mode }) })
+      .then(async res => {
+        const reader = res.body?.getReader(); if (!reader) { setAutoRunning(false); return; }
+        const dec = new TextDecoder(); let buf = '';
+        while (true) {
+          const { done, value } = await reader.read(); if (done) break;
+          buf += dec.decode(value, { stream: true }).replace(/\r\n/g, '\n');
+          while (buf.includes('\n\n')) {
+            const i = buf.indexOf('\n\n'); const block = buf.substring(0, i); buf = buf.substring(i + 2);
+            const lines = block.split('\n'); let et = '', d = '';
+            for (const l of lines) { const t = l.trim(); if (t.startsWith('event:')) et = t.substring(6).trim(); else if (t.startsWith('data:')) d += t.substring(5); }
+            try { const p = JSON.parse(d);
+              if (et === 'customer') setMessages(prev => [...prev, { role: 'customer', content: p.content, sceneTag: p.sceneTag }]);
+              else if (et === 'avatar') setMessages(prev => [...prev, { role: 'avatar', content: p.content, grains: p.grains, matchLevel: p.matchLevel, levelLabel: MATCH_STYLES[p.matchLevel]?.label }]);
+              else if (et === 'done') { setAutoRunning(false); return; }
+            } catch {}
+          }
+        }
+      }).catch(e => { if (e.name !== 'AbortError') console.error(e); setAutoRunning(false); });
+  };
+
+  // ====== Practice: send response → evaluate ======
+  const sendPractice = async () => {
+    if (!input.trim() || streaming || !currentScene) return;
+    const msg = input.trim(); setInput(''); setStreaming(true);
+    const lastCustomerMsg = [...messages].reverse().find(m => m.role === 'avatar')?.content || '';
+
+    // 从 retryRef 读取，读完立即重置
+    const isRetry = retryRef.current;
+    retryRef.current = false;
+
+    // 1. 管理员回答
+    setMessages(prev => [...prev, { role: 'customer', content: msg, isRetry }]);
+
+    // 2. 调 practice-evaluate 获取销冠答案 + 点评 + 技法
+    let championData: any = null;
+    const prevChampion = isRetry
+      ? [...messages].reverse().find(m => m.role === 'customer' && m.championAnswer)?.championAnswer || ''
+      : '';
+    try {
+      const res = await fetch(`${API_BASE}/admin/skills/${skillId}/practice-evaluate`, {
+        method: 'POST', headers: authHeaders(),
+        body: JSON.stringify({ sceneTag: currentScene.tag, customerMessage: lastCustomerMsg, myResponse: msg, previousChampionAnswer: prevChampion }),
+      });
+      const json = await res.json();
+      if (json.code === 200 && json.data) championData = json.data;
+    } catch (e) { console.error(e); }
+
+    if (championData) {
+      setMessages(prev => {
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last && last.role === 'customer') {
+          last.championAnswer = championData.championAnswer;
+          last.comparison = championData.comparison;
+          last.hits = championData.hits || [];
+          last.misses = championData.misses || [];
+          last.offTopic = championData.offTopic || false;
+          last.technique = championData.technique || '';
+          last.grains = championData.grains;
+          last.matchLevel = championData.matchLevel;
+          last.levelLabel = MATCH_STYLES[championData.matchLevel]?.label;
+        }
+        return updated;
+      });
+    }
+    setStreaming(false);
+
+    // 3. AI 客户回应（传轮次+角度信息）
+    if (!isRetry) {
+      // 非 retry 时才让客户推进到下一轮
+      try {
+        setStreamText(''); setStreaming(true);
+        const localMessages = [...messages, { role: 'customer', content: msg }];
+        const histStr = localMessages.map(m =>
+          `${m.role === 'customer' ? '销售' : '客户'}: ${m.content}`).join('\n');
+        const anglesStr = practiceAngles.length > 0 ? practiceAngles.join('\n') : '';
+        let aiResponse = '';
+        await sseChat(`/skills/${skillId}/practice/respond`,
+          { message: msg, sceneContext: currentScene.tag, history: histStr,
+            roundNumber: currentAngle, totalAngles: totalAngles > 0 ? totalAngles : 3,
+            practiceAngles: anglesStr },
+          (text) => { aiResponse = text; setStreamText(text); });
+        setStreamText('');
+        setMessages(prev => [...prev, { role: 'avatar', content: aiResponse, sceneTag: currentScene.tag }]);
+      } catch { setStreamText(''); }
+    }
+    setStreaming(false);
+  };
+
+  // ====== Practice: retry same angle ======
+  const retryPractice = () => {
+    retryRef.current = true;
+    // 移除客户最后一轮回复（保留用户的回答 + champion 对比）
+    setMessages(prev => {
+      const lastAvatar = [...prev].reverse().findIndex(m => m.role === 'avatar');
+      if (lastAvatar >= 0) {
+        const idx = prev.length - 1 - lastAvatar;
+        return prev.slice(0, idx);
+      }
+      return prev;
+    });
+    setInput('');
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  // ====== Practice: advance to next angle ======
+  const advanceRound = () => {
+    if (streaming) return; // 防重入
+    const nextAngle = currentAngle + 1;
+    setCurrentAngle(nextAngle);
+    // 客户回应 — 传新的轮次
+    setStreaming(true); setStreamText('');
+    const histStr = messages.map(m =>
+      `${m.role === 'customer' ? '销售' : '客户'}: ${m.content}`).join('\n');
+    const anglesStr = practiceAngles.length > 0 ? practiceAngles.join('\n') : '';
+    let aiResponse = '';
+    sseChat(`/skills/${skillId}/practice/respond`,
+      { message: '（继续下一轮）', sceneContext: currentScene!.tag, history: histStr,
+        roundNumber: nextAngle, totalAngles: totalAngles > 0 ? totalAngles : 3,
+        practiceAngles: anglesStr },
+      (text) => { aiResponse = text; setStreamText(text); }
+    ).then(() => {
+      setStreamText('');
+      setMessages(prev => [...prev, { role: 'avatar', content: aiResponse, sceneTag: currentScene!.tag }]);
+      setStreaming(false);
+    }).catch(() => { setStreamText(''); setStreaming(false); });
+  };
+
+  // ====== QA: send question → SSE chat ======
+  const sendQa = async () => {
+    if (!input.trim() || streaming) return;
+    const msg = input.trim(); setInput(''); setStreaming(true); setStreamText('');
+    setMessages(prev => [...prev, { role: 'customer', content: msg }]);
+    const histStr = messages.map(m => `${m.role === 'customer' ? '你' : '分身'}: ${m.content}`).join('\n');
+    let full = '';
+    await sseChat(`/skills/${skillId}/chat`, { message: msg, mode: 'quick', history: histStr }, (text) => { full = text; setStreamText(text); });
+    // 溯源匹配
+    try {
+      const res = await fetch(`${API_BASE}/admin/skills/${skillId}/match-grains`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ query: msg }),
+      });
+      const json = await res.json();
+      if (json.code === 200 && json.data) {
+        const style = MATCH_STYLES[json.data.matchLevel] || MATCH_STYLES.NO_DATA;
+        setMessages(prev => [...prev, { role: 'avatar', content: full, grains: json.data.grains, matchLevel: json.data.matchLevel, levelLabel: style.label }]);
+        setStreamText(''); setStreaming(false);
+        return;
+      }
+    } catch (e) { console.error('match grains error', e); }
+    setMessages(prev => [...prev, { role: 'avatar', content: full, matchLevel: 'NO_DATA', levelLabel: '⚠️ 数据不足' }]);
+    setStreamText(''); setStreaming(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  // 推荐问题直接发送（不走 input）
+  const sendQaMessage = async (msg: string) => {
+    if (!msg.trim() || streaming) return;
+    setInput(''); setStreaming(true); setStreamText('');
+    setMessages(prev => [...prev, { role: 'customer', content: msg }]);
+    const histStr = messages.map(m => `${m.role === 'customer' ? '你' : '分身'}: ${m.content}`).join('\n');
+    let full = '';
+    await sseChat(`/skills/${skillId}/chat`, { message: msg, mode: 'quick', history: histStr }, (text) => { full = text; setStreamText(text); });
+    try {
+      const res = await fetch(`${API_BASE}/admin/skills/${skillId}/match-grains`, {
+        method: 'POST', headers: authHeaders(), body: JSON.stringify({ query: msg }),
+      });
+      const json = await res.json();
+      if (json.code === 200 && json.data) {
+        const style = MATCH_STYLES[json.data.matchLevel] || MATCH_STYLES.NO_DATA;
+        setMessages(prev => [...prev, { role: 'avatar', content: full, grains: json.data.grains, matchLevel: json.data.matchLevel, levelLabel: style.label }]);
+        setStreamText(''); setStreaming(false);
+        return;
+      }
+    } catch (e) { console.error('match grains error', e); }
+    setMessages(prev => [...prev, { role: 'avatar', content: full, matchLevel: 'NO_DATA', levelLabel: '⚠️ 数据不足' }]);
+    setStreamText(''); setStreaming(false);
+  };
+
+  // ====== End → evaluate ======
+  const endAndEvaluate = async () => {
+    setEvalLoading(true);
+    try {
+      if (mode === 'practice') {
+        const rounds: any[] = [];
+        for (let i = 0; i < messages.length; i++) {
+          if (messages[i].role !== 'customer') continue;
+          if (!messages[i].championAnswer) continue; // 只收集有评价的消息
+          rounds.push({
+            sceneTag: currentScene?.tag || '',
+            matchLevel: messages[i].matchLevel || 'NO_DATA',
+            myResponse: messages[i].content || '',
+            championAnswer: messages[i].championAnswer || '',
+            hits: messages[i].hits || [],
+            misses: messages[i].misses || [],
+            technique: messages[i].technique || '',
+            isRetry: messages[i].isRetry || false,
+            grains: messages[i].grains || [],
+          });
+        }
+        const res = await fetch(`${API_BASE}/admin/skills/${skillId}/practice-score`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ rounds }),
+        });
+        const json = await res.json();
+        if (json.code === 200) { setEvalResult(json.data); setPhase('evaluate'); }
+      } else if (mode === 'qa') {
+        const rounds: any[] = [];
+        for (let i = 0; i < messages.length; i++) {
+          if (messages[i].role !== 'avatar' || messages[i].levelLabel === '💡 开场白') continue;
+          const prevCustomer = i > 0 && messages[i-1].role === 'customer' ? messages[i-1] : null;
+          rounds.push({
+            question: prevCustomer?.content || '',
+            avatarAnswer: messages[i].content || '',
+            matchLevel: messages[i].matchLevel || 'PROFILE_GUESS',
+            grains: messages[i].grains || [],
+          });
+        }
+        const res = await fetch(`${API_BASE}/admin/skills/${skillId}/qa-summary`, {
+          method: 'POST', headers: authHeaders(), body: JSON.stringify({ rounds }),
+        });
+        const json = await res.json();
+        if (json.code === 200) { setEvalResult(json.data); setPhase('evaluate'); }
+      } else {
+        // demo/debug: reuse evaluate-demo
+        const res = await fetch(`${API_BASE}/admin/skills/${skillId}/evaluate-demo`, {
+          method: 'POST', headers: authHeaders(),
+          body: JSON.stringify({ messages: messages.map(m => ({ role: m.role, content: m.content })) }),
+        });
+        const json = await res.json();
+        if (json.code === 200) { setEvalResult(json.data); setPhase('evaluate'); }
+      }
+    } catch (e) { console.error(e); }
+    setEvalLoading(false);
+  };
+
+  // ====== Scene switch ======
+  const switchScene = (dir: 'prev' | 'next') => {
+    const idx = sceneList.findIndex(s => s.tag === currentScene?.tag);
+    const newIdx = dir === 'prev' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= sceneList.length) return;
+    setCurrentScene(sceneList[newIdx]); setMessages([]);
+    if (mode === 'practice') {
+      generateCustomerOpening(sceneList[newIdx]).then(opening =>
+        setMessages([{ role: 'avatar', content: opening, sceneTag: sceneList[newIdx].tag, levelLabel: '🎭 客户开场' }]));
+    }
+    else if (mode === 'qa') setMessages([{ role: 'avatar', content: `你好，我是${name}的AI分身。有什么关于「${sceneList[newIdx].tag}」想问的？`, levelLabel: '💡 开场白' }]);
+    else if (mode === 'demo' || mode === 'debug') { setAutoRunning(false); startAutoDemo(sceneList[newIdx], mode === 'debug'); }
+  };
+
+  const canPrev = currentScene && sceneList.findIndex(s => s.tag === currentScene.tag) > 0;
+  const canNext = currentScene && sceneList.findIndex(s => s.tag === currentScene.tag) < sceneList.length - 1;
+
+  // ====== Role labels per mode ======
+  const roleLabel = (role: 'customer' | 'avatar') => {
+    const sceneTag = currentScene?.tag;
+    if (mode === 'practice') {
+      return role === 'customer' ? '👤 销售（你）' : `👤 客户${sceneTag ? ' · ' + sceneTag : ''}`;
+    }
+    if (mode === 'qa') {
+      return role === 'customer' ? '👤 你' : '🤖 分身';
+    }
+    // demo / debug
+    return role === 'customer' ? '👤 客户' : '🤖 分身（销冠）';
+  };
+
+  // ====== Render trace ======
+  const Trace = ({ msg }: { msg: ChatMessage }) => {
+    if (msg.grains && msg.grains.length > 0) return (
+      <details className="mt-1 px-2"><summary className="text-[10px] text-gray-300 cursor-pointer hover:text-muted-foreground">📋 溯源 · {msg.grains.length}条</summary>
+        <div className="mt-1 space-y-1">{msg.grains.map((g, gi) => {
+          const s = MATCH_STYLES[g.matchLevel || 'SEMANTIC'] || MATCH_STYLES.SEMANTIC;
+          return <div key={gi} className={`text-[10px] ${s.text} ${s.bg} rounded px-2 py-1`}>{s.icon} {g.sceneTag}{g.fileName && ` · ${g.fileName}`}{g.qualityScore != null && ` · ⭐${g.qualityScore}`}</div>;
+        })}</div></details>);
+    const s = MATCH_STYLES[msg.matchLevel || 'PROFILE_GUESS'] || MATCH_STYLES.PROFILE_GUESS;
+    return <div className={`mt-1 text-[10px] ${s.text} px-2`}>{s.icon} {s.label}</div>;
+  };
+
+  // ====== Render: Scenes ======
+  if (phase === 'scenes') return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-surface-2 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b"><h2 className="text-lg font-bold">🔍 选择验证场景</h2><button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button></div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+          {sceneList.length === 0 ? <p className="text-sm text-muted-foreground-2 text-center py-10">暂无场景颗粒数据</p> : sceneList.map(s => (
+            <button key={s.tag} onClick={() => selectScene(s)} className="w-full text-left bg-surface-2 border rounded-xl p-4 hover:border-primary hover:shadow-sm transition group">
+              <div className="flex items-center justify-between"><h3 className="font-semibold text-sm text-gray-800 group-hover:text-primary">{s.tag}</h3>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground-2">
+                  <span>{s.grainCount}条颗粒</span>
+                  {s.avgScore != null && <span className="text-amber-500">⭐{s.avgScore.toFixed(1)}</span>}
+                  <span className="text-primary opacity-0 group-hover:opacity-100">开始 →</span>
+                </div>
+              </div>
+              {s.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{s.description}</p>}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ====== Render: Mode Select ======
+  if (phase === 'mode-select' && currentScene) return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-surface-2 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b">
+          <div><button onClick={() => setPhase('scenes')} className="text-xs text-muted-foreground-2 hover:text-muted-foreground">← 返回场景列表</button>
+            <h2 className="text-lg font-bold mt-0.5">{currentScene.tag}</h2></div>
+          <button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6">
+          <p className="text-sm text-muted-foreground mb-4">{currentScene.description?.substring(0, 100)}</p>
+
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              { key: 'practice' as Mode, icon: '🎭', title: '对练', desc: '刻意练习，找盲区', detail: '你扮演销冠，AI扮演客户。回答后看销冠会怎么说。' },
+              { key: 'qa' as Mode, icon: '💬', title: '问答', desc: '深度学习，理解逻辑', detail: '向分身提问，追问"为什么"，深入理解销冠思维。' },
+              { key: 'demo' as Mode, icon: '🎬', title: '快速演示', desc: '产品演示，给客户看', detail: '4-5轮精炼对话，有起承转合，自动播放。' },
+              { key: 'debug' as Mode, icon: '🔧', title: '完整调试', desc: '质量审查，给自己看', detail: '所有颗粒逐个验证，完整溯源和验收报告。' },
+            ].map(item => (
+              <button key={item.key} onClick={() => startMode(item.key)} className="p-5 rounded-xl border-2 border-border text-left hover:border-primary hover:shadow-md transition group">
+                <div className="text-3xl mb-3">{item.icon}</div>
+                <div className="font-bold text-sm mb-1 group-hover:text-primary">{item.title}</div>
+                <div className="text-xs text-muted-foreground-2 font-medium">{item.desc}</div>
+                <div className="text-[11px] text-gray-300 mt-2">{item.detail}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ====== Render: Chat ======
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="relative bg-surface-2 rounded-2xl w-full max-w-3xl max-h-[90vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <button onClick={() => { abortRef.current?.abort(); setPhase('mode-select'); }} className="text-xs text-muted-foreground-2 hover:text-muted-foreground shrink-0">← 返回</button>
+            <span className="text-sm font-semibold truncate">{mode === 'practice' ? '🎭 对练' : mode === 'qa' ? '💬 问答' : mode === 'demo' ? '🎬 快速演示' : '🔧 完整调试'}<span className="text-muted-foreground-2 font-normal ml-1">· {currentScene?.tag}</span></span>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-xl shrink-0">✕</button>
+        </div>
+
+        {/* QA: Recommended questions */}
+        {mode === 'qa' && recQuestions.length > 0 && (() => {
+          // 按场景标签分组
+          const grouped: Record<string, string[]> = {};
+          recQuestions.forEach(q => {
+            const m = q.match(/「(.+?)」/);
+            const tag = m ? m[1] : '其他';
+            if (!grouped[tag]) grouped[tag] = [];
+            grouped[tag].push(q);
+          });
+          const tags = Object.keys(grouped);
+          return (
+          <div className="px-6 py-2.5 bg-surface border-b shrink-0">
+            <p className="text-[10px] text-muted-foreground-2 mb-1.5">💡 试试这些问题（基于分身所有技能生成）</p>
+            <div className={`${showAllQuestions ? 'max-h-48 overflow-y-auto' : ''}`}>
+            {showAllQuestions ? (
+              <div className="space-y-3">
+                {tags.map(tag => (
+                  <div key={tag}>
+                    <p className="text-[10px] text-muted-foreground-2 mb-1 ml-1">{tag}</p>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {grouped[tag].map((q, i) => (
+                        <button key={i} onClick={() => { setShowAllQuestions(false); sendQaMessage(q); }}
+                          className="whitespace-nowrap px-2.5 py-1 bg-surface-2 border border-border rounded text-[11px] text-foreground hover:border-primary hover:text-primary hover:bg-primary-light transition">
+                          {q.replace(/^.*?「.+?」/, '').replace(/^[的，,]?/, '').substring(0, 24)}{q.length > 28 ? '…' : ''}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex gap-1.5 flex-wrap">
+                {recQuestions.slice(0, 5).map((q, i) => (
+                  <button key={i} onClick={() => { sendQaMessage(q); }}
+                    className="whitespace-nowrap px-3 py-1.5 bg-surface-2 border border-border rounded-full text-xs text-foreground hover:border-primary hover:text-primary hover:bg-primary-light transition shrink-0 font-medium">
+                    {q.substring(0, 35)}{q.length > 35 ? '...' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            </div>
+            {recQuestions.length > 5 && (
+              <button onClick={() => setShowAllQuestions(!showAllQuestions)}
+                className="mt-1.5 text-[10px] text-primary hover:underline">
+                {showAllQuestions ? '收起 ▲' : `更多 (${recQuestions.length - 5}) ▸`}
+              </button>
+            )}
+          </div>
+          );
+        })()}
+
+        {/* Round counter (practice only) */}
+        {mode === 'practice' && totalAngles > 0 && (
+          <div className="text-center text-xs text-muted-foreground-2 py-1.5 bg-surface border-b">
+            练习角度 {currentAngle}/{totalAngles}
+          </div>
+        )}
+
+        {/* Messages */}
+        <div ref={chatRef} className="flex-1 overflow-y-auto px-6 py-4 space-y-3 min-h-0">
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
+              <div className="max-w-[80%]">
+                <div className={`rounded-xl px-4 py-2.5 text-sm ${m.role === 'customer' ? 'bg-primary-light/30 text-gray-800' : 'bg-blue-50 text-gray-800'}`}>
+                  <p className={`text-xs mb-1 ${m.role === 'customer' ? 'text-muted-foreground-2' : 'text-blue-400'}`}>{roleLabel(m.role)}</p>
+                  {mode === 'qa' && m.role === 'avatar'
+                    ? <span dangerouslySetInnerHTML={{ __html: m.content
+                        .replace(/\*\*(.+?)\*\*/g, '<strong class="font-semibold text-gray-900">$1</strong>')
+                        .replace(/\n/g, '<br/>') }} />
+                    : m.content}
+                </div>
+                {m.role === 'avatar' && mode !== 'demo' && <Trace msg={m} />}
+
+                {/* Practice: champion comparison */}
+                {mode === 'practice' && m.role === 'customer' && m.championAnswer && (
+                  <div className={`mt-2 p-3 rounded-lg space-y-2 ${m.offTopic ? 'bg-blue-50 border border-blue-200' : 'bg-amber-50 border border-amber-200'}`}>
+                    {m.offTopic ? (
+                      <>
+                        <p className="text-xs font-semibold text-blue-600">💡 教练提醒</p>
+                        <p className="text-xs text-muted-foreground">{m.comparison}</p>
+                        {m.misses && m.misses.length > 0 && (
+                          <div className="text-[10px] text-blue-500"><span>建议关注：</span>{m.misses.map((ms: string, mi: number) => <span key={mi}>·{ms} </span>)}</div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs font-semibold text-amber-700">⭐ 销冠会怎么说</p>
+                        <p className="text-xs text-foreground">{m.championAnswer}</p>
+                        {m.hits && m.hits.length > 0 && (
+                          <div className="text-[10px] space-y-0.5">
+                            <span className="text-green-600 font-medium">✅ 你说到的：</span>
+                            {m.hits.map((h: string, hi: number) => <span key={hi} className="text-green-600 ml-1">·{h} </span>)}
+                          </div>
+                        )}
+                        {m.misses && m.misses.length > 0 && (
+                          <div className="text-[10px] space-y-0.5">
+                            <span className="text-red-500 font-medium">⚠️ 还差的：</span>
+                            {m.misses.map((ms: string, mi: number) => <span key={mi} className="text-red-500 ml-1">·{ms} </span>)}
+                          </div>
+                        )}
+                        {m.comparison && <p className="text-[10px] text-muted-foreground pt-1 border-t border-amber-100">📝 {m.comparison}</p>}
+                      </>
+                    )}
+                    {/* 技法标签 */}
+                    {m.technique && (
+                      <div className="px-2 py-1.5 bg-purple-50 border border-purple-200 rounded text-[10px] text-purple-700">
+                        🏷️ 技法：{m.technique}
+                      </div>
+                    )}
+                    {/* 再试一次 / 继续 — 只在最新一条有 champion 的销售消息上显示 */}
+                    {mode === 'practice' && !streaming && !autoRunning &&
+                      !messages.slice(i + 1).some(lm => lm.role === 'customer' && lm.championAnswer) && (
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={retryPractice} className="px-3 py-1 bg-purple-100 text-purple-700 rounded text-xs hover:bg-purple-200 font-medium">
+                          🔄 用技法再试一次
+                        </button>
+                        <button onClick={advanceRound} className="px-3 py-1 bg-primary-light/30 text-muted-foreground rounded text-xs hover:bg-border">
+                          ➡️ 继续下一轮
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {streaming && streamText && (
+            <div className="flex justify-start"><div className="max-w-[80%] rounded-xl px-4 py-2.5 bg-blue-50 text-gray-800 text-sm"><p className="text-xs text-blue-400 mb-1">🤖 分身 · 回复中...</p>{streamText}</div></div>
+          )}
+          {autoRunning && (
+            <div className="text-center text-xs text-muted-foreground-2 py-2">
+              {mode === 'debug' ? '🔧 逐轮验证中...' : '🎬 演示进行中...'}
+            </div>
+          )}
+        </div>
+
+        {/* Input bar */}
+        {!autoRunning && (mode === 'practice' || mode === 'qa') && (
+          <div className="flex items-center gap-2 px-6 py-3 border-t shrink-0">
+            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (mode === 'practice' ? sendPractice() : sendQa())}
+              placeholder={mode === 'practice' ? '输入你的销售回复...' : '输入你的问题...'} disabled={streaming}
+              className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-primary disabled:bg-surface" />
+            <button onClick={() => mode === 'practice' ? sendPractice() : sendQa()} disabled={streaming || !input.trim()}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-sm disabled:opacity-40">发送</button>
+          </div>
+        )}
+
+        {/* Bottom bar */}
+        <div className="flex items-center justify-between px-6 py-2.5 border-t bg-surface shrink-0">
+          <div className="flex gap-2">
+            <button onClick={() => switchScene('prev')} disabled={!canPrev} className="px-2.5 py-1 border rounded text-xs text-muted-foreground disabled:opacity-30 hover:bg-surface-2">← 上个场景</button>
+            <button onClick={() => switchScene('next')} disabled={!canNext} className="px-2.5 py-1 border rounded text-xs text-muted-foreground disabled:opacity-30 hover:bg-surface-2">下个场景 →</button>
+          </div>
+          {autoRunning && mode === 'debug' && (
+            <button onClick={() => { abortRef.current?.abort(); setAutoRunning(false); }}
+              className="px-4 py-1.5 bg-red-500 text-white rounded-lg text-xs">⏹ 停止验证</button>
+          )}
+          {!autoRunning && messages.length > 0 && (
+            <button onClick={endAndEvaluate} disabled={evalLoading}
+              className="px-4 py-1.5 bg-primary text-white rounded-lg text-xs disabled:opacity-40">{evalLoading ? '生成中...' : (mode === 'debug' ? '📊 验收报告' : mode === 'demo' ? '📋 演示评估' : '📋 结束对练')}</button>
+          )}
+        </div>
+
+        {/* ---- Practice Evaluate Overlay ---- */}
+        {phase === 'evaluate' && evalResult && mode === 'practice' && (
+          <div className="absolute inset-0 bg-surface-2/95 flex flex-col rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-bold">📋 本节回顾</h2>
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); }} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {/* 技法掌握 */}
+              {evalResult.techniqueDetails?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">🏷️ 你带走的技法</h4>
+                  {evalResult.techniqueDetails.map((td: any, tdi: number) => {
+                    const statusCfg = td.status === 'mastered' ? { icon: '✅', bg: 'bg-green-50', text: 'text-green-700', label: '已掌握' } :
+                      td.status === 'improving' ? { icon: '🔄', bg: 'bg-amber-50', text: 'text-amber-700', label: '再试后改善' } :
+                      { icon: '📌', bg: 'bg-surface', text: 'text-muted-foreground', label: '下次练习' };
+                    return (
+                      <div key={tdi} className={`${statusCfg.bg} rounded-lg p-3`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs font-semibold">{statusCfg.icon} {statusCfg.label}</span>
+                        </div>
+                        <p className={`text-xs ${statusCfg.text}`}>{td.technique}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {/* 下次试试 */}
+              {evalResult.tryNext?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">💡 下次试试</h4>
+                  {evalResult.tryNext.map((tip: string, ti: number) => (
+                    <p key={ti} className="text-xs text-muted-foreground bg-purple-50 rounded-lg px-3 py-2">💡 {tip}</p>
+                  ))}
+                </div>
+              )}
+              {/* 相关场景 */}
+              {evalResult.relatedScenes?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-muted-foreground mb-2">🔗 推荐继续练</h4>
+                  <div className="flex gap-2 flex-wrap">
+                    {evalResult.relatedScenes.map((s: string, si: number) => (
+                      <span key={si} className="px-3 py-1 bg-surface border border-border rounded-full text-xs text-muted-foreground">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Retry 统计 */}
+              {evalResult.retryCount > 0 && (
+                <p className="text-xs text-muted-foreground-2 text-center">本节你用「再试一次」改进了 {evalResult.retryCount} 次回答</p>
+              )}
+              {evalResult.suggestion && <p className="text-sm text-muted-foreground italic text-center border-t pt-3">💡 {evalResult.suggestion}</p>}
+            </div>
+            <div className="flex justify-center gap-3 px-6 py-4 border-t">
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); setMessages([]); setCurrentAngle(1); generateCustomerOpening(currentScene!).then(opening => setMessages([{ role: 'avatar', content: opening, sceneTag: currentScene!.tag, levelLabel: '🎭 客户开场' }])); }} className="px-5 py-2 border border-primary text-primary rounded-lg text-sm">🔄 再练一次</button>
+              <button onClick={onClose} className="px-5 py-2 bg-primary text-white rounded-lg text-sm">关闭</button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- QA Evaluate Overlay ---- */}
+        {phase === 'evaluate' && evalResult && mode === 'qa' && (
+          <div className="absolute inset-0 bg-surface-2/95 flex flex-col rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-bold">📊 问答报告</h2>
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); }} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {evalResult.traceRate && <div className="flex items-center gap-3 text-sm"><span className="text-muted-foreground">溯源覆盖率</span><b className="text-green-600">{evalResult.traceRate}</b></div>}
+              {evalResult.totalQuestions != null && <div className="text-sm text-muted-foreground">总提问: <b>{evalResult.totalQuestions}</b></div>}
+              {evalResult.coveredTags?.length > 0 && <div className="text-xs text-muted-foreground-2">✅ 已覆盖: {evalResult.coveredTags.map((t: string) => <span key={t} className="bg-green-50 text-green-600 px-2 py-0.5 rounded ml-1">{t}</span>)}</div>}
+              {evalResult.uncoveredTags?.length > 0 && <div className="text-xs text-muted-foreground-2">⚠️ 盲区: {evalResult.uncoveredTags.map((t: string) => <span key={t} className="bg-red-50 text-red-600 px-2 py-0.5 rounded ml-1">{t}</span>)}</div>}
+              {evalResult.risks?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">风险点</h4>
+                  {evalResult.risks.map((r: any, ri: number) => (
+                    <div key={ri} className="border border-red-200 bg-red-50 rounded-lg p-3 text-xs text-red-700">第{r.round}轮: {r.detail}</div>
+                  ))}
+                </div>
+              )}
+              {evalResult.suggestion && <p className="text-sm text-muted-foreground italic">💡 {evalResult.suggestion}</p>}
+            </div>
+            <div className="flex justify-center gap-3 px-6 py-4 border-t">
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); setMessages([]); }} className="px-5 py-2 border border-primary text-primary rounded-lg text-sm">🔄 继续提问</button>
+              <button onClick={onClose} className="px-5 py-2 bg-primary text-white rounded-lg text-sm">关闭</button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Quick Demo Evaluate Overlay: 简洁 ---- */}
+        {phase === 'evaluate' && evalResult && mode === 'demo' && (
+          <div className="absolute inset-0 bg-surface-2/95 flex flex-col rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-bold">🎬 演示评估</h2>
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); }} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {evalResult.verdictText && (
+                <div className={`rounded-xl p-4 ${evalResult.verdict === 'ready' ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'}`}>
+                  <div className="font-bold text-lg">{evalResult.verdict === 'ready' ? '✅' : '⚠️'} {evalResult.verdictText}</div>
+                </div>
+              )}
+              {evalResult.traceCoverage && (
+                <div className="text-sm text-muted-foreground">
+                  溯源覆盖率 <b className="text-green-600">{evalResult.traceCoverage.rate}%</b> — {evalResult.traceCoverage.detail}
+                </div>
+              )}
+              {evalResult.suggestion && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-xs text-blue-700 font-medium mb-1">📌 建议</p>
+                  <p className="text-sm text-blue-800">{evalResult.suggestion}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center gap-3 px-6 py-4 border-t">
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); setMessages([]); startAutoDemo(currentScene!, false); }} className="px-5 py-2 border border-primary text-primary rounded-lg text-sm">🔄 再演示一次</button>
+              <button onClick={onClose} className="px-5 py-2 bg-primary text-white rounded-lg text-sm">关闭</button>
+            </div>
+          </div>
+        )}
+
+        {/* ---- Debug Evaluate Overlay: 详细 ---- */}
+        {phase === 'evaluate' && evalResult && mode === 'debug' && (
+          <div className="absolute inset-0 bg-surface-2/95 flex flex-col rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-lg font-bold">📊 验收报告</h2>
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); }} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              {evalResult.verdictText && (
+                <div className={`rounded-xl p-4 ${evalResult.verdict === 'ready' ? 'bg-green-50 border border-green-200' : evalResult.verdict === 'review' ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+                  <div className={`font-bold ${evalResult.verdict === 'ready' ? 'text-green-700' : evalResult.verdict === 'review' ? 'text-amber-700' : 'text-red-700'}`}>{evalResult.verdictText}</div>
+                </div>
+              )}
+              {evalResult.traceCoverage && (
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">溯源覆盖率</span>
+                  <b className="text-green-600">{evalResult.traceCoverage.rate}%</b>
+                  <span className="text-xs text-muted-foreground-2">({evalResult.traceCoverage.detail})</span>
+                </div>
+              )}
+              {evalResult.skillCoverage?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">技能覆盖矩阵</h4>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {evalResult.skillCoverage.map((sc: any) => (
+                      <span key={sc.tag} className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${
+                        sc.status === 'covered' ? 'bg-green-100 text-green-700' :
+                        sc.status === 'partial' ? 'bg-amber-100 text-amber-700' :
+                        'bg-red-50 text-red-400'}`}>
+                        {sc.status === 'missing' ? '○ ' : '● '}{sc.tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {evalResult.risks?.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">风险标注</h4>
+                  {evalResult.risks.map((r: any, ri: number) => (
+                    <div key={ri} className="border border-red-200 bg-red-50 rounded-lg p-3 text-xs text-red-700">
+                      <span className="font-medium">{r.type}</span> — {r.detail}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {evalResult.roundReviews?.length > 0 && (
+                <details className="space-y-2" open>
+                  <summary className="text-sm font-semibold text-muted-foreground cursor-pointer">逐轮回放 · {evalResult.roundReviews.length}轮</summary>
+                  <div className="mt-2 space-y-2">
+                    {evalResult.roundReviews.map((rd: any) => (
+                      <div key={rd.round} className={`border rounded-lg p-3 text-xs ${rd.traceable ? 'border-green-200 bg-green-50/30' : 'border-border bg-surface'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-muted-foreground">第{rd.round}轮</span>
+                          <span>{rd.traceable ? '✅ 溯源成功' : '⚠️ 未命中'}</span>
+                          {rd.matchedSceneTag && <span className="text-green-600">· {rd.matchedSceneTag}</span>}
+                          <span className="text-gray-300">· {rd.matchLevel}</span>
+                        </div>
+                        <p className="text-muted-foreground-2 mt-1 line-clamp-2">客户: {rd.customerMsg?.substring(0, 80)}</p>
+                        <p className="text-muted-foreground-2 line-clamp-2">分身: {rd.avatarMsg?.substring(0, 80)}</p>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+              {evalResult.suggestion && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <p className="text-xs text-blue-700 font-medium mb-1">📌 下一步建议</p>
+                  <p className="text-sm text-blue-800">{evalResult.suggestion}</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-center gap-3 px-6 py-4 border-t">
+              <button onClick={() => { setPhase('chat'); setEvalResult(null); setMessages([]); startAutoDemo(currentScene!, true); }} className="px-5 py-2 border border-primary text-primary rounded-lg text-sm">🔄 重新验证</button>
+              <button onClick={onClose} className="px-5 py-2 bg-primary text-white rounded-lg text-sm">关闭</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
