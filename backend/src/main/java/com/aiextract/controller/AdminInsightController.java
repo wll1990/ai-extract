@@ -36,6 +36,7 @@ public class AdminInsightController {
     private final com.aiextract.service.AdminInsightService adminInsightService;
     private final com.aiextract.repository.AutoInsightRepository autoInsightRepository;
     private final com.aiextract.repository.CandidateGrainRepository candidateGrainRepository;
+    private final com.aiextract.service.DashScopeEmbeddingService embeddingService;
 
     /**
      * 分身使用概览 — 对话量 / 用户数 / 满意率。
@@ -335,7 +336,7 @@ public class AdminInsightController {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
         }
 
-        // 标记为已通过（实际写入 experience_grain + 向量化由 AutoInsightScheduler 或 AdminGrainService 处理）
+        // 标记已通过
         candidate.setStatus(com.aiextract.model.CandidateGrain.STATUS_APPROVED);
         candidate.setReviewedAt(LocalDateTime.now());
         if (body != null && body.containsKey(KEY_NOTE)) {
@@ -343,12 +344,46 @@ public class AdminInsightController {
         }
         candidateGrainRepository.save(candidate);
 
+        // 写入 experience_grain + 向量化
+        com.aiextract.model.Skill skill = skillRepository.findById(candidate.getSkillId())
+                .orElseThrow(() -> new BusinessException(404, "关联分身不存在"));
+        com.aiextract.model.ExperienceGrain grain = com.aiextract.model.ExperienceGrain.builder()
+                .id(UUID.randomUUID())
+                .spaceId(skill.getSpaceId())
+                .sceneTag(candidate.getSceneTag())
+                .sceneDescription(candidate.getSceneDescription())
+                .expertThought(candidate.getExpertThought())
+                .standardScript(candidate.getStandardScript())
+                .commonMistakes(candidate.getCommonMistakes())
+                .applicableCondition(candidate.getApplicableCondition())
+                .sourceType("auto_discovery")
+                .status("active")
+                .weight(1.0)
+                .helpfulCount(0).unhelpfulCount(0)
+                .createdAt(LocalDateTime.now())
+                .build();
+        grainRepository.save(grain);
+
+        // 向量化
+        String text = (grain.getExpertThought() != null ? grain.getExpertThought() : "")
+                + " " + (grain.getStandardScript() != null ? grain.getStandardScript() : "");
+        if (!text.trim().isEmpty()) {
+            try {
+                float[] vec = embeddingService.embed(text);
+                grainRepository.updateEmbedding(grain.getId(), arrayToPgVector(vec));
+                log.info("候选颗粒已写入并向量化 grainId={} sceneTag={}", grain.getId(), candidate.getSceneTag());
+            } catch (Exception e) {
+                log.error("候选颗粒向量化失败 grainId={}", grain.getId(), e);
+            }
+        }
+
         log.info("候选颗粒已审核通过 grainId={} sceneTag={}", id, candidate.getSceneTag());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", candidate.getId().toString());
+        result.put("grainId", grain.getId().toString());
         result.put("status", candidate.getStatus());
-        result.put("message", "候选颗粒已审核通过，将由调度器写入 experience_grain 并完成向量化");
+        result.put("message", "候选颗粒已写入经验库并完成向量化");
         return ApiResponse.success(result);
     }
 
@@ -417,6 +452,16 @@ public class AdminInsightController {
         m.put(KEY_NOTE, g.getNote());
         m.put("createdAt", g.getCreatedAt() != null ? g.getCreatedAt().toString() : null);
         return m;
+    }
+
+    private String arrayToPgVector(float[] vec) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < vec.length; i++) {
+            if (i > 0) { sb.append(","); }
+            sb.append(String.format("%.8f", vec[i]));
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
 }

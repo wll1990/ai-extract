@@ -7,6 +7,7 @@ import { SkillOpeningView } from '@/components/skill/SkillOpeningView';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 import RecommendedQuestions from '@/components/skill/RecommendedQuestions';
 import HistorySidebar from '@/components/skill/HistorySidebar';
+import { API_BASE } from '@/lib/api/client';
 import PracticeChatSection from './PracticeChatSection';
 import { useQaChat } from './hooks/useQaChat';
 import ShareModal from '@/components/admin/ShareModal';
@@ -42,6 +43,15 @@ export default function SkillChatPage() {
   onResetPracticeRef.current = resetPractice;
 
   const [openTraces, setOpenTraces] = useState<Record<string, boolean>>({});
+  const [openingMessage, setOpeningMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!skillId) return;
+    fetch(`${API_BASE}/skills/${skillId}/detail`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(d => { if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage); })
+      .catch(() => {});
+  }, [skillId]);
   const toggleTrace = (msgId: string) => setOpenTraces(prev => ({ ...prev, [msgId]: !prev[msgId] }));
 
   const qa = useQaChat({ skillId, skillInfo: { ownerName, ownerTitle, ownerQuote: '' }, chatMode, setChatMode, setModeSelected, onResetPracticeRef });
@@ -123,19 +133,20 @@ export default function SkillChatPage() {
         <div className="flex-1 overflow-auto">
           {/* ── Practice 模式 ── */}
           {chatMode === 'practice' && !practiceSceneTag && (
-            <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} sceneTags={qa.sceneTags}
+            <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
               defaultMode="practice" onQaStart={qa.handleQaStart} onPracticeStart={(tag) => startPracticeWithScene(tag)} />
           )}
 
           {chatMode === 'practice' && practiceSceneTag && (
-            <PracticeChatSection key={practiceKey} skillId={skillId} ownerName={ownerName}
+            <PracticeChatSection key={practiceKey} skillId={skillId}
               initialSceneTag={practiceSceneTag} setChatMode={setChatMode} abortRef={practiceAbortRef} />
           )}
 
           {/* ── QA / Talk 模式 ── */}
           {(chatMode === 'qa' || chatMode === 'talk') && (
             <SkillChatView inputValue={qa.inputValue} onInputChange={qa.setInputValue} onSend={qa.handleQaSend}
-              isStreaming={qa.isStreaming} placeholder={chatMode === 'talk' ? '聊聊你的想法...' : '问我任何销售问题...'}
+              isStreaming={qa.isStreaming} streamText={qa.qaStreamText} ownerName={ownerName}
+              placeholder={chatMode === 'talk' ? '聊聊你的想法...' : '问我任何销售问题...'}
               footer={
                 <div className="flex items-center justify-center gap-2">
                   <span className="text-[11px] text-muted-foreground-2">按 Enter 发送，Shift+Enter 换行</span>
@@ -144,8 +155,8 @@ export default function SkillChatPage() {
               <div className="mx-auto max-w-[720px] space-y-4 px-4">
 
                 {/* ── QA 场景选择界面 ── */}
-                {chatMode === 'qa' && qa.messages.length === 0 && !qa.qaSceneContext && (
-                  <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} sceneTags={qa.sceneTags}
+                {chatMode === 'qa' && qa.messages.length === 0 && qa.qaSceneContext == null && (
+                  <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
                     defaultMode="qa" onQaStart={qa.handleQaStart} onPracticeStart={(tag) => startPracticeWithScene(tag)} />
                 )}
 
@@ -160,6 +171,16 @@ export default function SkillChatPage() {
                   </div>
                 )}
 
+                {/* ── 分身开场白 ── */}
+                {qa.messages.length === 0 && openingMessage && (chatMode === 'qa' || chatMode === 'talk') && (
+                  <div className="flex justify-start animate-[fadeIn_500ms_ease-out]">
+                    <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-primary-light px-5 py-3.5">
+                      <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{openingMessage}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* ── 聊天气泡 ── */}
                 {qa.messages.map((msg) => {
                   const isAi = msg.role === 'ai' || msg.role === 'assistant';
@@ -167,6 +188,10 @@ export default function SkillChatPage() {
                   const matchLevel = sim >= 50 ? 'high' : sim >= 30 ? 'mid' : null;
                   const hasTrace = !!(msg.source && msg.grainCount);
                   const traceOpen = !!openTraces[msg.id];
+                  // 拆分正文和溯源分析区
+                  const sepIndex = (msg.content || '').indexOf('━━━━━━');
+                  const mainText = sepIndex >= 0 ? (msg.content || '').substring(0, sepIndex).trim() : (msg.content || '');
+                  const sourceText = sepIndex >= 0 ? (msg.content || '').substring(sepIndex + 6).trim() : '';
 
                   return (
                     <div key={msg.id}>
@@ -179,7 +204,20 @@ export default function SkillChatPage() {
                             {/* 主气泡 */}
                             <div className="rounded-2xl rounded-tl-sm bg-white border border-[#E8ECF1] px-4 py-3 text-sm text-[#1A1D23] leading-relaxed shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                               {msg.content ? (
-                                <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                                <div>
+                                  {mainText && <p className="whitespace-pre-wrap break-words">{mainText}</p>}
+                                  {sourceText && (
+                                    <div className={`${mainText ? 'mt-3' : ''} rounded-xl bg-gradient-to-br from-[#F8FAFE] to-[#F1F5FB] border border-[#D7E3F8] overflow-hidden`}>
+                                      <div className="flex items-center gap-1.5 px-3 py-2 bg-white/60 border-b border-[#E8EFF9]">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-[#2563EB]" />
+                                        <span className="text-[11px] font-medium text-[#475569]">经验溯源</span>
+                                      </div>
+                                      <div className="px-3 py-2.5">
+                                        <p className="whitespace-pre-wrap break-words text-[12px] text-[#64748B] leading-relaxed">{sourceText}</p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               ) : (
                                 <span className="inline-flex gap-1.5 items-center h-5">
                                   <span className="w-1.5 h-1.5 rounded-full bg-[#CBD5E1] animate-pulse" />
@@ -241,6 +279,11 @@ export default function SkillChatPage() {
                                     </span>
                                   ))}
                                 </div>
+                                {(msg as any).sourceNames && (
+                                  <div className="mt-2 text-[11px] text-[#64748B]">
+                                    📄 {(msg as any).sourceNames}
+                                  </div>
+                                )}
                               </div>
                             )}
                           </div>

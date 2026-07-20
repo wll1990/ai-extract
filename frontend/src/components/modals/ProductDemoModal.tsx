@@ -110,7 +110,8 @@ export default function ProductDemoModal({ skillId, skill, scenarioGrains, onClo
       <SkillChatView
         inputValue={flow.ui.input} onInputChange={flow.ui.setInput}
         onSend={() => state.mode === 'practice' ? flow.practice.sendPractice() : flow.qa.sendQa()}
-        isStreaming={flow.ui.streaming}
+        isStreaming={flow.ui.streaming} streamText={flow.ui.streamText}
+        ownerName={ownerName}
         placeholder={state.mode === 'practice' ? '输入你的销售回复...' : '输入你的问题...'}
         disabled={state.autoRunning || (state.mode !== 'practice' && state.mode !== 'qa')}
       >

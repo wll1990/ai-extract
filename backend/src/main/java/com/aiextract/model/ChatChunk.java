@@ -34,6 +34,7 @@ public class ChatChunk {
     private static final String KEY_GRAIN_COUNT = "grainCount";
     private static final String KEY_AVG_SCORE = "avgScore";
     private static final String KEY_AVG_SIMILARITY = "avgSimilarity";
+    private static final String KEY_SOURCE_NAMES = "sourceNames";
     private static final String KEY_ACTION = "action";
     private static final String KEY_DATA = "data";
     private static final String KEY_SKILL_ID = "skillId";
@@ -63,6 +64,9 @@ public class ChatChunk {
     private Integer grainCount;
     private String avgScore;
     private String avgSimilarity;
+
+    /** 来源名称列表（type=source 时有效）：素材文件名或访谈主题，逗号分隔 */
+    private String sourceNames;
 
     /** 警告信息（type=warning 时有效） */
     private String action;
@@ -108,7 +112,7 @@ public class ChatChunk {
 
     public static ChatChunk source(String reportId, String reportTitle, String grainIds,
                                      String grainTags, int grainCount, String avgScore,
-                                     String avgSimilarity) {
+                                     String avgSimilarity, String sourceNames) {
         ChatChunk c = new ChatChunk();
         c.type = "source";
         c.reportId = reportId;
@@ -118,6 +122,7 @@ public class ChatChunk {
         c.grainCount = grainCount;
         c.avgScore = avgScore;
         c.avgSimilarity = avgSimilarity;
+        c.sourceNames = sourceNames;
         return c;
     }
 
@@ -148,6 +153,7 @@ public class ChatChunk {
         }
         c.avgScore = event.get(KEY_AVG_SCORE) != null ? event.get(KEY_AVG_SCORE).toString() : null;
         c.avgSimilarity = event.get(KEY_AVG_SIMILARITY) != null ? event.get(KEY_AVG_SIMILARITY).toString() : null;
+        c.sourceNames = event.get(KEY_SOURCE_NAMES) != null ? event.get(KEY_SOURCE_NAMES).toString() : null;
         c.action = event.get(KEY_ACTION) != null ? event.get(KEY_ACTION).toString() : null;
         c.skillId = event.get(KEY_SKILL_ID) != null ? event.get(KEY_SKILL_ID).toString() : null;
         return c;
@@ -156,30 +162,26 @@ public class ChatChunk {
     /** 序列化为 SSE 事件的 data 字段 JSON */
     public String toSseJson() {
         try {
-            return MAPPER.writeValueAsString(toOrderedMap());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put(KEY_TYPE, type);
+            if (content != null) { m.put(KEY_CONTENT, content); }
+            if (data != null) { m.put(KEY_DATA, data); }
+            if (message != null) { m.put(KEY_MESSAGE, message); }
+            if (conversationId != null) { m.put(KEY_CONVERSATION_ID, conversationId); }
+            if (reportId != null) { m.put(KEY_REPORT_ID, reportId); }
+            if (reportTitle != null) { m.put(KEY_REPORT_TITLE, reportTitle); }
+            if (grainIds != null) { m.put(KEY_GRAIN_IDS, grainIds); }
+            if (grainTags != null) { m.put(KEY_GRAIN_TAGS, grainTags); }
+            if (grainCount != null) { m.put(KEY_GRAIN_COUNT, grainCount); }
+            if (avgScore != null) { m.put(KEY_AVG_SCORE, avgScore); }
+            if (avgSimilarity != null) { m.put(KEY_AVG_SIMILARITY, avgSimilarity); }
+            if (sourceNames != null) { m.put(KEY_SOURCE_NAMES, sourceNames); }
+            if (action != null) { m.put(KEY_ACTION, action); }
+            if (skillId != null) { m.put(KEY_SKILL_ID, skillId); }
+            return MAPPER.writeValueAsString(m);
         } catch (JsonProcessingException e) {
             return "{\"type\":\"error\",\"message\":\"序列化失败\"}";
         }
-    }
-
-    /** 组装为有序 Map，type 始终在前 */
-    public Map<String, Object> toOrderedMap() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put(KEY_TYPE, type);
-        if (content != null) { m.put(KEY_CONTENT, content); }
-        if (data != null) { m.put(KEY_DATA, data); }
-        if (message != null) { m.put(KEY_MESSAGE, message); }
-        if (conversationId != null) { m.put(KEY_CONVERSATION_ID, conversationId); }
-        if (reportId != null) { m.put(KEY_REPORT_ID, reportId); }
-        if (reportTitle != null) { m.put(KEY_REPORT_TITLE, reportTitle); }
-        if (grainIds != null) { m.put(KEY_GRAIN_IDS, grainIds); }
-        if (grainTags != null) { m.put(KEY_GRAIN_TAGS, grainTags); }
-        if (grainCount != null) { m.put(KEY_GRAIN_COUNT, grainCount); }
-        if (avgScore != null) { m.put(KEY_AVG_SCORE, avgScore); }
-        if (avgSimilarity != null) { m.put(KEY_AVG_SIMILARITY, avgSimilarity); }
-        if (action != null) { m.put(KEY_ACTION, action); }
-        if (skillId != null) { m.put(KEY_SKILL_ID, skillId); }
-        return m;
     }
 
     // ---- getters (Jackson 需要) ----

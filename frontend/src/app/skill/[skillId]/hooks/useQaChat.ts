@@ -103,8 +103,8 @@ export function useQaChat({
         fullContent += content;
         setQaStreamText(fullContent);
       },
-      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity) => {
-        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity };
+      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
+        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
@@ -162,6 +162,7 @@ export function useQaChat({
       onChunk: (content) => {
         fullContent += content;
         setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: fullContent } : m));
+        setQaStreamText(fullContent);
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore) => {
         setMessages((prev) => prev.map((m) => m.id === aiMsgId
@@ -171,10 +172,12 @@ export function useQaChat({
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
       },
       onDone: () => {
+        setQaStreamText('');
         setIsStreaming(false);
         loadConversations();
       },
       onError: () => {
+        setQaStreamText('');
         setIsStreaming(false);
         setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
       },
@@ -196,11 +199,14 @@ export function useQaChat({
 
   const handleQaStart = useCallback((sceneTag: string) => {
     setChatMode('qa');
-    setQaSceneContext(sceneTag);
+    setModeSelected(true);
+    setQaSceneContext(sceneTag || null);
     setMessages([]);
-    fetchRecommendedQuestions(skillId, sceneTag, authToken)
-      .then(qs => setContextQuestions(Array.isArray(qs) ? qs : []))
-      .catch(() => setContextQuestions([]));
+    if (sceneTag) {
+      fetchRecommendedQuestions(skillId, sceneTag, authToken)
+        .then(qs => setContextQuestions(Array.isArray(qs) ? qs : []))
+        .catch(() => setContextQuestions([]));
+    }
   }, [skillId, setChatMode, authToken]);
 
   const handleTalkStart = useCallback(() => {
@@ -218,8 +224,8 @@ export function useQaChat({
     let sourceInfo: any = {};
     const controller = chat(skillId, '你好', {
       onChunk: (c) => { full += c; setQaStreamText(full); },
-      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity) => {
-        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity };
+      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
+        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
       onMeta: (conversationId) => { if (conversationId) setCurrentConvId(conversationId); },
       onDone: () => {

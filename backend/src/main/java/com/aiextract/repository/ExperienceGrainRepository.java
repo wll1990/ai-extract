@@ -75,6 +75,7 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @param spaceIds spaceIds
      * @return 结果列表
      */
+    @Query("SELECT eg.spaceId, COUNT(eg) FROM ExperienceGrain eg WHERE eg.spaceId IN :spaceIds GROUP BY eg.spaceId")
     List<Object[]> countBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
     /** 按空间列表分页查询 */
     @Query("SELECT g FROM ExperienceGrain g WHERE g.spaceId IN :spaceIds AND g.status = 'active' AND g.embedding IS NOT NULL")
@@ -84,16 +85,21 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * increment（Helpful）。
      * @param id id
      */
+    @Modifying
+    @Query("UPDATE ExperienceGrain eg SET eg.helpfulCount = eg.helpfulCount + 1 WHERE eg.id = :id")
     void incrementHelpful(@Param("id") UUID id);
     /**
      * increment（Unhelpful）。
      * @param id id
      */
+    @Modifying
+    @Query("UPDATE ExperienceGrain eg SET eg.unhelpfulCount = eg.unhelpfulCount + 1 WHERE eg.id = :id")
     void incrementUnhelpful(@Param("id") UUID id);
     /**
      * 查询（Embedding）。
      * @return 查询结果
      */
+    @Query("SELECT eg FROM ExperienceGrain eg WHERE eg.embedding IS NULL")
     org.springframework.data.domain.Page<ExperienceGrain> findWithoutEmbedding(org.springframework.data.domain.Pageable pageable);
     /**
      * 查询（Space,Id,Status）。
@@ -154,6 +160,8 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @param id id
      * @param embedding embedding
      */
+    @Modifying
+    @Query(value = "UPDATE experience_grain SET embedding = CAST(:embedding AS VECTOR) WHERE id = :id", nativeQuery = true)
     void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
 
 

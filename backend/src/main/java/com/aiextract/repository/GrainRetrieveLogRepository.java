@@ -21,11 +21,14 @@ public interface GrainRetrieveLogRepository extends JpaRepository<GrainRetrieveL
      * @param skillId skillId
      * @return 结果列表
      */
+    @Query("SELECT grl.sceneTag, COUNT(grl) FROM GrainRetrieveLog grl WHERE grl.skillId = :skillId GROUP BY grl.sceneTag")
     List<Object[]> countBySkillIdGroupBySceneTag(@Param("skillId") UUID skillId);
     /**
      * 删除（Older,Than30,Days）。
      * @return 统计数量
      */
+    @Modifying
+    @Query(value = "DELETE FROM grain_retrieve_log WHERE created_at < NOW() - INTERVAL '30 days'", nativeQuery = true)
     int deleteOlderThan30Days();
 
 

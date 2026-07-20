@@ -185,6 +185,18 @@ export function ChatView({ skill }: ChatViewProps) {
           />
         )}
 
+        {/* Warning toast — 分身画像不完整等非致命提醒 */}
+        {chat.warning && (
+          <div style={{
+            position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+            padding: '10px 20px', borderRadius: 100, background: '#f59e0b',
+            color: '#fff', fontSize: 13, fontWeight: 500, zIndex: 200,
+            cursor: 'pointer', boxShadow: '0 4px 12px rgba(245,158,11,0.3)',
+          }} onClick={chat.dismissWarning}>
+            💡 {chat.warning}（点击关闭）
+          </div>
+        )}
+
         {/* Error toast */}
         {chat.error && (
           <div style={{

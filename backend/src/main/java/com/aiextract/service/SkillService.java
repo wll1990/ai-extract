@@ -106,21 +106,18 @@ public class SkillService {
                     .setting("自定义对练场景")
                     .customerLine(request.getCustomScene())
                     .build();
-            angles = List.of(
-                    "客户提出核心顾虑，考验你如何回应不确定性",
-                    "客户分享过往不愉快经历，考验你如何建立信任",
-                    "客户追问具体执行细节，考验你如何给出可执行的承诺");
+            angles = practiceDemoService.getScenePracticeAngles(id, "通用");
         } else if (request.getScene() != null && !request.getScene().isBlank()) {
             // 使用指定的场景标签 — 从颗粒中加载场景信息
             sceneInfo = loadSceneByTag(id, skill.getSpaceId(), request.getScene());
             angles = buildPracticeAngles(request.getScene());
         } else {
-            // 从最近报告读取预设场景
-            sceneInfo = loadPracticeScene(skill.getSpaceId());
-            angles = List.of(
-                    "客户提出核心顾虑，考验你如何回应不确定性",
-                    "客户分享过往不愉快经历，考验你如何建立信任",
-                    "客户追问具体执行细节，考验你如何给出可执行的承诺");
+            // 默认选第一个有活跃颗粒的场景
+            String defaultScene = grainRepository.findBySpaceId(skill.getSpaceId()).stream()
+                    .filter(g -> "active".equals(g.getStatus()) && g.getSceneTag() != null)
+                    .findFirst().map(ExperienceGrain::getSceneTag).orElse("通用");
+            sceneInfo = loadSceneByTag(id, skill.getSpaceId(), defaultScene);
+            angles = practiceDemoService.getScenePracticeAngles(id, defaultScene);
         }
 
         // 持久化：已发布分身创建 Conversation + 首条客户消息
@@ -278,8 +275,10 @@ public class SkillService {
             if (m.getReportId() != null) {
                 var report = reportMap.get(m.getReportId());
                 item.put("reportTitle", report != null ? report.getTitle() : null);
+                item.put("source", report != null ? report.getTitle() : null);
             } else {
                 item.put("reportTitle", null);
+                item.put("source", null);
             }
             return item;
         }).collect(Collectors.toList());
@@ -410,7 +409,7 @@ public class SkillService {
                     .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
                     .findFirst()
                     .map(ExperienceGrain::getCommonMistakes)
-                    .orElse("已经有两家在谈，不考虑新的");
+                    .orElse(practiceDemoService.generateCustomerOpening(id, entry.getKey()));
 
             Map<String, Object> scene = new LinkedHashMap<>();
             scene.put("label", entry.getKey());

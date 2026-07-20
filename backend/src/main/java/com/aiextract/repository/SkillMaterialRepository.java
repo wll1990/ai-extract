@@ -47,12 +47,14 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      * @param timeout timeout
      * @return 结果列表
      */
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('uploaded', 'parse_failed') AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
     List<SkillMaterial> findPendingParseTasks(@Param("timeout") LocalDateTime timeout);
     /**
      * 查询（Pending,Cleaning,Tasks）。
      * @param timeout timeout
      * @return 结果列表
      */
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('parsed', 'cleaning_failed') AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
     List<SkillMaterial> findPendingCleaningTasks(@Param("timeout") LocalDateTime timeout);
     /**
      * 查询（File,Url）。
@@ -66,11 +68,15 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      * @param workerId workerId
      * @return 统计数量
      */
+    @Modifying
+    @Query("UPDATE SkillMaterial sm SET sm.lockedBy = :workerId, sm.lockedAt = CURRENT_TIMESTAMP WHERE sm.id = :id AND sm.lockedBy IS NULL")
     int tryLock(@Param("id") UUID id, @Param("workerId") String workerId);
     /**
      * release（Lock）。
      * @param id id
      */
+    @Modifying
+    @Query("UPDATE SkillMaterial sm SET sm.lockedBy = NULL, sm.lockedAt = NULL WHERE sm.id = :id")
     void releaseLock(@Param("id") UUID id);
 
 

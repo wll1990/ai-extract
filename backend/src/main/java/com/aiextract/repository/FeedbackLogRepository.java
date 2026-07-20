@@ -36,23 +36,27 @@ public interface FeedbackLogRepository extends JpaRepository<FeedbackLog, UUID> 
      * @param rating rating
      * @return 结果列表
      */
+    @Query("SELECT COUNT(fl), fl.grainId FROM FeedbackLog fl WHERE fl.skillId = :skillId AND fl.rating = :rating GROUP BY fl.grainId")
     List<Object[]> countBySkillIdAndRatingGroupByGrainId(@Param("skillId") UUID skillId, @Param("rating") String rating);
     /**
-     * satisfaction（Stats）。
+     * satisfaction（Stats）— 满意数 & 总数。
      * @param skillId skillId
-     * @return 结果列表
+     * @return [upCount, totalCount]
      */
+    @Query("SELECT COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), COUNT(fl) FROM FeedbackLog fl WHERE fl.skillId = :skillId")
     List<Object[]> satisfactionStats(@Param("skillId") UUID skillId);
     /**
      * global（Satisfaction,Stats）。
-     * @return 结果列表
+     * @return [upCount, totalCount]
      */
+    @Query("SELECT COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), COUNT(fl) FROM FeedbackLog fl")
     List<Object[]> globalSatisfactionStats();
     /**
-     * batch（Satisfaction,Stats）。
+     * batch（Satisfaction,Stats）— 按 skillId 分组。
      * @param skillIds skillIds
-     * @return 结果列表
+     * @return [skillId, upCount, totalCount]
      */
+    @Query("SELECT fl.skillId, COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), COUNT(fl) FROM FeedbackLog fl WHERE fl.skillId IN :skillIds GROUP BY fl.skillId")
     List<Object[]> batchSatisfactionStats(@Param("skillIds") List<UUID> skillIds);
 
 

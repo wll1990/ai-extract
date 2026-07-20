@@ -74,6 +74,8 @@ public class ChatStreamService {
     private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
     private final com.aiextract.repository.ConversationStatsRepository conversationStatsRepository;
     private final com.aiextract.repository.GrainRetrieveLogRepository grainRetrieveLogRepository;
+    private final com.aiextract.repository.SkillMaterialRepository skillMaterialRepository;
+    private final com.aiextract.repository.InterviewSessionRepository interviewSessionRepository;
 
     /** RAG 查询改写开关（默认开启），关闭后直接用原始消息做语义检索 */
     @Value("${app.rag.query-rewrite.enabled:true}")
@@ -182,6 +184,12 @@ public class ChatStreamService {
         RagContext ragCtx = new RagContext(skill.getId(), convId, request.getMessage());
         GrainResult grains = retrieveGrainsWithScores(ragQuery, skill.getSpaceId(), 5, domain, ragCtx);
 
+        // 捕获溯源数据用于持久化
+        final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
+        final UUID persistedReportId = grains.grains().stream()
+            .map(com.aiextract.model.ExperienceGrain::getReportId)
+            .filter(id -> id != null).findFirst().orElse(null);
+
         String systemPrompt = skillService.buildSkillSystemPrompt(
             skill, grains.grains(), grains.tiers(), mode, request.getChannel());
         log.info("③ SystemPrompt构建完成 {}chars", systemPrompt.length());
@@ -215,7 +223,8 @@ public class ChatStreamService {
             .doOnComplete(() -> {
                 long aiMs = System.currentTimeMillis() - tAiStart;
                 log.info("④ AI流式完成 {}ms contentLen={}", aiMs, aiContent.length());
-                saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, skill);
+                saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, skill,
+                    persistedGrainId, persistedReportId);
             })
             .timeout(Duration.ofSeconds(120))
             .doOnError(e -> {
@@ -327,6 +336,7 @@ public class ChatStreamService {
 
         StringBuilder aiContent = new StringBuilder();
         Flux<ChatChunk> practiceStream = chatStreamAdapter.chatStream(messages, Map.of("mode", "practice"))
+            .retry(1)
             .map(ChatChunk::fromEventMap)
             .doOnNext(chunk -> {
                 if ("content".equals(chunk.getType()) && chunk.getContent() != null) {
@@ -728,40 +738,73 @@ public class ChatStreamService {
         return dc.getDomain().getCounterpartyLabel();
     }
 
-    private void saveAiMessage(UUID convId, boolean record, String content, String mode, LocalDateTime now, Skill skill) {
+    private void saveAiMessage(UUID convId, boolean record, String content, String mode, LocalDateTime now, Skill skill,
+                                UUID grainId, UUID reportId) {
         { if (!record || content.isEmpty()) return; }
         String counterpartyLabel = resolveCounterpartyLabel(skill);
         String aiLabel = "practice".equals(mode) ? counterpartyLabel : resolveRoleLabel(skill);
         skillMessageRepository.save(com.aiextract.model.SkillMessage.builder()
             .id(UUID.randomUUID()).conversationId(convId)
             .role("assistant").roleLabel(aiLabel)
-            .content(content).createdAt(now).build());
+            .content(content).grainId(grainId).reportId(reportId).createdAt(now).build());
     }
 
     private Flux<ChatChunk> buildSourceChunkFlux(UUID spaceId, List<ExperienceGrain> grains,
                                                    Map<UUID, Double> similarities) {
         try {
-            List<Report> reports = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
-                spaceId, PageRequest.of(0, 1)).getContent();
-            { if (reports.isEmpty()) return Flux.empty(); }
-            Report r = reports.get(0);
-            String grainIds = grains.stream().limit(3)
+            // 取前 3 个颗粒用于溯源展示
+            List<ExperienceGrain> topGrains = grains.stream().limit(3).toList();
+
+            String grainIds = topGrains.stream()
                 .map(g -> g.getId().toString()).collect(Collectors.joining(","));
-            String grainTags = grains.stream().limit(3)
+            String grainTags = topGrains.stream()
                 .map(g -> g.getSceneTag() != null ? g.getSceneTag() : "")
                 .filter(t -> !t.isEmpty()).distinct().collect(Collectors.joining(","));
-            double avgScore = grains.stream().limit(3)
+
+            // 解析来源名称：素材文件名 或 访谈主题
+            List<String> names = new java.util.ArrayList<>();
+            for (ExperienceGrain g : topGrains) {
+                if (g.getSourceMaterialId() != null) {
+                    skillMaterialRepository.findById(g.getSourceMaterialId()).ifPresent(m -> {
+                        if (m.getFileName() != null) names.add(m.getFileName());
+                    });
+                }
+                if (g.getSourceInterviewId() != null) {
+                    interviewSessionRepository.findById(g.getSourceInterviewId()).ifPresent(s -> {
+                        if (s.getTopic() != null) names.add("访谈: " + s.getTopic());
+                    });
+                }
+            }
+            String sourceNames = names.stream().distinct().collect(Collectors.joining(", "));
+
+            // 报告信息：优先用第一个 grain 的 reportId
+            String reportId = null;
+            String reportTitle = null;
+            UUID firstReportId = topGrains.stream()
+                .map(ExperienceGrain::getReportId).filter(id -> id != null).findFirst().orElse(null);
+            if (firstReportId != null) {
+                Report r = reportRepository.findById(firstReportId).orElse(null);
+                if (r != null) {
+                    reportId = r.getId().toString();
+                    reportTitle = r.getTitle();
+                }
+            }
+
+            double avgScore = topGrains.stream()
                 .mapToDouble(g -> g.getQualityScore() != null ? g.getQualityScore() : 0)
                 .average().orElse(0);
-            double avgSim = grains.stream().limit(3)
+            double avgSim = topGrains.stream()
                 .mapToDouble(g -> similarities.getOrDefault(g.getId(), 0.0))
                 .average().orElse(0);
+
             return Flux.just(ChatChunk.source(
-                r.getId().toString(), r.getTitle(), grainIds, grainTags,
+                reportId != null ? reportId : "",
+                reportTitle != null ? reportTitle : "",
+                grainIds, grainTags,
                 Math.min(grains.size(), 3), String.format("%.1f", avgScore),
-                String.format("%.0f", avgSim * 100)));
+                String.format("%.0f", avgSim * 100), sourceNames));
         } catch (Exception e) {
-            log.warn("获取来源报告失败: {}", e.getMessage());
+            log.warn("构建溯源信息失败: {}", e.getMessage());
             return Flux.empty();
         }
     }

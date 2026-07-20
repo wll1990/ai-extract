@@ -7,7 +7,7 @@ import { apiClient } from './client';
 
 export interface SceneInfo {
   name: string; reportCount: number; avgRating: number;
-  coverage: 'sufficient' | 'normal' | 'empty';
+  coverage: 'sufficient' | 'moderate' | 'empty';
   suggestedOwner?: { name: string; reason: string };
 }
 

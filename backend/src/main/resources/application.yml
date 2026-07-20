@@ -108,6 +108,12 @@ storage:
 # 业务配置
 # ============================================================
 app:
+  # ---- CORS 跨域白名单 ----
+  cors:
+    allowed-origins:
+      - http://localhost:3000
+      - http://localhost:3001
+
   # ---- 分身分享 & C 端游客体系 ----
   share:
     guest-message-limit: 5        # 游客免费消息额度（跨会话全局计数）

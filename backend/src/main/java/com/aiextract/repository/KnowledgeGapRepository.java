@@ -50,6 +50,7 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
      * @param skillIds skillIds
      * @return 结果列表
      */
+    @Query("SELECT k.skillId, COUNT(k) FROM KnowledgeGap k WHERE k.skillId IN :skillIds AND k.status = 'open' GROUP BY k.skillId")
     List<Object[]> countOpenGapsBySkillIds(@Param("skillIds") List<UUID> skillIds);
     // ========== pgvector embedding 操作 ==========
 
@@ -67,6 +68,8 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
      * @param id id
      * @param embedding embedding
      */
+    @Modifying
+    @Query(value = "UPDATE knowledge_gap SET embedding = CAST(:embedding AS VECTOR) WHERE id = :id", nativeQuery = true)
     void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
     /** 找到与给定向量最相似的前 N 条缺口（余弦距离 < 阈值表示相关） */
     @Query(value = "SELECT k.* FROM knowledge_gap k WHERE k.status = 'open' AND k.embedding IS NOT NULL AND k.id != :excludeId ORDER BY k.embedding <=> CAST(:embedding AS VECTOR) ASC LIMIT :limit",
@@ -94,6 +97,7 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
      * @param idB idB
      * @return 计算结果
      */
+    @Query(value = "SELECT 1 - (k1.embedding <=> k2.embedding) FROM knowledge_gap k1, knowledge_gap k2 WHERE k1.id = :idA AND k2.id = :idB", nativeQuery = true)
     Double cosineDistance(@Param("idA") UUID idA, @Param("idB") UUID idB);
 
 

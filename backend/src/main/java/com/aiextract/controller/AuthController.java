@@ -44,10 +44,32 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request,
+                                               HttpServletResponse httpResponse,
+                                               HttpServletRequest httpRequest) {
         LoginResponse response = authService.register(request);
-        // 不设置 Cookie：管理员创建其他用户时不应替换自己的 token
+        // 仅自注册时设置 Cookie：管理员创建其他用户时已有自己的有效 token，不覆盖
+        if (!hasValidToken(httpRequest)) {
+            setTokenCookie(httpResponse, response.getToken());
+        }
         return ApiResponse.success(response);
+    }
+
+    /** 检查请求是否携带有效 token（判断是否为已登录管理员操作） */
+    private boolean hasValidToken(HttpServletRequest request) {
+        if (request.getCookies() != null) {
+            for (Cookie c : request.getCookies()) {
+                if ("token".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
+                    try {
+                        jwtUtil.getUserIdFromToken(c.getValue());
+                        return true;
+                    } catch (Exception e) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     @GetMapping("/me")
@@ -59,6 +81,17 @@ public class AuthController {
         UUID userId = jwtUtil.getUserIdFromToken(token);
         UserInfoResponse response = authService.getCurrentUser(userId);
         return ApiResponse.success(response);
+    }
+
+    /** 退出登录 — 清除 HttpOnly Cookie */
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout(HttpServletResponse response) {
+        Cookie clear = new Cookie("token", "");
+        clear.setHttpOnly(true);
+        clear.setPath("/");
+        clear.setMaxAge(0);
+        response.addCookie(clear);
+        return ApiResponse.success();
     }
 
     /** 设置 HttpOnly Cookie */

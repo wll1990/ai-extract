@@ -248,6 +248,7 @@ public class AutoInsightScheduler {
         // 3. 写 auto_insight
         AutoInsight insight = AutoInsight.builder()
             .id(UUID.randomUUID())
+            .skillId(cluster.skillIds.isEmpty() ? null : cluster.skillIds.iterator().next())
             .type(parsed.type)
             .title(parsed.title)
             .description(parsed.description)

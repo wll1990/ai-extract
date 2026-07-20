@@ -49,6 +49,7 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
      * @param spaceIds spaceIds
      * @return 结果列表
      */
+    @Query("SELECT r.spaceId, COUNT(r) FROM Report r WHERE r.spaceId IN :spaceIds GROUP BY r.spaceId")
     List<Object[]> countBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
     /** 关键词搜索（标题+副标题，content_json 是 JSONB 不做 LIKE 全扫） */
     @Query("SELECT r FROM Report r WHERE "

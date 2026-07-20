@@ -14,6 +14,10 @@ export interface SkillChatViewProps {
   onSend: () => void;
   /** 是否正在流式输出 */
   isStreaming?: boolean;
+  /** 流式文本内容（首 chunk 到达后非空，用于隐藏 ThinkingCard） */
+  streamText?: string;
+  /** 分身名称，显示在 ThinkingCard 中 */
+  ownerName?: string;
   /** 输入框 placeholder */
   placeholder?: string;
   /** 是否禁用输入 */
@@ -34,6 +38,8 @@ export function SkillChatView({
   onInputChange,
   onSend,
   isStreaming = false,
+  streamText,
+  ownerName,
   placeholder = '输入你的问题...',
   disabled = false,
   footer,
@@ -56,7 +62,7 @@ export function SkillChatView({
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
         {children}
-        {isStreaming && <ThinkingCard text="正在思考…" />}
+        {isStreaming && !streamText && <ThinkingCard name={ownerName} />}
         <div ref={chatEndRef} />
       </div>
 

@@ -131,6 +131,11 @@ export default function MobileChatShell({
       ) : (
         <>
           {/* qa/talk 消息区 */}
+          {qa.isStreaming && (
+            <div className="h-0.5 w-full overflow-hidden bg-gray-100">
+              <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-400" />
+            </div>
+          )}
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {/* 紧凑自我介绍卡片 — 首次打开且无消息时展示 */}
             {qa.messages.length === 0 && !qa.qaStreamText && (

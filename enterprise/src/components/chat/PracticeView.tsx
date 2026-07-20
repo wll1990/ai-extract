@@ -22,6 +22,8 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const [streamText, setStreamText] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [practiceId, setPracticeId] = useState('');
+  const [practiceConvId, setPracticeConvId] = useState<string | undefined>();
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -33,6 +35,8 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
     setPhase('active');
     try {
       const data = await startPractice(skillId, sceneLabel);
+      setPracticeId(data.practiceId);
+      setPracticeConvId(data.conversationId);
       setMessages([{ role: 'assistant', content: data.scene.customerLine }]);
     } catch {
       setMessages([{ role: 'assistant', content: '你好，我听说你们的产品不错，但说实话我们已经有供应商了。' }]);
@@ -50,21 +54,27 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
     setStreamText('');
 
     let full = '';
-    const ctrl = respondPractice(skillId, '', text, {
-      onChunk: (c) => { full += c; setStreamText(full); },
-      onDone: () => {
-        setStreamText('');
-        setMessages(prev => [...prev, { role: 'assistant', content: full }]);
-        setIsStreaming(false);
+    const ctrl = respondPractice(
+      skillId, practiceId, text, {
+        onChunk: (c) => { full += c; setStreamText(full); },
+        onDone: () => {
+          setStreamText('');
+          setMessages(prev => [...prev, { role: 'assistant', content: full }]);
+          setIsStreaming(false);
+        },
+        onError: () => {
+          setIsStreaming(false);
+          setMessages(prev => [...prev, { role: 'assistant', content: '（对方暂时无法回应）' }]);
+        },
       },
-      onError: () => {
-        setIsStreaming(false);
-        setMessages(prev => [...prev, { role: 'assistant', content: '（对方暂时无法回应）' }]);
-      },
-    }, selectedScene);
+      selectedScene,      // sceneContext
+      undefined,           // history
+      practiceConvId,      // conversationId
+      selectedScene,       // sceneTag — 用于后端颗粒匹配和溯源
+    );
     abortRef.current?.abort();
     abortRef.current = ctrl;
-  }, [inputValue, isStreaming, skillId, selectedScene]);
+  }, [inputValue, isStreaming, skillId, selectedScene, practiceId, practiceConvId]);
 
   const handleEvaluate = useCallback(() => {
     setPhase('evaluating');

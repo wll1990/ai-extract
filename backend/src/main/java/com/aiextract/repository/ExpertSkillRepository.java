@@ -44,6 +44,7 @@ public interface ExpertSkillRepository extends JpaRepository<ExpertSkill, UUID> 
      * @param timeout timeout
      * @return 结果列表
      */
+    @Query("SELECT es FROM ExpertSkill es WHERE es.status = 'pending' AND (es.lockedAt IS NULL OR es.lockedAt < :timeout)")
     List<ExpertSkill> findPendingTasks(@Param("timeout") LocalDateTime timeout);
     /**
      * try（Lock）。
@@ -51,11 +52,15 @@ public interface ExpertSkillRepository extends JpaRepository<ExpertSkill, UUID> 
      * @param workerId workerId
      * @return 统计数量
      */
+    @Modifying
+    @Query("UPDATE ExpertSkill es SET es.lockedBy = :workerId, es.lockedAt = CURRENT_TIMESTAMP WHERE es.id = :id AND es.lockedBy IS NULL")
     int tryLock(@Param("id") UUID id, @Param("workerId") String workerId);
     /**
      * release（Lock）。
      * @param id id
      */
+    @Modifying
+    @Query("UPDATE ExpertSkill es SET es.lockedBy = NULL, es.lockedAt = NULL WHERE es.id = :id")
     void releaseLock(@Param("id") UUID id);
     /**
      * 查询（Status,Domain）。

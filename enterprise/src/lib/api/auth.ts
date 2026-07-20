@@ -35,3 +35,7 @@ export interface RegisterParams {
 export function register(params: RegisterParams): Promise<LoginResult> {
   return apiClient('/auth/register', { method: 'POST', body: JSON.stringify(params) });
 }
+
+export function logout(): Promise<void> {
+  return apiClient('/auth/logout', { method: 'POST' });
+}

@@ -29,7 +29,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -138,10 +137,21 @@ public class InterviewService {
         long completedCount = sessionRepository.countBySpaceIdAndStatus(spaceId, STATUS_COMPLETED);
         boolean isFirstInterview = completedCount == 0;
 
-        // 3. 从空间关联的 Skill 解析领域
-        String domain = skillRepository.findBySpaceId(spaceId)
-                .map(s -> domainConfigLoader.resolveDomain(s))
-                .orElseThrow(() -> new IllegalStateException("无法解析领域，spaceId=" + spaceId));
+        // 3. 解析领域：已有 Skill 直接取，否则用萃取师领域自动建 draft Skill
+        com.aiextract.model.Skill skill = skillRepository.findBySpaceId(spaceId).orElseGet(() -> {
+            String fallbackDomain = expertSkillId != null
+                ? expertSkillRepository.findById(expertSkillId).map(ExpertSkill::getDomain).orElse("sales.b2b_enterprise")
+                : "sales.b2b_enterprise";
+            com.aiextract.model.Skill s = com.aiextract.model.Skill.builder()
+                .id(UUID.randomUUID()).spaceId(spaceId)
+                .domain(fallbackDomain).status("generating")
+                .modelName("deepseek-chat").modelConfig("{}")
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                .build();
+            log.info("自动创建 draft Skill spaceId={} domain={}", spaceId, fallbackDomain);
+            return skillRepository.save(s);
+        });
+        String domain = domainConfigLoader.resolveDomain(skill);
 
         // 4. 构建并保存会话实体
         LocalDateTime now = LocalDateTime.now();
@@ -439,32 +449,6 @@ public class InterviewService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessions", list);
         return result;
-    }
-
-    // ==================== PrintWriter 模式的 SSE 方法 ====================
-
-    /**
-     * 发送消息并写 SSE 到 PrintWriter（旧版同步模式，供 IM 网关等场景使用）。
-     */
-    public void processMessageToWriter(String sessionId, String message, PrintWriter writer) {
-        processMessageFlux(sessionId, message)
-                .subscribe(chunk -> sse(writer, chunk.toOrderedMap()));
-    }
-
-    /**
-     * 恢复访谈并写 SSE 到 PrintWriter。
-     */
-    public void resumeSessionToWriter(String sessionId, PrintWriter writer) {
-        resumeSessionFlux(sessionId)
-                .subscribe(chunk -> sse(writer, chunk.toOrderedMap()));
-    }
-
-    /**
-     * 标记阶段完成并写 SSE 到 PrintWriter。
-     */
-    public void markPhaseCompleteToWriter(String sessionId, String phase, PrintWriter writer) {
-        markPhaseCompleteFlux(sessionId, phase)
-                .subscribe(chunk -> sse(writer, chunk.toOrderedMap()));
     }
 
     // ==================== 内部方法 — 状态管理 ====================
@@ -985,22 +969,6 @@ public class InterviewService {
         if (session != null) {
             session.setLastActiveAt(LocalDateTime.now());
             sessionRepository.save(session);
-        }
-    }
-
-    // ==================== SSE 输出 ====================
-
-    /**
-     * 将事件 Map 写入 SSE 输出流。
-     *
-     * <p>格式: data: {"type":"...","content":"..."}\n\n
-     */
-    private void sse(PrintWriter writer, Map<String, Object> data) {
-        try {
-            writer.write("data: " + objectMapper.writeValueAsString(data) + "\n\n");
-            writer.flush();
-        } catch (Exception e) {
-            log.error("SSE 写入失败", e);
         }
     }
 }

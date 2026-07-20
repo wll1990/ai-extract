@@ -50,12 +50,14 @@ public interface AutoInsightRepository extends JpaRepository<AutoInsight, UUID> 
      * 统计（Active,Severity）。
      * @return 结果列表
      */
+    @Query("SELECT ai.severity, COUNT(ai) FROM AutoInsight ai WHERE ai.status = 'active' GROUP BY ai.severity")
     List<Object[]> countActiveBySeverity();
     /**
      * 统计（Active,Severity,For,Skill）。
      * @param skillId skillId
      * @return 结果列表
      */
+    @Query("SELECT ai.severity, COUNT(ai) FROM AutoInsight ai WHERE ai.skillId = :skillId AND ai.status = 'active' GROUP BY ai.severity")
     List<Object[]> countActiveBySeverityForSkill(@Param("skillId") UUID skillId);
     /**
      * 统计（Status）。

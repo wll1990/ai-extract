@@ -25,12 +25,14 @@ public interface ConversationStatsRepository extends JpaRepository<ConversationS
      * @param end end
      * @return 结果列表
      */
+    @Query("SELECT COUNT(DISTINCT cs.conversationId), COUNT(DISTINCT cs.userId) FROM ConversationStats cs WHERE cs.skillId = :skillId AND cs.createdAt BETWEEN :start AND :end")
     List<Object[]> statsOverview(@Param("skillId") UUID skillId, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     /**
-     * rag（Distribution）。
+     * rag（Distribution）— RAG 匹配分布：高匹配 / 参考 / 无匹配的合计。
      * @param skillId skillId
      * @return 结果列表
      */
+    @Query("SELECT COALESCE(SUM(cs.ragHighCount), 0), COALESCE(SUM(cs.ragRefCount), 0), COALESCE(SUM(cs.ragNoneCount), 0) FROM ConversationStats cs WHERE cs.skillId = :skillId")
     List<Object[]> ragDistribution(@Param("skillId") UUID skillId);
     /**
      * 查询（Skill,Id,Test）。
@@ -44,6 +46,7 @@ public interface ConversationStatsRepository extends JpaRepository<ConversationS
      * @param end end
      * @return 结果列表
      */
+    @Query("SELECT COUNT(DISTINCT cs.conversationId), COUNT(DISTINCT cs.userId) FROM ConversationStats cs WHERE cs.createdAt BETWEEN :start AND :end")
     List<Object[]> globalOverview(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     /**
      * batch（Stats,Overview）。
@@ -52,6 +55,7 @@ public interface ConversationStatsRepository extends JpaRepository<ConversationS
      * @param end end
      * @return 结果列表
      */
+    @Query("SELECT cs.skillId, COUNT(DISTINCT cs.conversationId), COUNT(DISTINCT cs.userId), COALESCE(SUM(cs.ragHighCount),0), COALESCE(SUM(cs.ragRefCount),0), COALESCE(SUM(cs.ragNoneCount),0), MAX(cs.createdAt) FROM ConversationStats cs WHERE cs.skillId IN :skillIds AND cs.createdAt BETWEEN :start AND :end GROUP BY cs.skillId")
     List<Object[]> batchStatsOverview(@Param("skillIds") List<UUID> skillIds, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
 

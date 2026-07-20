@@ -197,10 +197,11 @@ public class ExpertService {
     /** 短事务：更新萃取师状态 */
     @Transactional(rollbackFor = Exception.class, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
     public void updateExpertStatus(UUID expertId, String status) {
-        expertSkillRepository.findById(expertId).ifPresent(expert -> {
-            expert.setStatus(status);
-            expertSkillRepository.save(expert);
-        });
+        ExpertSkill expert = expertSkillRepository.findById(expertId)
+                .orElseThrow(() -> new BusinessException(404, "萃取师不存在: " + expertId));
+        expert.setStatus(status);
+        expertSkillRepository.save(expert);
+        log.info("萃取师状态更新 expertId={} status={}", expertId, status);
     }
 
 
@@ -241,6 +242,7 @@ public class ExpertService {
                                 .bodyValue(Map.of("file_path", fileUrl, "file_name", doc.getFileName()))
                                 .retrieve()
                                 .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, String>>() {})
+                                .timeout(java.time.Duration.ofSeconds(120))
                                 .block();
                         if (parseResult != null && parseResult.containsKey("text")) {
                             doc.setParsedContent(parseResult.get("text"));
@@ -523,7 +525,7 @@ public class ExpertService {
         UUID gid = UUID.fromString(grainId);
         ExpertGrain grain = expertGrainRepository.findById(gid).orElse(null);
         if (grain == null) {
-            return;
+            throw new BusinessException(404, "颗粒不存在: " + grainId);
         }
 
         if (request.getCategory() != null) grain.setCategory(request.getCategory());

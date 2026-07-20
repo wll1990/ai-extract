@@ -34,6 +34,7 @@ interface ChatState {
   currentConvId: string | null;
   sourceInfo: SourceInfo | null;
   error: string | null;
+  warning: string | null;
   suggestedQuestions: string[];
 }
 
@@ -44,7 +45,9 @@ type ChatAction =
   | { type: 'META'; conversationId: string }
   | { type: 'DONE' }
   | { type: 'ERROR'; message: string }
+  | { type: 'WARNING'; message: string }
   | { type: 'SUGGESTED'; questions: string[] }
+  | { type: 'DISMISS_WARNING' }
   | { type: 'LOAD_HISTORY'; messages: Message[]; conversationId: string }
   | { type: 'RESET' };
 
@@ -84,6 +87,12 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'ERROR':
       return { ...state, phase: 'error', error: action.message };
 
+    case 'WARNING':
+      return { ...state, warning: action.message };
+
+    case 'DISMISS_WARNING':
+      return { ...state, warning: null };
+
     case 'SUGGESTED':
       return { ...state, suggestedQuestions: action.questions };
 
@@ -92,13 +101,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state, phase: 'idle',
         messages: action.messages,
         currentConvId: action.conversationId,
-        error: null, streamText: '', sourceInfo: null,
+        error: null, warning: null, streamText: '', sourceInfo: null,
       };
 
     case 'RESET':
       return {
         phase: 'entry', messages: [], streamText: '',
-        currentConvId: null, sourceInfo: null, error: null,
+        currentConvId: null, sourceInfo: null, error: null, warning: null,
         suggestedQuestions: [],
       };
 
@@ -109,7 +118,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
 const initialState: ChatState = {
   phase: 'entry', messages: [], streamText: '',
-  currentConvId: null, sourceInfo: null, error: null,
+  currentConvId: null, sourceInfo: null, error: null, warning: null,
   suggestedQuestions: [],
 };
 
@@ -156,6 +165,9 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
         if (type === 'suggested' && Array.isArray(data.questions)) {
           dispatch({ type: 'SUGGESTED', questions: data.questions as string[] });
         }
+        if (type === 'warning' && typeof data.message === 'string') {
+          dispatch({ type: 'WARNING', message: data.message as string });
+        }
       },
     };
 
@@ -165,6 +177,10 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
 
   const clearError = useCallback(() => {
     dispatch({ type: 'RESET' });
+  }, []);
+
+  const dismissWarning = useCallback(() => {
+    dispatch({ type: 'DISMISS_WARNING' });
   }, []);
 
   const reset = useCallback(() => {
@@ -192,6 +208,7 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
     abortRef,
     sendMessage,
     clearError,
+    dismissWarning,
     reset,
     loadHistory,
   };

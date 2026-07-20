@@ -173,7 +173,8 @@ export default function PracticeScenarioModal({ skillId, grain, onClose }: Props
           inputValue={input}
           onInputChange={setInput}
           onSend={handleSend}
-          isStreaming={streaming}
+          isStreaming={streaming} streamText={streamText}
+          ownerName="销冠"
           placeholder="输入客户问题..."
           footer={
             <div className="flex gap-2">

@@ -21,7 +21,7 @@ public interface ExpertDocumentRepository extends JpaRepository<ExpertDocument, 
      */
     List<ExpertDocument> findByExpertId(UUID expertId);
 
-    @Query("SELECT d.expertId, COUNT(d) FROM ExpertDocument d WHERE d.expertId IN :ids GROUP BY d.expertId")
+    @Query("SELECT ed.expertId, COUNT(ed) FROM ExpertDocument ed WHERE ed.expertId IN :ids GROUP BY ed.expertId")
     /**
      * 统计（Expert,Id）。
      * @param ids ids

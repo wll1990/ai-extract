@@ -338,8 +338,8 @@ public class MaterialCleaningService {
                 }
             }
         } catch (Exception e) {
-            log.warn("预检失败，跳过: {}", e.getMessage());
-            acceptanceData.put(KEY_PASSED, true); // 预检异常不阻断上传
+            log.warn("预检异常，素材标记未通过: {}", e.getMessage());
+            acceptanceData.put(KEY_PASSED, false);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -937,13 +937,15 @@ public class MaterialCleaningService {
         if (faqJson != null) {
             try {
                 metaMap.put("faq", objectMapper.readValue(faqJson, List.class));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.error("FAQ JSON 解析失败", e);
             }
         }
         if (narrativeJson != null) {
             try {
                 metaMap.put("narrative", objectMapper.readValue(narrativeJson, Map.class));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.error("Narrative JSON 解析失败", e);
             }
         }
         self.finalizeMaterialCleaning(materialId, analysisNotes, toJson(metaMap));

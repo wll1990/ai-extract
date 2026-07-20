@@ -38,6 +38,10 @@ public class GrainRetriever {
     public List<GrainResult> retrieveWithScores(String question, UUID spaceId, int topK) {
         long t0 = System.currentTimeMillis();
         float[] queryVector = embeddingService.embed(question);
+        if (queryVector == null || queryVector.length == 0) {
+            log.error("嵌入服务返回空 question={}", question.substring(0, Math.min(100, question.length())));
+            return List.of();
+        }
         String vectorStr = arrayToPgVector(queryVector);
 
         // Step 1: ANN 检索 + 记录余弦相似度

@@ -39,7 +39,7 @@ public interface ExpertGrainRepository extends JpaRepository<ExpertGrain, UUID> 
      * @param expertId expertId
      */
     void deleteByExpertId(UUID expertId);
-    @Query("SELECT g.expertId, COUNT(g) FROM ExpertGrain g WHERE g.expertId IN :ids GROUP BY g.expertId")
+    @Query("SELECT eg.expertId, COUNT(eg) FROM ExpertGrain eg WHERE eg.expertId IN :ids GROUP BY eg.expertId")
     /**
      * 统计（Expert,Id）。
      * @param ids ids

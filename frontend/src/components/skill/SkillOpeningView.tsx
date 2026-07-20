@@ -11,6 +11,7 @@ export interface SceneTag {
 export interface SkillOpeningViewProps {
   ownerName: string;
   ownerTitle?: string;
+  ownerIntro?: string;
   sceneTags?: SceneTag[];
   /** 选中场景后：开始问答 */
   onQaStart?: (sceneTag: string) => void;
@@ -39,6 +40,7 @@ function getEmoji(label: string): string {
 export function SkillOpeningView({
   ownerName,
   ownerTitle,
+  ownerIntro,
   sceneTags,
   onQaStart,
   onPracticeStart,
@@ -94,87 +96,117 @@ export function SkillOpeningView({
 
   return (
     <div className="space-y-6 py-8">
-      {/* 英雄区 — ChatHero 卡片样式 */}
-      <div className="mx-auto rounded-2xl border border-border bg-surface-2/80 px-5 py-5 shadow-sm">
-        <div className="flex items-center gap-4 mb-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-sm flex-shrink-0 overflow-hidden">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/def-avatar.png" alt={ownerName || 'AI分身'} className="h-full w-full object-cover" />
+      {/* 英雄区 — 仅在无默认模式时显示（初始进入分身页） */}
+      {!defaultMode && (
+        <div className="mx-auto rounded-2xl border border-border bg-surface-2/80 px-5 py-5 shadow-sm">
+          <div className="flex items-start gap-4 mb-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-sm flex-shrink-0 overflow-hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/def-avatar.png" alt={ownerName || 'AI分身'} className="h-full w-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-bold text-foreground">
+                嗨，我是 {ownerName || 'AI分身'} <span className="inline-block">👋</span>
+              </h2>
+              {ownerTitle && <p className="text-sm text-muted-foreground">{ownerTitle}</p>}
+              {ownerIntro && (
+                <p className="mt-2 text-[13px] text-muted-foreground leading-relaxed">
+                  {ownerIntro}
+                </p>
+              )}
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-foreground">
-              嗨，我是 {ownerName || 'AI分身'} <span className="inline-block">👋</span>
-            </h2>
-            {ownerTitle && <p className="text-sm text-muted-foreground">{ownerTitle}</p>}
+          <div className="grid grid-cols-3 gap-2 mb-2">
+            <div className="rounded-xl bg-surface px-3 py-2 text-center">
+              <div className="text-sm mb-0.5">💬</div>
+              <div className="text-[11px] font-semibold text-foreground">请教销冠</div>
+              <div className="text-[10px] text-muted-foreground">AI 教你怎么说</div>
+            </div>
+            <div className="rounded-xl bg-surface px-3 py-2 text-center">
+              <div className="text-sm mb-0.5">🎯</div>
+              <div className="text-[11px] font-semibold text-foreground">场景对练</div>
+              <div className="text-[10px] text-muted-foreground">模拟实战对话</div>
+            </div>
+            <div className="rounded-xl bg-surface px-3 py-2 text-center">
+              <div className="text-sm mb-0.5">📋</div>
+              <div className="text-[11px] font-semibold text-foreground">萃取报告</div>
+              <div className="text-[10px] text-muted-foreground">查看经验成果</div>
+            </div>
           </div>
+          <p className="text-[11px] text-muted-foreground-2 text-center">每一段经历都值得被看见，每一个故事都能启发他人。</p>
         </div>
-        <div className="grid grid-cols-3 gap-2 mb-2">
-          <div className="rounded-xl bg-surface px-3 py-2 text-center">
-            <div className="text-sm mb-0.5">💬</div>
-            <div className="text-[11px] font-semibold text-foreground">请教销冠</div>
-            <div className="text-[10px] text-muted-foreground">AI 教你怎么说</div>
-          </div>
-          <div className="rounded-xl bg-surface px-3 py-2 text-center">
-            <div className="text-sm mb-0.5">🎯</div>
-            <div className="text-[11px] font-semibold text-foreground">场景对练</div>
-            <div className="text-[10px] text-muted-foreground">模拟实战对话</div>
-          </div>
-          <div className="rounded-xl bg-surface px-3 py-2 text-center">
-            <div className="text-sm mb-0.5">📋</div>
-            <div className="text-[11px] font-semibold text-foreground">萃取报告</div>
-            <div className="text-[10px] text-muted-foreground">查看经验成果</div>
-          </div>
-        </div>
-        <p className="text-[11px] text-muted-foreground-2 text-center">每一段经历都值得被看见，每一个故事都能启发他人。</p>
-      </div>
+      )}
 
-      {/* 场景轮播 */}
+      {/* 场景选择 */}
       {sortedTags.length > 0 && (
         <div>
           <p className="text-xs font-medium text-muted-foreground text-center mb-2.5">
             {defaultMode === 'qa' ? '选一个场景开始，或直接跳过' : defaultMode === 'practice' ? '选一个场景开始对练' : '选择一个场景开始'}
           </p>
 
-          <div ref={scrollRef} className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
-            <div className="flex gap-3 px-[15%]">
-              {sortedTags.map((s) => {
-                const isSelected = s.tag === selectedScene;
-                return (
-                  <button
-                    key={s.tag}
-                    type="button"
-                    onClick={() => handleSceneClick(s.tag)}
-                    className={`movie-card snap-center flex-shrink-0 w-[70%] rounded-2xl p-5 text-center shadow-sm transition-all ${
-                      isSelected
-                        ? 'bg-primary text-white shadow-md scale-[1.02]'
-                        : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
-                    }`}
-                  >
-                    <span className="text-2xl">{getEmoji(s.tag)}</span>
-                    <h3 className={`mt-2 text-base font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
-                      {s.tag}
-                    </h3>
-                    {(s.count || 0) > 0 && (
-                      <p className={`mt-1 text-xs ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
-                        {s.count} 条销冠锦囊
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {sortedTags.length > 1 && (
-            <div className="flex justify-center gap-1.5 mt-2.5">
-              {sortedTags.map((_, i) => (
-                <button key={i} type="button"
-                  className={`rounded-full transition-all duration-200 ${
-                    i === activeIndex ? 'h-1.5 w-4 bg-foreground' : 'h-1.5 w-1.5 bg-muted-foreground-2/30'
-                  }`}
-                />
+          {defaultMode ? (
+            /* 已选模式：紧凑网格，点击直达 */
+            <div className="grid grid-cols-2 gap-2">
+              {sortedTags.map((s) => (
+                <button
+                  key={s.tag}
+                  type="button"
+                  onClick={() => handleSceneClick(s.tag)}
+                  className="rounded-xl bg-surface-2 border border-border px-3 py-3 text-left hover:border-primary/30 hover:shadow-sm transition-all"
+                >
+                  <span className="text-base">{getEmoji(s.tag)}</span>
+                  <h3 className="mt-1 text-sm font-semibold text-foreground">{s.tag}</h3>
+                  {(s.count || 0) > 0 && (
+                    <p className="mt-0.5 text-[11px] text-muted-foreground-2">{s.count} 条锦囊</p>
+                  )}
+                </button>
               ))}
             </div>
+          ) : (
+            /* 初始页：电影卡片轮播 */
+            <>
+              <div ref={scrollRef} className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
+                <div className="flex gap-3 px-[15%]">
+                  {sortedTags.map((s) => {
+                    const isSelected = s.tag === selectedScene;
+                    return (
+                      <button
+                        key={s.tag}
+                        type="button"
+                        onClick={() => handleSceneClick(s.tag)}
+                        className={`movie-card snap-center flex-shrink-0 w-[70%] rounded-2xl p-5 text-center shadow-sm transition-all ${
+                          isSelected
+                            ? 'bg-primary text-white shadow-md scale-[1.02]'
+                            : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
+                        }`}
+                      >
+                        <span className="text-2xl">{getEmoji(s.tag)}</span>
+                        <h3 className={`mt-2 text-base font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                          {s.tag}
+                        </h3>
+                        {(s.count || 0) > 0 && (
+                          <p className={`mt-1 text-xs ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
+                            {s.count} 条销冠锦囊
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {sortedTags.length > 1 && (
+                <div className="flex justify-center gap-1.5 mt-2.5">
+                  {sortedTags.map((_, i) => (
+                    <button key={i} type="button"
+                      className={`rounded-full transition-all duration-200 ${
+                        i === activeIndex ? 'h-1.5 w-4 bg-foreground' : 'h-1.5 w-1.5 bg-muted-foreground-2/30'
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
