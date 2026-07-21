@@ -186,6 +186,24 @@ export default function MobileChatShell({
                   <Avatar name={name} avatarUrl={info.avatarUrl} />
                   <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
                     <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{m.content}</div>
+                    {m.avgSimilarity != null && (
+                      <div className="mt-1.5">
+                        {Number(m.avgSimilarity) >= 50 ? (
+                          <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                            style={{ background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))' }}>
+                            🏅 精准匹配
+                          </span>
+                        ) : Number(m.avgSimilarity) >= 30 ? (
+                          <span className="inline-flex items-center gap-1 rounded-r-md border-l-2 border-[#8b9dc3] bg-[#f8f9fb] px-2 py-0.5 text-[10px] font-medium text-[#5a6d8a]">
+                            📎 关联匹配
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] italic text-[#b0b7c3]">
+                            ✦ 综合画像生成
+                          </span>
+                        )}
+                      </div>
+                    )}
                     {(m.source || m.grainTags) && (
                       <div className="mt-2 border-t border-[#dfe6ff] pt-2">
                         <details>

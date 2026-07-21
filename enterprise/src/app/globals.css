@@ -184,3 +184,9 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
+
+/* U1: 推荐问题按钮 hover 箭头右移 */
+button:hover .rec-q-arrow {
+  transform: translateX(4px);
+  opacity: 1;
+}

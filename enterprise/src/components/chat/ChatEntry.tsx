@@ -3,6 +3,15 @@
 import { useEffect, useState } from 'react';
 import { fetchRecommendedQuestions, type SkillDetail } from '@/lib/api/skill';
 
+const SCENE_EMOJIS: Record<string, string> = {
+  '价格谈判': '💰', '竞品对比': '🤝', '异议处理': '🎯',
+  '决策推进': '🚀', '需求挖掘': '🔍', '方案演示': '📊',
+  '客户维护': '💝', '催单逼单': '⚡', '破冰建立信任': '🧊',
+  '行业研究': '📈', '公司分析': '🏢', '估值定价': '💎',
+  '交易决策': '📉', '风险控制': '🛡️', '宏观判断': '🌐',
+};
+const getEmoji = (tag: string) => SCENE_EMOJIS[tag] || '💡';
+
 interface ChatEntryProps {
   skill: SkillDetail;
   onQuestionClick: (question: string) => void;
@@ -67,21 +76,46 @@ export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
         </p>
       )}
 
-      {/* Scene tags */}
+      {/* Scene tags — 3 列可点击卡片 */}
       {skill.sceneTags && skill.sceneTags.length > 0 && (
-        <div style={{
-          display: 'flex', flexWrap: 'wrap', gap: 6,
-          justifyContent: 'center', marginBottom: 24,
-        }}>
-          {skill.sceneTags.slice(0, 8).map(tag => (
-            <span key={tag.tag} style={{
-              padding: '4px 12px', borderRadius: 100,
-              background: 'var(--s3)', fontSize: 11,
-              color: 'var(--fg-mid)',
-            }}>
-              {tag.tag}
-            </span>
-          ))}
+        <div style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
+          <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
+            💡 擅长领域 · 点击即可开始
+          </p>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
+          }}>
+            {skill.sceneTags.slice(0, 6).map(tag => (
+              <button key={tag.tag} onClick={() => onQuestionClick(`聊聊${tag.tag}方面的经验？`)}
+                style={{
+                  padding: '12px 8px', borderRadius: 12,
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--surface)',
+                  cursor: 'pointer', textAlign: 'center',
+                  fontFamily: 'inherit',
+                  transition: 'all 0.2s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                  e.currentTarget.style.borderColor = 'var(--tangerine)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                }}
+              >
+                <div style={{ fontSize: 22, marginBottom: 4 }}>{getEmoji(tag.tag)}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-high)' }}>{tag.tag}</div>
+                {(tag.count || 0) > 0 && (
+                  <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 2 }}>
+                    {tag.count} 条锦囊
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -97,11 +131,14 @@ export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
                 key={i}
                 onClick={() => onQuestionClick(q)}
                 style={{
-                  width: '100%', padding: '10px 18px', borderRadius: 100,
-                  border: '1.5px solid var(--border-subtle)',
+                  width: '100%', padding: '12px 16px', borderRadius: 12,
+                  border: '1px solid var(--border-subtle)',
                   background: 'var(--surface)', cursor: 'pointer',
                   fontSize: 13, color: 'var(--fg-high)', textAlign: 'left',
-                  transition: 'all 0.15s', fontFamily: 'inherit',
+                  fontFamily: 'inherit',
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transform: 'scale(1)',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'var(--s3)';
@@ -111,8 +148,18 @@ export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
                   e.currentTarget.style.background = 'var(--surface)';
                   e.currentTarget.style.borderColor = 'var(--border-subtle)';
                 }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.97)'; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                {q}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 16 }}>💬</span>
+                  <span>{q}</span>
+                </span>
+                <span style={{
+                  fontSize: 14, color: 'var(--fg-dim)',
+                  transition: 'transform 0.2s ease-out, opacity 0.2s',
+                  opacity: 0.5,
+                }} className="rec-q-arrow">→</span>
               </button>
             ))}
           </div>

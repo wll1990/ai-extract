@@ -217,7 +217,7 @@ export default function SkillChatPage() {
                 {qa.messages.map((msg) => {
                   const isAi = msg.role === 'ai' || msg.role === 'assistant';
                   const sim = msg.avgSimilarity ? Number(msg.avgSimilarity) : 0;
-                  const matchLevel = sim >= 50 ? 'high' : sim >= 30 ? 'mid' : null;
+                  const matchLevel = sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
                   const hasTrace = !!(msg.source && msg.grainCount);
                   const traceOpen = !!openTraces[msg.id];
                   // 拆分正文和溯源分析区
@@ -262,19 +262,25 @@ export default function SkillChatPage() {
                             {/* 元信息行：匹配度 + 溯源 + 反馈 */}
                             <div className="flex items-center gap-3 mt-1.5 ml-1">
                               {/* 匹配度指示器 */}
-                              {matchLevel && (
-                                <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${
-                                  matchLevel === 'high' ? 'text-[#16A34A]' : 'text-[#CA8A04]'
-                                }`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${
-                                    matchLevel === 'high' ? 'bg-[#16A34A]' : 'bg-[#CA8A04]'
-                                  }`} />
-                                  {matchLevel === 'high' ? '高度匹配' : '参考匹配'}
+                              {matchLevel === 'precise' && (
+                                <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                                  style={{ background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))' }}>
+                                  🏅 精准匹配
+                                </span>
+                              )}
+                              {matchLevel === 'related' && (
+                                <span className="inline-flex items-center gap-1 rounded-r-md border-l-2 border-[#8b9dc3] bg-[#f8f9fb] px-2 py-0.5 text-[11px] font-medium text-[#5a6d8a]">
+                                  📎 关联匹配
+                                </span>
+                              )}
+                              {matchLevel === 'synthetic' && (
+                                <span className="inline-flex items-center gap-1 text-[11px] italic text-[#b0b7c3]">
+                                  ✦ 综合画像生成
                                 </span>
                               )}
 
-                              {/* 溯源展开按钮 */}
-                              {hasTrace && (
+                              {/* 溯源展开按钮 — synthetic 不展示 */}
+                              {hasTrace && matchLevel !== 'synthetic' && (
                                 <button onClick={() => toggleTrace(msg.id)}
                                   className="inline-flex items-center gap-1 text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
                                   <span className={`transition-transform ${traceOpen ? 'rotate-90' : ''}`}>›</span>

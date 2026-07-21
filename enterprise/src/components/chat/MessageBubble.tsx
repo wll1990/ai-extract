@@ -13,7 +13,7 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const hasTrace = !!(message.grainTags && message.grainCount);
   const sim = message.avgSimilarity ? Number(message.avgSimilarity) : 0;
-  const matchLevel = sim >= 50 ? 'high' : sim >= 30 ? 'mid' : null;
+  const matchLevel = sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
 
   if (isUser) {
     return (
@@ -79,21 +79,39 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
               display: 'flex', alignItems: 'center', gap: 12,
               marginTop: 6, marginLeft: 4,
             }}>
-              {matchLevel && (
+              {matchLevel === 'precise' && (
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 11, fontWeight: 500,
-                  color: matchLevel === 'high' ? '#16a34a' : '#ca8a04',
+                  padding: '2px 10px', borderRadius: 6,
+                  border: '1px solid #c9a44b',
+                  background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))',
+                  fontSize: 11, fontWeight: 500, color: '#8b6914',
+                  boxShadow: '0 0 6px rgba(201,164,75,0.08)',
                 }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%',
-                    background: matchLevel === 'high' ? '#16a34a' : '#ca8a04',
-                  }} />
-                  {matchLevel === 'high' ? '高度匹配' : '参考匹配'}
+                  <span style={{ fontSize: 13 }}>🏅</span> 精准匹配
+                </span>
+              )}
+              {matchLevel === 'related' && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '2px 10px', borderRadius: '0 6px 6px 0',
+                  borderLeft: '2px solid #8b9dc3',
+                  background: '#f8f9fb',
+                  fontSize: 11, fontWeight: 500, color: '#5a6d8a',
+                }}>
+                  <span style={{ fontSize: 13 }}>📎</span> 关联匹配
+                </span>
+              )}
+              {matchLevel === 'synthetic' && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, fontStyle: 'italic', color: '#b0b7c3',
+                }}>
+                  <span style={{ fontSize: 12 }}>✦</span> 综合画像生成
                 </span>
               )}
 
-              {hasTrace && (
+              {hasTrace && matchLevel !== 'synthetic' && (
                 <button
                   onClick={() => setTraceOpen(!traceOpen)}
                   style={{
