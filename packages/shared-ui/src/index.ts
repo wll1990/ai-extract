@@ -1,5 +1,29 @@
+// ═══ Chat Components ═══
 export { ChatComposer, type ChatComposerProps } from './chat/ChatComposer';
 export { ThinkingCard, type ThinkingCardProps } from './chat/ThinkingCard';
 export { QuickReplies, type QuickRepliesProps } from './chat/QuickReplies';
 export { WaveThinking, type WaveThinkingProps } from './chat/WaveThinking';
 export { RadarReveal, type RadarRevealProps, type Dimension } from './chat/RadarReveal';
+
+// ═══ API ═══
+export { configureApi, apiClient, getApiBaseUrl, type ApiConfig } from './api/client';
+export { connectSse, type SseCallbacks } from './api/sse';
+export {
+  fetchPublicStats, fetchPublicSkills, fetchSkillDetail,
+  fetchRecommendedQuestions, chat, listConversations,
+  getConversationMessages, deleteConversation, submitFeedback,
+  fetchSceneTags, fetchPracticeScenes, startPractice,
+  respondPractice, evaluatePractice, evaluatePracticeRound,
+  fetchPracticeTrend,
+  type SceneTag, type PublicSkillInfo, type SkillDetail,
+  type ConversationItem, type ConversationMessage,
+  type PracticeSceneData, type PracticeStartData, type RoundEval,
+} from './api/skill';
+
+// ═══ Hooks ═══
+export {
+  usePracticeFlow, practiceReducer,
+  type PracticeFlowInputs,
+  type PracticeMessage, type PracticeEval, type PracticeSource,
+} from './hooks/usePracticeFlow';
+export { resolveConfig, type ChatConfig } from './hooks/types';
