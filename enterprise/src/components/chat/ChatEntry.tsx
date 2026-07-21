@@ -28,10 +28,8 @@ export function ChatEntry({
 }: ChatEntryProps) {
   const [questions, setQuestions] = useState<string[]>([]);
   const [questionsLoading, setQuestionsLoading] = useState(false);
-  const [showAllQuestions, setShowAllQuestions] = useState(false);
-  const [showAllScenes, setShowAllScenes] = useState(false);
-  const INITIAL_QUESTIONS = 4;
-  const INITIAL_SCENES = 3;
+  const [questionsBatch, setQuestionsBatch] = useState(1);
+  const BATCH_QUESTIONS = 4;
   const name = skill.displayName || skill.ownerName || '专家';
   const initial = name[0];
 
@@ -51,8 +49,7 @@ export function ChatEntry({
   useEffect(() => {
     if (showQuestions && activeSceneTag !== undefined) {
       loadQuestions(activeSceneTag);
-      setShowAllQuestions(false);
-      setShowAllScenes(false);
+      setQuestionsBatch(1);
     }
   }, [activeSceneTag]);
 
@@ -121,86 +118,66 @@ export function ChatEntry({
         </div>
       )}
 
-      {/* 擅长领域 — scene tag grid (QA only) */}
-      {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (() => {
-        const visibleScenes = showAllScenes
-          ? skill.sceneTags
-          : skill.sceneTags.slice(0, INITIAL_SCENES);
-        const hasMore = skill.sceneTags.length > INITIAL_SCENES;
-        return (
-        <div className="animate-stagger-4" style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
-          <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
+      {/* 擅长领域 — 横向滚动 pill 条 (QA only) */}
+      {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (
+        <div className="animate-stagger-4" style={{ maxWidth: 520, width: '100%', marginBottom: 24 }}>
+          <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 8 }}>
             擅长领域
           </p>
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
+            display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8,
+            scrollbarWidth: 'none', msOverflowStyle: 'none',
+            justifyContent: 'center', flexWrap: 'nowrap',
           }}>
-            {visibleScenes.map(tag => {
+            {skill.sceneTags.map(tag => {
               const isActive = activeSceneTag === tag.tag;
               return (
               <button
                 key={tag.tag}
-                onClick={() => {
-                  // QA 模式：场景感知 — 点标签不直接发消息，而是加载该场景的推荐问题
-                  if (onSceneTagClick) {
-                    onSceneTagClick(tag.tag);
-                  } else {
-                    // fallback: 无 onSceneTagClick 时直接发送
-                    onQuestionClick(`聊聊${tag.tag}方面的经验？`);
-                  }
-                }}
+                onClick={() => onSceneTagClick?.(tag.tag)}
                 style={{
-                  padding: '12px 8px', borderRadius: 12,
+                  flexShrink: 0, padding: '7px 16px', borderRadius: 100,
                   border: isActive ? '2px solid var(--tangerine)' : '1px solid var(--border-subtle)',
-                  background: isActive ? 'rgba(255,92,0,0.05)' : 'var(--surface)',
+                  background: isActive ? 'rgba(255,92,0,0.06)' : 'var(--surface)',
                   cursor: 'pointer', textAlign: 'center',
-                  fontFamily: 'inherit',
+                  fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                  color: isActive ? 'var(--tangerine)' : 'var(--fg-high)',
                   transition: 'all 0.2s ease',
-                  transform: isActive ? 'translateY(-2px)' : 'none',
-                  boxShadow: isActive ? '0 4px 12px rgba(255,92,0,0.12)' : 'none',
+                  transform: isActive ? 'translateY(-1px)' : 'none',
+                  boxShadow: isActive ? '0 2px 8px rgba(255,92,0,0.12)' : 'none',
+                  whiteSpace: 'nowrap',
+                  display: 'flex', alignItems: 'center', gap: 6,
                 }}
                 onMouseEnter={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
                     e.currentTarget.style.borderColor = 'var(--tangerine)';
+                    e.currentTarget.style.background = 'rgba(255,92,0,0.04)';
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isActive) {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
                     e.currentTarget.style.borderColor = 'var(--border-subtle)';
+                    e.currentTarget.style.background = 'var(--surface)';
                   }
                 }}
               >
-                <div style={{ fontSize: 22, marginBottom: 4 }}>{getEmoji(tag.tag)}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-high)' }}>{tag.tag}</div>
+                <span style={{ fontSize: 15 }}>{getEmoji(tag.tag)}</span>
+                {tag.tag}
                 {(tag.count || 0) > 0 && (
-                  <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 2 }}>
-                    {tag.count} 条锦囊
-                  </div>
+                  <span style={{
+                    fontSize: 10, color: isActive ? 'var(--tangerine)' : 'var(--fg-dim)',
+                    background: isActive ? 'rgba(255,92,0,0.08)' : 'var(--s3)',
+                    padding: '1px 6px', borderRadius: 10, fontWeight: 500,
+                  }}>
+                    {tag.count}
+                  </span>
                 )}
               </button>
               );
             })}
           </div>
-          {hasMore && (
-            <button
-              onClick={() => setShowAllScenes(prev => !prev)}
-              style={{
-                display: 'block', margin: '10px auto 0',
-                background: 'none', border: 'none', cursor: 'pointer',
-                fontSize: 12, color: 'var(--tangerine)', fontFamily: 'inherit',
-                fontWeight: 500,
-              }}
-            >
-              {showAllScenes ? '收起' : `展开全部 ${skill.sceneTags.length} 个领域 →`}
-            </button>
-          )}
         </div>
-        );
-      })()}
+      )}
 
       {/* 精选话题 — recommended questions (QA only) */}
       {showQuestions && (
@@ -218,10 +195,10 @@ export function ChatEntry({
           {questionsLoading ? (
             <div style={{ fontSize: 13, color: 'var(--fg-dim)', padding: 12 }}>加载中…</div>
           ) : questions.length > 0 ? (() => {
-            const visibleQuestions = showAllQuestions
-              ? questions
-              : questions.slice(0, INITIAL_QUESTIONS);
-            const hasMoreQ = questions.length > INITIAL_QUESTIONS;
+            const visibleQCount = Math.min(questionsBatch * BATCH_QUESTIONS, questions.length);
+            const visibleQuestions = questions.slice(0, visibleQCount);
+            const hasMoreQ = visibleQCount < questions.length;
+            const canCollapseQ = questionsBatch > 1;
             return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {visibleQuestions.map((q, i) => (
@@ -260,18 +237,32 @@ export function ChatEntry({
                   }} className="rec-q-arrow">→</span>
                 </button>
               ))}
-              {hasMoreQ && (
-                <button
-                  onClick={() => setShowAllQuestions(prev => !prev)}
-                  style={{
-                    display: 'block', margin: '4px auto 0',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    fontSize: 12, color: 'var(--tangerine)', fontFamily: 'inherit',
-                    fontWeight: 500,
-                  }}
-                >
-                  {showAllQuestions ? '收起' : `展开全部 ${questions.length} 个话题 →`}
-                </button>
+              {(hasMoreQ || canCollapseQ) && (
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 4 }}>
+                  {hasMoreQ && (
+                    <button
+                      onClick={() => setQuestionsBatch(prev => prev + 1)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, color: 'var(--tangerine)', fontFamily: 'inherit',
+                        fontWeight: 500,
+                      }}
+                    >
+                      展开更多 →
+                    </button>
+                  )}
+                  {canCollapseQ && (
+                    <button
+                      onClick={() => setQuestionsBatch(1)}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 12, color: 'var(--fg-dim)', fontFamily: 'inherit',
+                      }}
+                    >
+                      收起
+                    </button>
+                  )}
+                </div>
               )}
             </div>
             );
