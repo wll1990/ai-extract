@@ -9,6 +9,8 @@ import com.aiextract.model.Skill;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.service.ChatStreamService;
+import com.aiextract.service.ConversationService;
+import com.aiextract.service.GrainRecommendationService;
 import com.aiextract.service.PracticeDemoService;
 import com.aiextract.service.SkillService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +40,8 @@ public class SkillController {
 
     private final SkillService skillService;
     private final ChatStreamService chatStreamService;
+    private final ConversationService conversationService;
+    private final GrainRecommendationService grainRecommendationService;
     private final ObjectMapper objectMapper;
     private final com.aiextract.util.JwtUtil jwtUtil;
     private final SkillRepository skillRepository;
@@ -71,18 +75,18 @@ public class SkillController {
     public ApiResponse<List<Map<String, Object>>> listConversations(
             @PathVariable String skillId) {
         UUID userId = extractUserId();
-        return ApiResponse.success(skillService.listConversations(skillId, userId));
+        return ApiResponse.success(conversationService.listConversations(skillId, userId));
     }
 
     @GetMapping("/conversations/{conversationId}/messages")
     public ApiResponse<List<Map<String, Object>>> getConversationMessages(
             @PathVariable String conversationId) {
-        return ApiResponse.success(skillService.getConversationMessages(conversationId, extractUserId()));
+        return ApiResponse.success(conversationService.getConversationMessages(conversationId, extractUserId()));
     }
 
     @DeleteMapping("/conversations/{conversationId}")
     public ApiResponse<Void> deleteConversation(@PathVariable String conversationId) {
-        skillService.deleteConversation(conversationId, extractUserId());
+        conversationService.deleteConversation(conversationId, extractUserId());
         return ApiResponse.success();
     }
 
@@ -144,7 +148,7 @@ public class SkillController {
     public ApiResponse<List<String>> getSuggestedQuestions(@PathVariable String skillId) {
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
             .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
-        return ApiResponse.success(skillService.generateSuggestedQuestions(skill));
+        return ApiResponse.success(grainRecommendationService.generateSuggestedQuestions(skill));
     }
 
     /**
