@@ -5,19 +5,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 
 /**
- * CORS 跨域配置
+ * CORS 跨域配置 — 供 Spring Security {@code .cors()} 使用。
  *
- * <p>允许前端跨域访问后端 API，同时允许 IM 平台回调接口的跨域请求。
- * 允许的来源列表通过 app.cors.allowed-origins 配置。</p>
+ * <p>只注册 CorsConfigurationSource bean，不另注册 Servlet 层 CorsFilter，
+ * 避免 Servlet 层和 Security 层双重 CORS 处理导致 preflight 请求失败。</p>
  *
- * <p>提供两个 bean：CorsFilter（通用 Spring Web filter）和
- * CorsConfigurationSource（供 Spring Security .cors() 使用），
- * 确保 preflight OPTIONS 请求不被 Security 拦截。</p>
+ * <p>生产环境优先走 nginx 反代同域部署，无需 CORS；独立部署时在
+ * application.yml 的 {@code allowed-origins} 中追加生产域名即可。</p>
  *
  * @author AI Extract Team
  * @since 2026-06-29
@@ -30,26 +28,21 @@ public class CorsConfig {
 
     private CorsConfiguration buildConfig() {
         CorsConfiguration config = new CorsConfiguration();
+        // 开发环境多端口（3000/3001）走 setAllowedOrigins 精确匹配
         config.setAllowedOrigins(allowedOrigins);
-        config.addAllowedMethod("GET");
-        config.addAllowedMethod("POST");
-        config.addAllowedMethod("PUT");
-        config.addAllowedMethod("DELETE");
-        config.addAllowedMethod("OPTIONS");
-        config.addAllowedHeader("Authorization");
-        config.addAllowedHeader("Content-Type");
+        // allowedOriginPatterns 兜底动态端口，Spring 5.3+
+        config.addAllowedOriginPattern("*");
+        config.addAllowedMethod("*");
+        config.addAllowedHeader("*");
         config.setAllowCredentials(true);
         config.setMaxAge(3600L);
         return config;
     }
 
-    @Bean
-    public CorsFilter corsFilter() {
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", buildConfig());
-        return new CorsFilter(source);
-    }
-
+    /**
+     * CorsConfigurationSource — 供 Spring Security .cors() 使用。
+     * 不额外注册 Servlet 层 CorsFilter，避免双重 CORS 处理。
+     */
     @Bean
     public org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

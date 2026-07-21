@@ -413,6 +413,13 @@ public class AdminAuditController {
         return ApiResponse.success(Map.of("passed", true));
     }
 
+    /** 手动触发 AI 重新生成开场白（已发布分身也可用） */
+    @PostMapping("/admin/skills/{skillId}/regenerate-opening")
+    public ApiResponse<String> regenerateOpening(@PathVariable UUID skillId) {
+        skillService.generateOpeningMessage(skillId);
+        return ApiResponse.success("已触发重新生成，稍后刷新查看");
+    }
+
     /** 场景对练 SSE 流式 */
     @PostMapping(value = "/admin/skills/{skillId}/practice-scenario", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter practiceScenario(@PathVariable UUID skillId,
