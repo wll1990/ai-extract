@@ -28,6 +28,10 @@ export function ChatEntry({
 }: ChatEntryProps) {
   const [questions, setQuestions] = useState<string[]>([]);
   const [questionsLoading, setQuestionsLoading] = useState(false);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
+  const [showAllScenes, setShowAllScenes] = useState(false);
+  const INITIAL_QUESTIONS = 4;
+  const INITIAL_SCENES = 3;
   const name = skill.displayName || skill.ownerName || '专家';
   const initial = name[0];
 
@@ -43,10 +47,12 @@ export function ChatEntry({
     if (showQuestions) loadQuestions();
   }, [skill.id, showQuestions]);
 
-  // 当 activeSceneTag 变化时重新加载推荐问题
+  // 当 activeSceneTag 变化时重新加载推荐问题 + 重置展开状态
   useEffect(() => {
     if (showQuestions && activeSceneTag !== undefined) {
       loadQuestions(activeSceneTag);
+      setShowAllQuestions(false);
+      setShowAllScenes(false);
     }
   }, [activeSceneTag]);
 
@@ -116,7 +122,12 @@ export function ChatEntry({
       )}
 
       {/* 擅长领域 — scene tag grid (QA only) */}
-      {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (
+      {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (() => {
+        const visibleScenes = showAllScenes
+          ? skill.sceneTags
+          : skill.sceneTags.slice(0, INITIAL_SCENES);
+        const hasMore = skill.sceneTags.length > INITIAL_SCENES;
+        return (
         <div className="animate-stagger-4" style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
             擅长领域
@@ -124,7 +135,7 @@ export function ChatEntry({
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
           }}>
-            {skill.sceneTags.slice(0, 6).map(tag => {
+            {visibleScenes.map(tag => {
               const isActive = activeSceneTag === tag.tag;
               return (
               <button
@@ -174,8 +185,22 @@ export function ChatEntry({
               );
             })}
           </div>
+          {hasMore && (
+            <button
+              onClick={() => setShowAllScenes(prev => !prev)}
+              style={{
+                display: 'block', margin: '10px auto 0',
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 12, color: 'var(--tangerine)', fontFamily: 'inherit',
+                fontWeight: 500,
+              }}
+            >
+              {showAllScenes ? '收起' : `展开全部 ${skill.sceneTags.length} 个领域 →`}
+            </button>
+          )}
         </div>
-      )}
+        );
+      })()}
 
       {/* 精选话题 — recommended questions (QA only) */}
       {showQuestions && (
@@ -192,9 +217,14 @@ export function ChatEntry({
           </p>
           {questionsLoading ? (
             <div style={{ fontSize: 13, color: 'var(--fg-dim)', padding: 12 }}>加载中…</div>
-          ) : questions.length > 0 ? (
+          ) : questions.length > 0 ? (() => {
+            const visibleQuestions = showAllQuestions
+              ? questions
+              : questions.slice(0, INITIAL_QUESTIONS);
+            const hasMoreQ = questions.length > INITIAL_QUESTIONS;
+            return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {questions.map((q, i) => (
+              {visibleQuestions.map((q, i) => (
                 <button
                   key={i}
                   onClick={() => onQuestionClick(q)}
@@ -230,8 +260,22 @@ export function ChatEntry({
                   }} className="rec-q-arrow">→</span>
                 </button>
               ))}
+              {hasMoreQ && (
+                <button
+                  onClick={() => setShowAllQuestions(prev => !prev)}
+                  style={{
+                    display: 'block', margin: '4px auto 0',
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    fontSize: 12, color: 'var(--tangerine)', fontFamily: 'inherit',
+                    fontWeight: 500,
+                  }}
+                >
+                  {showAllQuestions ? '收起' : `展开全部 ${questions.length} 个话题 →`}
+                </button>
+              )}
             </div>
-          ) : (
+            );
+          })() : (
             <div style={{ fontSize: 13, color: 'var(--fg-dim)', padding: 12 }}>暂无推荐话题</div>
           )}
         </div>
