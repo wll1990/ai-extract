@@ -37,7 +37,7 @@ export function ChatEntry({
     setQuestionsLoading(true);
     fetchRecommendedQuestions(skill.id, sceneTag)
       .then(setQuestions)
-      .catch(() => {})
+      .catch((e) => { console.error('[ChatEntry] fetchRecommendedQuestions failed', e); })
       .finally(() => setQuestionsLoading(false));
   };
 
