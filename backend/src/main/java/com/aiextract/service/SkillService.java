@@ -332,11 +332,9 @@ public class SkillService {
             String commonMistakes = (String) row[2];
 
             String setting = !sceneDescription.isEmpty() ? sceneDescription : sceneTag + "场景练习";
-            // 优先读预生成开场白 → 颗粒 commonMistakes → 模板兜底
             String preGenerated = readPracticeOpening(id, sceneTag);
             String customerLine = preGenerated != null ? preGenerated
-                    : !commonMistakes.isEmpty() ? commonMistakes
-                    : "你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？";
+                    : "说实话，我对" + sceneTag + "这块还有些担心，你帮我分析分析？";
             long grainCount = countMap.getOrDefault(sceneTag, 0L);
 
             Map<String, Object> scene = new LinkedHashMap<>();
@@ -602,14 +600,10 @@ public class SkillService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        // 优先读异步缓存 → 颗粒常见误区 → 模板兜底
+        // 优先读预生成开场白（与审核页 autoDemo 同源：generateCustomerOpening）
         String customerLine = readPracticeOpening(skillId, sceneTag);
         if (customerLine == null) {
-            customerLine = grains.stream()
-                    .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
-                    .findFirst()
-                    .map(ExperienceGrain::getCommonMistakes)
-                    .orElse("你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？");
+            customerLine = "说实话，我对" + sceneTag + "这块还有些担心，你帮我分析分析？";
         }
 
         // 获取报告信息用于溯源
