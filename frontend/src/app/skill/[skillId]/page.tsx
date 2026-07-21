@@ -12,6 +12,7 @@ import PracticeChatSection from './PracticeChatSection';
 import { useQaChat } from './hooks/useQaChat';
 import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
+import SceneTagBar from '@/components/skill/SceneTagBar';
 import { getOrCreateSkillShare, toggleSkillShare } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -85,8 +86,6 @@ export default function SkillChatPage() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* 顶栏 */}
         <header className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface-2 flex-shrink-0">
-          <button onClick={qa.handleBackToModes} className="text-muted-foreground-2 hover:text-foreground text-lg leading-none transition-colors">←</button>
-
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 overflow-hidden shadow-sm">
             {initial}
           </div>
@@ -102,11 +101,11 @@ export default function SkillChatPage() {
           {chatMode !== 'practice' && (
             <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5">
               {[
-                { key: 'qa' as ChatMode, icon: '💬', label: '请教专家' },
-                { key: 'talk' as ChatMode, icon: '☕', label: '自由对话' },
+                { key: 'qa' as ChatMode, icon: '💬', label: '经验请教' },
+                { key: 'talk' as ChatMode, icon: '☕', label: '轻松交流' },
               ].map(m => (
                 <button key={m.key}
-                  onClick={() => { setChatMode(m.key); }}
+                  onClick={() => { qa.setMessages([]); qa.setCurrentConvId(''); setChatMode(m.key); }}
                   className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                     chatMode === m.key ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground-2 hover:text-foreground'
                   }`}>
@@ -147,10 +146,14 @@ export default function SkillChatPage() {
               }>
               <div className="mx-auto max-w-[720px] space-y-4 px-4">
 
-                {/* ── QA 场景选择界面 ── */}
-                {chatMode === 'qa' && qa.messages.length === 0 && !qa.qaSceneContext && (
-                  <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
-                    defaultMode="qa" onQaStart={qa.handleQaStart} onPracticeStart={(tag) => startPracticeWithScene(tag)} />
+                {/* ── QA 未选场景时：场景 pill 条 ── */}
+                {chatMode === 'qa' && qa.messages.length === 0 && !qa.qaSceneContext && qa.sceneTags.length > 0 && (
+                  <div className="pt-6">
+                    <p className="text-xs text-muted-foreground text-center mb-2">擅长领域</p>
+                    <SceneTagBar sceneTags={qa.sceneTags} activeTag="" chatMode="qa"
+                      onQaTagClick={qa.handleQaStart}
+                      onTalkTagClick={() => {}} />
+                  </div>
                 )}
 
                 {/* ── QA 场景上下文标签（含上/下一场景翻页） ── */}
