@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@aiextract/shared-ui": "*",
     "@nivo/bar": "^0.99.0",
     "@nivo/core": "^0.99.0",
     "@nivo/pie": "^0.99.0",

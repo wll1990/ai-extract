@@ -7,9 +7,9 @@ import React, { useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { ChatHero } from '@/components/chat/ChatHero';
-import { QuickReplies } from '@/components/chat/QuickReplies';
-import { ThinkingCard } from '@/components/chat/ThinkingCard';
-import { ChatComposer } from '@/components/chat/ChatComposer';
+import { QuickReplies } from '@aiextract/shared-ui/src/chat/QuickReplies';
+import { ThinkingCard } from '@aiextract/shared-ui/src/chat/ThinkingCard';
+import { ChatComposer } from '@aiextract/shared-ui/src/chat/ChatComposer';
 import { VoiceInput } from '@/components/voice/VoiceInput';
 import { ResumeModal } from '@/components/modals/ResumeModal';
 import { getSession, pauseSession } from '@/lib/api/interview';
@@ -193,7 +193,7 @@ export function SalesInterviewChat() {
 
             {/* 快捷回复 — AI 开场后展示 */}
             {state.messages.length >= 2 && state.messages.length <= 4 && !h.isStreaming && (
-              <QuickReplies replies={quickReplies} onSelect={(text) => { h.setInputValue(text); h.handleSend(); }} disabled={h.isStreaming} />
+              <QuickReplies replies={quickReplies} onSelect={(text: string) => { h.setInputValue(text); h.handleSend(); }} disabled={h.isStreaming} />
             )}
 
             {state.messages.map((msg) => {

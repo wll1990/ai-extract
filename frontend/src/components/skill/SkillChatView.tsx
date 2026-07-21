@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { ThinkingCard } from '@/components/chat/ThinkingCard';
+import { ThinkingCard } from '@aiextract/shared-ui/src/chat/ThinkingCard';
 
 export interface SkillChatViewProps {
   /** 消息渲染区域（各页面自定义气泡样式） */
