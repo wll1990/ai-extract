@@ -56,7 +56,7 @@ export function ChatEntry({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
-      justifyContent: 'center', padding: '60px 24px', textAlign: 'center',
+      justifyContent: 'flex-start', padding: '32px 24px 60px', textAlign: 'center',
       flex: 1,
     }}>
       {/* Avatar */}

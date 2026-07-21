@@ -31,11 +31,9 @@ export function ChatView({ skill }: ChatViewProps) {
   const convs = useConversations(skill.id);
 
   // Talk 配置
-  const talkConfig = (() => { try { return JSON.parse((skill as any).talkConfig || '{}'); } catch { return {}; } })();
-  // QA 模式：默认显示场景标签和推荐问题（场景感知）
-  // Talk 模式：默认不显示，仅当 talkConfig 显式开启时才显示
-  const showQuestions = mode === 'qa' || (mode === 'talk' && talkConfig.showRecommendedQuestions === true);
-  const showSceneTags = mode === 'qa' || (mode === 'talk' && talkConfig.showSceneTags === true);
+  // QA: 场景标签 + 推荐问题 | Talk: 仅推荐问题 | Practice: 独立场景选择
+  const showQuestions = mode === 'qa' || mode === 'talk';
+  const showSceneTags = mode === 'qa';
 
   const [inputValue, setInputValue] = useState('');
   const [activeSceneTag, setActiveSceneTag] = useState<string | undefined>();

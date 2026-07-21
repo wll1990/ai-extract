@@ -229,7 +229,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   // ═══ 场景选择 ═══
   if (phase === 'select') {
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '32px 40px' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🎯</div>
           <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>选择演练场景</h3>
