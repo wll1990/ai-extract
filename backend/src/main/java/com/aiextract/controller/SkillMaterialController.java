@@ -78,6 +78,33 @@ public class SkillMaterialController {
         return ApiResponse.success(Map.of("uploaded", results.size(), "results", results));
     }
 
+    /** 文本素材上传 — 直接粘贴文本，不走文件存盘 */
+    @PostMapping("/admin/materials/text")
+    public ApiResponse<Map<String, Object>> uploadText(@RequestBody Map<String, Object> body) {
+        String text = (String) body.get("text");
+        if (text == null || text.isBlank()) {
+            throw new BusinessException(400, "文本内容不能为空");
+        }
+        if (text.length() < 10) {
+            throw new BusinessException(400, "文本内容至少10个字");
+        }
+
+        UUID spaceId = body.containsKey("spaceId") ? UUID.fromString((String) body.get("spaceId")) : null;
+        String skillIdStr = (String) body.get("skillId");
+        UUID skillId = (skillIdStr != null && !skillIdStr.isEmpty()) ? UUID.fromString(skillIdStr) : null;
+        String skillName = (String) body.getOrDefault("skillName", null);
+        String domain = (String) body.getOrDefault("domain", null);
+        String title = (String) body.getOrDefault("title", null);
+
+        if (isNoTargetSpecified(spaceId, skillId, skillName)) {
+            throw new BusinessException(400, "请选择空间或分身");
+        }
+
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        Map<String, Object> result = cleaningService.uploadTextMaterial(text, spaceId, skillId, skillName, userId, domain, title);
+        return ApiResponse.success(Map.of("uploaded", 1, "results", List.of(result)));
+    }
+
     /** 分身列表（供上传时下拉选择，仅当前企业） */
     @GetMapping("/admin/skills/picker")
     public ApiResponse<List<Map<String, Object>>> picker() {

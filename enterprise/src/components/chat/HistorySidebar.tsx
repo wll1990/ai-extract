@@ -92,7 +92,7 @@ export function HistorySidebar({
                 </button>
               </div>
               <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 2 }}>
-                {conv.mode === 'practice' ? '对练' : conv.mode === 'talk' ? '对话' : '问答'}
+                {conv.mode === 'practice' ? '🎯 对练' : conv.mode === 'talk' ? '💬 对话' : '📝 请教'}
                 {conv.updatedAt && ` · ${new Date(conv.updatedAt).toLocaleDateString()}`}
               </div>
             </div>

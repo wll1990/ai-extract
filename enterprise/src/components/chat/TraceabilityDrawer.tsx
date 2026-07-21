@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { API_BASE } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 
 interface GrainTrace {
   grainId: string;
@@ -33,9 +33,8 @@ export function TraceabilityDrawer({ grainIds, open, onClose }: TraceabilityDraw
   useEffect(() => {
     if (!open || !grainIds) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`)
-      .then(r => r.json())
-      .then(r => setData(r.data || []))
+    apiClient<GrainTrace[]>(`/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`)
+      .then(data => setData(data))
       .finally(() => setLoading(false));
   }, [open, grainIds]);
 

@@ -140,6 +140,17 @@ export default function ExpertInterviewPage() {
                 <span className="text-sm text-foreground">{topic}</span>
               </label>
             ))}
+            {/* 自定义主题 */}
+            <label className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 transition-all ${isCustom ? 'border-foreground bg-primary-light' : 'border-border hover:border-border-strong'}`}>
+              <input type="radio" name="topic" checked={isCustom}
+                onChange={() => setIsCustom(true)} className="h-4 w-4 accent-navy" />
+              <span className="text-sm text-foreground">自定义主题</span>
+            </label>
+            {isCustom && (
+              <input value={customTopic} onChange={e => setCustomTopic(e.target.value)}
+                placeholder="输入你想聊的话题..."
+                className="w-full border border-border rounded-lg p-2.5 text-sm" />
+            )}
           </div>
         </div>
 

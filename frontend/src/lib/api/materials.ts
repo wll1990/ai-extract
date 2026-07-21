@@ -31,3 +31,18 @@ export function submitManualText(materialId: string, text: string): Promise<void
     body: JSON.stringify({ text }),
   });
 }
+
+/** 文本素材上传 — 直接粘贴文本作为素材来源 */
+export function uploadMaterialText(params: {
+  text: string;
+  spaceId?: string;
+  skillId?: string;
+  skillName?: string;
+  domain?: string;
+  title?: string;
+}): Promise<{ uploaded: number; results: any[] }> {
+  return apiClient('/admin/materials/text', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}

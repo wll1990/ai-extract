@@ -64,7 +64,6 @@ public class ConversationPersistenceService {
             }
             if (conv != null) {
                 conv.setUpdatedAt(now);
-                conv.setMode(mode);
                 conversationRepository.save(conv);
             }
         }

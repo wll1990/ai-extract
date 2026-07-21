@@ -17,9 +17,10 @@ interface ChatEntryProps {
   onQuestionClick: (question: string) => void;
   showQuestions?: boolean;
   showSceneTags?: boolean;
+  mode?: string;
 }
 
-export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSceneTags = true }: ChatEntryProps) {
+export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSceneTags = true, mode = 'qa' }: ChatEntryProps) {
   const [questions, setQuestions] = useState<string[]>([]);
   const name = skill.displayName || skill.ownerName || '专家';
   const initial = name[0];
@@ -37,42 +38,49 @@ export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSc
       flex: 1,
     }}>
       {/* Avatar */}
-      {skill.avatarUrl ? (
-        <img
-          src={skill.avatarUrl} alt={name}
-          style={{
-            width: 72, height: 72, borderRadius: 20, objectFit: 'cover',
-            boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1)',
+      <div className="animate-stagger-1">
+        {skill.avatarUrl ? (
+          <img
+            src={skill.avatarUrl} alt={name}
+            style={{
+              width: 72, height: 72, borderRadius: 20, objectFit: 'cover',
+              boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1)',
+              marginBottom: 20,
+            }}
+          />
+        ) : (
+          <div style={{
+            width: 72, height: 72, borderRadius: 20,
+            background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#fff', fontSize: 30, fontWeight: 800,
+            boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1), inset 0 1px 2px 0 rgba(255,255,255,0.5)',
             marginBottom: 20,
-          }}
-        />
-      ) : (
-        <div style={{
-          width: 72, height: 72, borderRadius: 20,
-          background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 30, fontWeight: 800,
-          boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1), inset 0 1px 2px 0 rgba(255,255,255,0.5)',
-          marginBottom: 20,
-        }}>
-          {initial}
-        </div>
-      )}
+          }}>
+            {initial}
+          </div>
+        )}
+      </div>
 
-      <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6, color: 'var(--fg-high)' }}>
-        {name}
-      </h1>
-      {skill.ownerTitle && (
-        <p style={{ fontSize: 13, color: 'var(--fg-mid)', marginBottom: 16 }}>
-          {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
-        </p>
-      )}
+      <div className="animate-stagger-2">
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', color: 'var(--fg-high)' }}>
+          {name}
+        </h1>
+        {skill.ownerTitle && (
+          <p style={{ fontSize: 13, color: 'var(--fg-mid)', marginBottom: 16 }}>
+            {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
+          </p>
+        )}
+      </div>
 
       {skill.openingMessage && (
-        <p style={{
+        <p className="animate-stagger-3" style={{
           fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
-          maxWidth: 460, marginBottom: 24, background: 'var(--s3)',
+          maxWidth: 460, marginBottom: 24,
           padding: '14px 20px', borderRadius: '18px 18px 18px 6px',
+          background: mode === 'qa' ? '#fef9f0' : mode === 'talk' ? '#f5f3ff' : '#f0fdf6',
+          borderLeft: mode === 'qa' ? '2px solid rgba(245,158,11,0.2)' : mode === 'talk' ? '2px solid rgba(99,102,241,0.2)' : '2px solid rgba(16,185,129,0.2)',
+          transition: 'background 0.4s ease, border-color 0.4s ease',
         }}>
           {skill.openingMessage}
         </p>
@@ -80,7 +88,7 @@ export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSc
 
       {/* Scene tags — 3 列可点击卡片 */}
       {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (
-        <div style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
+        <div className="animate-stagger-4" style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
             💡 擅长领域 · 点击即可开始
           </p>
@@ -123,7 +131,7 @@ export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSc
 
       {/* Recommended questions */}
       {showQuestions && questions.length > 0 && (
-        <div style={{ maxWidth: 420, width: '100%' }}>
+        <div className="animate-stagger-5" style={{ maxWidth: 420, width: '100%' }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
             试试这些问题
           </p>

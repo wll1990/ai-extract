@@ -23,6 +23,10 @@ interface Props {
   authToken?: string;
   onPracticeLimit: (info: { used: number; limit: number; pendingText: string }) => void;
   practiceHint?: string;
+  /** 是否已用完免费额度（游客 remaining === 0） */
+  isLimitReached?: boolean;
+  /** 点击"注册解锁"的回调 */
+  onRegisterPrompt?: () => void;
 }
 
 const TABS: Array<{ mode: ChatMode; label: string }> = [
@@ -38,6 +42,7 @@ const TABS: Array<{ mode: ChatMode; label: string }> = [
 export default function MobileChatShell({
   info, mode, onSwitchMode, remainingLabel, onOpenHistory, qa, onAfterSend,
   practiceSceneTag, practiceKey, onPickScene, abortRef, authToken, onPracticeLimit, practiceHint,
+  isLimitReached, onRegisterPrompt,
 }: Props) {
   const name = info.ownerName || '销冠';
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -47,7 +52,7 @@ export default function MobileChatShell({
   }, [qa.messages, qa.qaStreamText]);
 
   const send = () => {
-    if (!qa.inputValue.trim() || qa.isStreaming) return;
+    if (!qa.inputValue.trim() || qa.isStreaming || isLimitReached) return;
     qa.handleQaSend();
     onAfterSend();
   };
@@ -260,7 +265,10 @@ export default function MobileChatShell({
             <div className="flex-none px-4 pb-1">
               <div className="flex flex-wrap gap-2">
                 {qa.suggestedQuestions.slice(0, 3).map(q => (
-                  <button key={q} onClick={() => { qa.handleQuestionClick(q); onAfterSend(); }}
+                  <button key={q} onClick={() => {
+                    if (isLimitReached) { onRegisterPrompt?.(); return; }
+                    qa.handleQuestionClick(q); onAfterSend();
+                  }}
                     className="rounded-full border border-[#dfe6ff] bg-white px-4 py-2 text-[13px] text-foreground shadow-sm transition-colors hover:border-[#2147ff] hover:bg-[#eef2ff] active:scale-[0.97]">
                     {q}
                   </button>
@@ -271,20 +279,36 @@ export default function MobileChatShell({
 
           {/* 输入条 */}
           <div className="flex-none border-t border-[#dfe6ff] bg-white px-4 pb-[calc(10px+env(safe-area-inset-bottom))] pt-3">
-            <div className="flex items-center gap-2">
-              <input
-                value={qa.inputValue}
-                onChange={e => qa.setInputValue(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-                placeholder="输入消息…"
-                disabled={qa.isStreaming}
-                className="h-[44px] flex-1 rounded-full border border-[#dfe6ff] bg-[#f7f9ff] px-5 text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
-              />
-              <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
-                className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
-                <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>
-              </button>
-            </div>
+            {isLimitReached ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value=""
+                  readOnly
+                  placeholder="免费体验次数已用完"
+                  disabled
+                  className="h-[44px] flex-1 rounded-full border border-[#dfe6ff] bg-[#f7f9ff] px-5 text-[14px] outline-none disabled:opacity-50"
+                />
+                <button onClick={onRegisterPrompt}
+                  className="flex-none rounded-full bg-gradient-to-r from-[#06b6d4] to-[#3b82f6] px-5 py-2.5 text-[13px] font-semibold text-white shadow-md transition-transform active:scale-[0.97]">
+                  注册解锁
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  value={qa.inputValue}
+                  onChange={e => qa.setInputValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+                  placeholder="输入消息…"
+                  disabled={qa.isStreaming}
+                  className="h-[44px] flex-1 rounded-full border border-[#dfe6ff] bg-[#f7f9ff] px-5 text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
+                />
+                <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
+                  className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
+                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}

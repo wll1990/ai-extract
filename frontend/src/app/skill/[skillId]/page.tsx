@@ -11,6 +11,7 @@ import { API_BASE } from '@/lib/api/client';
 import PracticeChatSection from './PracticeChatSection';
 import { useQaChat } from './hooks/useQaChat';
 import ShareModal from '@/components/admin/ShareModal';
+import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import { getOrCreateSkillShare, toggleSkillShare } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -42,9 +43,9 @@ export default function SkillChatPage() {
   const onResetPracticeRef = useRef<() => void>(resetPractice);
   onResetPracticeRef.current = resetPractice;
 
-  const [openTraces, setOpenTraces] = useState<Record<string, boolean>>({});
   const [openingMessage, setOpeningMessage] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [traceGrainIds, setTraceGrainIds] = useState('');
 
   useEffect(() => {
     if (!skillId) return;
@@ -56,11 +57,10 @@ export default function SkillChatPage() {
       })
       .catch(() => {});
   }, [skillId]);
-  const toggleTrace = (msgId: string) => setOpenTraces(prev => ({ ...prev, [msgId]: !prev[msgId] }));
 
   const qa = useQaChat({ skillId, skillInfo: { ownerName, ownerTitle, ownerQuote: '' }, chatMode, setChatMode, setModeSelected, onResetPracticeRef });
 
-  useEffect(() => { return () => { qa.abortRef.current?.abort(); practiceAbortRef.current?.abort(); }; }, []);
+  useEffect(() => { return () => { qa.stop(); practiceAbortRef.current?.abort(); }; }, []);
 
   // ── 模式入口（未选模式时显示三卡片选择器） ──
   if (!modeSelected) {
@@ -218,8 +218,7 @@ export default function SkillChatPage() {
                   const isAi = msg.role === 'ai' || msg.role === 'assistant';
                   const sim = msg.avgSimilarity ? Number(msg.avgSimilarity) : 0;
                   const matchLevel = sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
-                  const hasTrace = !!(msg.source && msg.grainCount);
-                  const traceOpen = !!openTraces[msg.id];
+                  const hasTrace = !!(msg.grainTags && msg.grainCount);
                   // 拆分正文和溯源分析区
                   const sepIndex = (msg.content || '').indexOf('━━━━━━');
                   const mainText = sepIndex >= 0 ? (msg.content || '').substring(0, sepIndex).trim() : (msg.content || '');
@@ -279,12 +278,11 @@ export default function SkillChatPage() {
                                 </span>
                               )}
 
-                              {/* 溯源展开按钮 — synthetic 不展示 */}
+                              {/* 溯源按钮 — synthetic 不展示 */}
                               {hasTrace && matchLevel !== 'synthetic' && (
-                                <button onClick={() => toggleTrace(msg.id)}
+                                <button onClick={() => setTraceGrainIds(msg.grainIds || msg.grainId || '')}
                                   className="inline-flex items-center gap-1 text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
-                                  <span className={`transition-transform ${traceOpen ? 'rotate-90' : ''}`}>›</span>
-                                  溯源 · {msg.grainCount} 条
+                                  溯源 · {msg.grainCount} 条 →
                                 </button>
                               )}
 
@@ -307,23 +305,6 @@ export default function SkillChatPage() {
                               </div>
                             </div>
 
-                            {/* 溯源展开内容 */}
-                            {hasTrace && traceOpen && (
-                              <div className="mt-1.5 ml-1 rounded-lg bg-[#F8FAFC] border border-[#E8ECF1] px-3 py-2">
-                                <div className="flex flex-wrap gap-1">
-                                  {msg.grainTags && msg.grainTags.split(',').filter(Boolean).map((tag, i) => (
-                                    <span key={i} className="inline-flex items-center gap-1 text-[11px] text-[#2563EB] bg-[#EFF6FF] rounded-full px-2.5 py-0.5">
-                                      {tag.trim()}
-                                    </span>
-                                  ))}
-                                </div>
-                                {(msg as any).sourceNames && (
-                                  <div className="mt-2 text-[11px] text-[#64748B]">
-                                    📄 {(msg as any).sourceNames}
-                                  </div>
-                                )}
-                              </div>
-                            )}
                           </div>
                         </div>
                       ) : (
@@ -364,6 +345,12 @@ export default function SkillChatPage() {
         {shareTarget && (
           <ShareModal skillId={skillId} ownerName={ownerName} onClose={() => setShareTarget(false)}
             getOrCreate={getOrCreateSkillShare} toggleShare={toggleSkillShare} />
+        )}
+
+        {/* 溯源抽屉 */}
+        {traceGrainIds && (
+          <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds}
+            onClose={() => setTraceGrainIds('')} />
         )}
 
         {/* Practice 底部返回按钮 */}

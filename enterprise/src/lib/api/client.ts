@@ -7,7 +7,36 @@
  * @since 2026-07-20
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
+function resolveBaseUrl(): string {
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
+
+  // 已是绝对 URL — 服务端和客户端都能直接使用
+  if (base.startsWith('http://') || base.startsWith('https://')) {
+    return base;
+  }
+
+  // 相对 URL 在浏览器端正常工作（浏览器 fetch 基于 window.location.origin 解析）
+  if (typeof window !== 'undefined') {
+    return base;
+  }
+
+  // 服务端 + 相对 URL — Node.js undici fetch 无法解析相对路径
+  // 使用显式的后端 origin 兜底，默认指向本地开发环境
+  const origin =
+    process.env.API_BACKEND_ORIGIN ||
+    process.env.NEXT_PUBLIC_API_BASE_URL_ORIGIN ||
+    'http://localhost:8080';
+
+  console.warn(
+    `[apiClient] 检测到服务端使用相对 API_BASE ("${base}")，` +
+    `自动拼接 origin "${origin}"。` +
+    `建议将 NEXT_PUBLIC_API_BASE_URL 设为绝对 URL（如 "${origin}${base}"）以消除此警告。`,
+  );
+
+  return `${origin}${base}`;
+}
+
+const API_BASE = resolveBaseUrl();
 export { API_BASE };
 
 export async function apiClient<T>(

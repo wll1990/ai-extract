@@ -33,7 +33,8 @@ export default async function DiscoverPage({ searchParams }: DiscoverPageProps) 
       }
       return true;
     });
-  } catch {
+  } catch (err) {
+    console.error('[DiscoverPage] Failed to fetch public skills:', err);
     error = '加载专家列表失败，请稍后重试';
   }
 

@@ -30,5 +30,10 @@ public interface SkillConversationRepository extends JpaRepository<SkillConversa
      */
     Page<SkillConversation> findAllByOrderByUpdatedAtDesc(Pageable pageable);
 
+    /**
+     * 按 skill + user + mode 查询会话列表，按更新时间降序。
+     */
+    List<SkillConversation> findBySkillIdAndUserIdAndModeOrderByUpdatedAtDesc(
+        UUID skillId, UUID userId, String mode);
 
 }

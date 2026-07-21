@@ -45,9 +45,20 @@ export default function RegisterSheet({
 
   return (
     <div className="fixed inset-0 z-[60]">
-      <div className="absolute inset-0 bg-navy/40" onClick={reason === 'manual' ? onClose : undefined} />
+      <div className="absolute inset-0 bg-navy/40" onClick={onClose} />
       <div className="absolute inset-x-0 bottom-0 mx-auto max-w-[520px] rounded-t-2xl bg-bg px-6 pb-[calc(26px+env(safe-area-inset-bottom))] pt-2.5 shadow-xl">
-        <div className="mx-auto h-1 w-9 rounded-pill bg-border-strong" />
+        <div className="relative mx-auto flex items-center justify-center">
+          <div className="h-1 w-9 rounded-pill bg-border-strong" />
+          <button
+            onClick={onClose}
+            aria-label="关闭"
+            className="absolute right-0 top-1/2 -translate-y-1/2 flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground-2 hover:bg-surface active:bg-border"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
         <div className="mx-auto mt-5 flex h-[52px] w-[52px] items-center justify-center rounded-full bg-[linear-gradient(135deg,#06b6d4_0%,#3b82f6_100%)] shadow-float">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
@@ -103,8 +114,10 @@ export default function RegisterSheet({
           ) : (
             <>没有账号？<button onClick={() => setMode('register')} className="font-medium text-primary">去注册</button></>
           )}
-          {reason === 'manual' && (
-            <button onClick={onClose} className="ml-4 text-muted-foreground-2">暂不</button>
+          {reason !== 'expired' && (
+            <button onClick={onClose} className="ml-4 text-muted-foreground-2">
+              {reason === 'limit' ? '暂不，先看看' : '暂不'}
+            </button>
           )}
         </div>
       </div>

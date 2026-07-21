@@ -18,6 +18,8 @@ export function useInterviewCreate() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preselectedSpaceId = searchParams.get('spaceId') || '';
+  const inviteType = searchParams.get('invite') || '';
+  const interviewType = (inviteType === 'expert' ? 'expert' : 'sales') as 'sales' | 'expert';
 
   const [topicInput, setTopicInput] = useState('');
   const [selectedExpert, setSelectedExpert] = useState<ExpertOption>({ id: '', name: '综合（推荐）', type: 'composite' });
@@ -71,7 +73,7 @@ export function useInterviewCreate() {
       const session = await createInterview({
         spaceId, topic,
         expertSkillId: selectedExpert.type === 'composite' ? undefined : selectedExpert.id,
-        interviewType: 'sales' as const,
+        interviewType,
       });
       router.push(`/interview/${session.sessionId}`);
     } catch (err) {
@@ -94,5 +96,6 @@ export function useInterviewCreate() {
     activeSession, spaceId, setSpaceId,
     spaces, selectedSpace, preselectedSpaceId,
     handleStart, handleContinue,
+    interviewType,
   };
 }

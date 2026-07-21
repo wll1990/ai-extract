@@ -50,6 +50,14 @@ export default function SharePage() {
   const noopRef = useRef<() => void>(() => {});
   const noop = useCallback(() => {}, []);
 
+  /** 重新打开注册抽屉（额度用完后从输入条点击"注册解锁"） */
+  const handleOpenRegisterSheet = useCallback(() => {
+    setSheetMode('register');
+    setSheetReason('limit');
+    setSheetError('');
+    setSheetOpen(true);
+  }, []);
+
   /** 游客额度用尽 → 弹注册抽屉（qa/talk 记录待重发消息） */
   const handleLimit = useCallback((limitInfo: { used: number; limit: number; pendingText: string }) => {
     guest.setRemaining(0);
@@ -202,6 +210,8 @@ export default function SharePage() {
           authToken={authToken}
           onPracticeLimit={handlePracticeLimit}
           practiceHint={practiceHint}
+          isLimitReached={guest.isGuest && guest.remaining === 0}
+          onRegisterPrompt={handleOpenRegisterSheet}
         />
       )}
 

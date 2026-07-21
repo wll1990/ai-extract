@@ -197,6 +197,7 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
         id: m.id,
         role: m.role === 'assistant' ? 'ai' : m.role as 'user' | 'ai',
         content: m.content,
+        grainIds: m.grainId || undefined,
         grainTags: m.grainTags || undefined,
         grainCount: m.grainCount || undefined,
         avgScore: m.avgScore || undefined,
@@ -207,7 +208,7 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
 
   return {
     ...state,
-    abortRef,
+    stop: () => { abortRef.current?.abort(); },
     sendMessage,
     clearError,
     dismissWarning,

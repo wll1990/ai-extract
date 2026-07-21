@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient, API_BASE } from '@/lib/api/client';
 import { MaterialUploadGuide } from '@/components/skill/MaterialUploadGuide';
+import { uploadMaterialText } from '@/lib/api/materials';
 
 interface UserOption {
   id: string; name: string; account: string; spaceId: string;
@@ -20,6 +21,11 @@ export default function UploadPage() {
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState('');
+
+  // 文本粘贴模式
+  const [inputMode, setInputMode] = useState<'file' | 'text'>('file');
+  const [textContent, setTextContent] = useState('');
+  const [textTitle, setTextTitle] = useState('');
 
   useEffect(() => {
     apiClient<UserOption[]>('/admin/users').then(list => {
@@ -56,6 +62,25 @@ export default function UploadPage() {
     setUploading(false);
   };
 
+  const handleTextUpload = async () => {
+    if (!textContent.trim()) { setError('请输入文本内容'); return; }
+    if (textContent.trim().length < 10) { setError('文本内容至少10个字'); return; }
+    if (!spaceId) { setError('请选择上传给谁'); return; }
+    if (!domain) { setError('请选择领域'); return; }
+
+    setUploading(true); setError('');
+    try {
+      const data = await uploadMaterialText({
+        text: textContent.trim(),
+        spaceId,
+        domain,
+        title: textTitle || undefined,
+      });
+      setResult(data);
+    } catch { setError('网络错误'); }
+    setUploading(false);
+  };
+
   // ── 结果页 ──
   if (result) {
     const firstItem = result.results?.[0];
@@ -65,7 +90,7 @@ export default function UploadPage() {
 
     return (
       <div className="max-w-6xl mx-auto p-6">
-        <button onClick={() => { setResult(null); setFiles([]); }}
+        <button onClick={() => { setResult(null); setFiles([]); setTextContent(''); setTextTitle(''); }}
           className="text-sm text-muted-foreground hover:text-foreground mb-6">← 继续上传</button>
 
         <div className="grid grid-cols-5 gap-8">
@@ -144,7 +169,7 @@ export default function UploadPage() {
                 <button onClick={() => router.push(`/admin/skills/${firstItem.skillId}/audit`)}
                   className="px-4 py-2 bg-primary text-white rounded-lg text-sm">进入审核</button>
               )}
-              <button onClick={() => { setResult(null); setFiles([]); }}
+              <button onClick={() => { setResult(null); setFiles([]); setTextContent(''); setTextTitle(''); }}
                 className="px-4 py-2 border rounded-lg text-sm">继续上传</button>
             </div>
           </div>
@@ -157,7 +182,19 @@ export default function UploadPage() {
   return (
     <div className="max-w-6xl mx-auto p-6">
       <button onClick={() => router.back()} className="text-sm text-muted-foreground hover:text-foreground mb-4">← 返回</button>
-      <h1 className="text-xl font-bold mb-6">上传素材</h1>
+      <h1 className="text-xl font-bold mb-2">上传素材</h1>
+
+      {/* 输入模式切换 */}
+      <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5 w-fit mb-6">
+        <button onClick={() => { setInputMode('file'); setError(''); }}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${inputMode === 'file' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          📁 上传文件
+        </button>
+        <button onClick={() => { setInputMode('text'); setError(''); }}
+          className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${inputMode === 'text' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+          📝 粘贴文本
+        </button>
+      </div>
 
       <div className="grid grid-cols-5 gap-8">
         {/* 左侧：功能区 */}
@@ -199,31 +236,57 @@ export default function UploadPage() {
             )}
           </div>
 
-          {/* 文件选择 */}
-          <div>
-            <label className="block text-sm font-medium text-muted-foreground mb-2">选择文件</label>
-            <input type="file" multiple onChange={e => {
-                const selected = Array.from(e.target.files || []).slice(0, 5);
-                setFiles(selected); setError('');
-              }}
-              accept=".txt,.md,.csv,.html,.json,.xml,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.mp3,.wav,.m4a"
-              className="w-full border border-border rounded-lg p-3 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-primary-light file:text-primary" />
-            {files.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {files.map((f, i) => (
-                  <p key={i} className="text-xs text-muted-foreground-2">{f.name} ({(f.size / 1024).toFixed(0)}KB)</p>
-                ))}
-                <p className="text-xs text-primary">共 {files.length} 个文件</p>
+          {/* 文件选择 / 文本粘贴 */}
+          {inputMode === 'file' ? (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">选择文件</label>
+                <input type="file" multiple onChange={e => {
+                    const selected = Array.from(e.target.files || []).slice(0, 5);
+                    setFiles(selected); setError('');
+                  }}
+                  accept=".txt,.md,.csv,.html,.json,.xml,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.mp3,.wav,.m4a"
+                  className="w-full border border-border rounded-lg p-3 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-primary-light file:text-primary" />
+                {files.length > 0 && (
+                  <div className="mt-2 space-y-1">
+                    {files.map((f, i) => (
+                      <p key={i} className="text-xs text-muted-foreground-2">{f.name} ({(f.size / 1024).toFixed(0)}KB)</p>
+                    ))}
+                    <p className="text-xs text-primary">共 {files.length} 个文件</p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-
-          {error && <p className="text-red-500 text-sm">{error}</p>}
-
-          <button onClick={handleUpload} disabled={uploading}
-            className="w-full py-3 bg-primary text-white rounded-lg font-medium disabled:opacity-50">
-            {uploading ? '上传中...' : '上传素材'}
-          </button>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button onClick={handleUpload} disabled={uploading}
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium disabled:opacity-50">
+                {uploading ? '上传中...' : '上传素材'}
+              </button>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">标题（可选）</label>
+                <input value={textTitle} onChange={e => setTextTitle(e.target.value)}
+                  placeholder="给这段素材起个名字，方便后续查找"
+                  className="w-full border border-border rounded-lg p-2 text-sm" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-2">
+                  文本内容 <span className="text-red-400">*</span>
+                </label>
+                <textarea value={textContent} onChange={e => setTextContent(e.target.value)}
+                  placeholder="粘贴对话记录、笔记、案例等...&#10;&#10;要求：中文占比 ≥ 70%，至少 50 字，真实经验"
+                  rows={14}
+                  className="w-full border border-border rounded-lg p-3 text-sm resize-y" />
+                <p className="text-xs text-muted-foreground-2 mt-1">{textContent.length} 字</p>
+              </div>
+              {error && <p className="text-red-500 text-sm">{error}</p>}
+              <button onClick={handleTextUpload} disabled={uploading}
+                className="w-full py-3 bg-primary text-white rounded-lg font-medium disabled:opacity-50">
+                {uploading ? '上传中...' : '上传文本素材'}
+              </button>
+            </>
+          )}
         </div>
 
         {/* 右侧：上传指南 */}

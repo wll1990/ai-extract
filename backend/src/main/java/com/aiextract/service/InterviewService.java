@@ -641,7 +641,10 @@ public class InterviewService {
         params.put("expert_knowledge", expertKnowledge != null ? expertKnowledge : "");
         params.put("domain", domain);
 
-        return promptLoader.format("interview_system.md", params, domain);
+        String templateName = "expert".equals(session.getInterviewType())
+            ? "interview_system_expert.md"
+            : "interview_system.md";
+        return promptLoader.format(templateName, params, domain);
     }
 
     /**

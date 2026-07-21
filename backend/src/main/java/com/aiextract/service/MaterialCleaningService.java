@@ -358,6 +358,170 @@ public class MaterialCleaningService {
     }
 
     /**
+     * 文本素材上传 — 用户直接粘贴文本，不走文件存盘。
+     * <p>逻辑与 {@link #uploadMaterial} 一致，但跳过文件保存步骤，
+     * 直接将用户输入的文本写入 parsedContent 并执行预检。</p>
+     */
+    public Map<String, Object> uploadTextMaterial(String text, UUID spaceId, UUID skillId,
+            String skillName, UUID userId, String domain, String title) {
+        Skill skill;
+        boolean skillCreated = false;
+
+        if (skillId != null) {
+            skill = skillRepository.findById(skillId)
+                    .orElseThrow(() -> new RuntimeException("分身不存在"));
+        } else if (spaceId != null) {
+            Space existingSpace = spaceRepository.findById(spaceId)
+                    .orElseThrow(() -> new RuntimeException("空间不存在"));
+            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
+                throw new RuntimeException("分身名称已存在，请选择已有分身");
+            }
+            String autoOwnerName = null;
+            String autoOwnerTitle = existingSpace.getDescription();
+            if (existingSpace.getUserId() != null) {
+                autoOwnerName = userRepository.findById(existingSpace.getUserId())
+                        .map(com.aiextract.model.User::getName).orElse(null);
+            }
+            skill = Skill.builder()
+                    .id(UUID.randomUUID())
+                    .spaceId(spaceId)
+                    .displayName(skillName)
+                    .ownerName(autoOwnerName)
+                    .ownerTitle(autoOwnerTitle)
+                    .domain(domain)
+                    .status("generating")
+                    .modelName("deepseek-chat")
+                    .modelConfig("{}")
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            skillRepository.save(skill);
+            skillCreated = true;
+            log.info("文本素材在已有空间下新建分身: name={}, skillId={}, spaceId={}", skillName, skill.getId(), spaceId);
+        } else {
+            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
+                throw new RuntimeException("分身名称已存在，请选择已有分身");
+            }
+            UUID newSpaceId = UUID.randomUUID();
+            Space space = Space.builder()
+                    .id(newSpaceId)
+                    .userId(userId)
+                    .title(skillName)
+                    .description(skillName + " · 资深销冠")
+                    .isPublic(false)
+                    .status("active")
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            spaceRepository.save(space);
+            skill = Skill.builder()
+                    .id(UUID.randomUUID())
+                    .spaceId(newSpaceId)
+                    .displayName(skillName)
+                    .domain(domain)
+                    .status("generating")
+                    .modelName("deepseek-chat")
+                    .modelConfig("{}")
+                    .createdAt(LocalDateTime.now())
+                    .updatedAt(LocalDateTime.now())
+                    .build();
+            skillRepository.save(skill);
+            skillCreated = true;
+            log.info("文本素材新建分身: name={}, id={}, domain={}", skillName, skill.getId(), domain);
+        }
+
+        // 创建素材记录 — 文本来源，直接设 parsedContent
+        String fileName = (title != null && !title.isBlank()) ? title + ".txt" : "手动粘贴文本.txt";
+        SkillMaterial material = SkillMaterial.builder()
+                .skillId(skill.getId())
+                .uploadedBy(userId)
+                .fileName(fileName)
+                .fileUrl("text://paste/" + UUID.randomUUID())
+                .fileType("text/plain")
+                .fileSize((long) text.length())
+                .parsedContent(text)
+                .version(1)
+                .status("uploaded")
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        material = materialRepository.save(material);
+
+        // 预检（文本类直接检查）
+        Map<String, Object> preCheckData = null;
+        Map<String, Object> acceptanceData = new LinkedHashMap<>();
+        acceptanceData.put(KEY_PASSED, true);
+        try {
+            String effectiveDomain = domainConfigLoader.resolveDomain(skill);
+            if (effectiveDomain == null) effectiveDomain = domain;
+
+            // Gate 1: 准入检查
+            var acceptance = preChecker.checkAcceptance(text, effectiveDomain);
+            acceptanceData.put(KEY_PASSED, acceptance.passed());
+            if (!acceptance.passed()) {
+                acceptanceData.put("rejectCode", acceptance.rejectCode());
+                acceptanceData.put("rejectReason", acceptance.rejectReason());
+                acceptanceData.put("details", acceptance.details());
+                material.setStatus("rejected");
+                material.setAnalysisNotes(acceptance.rejectReason());
+                materialRepository.save(material);
+            } else {
+                // 重复检测
+                List<String> existingMaterialTexts = materialRepository
+                        .findBySkillId(skill.getId()).stream()
+                        .map(SkillMaterial::getParsedContent)
+                        .filter(t -> t != null && !t.isBlank())
+                        .toList();
+                var dupCheck = preChecker.checkDuplicate(text, skill.getSpaceId(), effectiveDomain, existingMaterialTexts);
+                if (!dupCheck.passed()) {
+                    acceptanceData.put(KEY_PASSED, false);
+                    acceptanceData.put("rejectCode", dupCheck.rejectCode());
+                    acceptanceData.put("rejectReason", dupCheck.rejectReason());
+                    acceptanceData.put("details", dupCheck.details());
+                    material.setStatus("rejected");
+                    material.setAnalysisNotes(dupCheck.rejectReason());
+                    materialRepository.save(material);
+                }
+            }
+            // Gate 2: 质量预检
+            if (Boolean.TRUE.equals(acceptanceData.get(KEY_PASSED))) {
+                var quality = preChecker.evaluate(text, domain, skill.getSpaceId());
+                preCheckData = new LinkedHashMap<>();
+                preCheckData.put("overallScore", quality.overallScore());
+                preCheckData.put("grade", quality.grade());
+                preCheckData.put("estimatedGrainMin", quality.estimatedGrainMin());
+                preCheckData.put("estimatedGrainMax", quality.estimatedGrainMax());
+                preCheckData.put("detectedScenes", quality.detectedScenes());
+                List<Map<String, Object>> checks = new ArrayList<>();
+                for (var c : quality.checks()) {
+                    Map<String, Object> cm = new LinkedHashMap<>();
+                    cm.put("dimension", c.dimension());
+                    cm.put("name", c.name());
+                    cm.put(KEY_PASSED, c.passed());
+                    cm.put("score", c.score());
+                    cm.put("feedback", c.feedback());
+                    if (c.suggestion() != null) cm.put("suggestion", c.suggestion());
+                    checks.add(cm);
+                }
+                preCheckData.put("checks", checks);
+            }
+        } catch (Exception e) {
+            log.warn("文本素材预检异常: {}", e.getMessage());
+            acceptanceData.put(KEY_PASSED, false);
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("materialId", material.getId().toString());
+        result.put("skillId", skill.getId().toString());
+        result.put("skillName", skill.getDisplayName());
+        result.put("skillCreated", skillCreated);
+        result.put("status", material.getStatus());
+        result.put("acceptance", acceptanceData);
+        if (preCheckData != null) result.put("preCheck", preCheckData);
+        return result;
+    }
+
+    /**
      * 尝试从已保存的文件中读取文本内容（仅对文本类文件有效）。
      * 二进制文件（PDF/Word/音频等）返回 null，等 parseFile 解析后再预检。
      */

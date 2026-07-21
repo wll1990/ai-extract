@@ -20,7 +20,7 @@ export type ChatMode = 'qa' | 'talk' | 'practice';
 
 interface Message {
   id: string; role: string; content: string; type?: string;
-  source?: string; grainId?: string; reportId?: string;
+  source?: string; grainIds?: string; grainId?: string; reportId?: string;
   grainTags?: string; grainCount?: number; avgScore?: string;
   avgSimilarity?: string;
 }
@@ -104,7 +104,7 @@ export function useQaChat({
         setQaStreamText(fullContent);
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
-        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
+        sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
@@ -155,7 +155,7 @@ export function useQaChat({
     setIsStreaming(true);
 
     const aiMsgId = `a-${Date.now()}`;
-    setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: '', source: '', grainId: '' }]);
+    setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: '', source: '', grainId: '', grainIds: '' }]);
 
     let fullContent = '';
     const controller = chat(skillId, text, {
@@ -164,9 +164,9 @@ export function useQaChat({
         setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: fullContent } : m));
         setQaStreamText(fullContent);
       },
-      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore) => {
+      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         setMessages((prev) => prev.map((m) => m.id === aiMsgId
-          ? { ...m, reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore } : m));
+          ? { ...m, reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames } : m));
       },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
@@ -225,7 +225,7 @@ export function useQaChat({
     const controller = chat(skillId, '你好', {
       onChunk: (c) => { full += c; setQaStreamText(full); },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
-        sourceInfo = { reportId, grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
+        sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
       onMeta: (conversationId) => { if (conversationId) setCurrentConvId(conversationId); },
       onDone: () => {
@@ -303,7 +303,7 @@ export function useQaChat({
   }, [skillId, messages, currentConvId, authToken]);
 
   return {
-    abortRef,
+    stop: () => { abortRef.current?.abort(); },
     sceneTags, setSceneTags,
     messages, setMessages,
     inputValue, setInputValue,

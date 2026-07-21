@@ -32,7 +32,8 @@
       "Bash(docker-compose build *)",
       "Bash(docker-compose ps *)",
       "Bash(docker compose *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(python3 -c \"import json; json.load\\(open\\('/Users/wanglei/Documents/opc-project/ai-extract/graphify-out/.graphify_chunk_16.json'\\)\\)\")"
     ]
   }
 }

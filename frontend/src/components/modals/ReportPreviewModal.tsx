@@ -81,7 +81,7 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
               <p className="text-white/80 text-sm">正在加载报告...</p>
             </div>
           </div>
-        ) : !readiness?.ready ? (
+        ) : readiness && !readiness.ready ? (
           <div className="flex items-center justify-center h-full">
             <div className="bg-white rounded-2xl p-10 max-w-md text-center shadow-2xl">
               <div className="text-5xl mb-4">📋</div>

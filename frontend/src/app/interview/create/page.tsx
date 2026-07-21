@@ -43,7 +43,12 @@ export default function CreateInterviewPage() {
           <button type="button" onClick={() => window.history.back()} className="text-muted-foreground-2 hover:text-foreground text-lg transition-colors" aria-label="关闭">✕</button>
         </div>
 
-        <h1 className="mb-8 text-[26px] sm:text-[28px] font-bold text-foreground">创建新访谈</h1>
+        <h1 className="mb-8 text-[26px] sm:text-[28px] font-bold text-foreground">
+          {h.interviewType === 'expert' ? '萃取师访谈' : '创建新访谈'}
+        </h1>
+        {h.interviewType === 'expert' && (
+          <p className="-mt-6 mb-6 text-sm text-muted-foreground">通过元萃取引擎，深度挖掘萃取师本人的实践智慧和判断直觉</p>
+        )}
 
         {/* 被访者 */}
         <div className="mb-5 rounded-xl bg-surface-2 border border-border p-4">
@@ -135,12 +140,21 @@ export default function CreateInterviewPage() {
         {/* 前置引导卡片 */}
         <div className="mb-6 rounded-xl bg-primary-light/50 border border-primary-light px-4 sm:px-5 py-4 text-sm text-muted-foreground">
           <p className="font-medium text-foreground mb-2">📋 开始前请注意</p>
-          <ul className="space-y-1.5">
-            <li>· 预计需要 <span className="text-foreground font-medium">40 分钟</span>，请确保时间充足</li>
-            <li>· 找一个安静的环境，准备好耳机或麦克风</li>
-            <li>· AI 萃取师会引导你回顾具体场景，放松像聊天一样就行</li>
-            <li>· 你只需要回忆真实经历——不需要提前准备文稿</li>
-          </ul>
+          {h.interviewType === 'expert' ? (
+            <ul className="space-y-1.5">
+              <li>· 预计需要 <span className="text-foreground font-medium">30-40 分钟</span>，请确保时间充足</li>
+              <li>· 找一个安静的环境，准备好耳机或麦克风</li>
+              <li>· AI 会引导你回顾自己的萃取经验和方法论</li>
+              <li>· 围绕你真实的萃取案例展开——不需要提前准备文稿</li>
+            </ul>
+          ) : (
+            <ul className="space-y-1.5">
+              <li>· 预计需要 <span className="text-foreground font-medium">40 分钟</span>，请确保时间充足</li>
+              <li>· 找一个安静的环境，准备好耳机或麦克风</li>
+              <li>· AI 萃取师会引导你回顾具体场景，放松像聊天一样就行</li>
+              <li>· 你只需要回忆真实经历——不需要提前准备文稿</li>
+            </ul>
+          )}
         </div>
 
         {/* 底部操作区 */}
@@ -152,7 +166,7 @@ export default function CreateInterviewPage() {
             disabled={!h.topicInput.trim() || !h.spaceId || h.loading}
             className="rounded-lg bg-primary px-6 sm:px-8 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"
           >
-            {h.loading ? '创建中...' : '开始访谈'}
+            {h.loading ? '创建中...' : h.interviewType === 'expert' ? '开始萃取师访谈' : '开始访谈'}
           </button>
         </div>
 

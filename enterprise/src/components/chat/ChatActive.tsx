@@ -13,11 +13,12 @@ interface ChatActiveProps {
   onSend: () => void;
   ownerName: string;
   placeholder?: string;
+  mode?: string;
 }
 
 export function ChatActive({
   messages, streamText, phase, inputValue,
-  onInputChange, onSend, ownerName, placeholder = '输入你的问题...',
+  onInputChange, onSend, ownerName, placeholder = '输入你的问题...', mode = 'qa',
 }: ChatActiveProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const isStreaming = phase === 'streaming';
@@ -40,8 +41,13 @@ export function ChatActive({
         flex: 1, overflowY: 'auto', padding: '20px 24px',
       }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          {messages.map(msg => (
-            <MessageBubble key={msg.id} message={msg} ownerName={ownerName} />
+          {messages.map((msg, i) => (
+            <div key={msg.id} style={{
+              animation: messages.length > 5 ? 'none' : `staggerIn 0.35s ease-out both`,
+              animationDelay: messages.length > 5 ? '0ms' : `${Math.min(i * 40, 200)}ms`,
+            }}>
+              <MessageBubble message={msg} ownerName={ownerName} />
+            </div>
           ))}
 
           {/* Stream text bubble */}
