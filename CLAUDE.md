@@ -55,7 +55,7 @@ ai-extract/
 
 ### 关键约定
 
-- 前端 QA 模式传 `mode='qa'`（**不是 undefined**，否则后端默认给错值）
+
 - 历史消息角色：前端用 `'ai'`，**DB 存的是 `'assistant'`**，渲染时两个都要匹配
 - 已发布分身 (`status='published'`) 才持久化对话，未发布分身使用临时 UUID
 - SSE 三种格式统一处理见 `frontend/src/lib/sse.ts`

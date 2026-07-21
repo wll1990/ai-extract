@@ -51,13 +51,13 @@ export interface ChatConfig {
 }
 
 /** 合并用户配置与默认值 */
-export function resolveConfig(config?: ChatConfig): Required<ChatConfig>['platform'] & { i18n: Required<Required<ChatConfig>['i18n']>; roles: Required<Required<ChatConfig>['i18n']>['roles'] } {
-  const p = config?.platform || {} as any;
-  const i = config?.i18n || {} as any;
-  const ip = i.practice || {};
-  const im = i.match || {};
-  const ic = i.chat || {};
-  const ir = i.roles || {};
+export function resolveConfig(config?: ChatConfig) {
+  const p: Record<string, any> = (config?.platform || {}) as Record<string, any>;
+  const i: Record<string, any> = (config?.i18n || {}) as Record<string, any>;
+  const ip: Record<string, any> = (i.practice || {}) as Record<string, any>;
+  const im: Record<string, any> = (i.match || {}) as Record<string, any>;
+  const ic: Record<string, any> = (i.chat || {}) as Record<string, any>;
+  const ir: Record<string, any> = (i.roles || {}) as Record<string, any>;
 
   return {
     platform: {

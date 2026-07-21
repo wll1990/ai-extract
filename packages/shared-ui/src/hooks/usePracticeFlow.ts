@@ -285,7 +285,8 @@ export function usePracticeFlow({
         onEvent: (type, data) => {
           if (type === 'limit') {
             dispatch({ type: 'REMOVE_LAST_CUSTOMER' });
-            onLimit?.({ used: (data as any).used || 0, limit: (data as any).limit || 5, pendingText: text });
+            const limitData = data as { used?: number; limit?: number };
+            onLimit?.({ used: limitData.used || 0, limit: limitData.limit || 5, pendingText: text });
           }
         },
       },

@@ -30,12 +30,6 @@ interface PracticeViewProps {
   onBack: () => void;
 }
 
-const MATCH_LABELS: Record<string, string> = {
-  EXACT: '精确命中',
-  SEMANTIC: '语义相关',
-  PROFILE_GUESS: '画像推断',
-};
-
 export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: PracticeViewProps) {
   const [phase, setPhase] = useState<'select' | 'active' | 'evaluating' | 'result'>('select');
   const [scenes, setScenes] = useState<{ label: string; title: string; setting: string; customerLine: string }[]>([]);
@@ -56,7 +50,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
-    fetchPracticeScenes(skillId).then(setScenes).catch(() => {});
+    fetchPracticeScenes(skillId).then(setScenes).catch((e) => { console.error('[PracticeView] fetchPracticeScenes failed', e); });
   }, [skillId]);
 
   const handleStart = useCallback(async (sceneLabel: string) => {
@@ -112,8 +106,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
 
       setMessages(prev => {
         const next = [...prev];
-        const lastUserIdx = next.length - 1;
-        // 找到最后一个 user 消息（可能被 streaming 占位插入）
+        // 找到最后一个 user 消息并更新评价字段
         for (let i = next.length - 1; i >= 0; i--) {
           if (next[i].role === 'user') {
             next[i] = {

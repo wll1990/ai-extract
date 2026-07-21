@@ -16,17 +16,14 @@ let _config: ApiConfig = {
   getAuthHeaders: () => ({}),
 };
 
-let _baseUrl: string = '/api/v1';
-
 export function configureApi(config: Partial<ApiConfig>) {
   if (config.baseUrl != null) _config.baseUrl = config.baseUrl;
   if (config.getAuthHeaders) _config.getAuthHeaders = config.getAuthHeaders;
   if (config.onAuthError) _config.onAuthError = config.onAuthError;
-  _baseUrl = _config.baseUrl;
 }
 
 export function getApiBaseUrl(): string {
-  return _baseUrl;
+  return _config.baseUrl;
 }
 
 export async function apiClient<T>(

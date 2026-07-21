@@ -600,7 +600,8 @@ public class SkillService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        // AI 生成自然客户开场白（复用审核页同一接口）
+        // TODO(P0): 发布时 @Async 预生成各场景开场白存库，此处读缓存
+        // 当前临时保留同步 AI 调用，后续迁移至异步预生成模式
         String customerLine = practiceDemoService.generateCustomerOpening(skillId, sceneTag);
 
         // 获取报告信息用于溯源
