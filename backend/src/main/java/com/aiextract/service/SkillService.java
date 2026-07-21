@@ -18,6 +18,7 @@ import com.aiextract.model.User;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SkillProfileRepository;
+import com.aiextract.repository.SkillEvaluationRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.repository.SpaceRepository;
 import com.aiextract.repository.UserRepository;
@@ -64,6 +65,7 @@ public class SkillService {
     private final com.aiextract.repository.SkillMessageRepository skillMessageRepository;
     private final PracticeDemoService practiceDemoService;
     private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
+    private final SkillEvaluationRepository skillEvaluationRepository;
 
     // ==================== Helper methods（ChatStreamService 复用） ====================
 
@@ -884,4 +886,30 @@ public class SkillService {
     /**
      * 安全发送SSE事件
      */
+
+    /**
+     * 查询对练评分趋势 — 返回用户在此分身下的历次对练评估分数。
+     *
+     * @param skillId 分身 ID
+     * @param userId  用户 ID
+     * @return 按时间排序的评分列表 [{score, styleScore, consistencyScore, behaviorScore, scriptReuseScore, createdAt}]
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getPracticeScoreTrend(String skillId, UUID userId) {
+        var evals = skillEvaluationRepository
+            .findBySkillIdAndEvaluatorIdAndModeOrderByCreatedAtAsc(
+                UUID.fromString(skillId), userId, "practice");
+        return evals.stream().map(e -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", e.getId().toString());
+            m.put("score", e.getScore());
+            m.put("styleScore", e.getStyleScore());
+            m.put("consistencyScore", e.getConsistencyScore());
+            m.put("behaviorScore", e.getBehaviorScore());
+            m.put("scriptReuseScore", e.getScriptReuseScore());
+            m.put("demoScript", e.getDemoScript());
+            m.put("createdAt", e.getCreatedAt() != null ? e.getCreatedAt().toString() : null);
+            return m;
+        }).collect(Collectors.toList());
+    }
 }

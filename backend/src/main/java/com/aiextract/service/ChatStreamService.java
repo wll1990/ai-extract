@@ -75,6 +75,7 @@ public class ChatStreamService {
     private final ConversationPersistenceService convPersistence;
     private final PromptAssemblyService promptAssembly;
     private final GrainRecommendationService grainRec;
+    private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
     private final ShareRateLimiter shareRateLimiter;
 
     @Value("${app.share.guest-message-limit:5}")
@@ -450,7 +451,7 @@ public class ChatStreamService {
     // 对练综合评价
     // ============================================================
 
-    public Flux<ChatChunk> evaluatePractice(String skillId, String conversation, String scene) {
+    public Flux<ChatChunk> evaluatePractice(String skillId, String conversation, String scene, UUID userId) {
         Skill skill = skillRepository.findById(UUID.fromString(skillId)).orElse(null);
         String name = skill != null && skill.getOwnerName() != null ? skill.getOwnerName() : "销冠";
         String domain = domainConfigLoader.resolveDomain(skill);
@@ -459,10 +460,57 @@ public class ChatStreamService {
             Map.of("role", "system", "content", evalPrompt),
             Map.of("role", "user", "content", "请输出评价")
         );
+        final UUID skillUuid = skill != null ? skill.getId() : UUID.fromString(skillId);
+        final StringBuilder accumulated = new StringBuilder();
         return chatStreamAdapter.chatStream(messages, Map.of("mode", "evaluate"))
             .map(ChatChunk::fromEventMap)
+            .doOnNext(chunk -> {
+                if ("content".equals(chunk.getType()) && chunk.getContent() != null) {
+                    accumulated.append(chunk.getContent());
+                }
+            })
+            .doOnComplete(() -> persistEvaluation(skillUuid, accumulated.toString(), name, userId))
             .timeout(Duration.ofSeconds(120))
             .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
+    }
+
+    /**
+     * 解析 AI 评估 JSON 并持久化到 skill_evaluation 表。
+     * 解析失败时静默吞异常 — 评估结果仍通过 SSE 到达前端，只是不存档。
+     */
+    private void persistEvaluation(UUID skillId, String rawJson, String ownerName, UUID userId) {
+        if (rawJson == null || rawJson.isBlank()) return;
+        try {
+            // 提取 JSON 对象（AI 可能前后加 markdown fence 或中文说明）
+            int start = rawJson.indexOf('{');
+            int end = rawJson.lastIndexOf('}');
+            if (start < 0 || end <= start) return;
+            String jsonStr = rawJson.substring(start, end + 1);
+
+            com.fasterxml.jackson.databind.ObjectMapper om = new com.fasterxml.jackson.databind.ObjectMapper();
+            @SuppressWarnings("unchecked")
+            var map = om.readValue(jsonStr, java.util.Map.class);
+
+            com.aiextract.model.SkillEvaluation eval = com.aiextract.model.SkillEvaluation.builder()
+                .skillId(skillId)
+                .mode("practice")
+                .evaluatorId(userId)
+                .score(map.get("score") instanceof Number s ? s.intValue() : null)
+                .styleScore(map.get("style_score") instanceof Number s ? s.intValue() : null)
+                .consistencyScore(map.get("consistency_score") instanceof Number s ? s.intValue() : null)
+                .behaviorScore(map.get("behavior_score") instanceof Number s ? s.intValue() : null)
+                .scriptReuseScore(map.get("script_reuse_score") instanceof Number s ? s.intValue() : null)
+                .scoreDetail(om.writeValueAsString(map.getOrDefault("score_detail", "")))
+                .strengths(om.writeValueAsString(map.getOrDefault("strengths", java.util.List.of())))
+                .improvements(om.writeValueAsString(map.getOrDefault("improvements", java.util.List.of())))
+                .demoScript(map.get("demo_script") instanceof String s ? s : null)
+                .createdAt(java.time.LocalDateTime.now())
+                .build();
+            skillEvaluationRepository.save(eval);
+            log.info("对练评估已持久化 skillId={} score={}", skillId, eval.getScore());
+        } catch (Exception e) {
+            log.warn("对练评估持久化失败 skillId={}: {}", skillId, e.getMessage());
+        }
     }
 
     // ============================================================

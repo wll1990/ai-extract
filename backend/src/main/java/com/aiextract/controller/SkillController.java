@@ -285,6 +285,18 @@ public class SkillController {
         return SseAdapter.fromFlux(
             chatStreamService.evaluatePractice(skillId,
                 body.getOrDefault("conversation", ""),
-                body.getOrDefault("scene", "")));
+                body.getOrDefault("scene", ""),
+                extractUserId()));
+    }
+
+    /**
+     * 查询用户对练评分趋势 — 按时间返回历次对练评估分数。
+     */
+    @GetMapping("/{skillId}/practice/trend")
+    public ApiResponse<List<Map<String, Object>>> getPracticeTrend(
+            @PathVariable String skillId) {
+        UUID userId = extractUserId();
+        var evaluations = skillService.getPracticeScoreTrend(skillId, userId);
+        return ApiResponse.success(evaluations);
     }
 }

@@ -22,5 +22,13 @@ public interface SkillEvaluationRepository extends JpaRepository<SkillEvaluation
      */
     List<SkillEvaluation> findByConversationId(UUID conversationId);
 
+    /**
+     * 按分身 + 评估人 + 模式查询，按时间升序。
+     * @param skillId 分身 ID
+     * @param evaluatorId 评估人 ID
+     * @param mode 评估模式
+     * @return 评估列表
+     */
+    List<SkillEvaluation> findBySkillIdAndEvaluatorIdAndModeOrderByCreatedAtAsc(UUID skillId, UUID evaluatorId, String mode);
 
 }
