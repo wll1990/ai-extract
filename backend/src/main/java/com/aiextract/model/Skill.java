@@ -150,6 +150,14 @@ public class Skill {
     private String openingMessage;
 
     /**
+     * 对练场景开场白缓存（JSON: {"场景标签": "客户开场白话术", ...}）。
+     * 发布时 @Async 预生成，HTTP 路径直接读此字段，不调 AI。
+     * @since 2026-07-22
+     */
+    @Column(name = "practice_openings", columnDefinition = "TEXT")
+    private String practiceOpenings;
+
+    /**
      * 领域标识，默认 sales。驱动预检、萃取、Chat 的领域知识库。
      */
     @Column(length = 20)

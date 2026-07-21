@@ -399,6 +399,8 @@ public class AdminAuditController {
             skillRepository.save(skill);
             // 异步生成开场白（若已手动填写则跳过）
             skillService.generateOpeningMessage(skillId);
+            // 异步预生成各场景对练客户开场白
+            skillService.generatePracticeOpenings(skillId);
         } else if ("unpublish".equals(action)) {
             if (!"published".equals(skill.getStatus())) {
                 throw new BusinessException(400, "仅已发布的分身可以撤销发布");

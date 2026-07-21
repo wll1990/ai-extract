@@ -332,7 +332,10 @@ public class SkillService {
             String commonMistakes = (String) row[2];
 
             String setting = !sceneDescription.isEmpty() ? sceneDescription : sceneTag + "场景练习";
-            String customerLine = !commonMistakes.isEmpty() ? commonMistakes
+            // 优先读预生成开场白 → 颗粒 commonMistakes → 模板兜底
+            String preGenerated = readPracticeOpening(id, sceneTag);
+            String customerLine = preGenerated != null ? preGenerated
+                    : !commonMistakes.isEmpty() ? commonMistakes
                     : "你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？";
             long grainCount = countMap.getOrDefault(sceneTag, 0L);
 
@@ -599,12 +602,15 @@ public class SkillService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        // 优先用颗粒常见误区，无误区时模板兜底（HTTP 线程不调 AI）
-        String customerLine = grains.stream()
-                .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
-                .findFirst()
-                .map(ExperienceGrain::getCommonMistakes)
-                .orElse("你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？");
+        // 优先读异步缓存 → 颗粒常见误区 → 模板兜底
+        String customerLine = readPracticeOpening(skillId, sceneTag);
+        if (customerLine == null) {
+            customerLine = grains.stream()
+                    .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
+                    .findFirst()
+                    .map(ExperienceGrain::getCommonMistakes)
+                    .orElse("你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？");
+        }
 
         // 获取报告信息用于溯源
         String reportTitle = "";
@@ -821,6 +827,78 @@ public class SkillService {
         } catch (Exception e) {
             log.error("开场白生成失败 skillId={}", skillId, e);
             // 静默失败，不阻塞发布流程
+        }
+    }
+
+    /**
+     * 异步预生成各场景的对练客户开场白，存到 skill.practice_openings (JSON)。
+     * 发布时触发，HTTP 路径直接读缓存，不调 AI。
+     */
+    @Async
+    public void generatePracticeOpenings(UUID skillId) {
+        try {
+            Skill skill = skillRepository.findById(skillId).orElse(null);
+            if (skill == null) return;
+
+            // 用 DB 聚合查询获取所有活跃场景
+            List<Object[]> scenes = grainRepository.countGrainsByScene(skill.getSpaceId());
+            if (scenes.isEmpty()) {
+                log.info("无活跃场景，跳过对练开场白生成 skillId={}", skillId);
+                return;
+            }
+
+            Map<String, String> openings = new LinkedHashMap<>();
+            // 已有缓存则增量更新，只补没有的场景
+            if (skill.getPracticeOpenings() != null && !skill.getPracticeOpenings().isBlank()) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> cached = objectMapper.readValue(skill.getPracticeOpenings(), Map.class);
+                    openings.putAll(cached);
+                } catch (Exception e) {
+                    log.warn("practiceOpenings JSON 解析失败，重新生成 skillId={}", skillId);
+                }
+            }
+
+            int generated = 0;
+            for (Object[] row : scenes) {
+                String sceneTag = (String) row[0];
+                // 已有缓存则跳过
+                if (openings.containsKey(sceneTag) && !openings.get(sceneTag).isBlank()) continue;
+
+                try {
+                    String opening = practiceDemoService.generateCustomerOpening(skillId, sceneTag);
+                    if (opening != null && !opening.isBlank()) {
+                        openings.put(sceneTag, opening.trim());
+                        generated++;
+                    }
+                } catch (Exception e) {
+                    log.warn("场景开场白生成失败 sceneTag={} skillId={}", sceneTag, skillId, e);
+                }
+            }
+
+            if (generated > 0) {
+                skill.setPracticeOpenings(objectMapper.writeValueAsString(openings));
+                skillRepository.save(skill);
+                log.info("对练开场白已生成 skillId={} generated={} total={}", skillId, generated, openings.size());
+            }
+        } catch (Exception e) {
+            log.error("对练开场白批量生成失败 skillId={}", skillId, e);
+        }
+    }
+
+    /**
+     * 从 skill.practice_openings 读取指定场景的缓存开场白。
+     * @return 缓存值，未命中返回 null
+     */
+    private String readPracticeOpening(UUID skillId, String sceneTag) {
+        Skill skill = skillRepository.findById(skillId).orElse(null);
+        if (skill == null || skill.getPracticeOpenings() == null || skill.getPracticeOpenings().isBlank()) return null;
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, String> map = objectMapper.readValue(skill.getPracticeOpenings(), Map.class);
+            return map.get(sceneTag);
+        } catch (Exception e) {
+            return null;
         }
     }
 
