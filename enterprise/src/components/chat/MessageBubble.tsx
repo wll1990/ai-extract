@@ -75,7 +75,8 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
           </div>
 
           {/* Meta row */}
-          {message.role === 'ai' && message.content && (
+          {/* 兼容 ai 和 assistant — DB 存 assistant，前端内部用 ai */}
+          {(message.role === 'ai' || message.role === 'assistant') && message.content && (
             <div style={{
               display: 'flex', alignItems: 'center', gap: 12,
               marginTop: 6, marginLeft: 4,

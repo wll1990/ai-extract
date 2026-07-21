@@ -317,35 +317,31 @@ public class SkillService {
         Skill skill = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
 
-        List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
-        Map<String, List<ExperienceGrain>> grouped = groupGrainsByScene(grains);
+        // DB 层聚合：最佳颗粒 + 计数，替代 Java 内存 groupGrainsByScene
+        UUID spaceId = skill.getSpaceId();
+        List<Object[]> bestGrains = grainRepository.findBestGrainsPerScene(spaceId);
+        List<Object[]> grainCounts = grainRepository.countGrainsByScene(spaceId);
+        Map<String, Long> countMap = grainCounts.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (String) row[0], row -> (Long) row[1], (a, b) -> a));
 
         List<Map<String, Object>> scenes = new ArrayList<>();
-        for (Map.Entry<String, List<ExperienceGrain>> entry : grouped.entrySet()) {
-            List<ExperienceGrain> grainList = entry.getValue();
-            { if (grainList.isEmpty()) continue; }
+        for (Object[] row : bestGrains) {
+            String sceneTag = (String) row[0];
+            String sceneDescription = (String) row[1];
+            String commonMistakes = (String) row[2];
 
-            // 取第一条有场景描述的颗粒
-            ExperienceGrain best = grainList.stream()
-                    .filter(g -> g.getSceneDescription() != null && !g.getSceneDescription().isEmpty())
-                    .findFirst().orElse(grainList.get(0));
-
-            String setting = best.getSceneDescription() != null ? best.getSceneDescription() : entry.getKey() + "场景练习";
-            // 客户开场白：优先用常见错误作为客户刁难台词
-            // 优先使用颗粒的常见误区作为客户刁难台词
-            // 无 commonMistakes 时用模板，禁止在 HTTP 线程内调 AI（性能红线）
-            String customerLine = grainList.stream()
-                    .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
-                    .findFirst()
-                    .map(ExperienceGrain::getCommonMistakes)
-                    .orElse("你好，我对" + entry.getKey() + "还有些疑问，能帮我详细分析一下吗？");
+            String setting = !sceneDescription.isEmpty() ? sceneDescription : sceneTag + "场景练习";
+            String customerLine = !commonMistakes.isEmpty() ? commonMistakes
+                    : "你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？";
+            long grainCount = countMap.getOrDefault(sceneTag, 0L);
 
             Map<String, Object> scene = new LinkedHashMap<>();
-            scene.put("label", entry.getKey());
+            scene.put("label", sceneTag);
             scene.put("title", setting.length() > 20 ? setting.substring(0, 20) + "..." : setting);
             scene.put("setting", setting);
             scene.put("customerLine", customerLine);
-            scene.put("grainCount", grainList.size());
+            scene.put("grainCount", (int) grainCount);
             scenes.add(scene);
         }
         return scenes;
@@ -366,19 +362,22 @@ public class SkillService {
         Skill skill = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
 
-        List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
-        Map<String, List<ExperienceGrain>> grouped = groupGrainsByScene(grains);
+        // DB 层聚合替代 Java 内存 groupGrainsByScene
+        List<Object[]> grainCounts = grainRepository.countGrainsByScene(skill.getSpaceId());
+        List<Object[]> bestGrains = grainRepository.findBestGrainsPerScene(skill.getSpaceId());
+        Map<String, String> descMap = bestGrains.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> (String) row[0], row -> (String) row[1], (a, b) -> a));
 
         List<Map<String, Object>> tags = new ArrayList<>();
-        for (Map.Entry<String, List<ExperienceGrain>> entry : grouped.entrySet()) {
+        for (Object[] row : grainCounts) {
+            String tagName = (String) row[0];
+            long count = (Long) row[1];
+            String desc = descMap.getOrDefault(tagName, tagName + "相关经验");
+
             Map<String, Object> tag = new LinkedHashMap<>();
-            tag.put("tag", entry.getKey());
-            tag.put("count", entry.getValue().size());
-            // 取第一条有描述的经验作为标签描述
-            String desc = entry.getValue().stream()
-                    .map(ExperienceGrain::getSceneDescription)
-                    .filter(d -> d != null && !d.isEmpty())
-                    .findFirst().orElse(entry.getKey() + "相关经验");
+            tag.put("tag", tagName);
+            tag.put("count", (int) count);
             tag.put("description", desc.length() > 30 ? desc.substring(0, 30) + "..." : desc);
             tags.add(tag);
         }

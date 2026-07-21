@@ -28,6 +28,28 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
     List<ExperienceGrain> findBySpaceId(UUID spaceId);
 
     /**
+     * 每场景最佳颗粒 — PostgreSQL DISTINCT ON，一条查询替代 Java 内存 groupGrainsByScene。
+     * 返回每场景标签、场景描述、常见误区、质量分。
+     */
+    @Query(value = "SELECT DISTINCT ON (scene_tag) scene_tag, " +
+            "COALESCE(scene_description, '') as scene_description, " +
+            "COALESCE(common_mistakes, '') as common_mistakes, " +
+            "COALESCE(quality_score, 0) as quality_score " +
+            "FROM experience_grain " +
+            "WHERE space_id = :spaceId AND status = 'active' AND scene_tag IS NOT NULL " +
+            "ORDER BY scene_tag, quality_score DESC NULLS LAST",
+            nativeQuery = true)
+    List<Object[]> findBestGrainsPerScene(@Param("spaceId") UUID spaceId);
+
+    /**
+     * 每场景颗粒计数 — DB 层 GROUP BY，替代 Java 内存遍历。
+     */
+    @Query("SELECT g.sceneTag, COUNT(g) FROM ExperienceGrain g " +
+           "WHERE g.spaceId = :spaceId AND g.status = 'active' AND g.sceneTag IS NOT NULL " +
+           "GROUP BY g.sceneTag")
+    List<Object[]> countGrainsByScene(@Param("spaceId") UUID spaceId);
+
+    /**
      * 按报告ID查询所有经验颗粒
      *
      * @param reportId 报告ID
