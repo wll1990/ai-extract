@@ -25,8 +25,8 @@ export default function SkillChatPage() {
   const ownerTitle = searchParams.get('title') || '';
   const initial = (ownerName || '?')[0];
 
-  const [chatMode, setChatMode] = useState<ChatMode>('qa');
-  const [modeSelected, setModeSelected] = useState(false);
+  const [chatMode, setChatMode] = useState<ChatMode>('talk');
+  const [modeSelected, setModeSelected] = useState(true);
   const [shareTarget, setShareTarget] = useState(false);
 
   const practiceAbortRef = useRef<AbortController | null>(null);
@@ -62,25 +62,12 @@ export default function SkillChatPage() {
 
   useEffect(() => { return () => { qa.stop(); practiceAbortRef.current?.abort(); }; }, []);
 
-  // ── 模式入口（未选模式时显示三卡片选择器） ──
-  if (!modeSelected) {
-    return (
-      <div className="flex h-screen bg-surface-2">
-        <div className="flex-1 flex flex-col min-w-0 overflow-auto">
-          <SkillModeSelector
-            skillId={skillId}
-            ownerName={ownerName}
-            ownerTitle={ownerTitle}
-            openingMessage={openingMessage}
-            avatarUrl={avatarUrl}
-            onTalkStart={qa.handleTalkStart}
-            onQaStart={qa.handleQaModeSelect}
-            onPracticeStart={() => { setChatMode('practice'); setModeSelected(true); }}
-          />
-        </div>
-      </div>
-    );
-  }
+  // ── 自动进入 Talk 模式 ──
+  useEffect(() => {
+    if (skillId && chatMode === 'talk') {
+      qa.handleTalkStart();
+    }
+  }, [skillId]);
 
   return (
     <div className="flex h-screen bg-surface-2">
@@ -354,7 +341,7 @@ export default function SkillChatPage() {
         )}
 
         {/* Practice 底部返回按钮 */}
-        {chatMode === 'practice' && modeSelected && (
+        {chatMode === 'practice' && (
           <div className="flex-shrink-0 px-4 py-2 border-t border-border text-center">
             <button onClick={() => { setChatMode('qa'); resetPractice(); }}
               className="text-xs text-muted-foreground-2 hover:text-foreground transition-colors">↩ 返回问答</button>

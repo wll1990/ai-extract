@@ -44,6 +44,8 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const [angleCurrent, setAngleCurrent] = useState(1);
   const [angleTotal, setAngleTotal] = useState(3);
   const [showHint, setShowHint] = useState(false);
+  const [scenePageSize, setScenePageSize] = useState(6);
+  const SCENE_INCREMENT = 4;
   const abortRef = useRef<AbortController | null>(null);
   const retryRef = useRef(false);
   const retryCountRef = useRef(0);
@@ -228,15 +230,18 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
 
   // ═══ 场景选择 ═══
   if (phase === 'select') {
+    const visibleScenes = scenes.slice(0, scenePageSize);
+    const hasMore = scenes.length > scenePageSize;
+    const allShown = scenePageSize >= scenes.length;
     return (
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '32px 40px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '32px 40px 60px', overflowY: 'auto' }}>
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{ fontSize: 40, marginBottom: 16 }}>🎯</div>
           <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>选择演练场景</h3>
           <p style={{ fontSize: 13, color: 'var(--fg-mid)' }}>AI 将扮演客户，模拟真实对话场景</p>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, maxWidth: 600, width: '100%' }}>
-          {scenes.map(s => (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, maxWidth: 640, width: '100%' }}>
+          {visibleScenes.map(s => (
             <button key={s.label} onClick={() => handleStart(s.label)}
               style={{
                 padding: '16px', borderRadius: 16, border: '1.5px solid var(--border-subtle)',
@@ -248,6 +253,39 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
             </button>
           ))}
         </div>
+        {hasMore && (
+          <button onClick={() => setScenePageSize(prev => prev + SCENE_INCREMENT)}
+            style={{
+              marginTop: 16, padding: '8px 24px', borderRadius: 100,
+              border: '1.5px solid var(--border-subtle)', background: 'var(--surface)',
+              cursor: 'pointer', fontSize: 13, color: 'var(--fg-mid)',
+              fontFamily: 'inherit', fontWeight: 500,
+              transition: 'all 0.15s',
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--tangerine)';
+              e.currentTarget.style.color = 'var(--tangerine)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-subtle)';
+              e.currentTarget.style.color = 'var(--fg-mid)';
+            }}
+          >
+            展开更多 · 还剩 {scenes.length - scenePageSize} 个 ▼
+          </button>
+        )}
+        {allShown && scenes.length > 6 && (
+          <button onClick={() => setScenePageSize(6)}
+            style={{
+              marginTop: 12, padding: '6px 20px', borderRadius: 100,
+              border: 'none', background: 'transparent',
+              cursor: 'pointer', fontSize: 12, color: 'var(--fg-dim)',
+              fontFamily: 'inherit',
+            }}>
+            收起 ▲
+          </button>
+        )}
       </div>
     );
   }
