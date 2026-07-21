@@ -83,6 +83,29 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
   --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07);
   --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1);
+
+  /* ═══ 对练皮肤变量 (for shared-ui PracticeView) ═══ */
+  --practice-scene-bg: rgba(255,92,0,0.06);
+  --practice-scene-text: #92400e;
+  --practice-user-bubble: linear-gradient(135deg, var(--tangerine), #ff7b3d);
+  --practice-customer-avatar: linear-gradient(135deg, var(--tangerine), #ff7b3d);
+  --practice-eval-bg: #fff5ec;
+  --practice-eval-border: #ffe0c0;
+  --practice-eval-title: #b45309;
+  --practice-hit-text: #16a34a;
+  --practice-miss-text: #dc2626;
+  --practice-offtopic-bg: #eff6ff;
+  --practice-offtopic-border: #bfdbfe;
+  --practice-offtopic-text: #2563eb;
+  --practice-technique-bg: rgba(147,51,234,0.06);
+  --practice-technique-border: rgba(147,51,234,0.12);
+  --practice-technique-text: #7e22ce;
+  --practice-retry-btn-bg: rgba(147,51,234,0.06);
+  --practice-retry-btn-text: #7e22ce;
+  --practice-advance-btn-bg: var(--s3);
+  --practice-full-bg: rgba(22,163,74,0.06);
+  --practice-full-border: rgba(22,163,74,0.12);
+  --practice-full-title: #15803d;
 }
 
 @layer base {

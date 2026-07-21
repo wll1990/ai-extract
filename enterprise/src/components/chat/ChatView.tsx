@@ -12,9 +12,9 @@ import type { SkillDetail } from '@/lib/api/skill';
 type Mode = 'qa' | 'talk' | 'practice';
 
 const MODE_ITEMS: { key: Mode; label: string; icon: string; color: string; desc: string }[] = [
-  { key: 'qa', label: '请教', icon: '🔍', color: '#f59e0b', desc: '向专家提问，获取实战经验' },
-  { key: 'talk', label: '对话', icon: '💬', color: '#6366f1', desc: '与专家自由交流' },
-  { key: 'practice', label: '对练', icon: '🎯', color: '#10b981', desc: '模拟场景，打磨技巧' },
+  { key: 'qa', label: '经验请教', icon: '🔍', color: '#f59e0b', desc: '带着问题来，带着方法走' },
+  { key: 'talk', label: '轻松交流', icon: '💬', color: '#6366f1', desc: '像老同事一样自然对话' },
+  { key: 'practice', label: '实战演练', icon: '🎯', color: '#10b981', desc: '在真实场景中刻意练习' },
 ];
 
 interface ChatViewProps {
