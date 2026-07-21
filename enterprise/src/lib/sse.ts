@@ -25,7 +25,7 @@ export interface SseCallbacks {
   onDone?: () => void;
   onError?: (message: string) => void;
   onAbort?: () => void;
-  onSource?: (reportId: string, reportTitle: string, grainIds?: string, grainTags?: string, grainCount?: number, avgScore?: string, avgSimilarity?: string) => void;
+  onSource?: (reportId: string, reportTitle: string, grainIds?: string, grainTags?: string, grainCount?: number, avgScore?: string, avgSimilarity?: string, sourceNames?: string) => void;
   onMeta?: (conversationId: string) => void;
   onEvent?: (type: string, data: Record<string, unknown>) => void;
 }
@@ -184,6 +184,7 @@ export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks):
           event.grainCount != null ? Number(event.grainCount) : 0,
           (event.avgScore as string) || '',
           (event.avgSimilarity as string) || '',
+          (event.sourceNames as string) || '',
         );
         break;
       case 'meta':

@@ -22,11 +22,37 @@ module.exports = {
           low: 'var(--fg-low)',
           dim: 'var(--fg-dim)',
         },
-        surface: 'var(--surface)',
+        surface: {
+          DEFAULT: 'var(--surface)',
+          2: 'var(--surface-2)',
+        },
         'border-subtle': 'var(--border-subtle)',
         tangerine: {
           DEFAULT: 'var(--tangerine)',
           hover: 'var(--tangerine-hover)',
+        },
+        foreground: 'var(--foreground)',
+        'muted-foreground': 'var(--muted-foreground)',
+        'muted-foreground-2': 'var(--muted-foreground-2)',
+        border: 'var(--border)',
+        'border-strong': 'var(--border-strong)',
+        background: 'var(--background)',
+        primary: {
+          DEFAULT: 'var(--primary)',
+          hover: 'var(--primary-hover)',
+          light: 'var(--primary-light)',
+        },
+        success: {
+          DEFAULT: 'var(--success)',
+          bg: 'var(--success-bg)',
+        },
+        warning: {
+          bg: 'var(--warning-bg)',
+          text: 'var(--warning-text)',
+        },
+        danger: {
+          DEFAULT: 'var(--danger)',
+          bg: 'var(--danger-bg)',
         },
       },
       boxShadow: {

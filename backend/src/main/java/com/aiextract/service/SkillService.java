@@ -332,11 +332,13 @@ public class SkillService {
 
             String setting = best.getSceneDescription() != null ? best.getSceneDescription() : entry.getKey() + "场景练习";
             // 客户开场白：优先用常见错误作为客户刁难台词
+            // 优先使用颗粒的常见误区作为客户刁难台词
+            // 无 commonMistakes 时用模板，禁止在 HTTP 线程内调 AI（性能红线）
             String customerLine = grainList.stream()
                     .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
                     .findFirst()
                     .map(ExperienceGrain::getCommonMistakes)
-                    .orElse(practiceDemoService.generateCustomerOpening(id, entry.getKey()));
+                    .orElse("你好，我对" + entry.getKey() + "还有些疑问，能帮我详细分析一下吗？");
 
             Map<String, Object> scene = new LinkedHashMap<>();
             scene.put("label", entry.getKey());

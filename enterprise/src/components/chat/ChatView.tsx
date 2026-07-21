@@ -32,10 +32,13 @@ export function ChatView({ skill }: ChatViewProps) {
 
   // Talk 配置
   const talkConfig = (() => { try { return JSON.parse((skill as any).talkConfig || '{}'); } catch { return {}; } })();
-  const showQuestions = mode === 'qa' || (mode === 'talk' && talkConfig.showRecommendedQuestions !== false);
-  const showSceneTags = mode === 'qa' || (mode === 'talk' && talkConfig.showSceneTags !== false);
+  // QA 模式：默认显示场景标签和推荐问题（场景感知）
+  // Talk 模式：默认不显示，仅当 talkConfig 显式开启时才显示
+  const showQuestions = mode === 'qa' || (mode === 'talk' && talkConfig.showRecommendedQuestions === true);
+  const showSceneTags = mode === 'qa' || (mode === 'talk' && talkConfig.showSceneTags === true);
 
   const [inputValue, setInputValue] = useState('');
+  const [activeSceneTag, setActiveSceneTag] = useState<string | undefined>();
 
   const handleSend = useCallback(() => {
     const text = inputValue.trim();
@@ -47,6 +50,11 @@ export function ChatView({ skill }: ChatViewProps) {
   const handleQuestionClick = useCallback((q: string) => {
     chat.sendMessage(q, mode);
   }, [chat, mode]);
+
+  const handleSceneTagClick = useCallback((tag: string) => {
+    // 点击已选中的标签取消选中，回到通用推荐
+    setActiveSceneTag(prev => prev === tag ? undefined : tag);
+  }, []);
 
   const handleSwitchConversation = useCallback(async (id: string) => {
     convs.switchConversation(id);
@@ -188,7 +196,7 @@ export function ChatView({ skill }: ChatViewProps) {
               }}
             />
           ) : isEntry ? (
-            <ChatEntry skill={skill} onQuestionClick={handleQuestionClick}
+            <ChatEntry skill={skill} onQuestionClick={handleQuestionClick} onSceneTagClick={handleSceneTagClick} activeSceneTag={activeSceneTag}
               showQuestions={showQuestions} showSceneTags={showSceneTags} mode={mode} />
           ) : (
             <ChatActive

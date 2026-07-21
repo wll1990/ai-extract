@@ -136,3 +136,56 @@ export function evaluatePractice(
     body: { conversation, scene },
   }, callbacks);
 }
+
+/** 逐轮评价（JSON，非 SSE） */
+export interface RoundEval {
+  championAnswer: string;
+  comparison: string;
+  hits: string[];
+  misses: string[];
+  technique: string;
+  offTopic?: boolean;
+  grains?: Array<{
+    sceneTag?: string;
+    qualityScore?: number;
+    matchLevel?: string;
+    fileName?: string;
+  }>;
+  matchLevel?: string;
+  fullAnswer?: string;
+  isLastRetry?: boolean;
+}
+
+export function evaluatePracticeRound(
+  skillId: string,
+  body: {
+    sceneTag: string;
+    customerMessage: string;
+    myResponse: string;
+    previousChampionAnswer?: string;
+    retryCount?: number;
+  },
+): Promise<RoundEval> {
+  return apiClient(`/skills/${skillId}/practice/evaluate-round`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+/** 用户反馈 */
+export function submitFeedback(params: {
+  skillId: string;
+  sessionId?: string;
+  grainId?: string;
+  helpful: boolean;
+  conversationId?: string;
+  query?: string;
+  aiResponse?: string;
+  ragScore?: number;
+  messageId?: string;
+}): Promise<void> {
+  return apiClient(`/skills/${params.skillId}/feedback`, {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+}
