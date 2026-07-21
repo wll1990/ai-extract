@@ -1,1 +1,0 @@
-ALTER TABLE skill ADD COLUMN IF NOT EXISTS practice_openings TEXT;
