@@ -24,6 +24,11 @@ export function ChatView({ skill }: ChatViewProps) {
   const chat = useChat({ skillId: skill.id, ownerName });
   const convs = useConversations(skill.id);
 
+  // Talk 配置
+  const talkConfig = (() => { try { return JSON.parse((skill as any).talkConfig || '{}'); } catch { return {}; } })();
+  const showQuestions = mode === 'qa' || (mode === 'talk' && talkConfig.showRecommendedQuestions !== false);
+  const showSceneTags = mode === 'qa' || (mode === 'talk' && talkConfig.showSceneTags !== false);
+
   const [inputValue, setInputValue] = useState('');
 
   const handleSend = useCallback(() => {
@@ -171,7 +176,8 @@ export function ChatView({ skill }: ChatViewProps) {
             onBack={() => setMode('qa')}
           />
         ) : isEntry ? (
-          <ChatEntry skill={skill} onQuestionClick={handleQuestionClick} />
+          <ChatEntry skill={skill} onQuestionClick={handleQuestionClick}
+            showQuestions={showQuestions} showSceneTags={showSceneTags} />
         ) : (
           <ChatActive
             messages={chat.messages}

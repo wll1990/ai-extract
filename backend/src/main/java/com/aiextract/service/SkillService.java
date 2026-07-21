@@ -861,6 +861,7 @@ public class SkillService {
         detail.put("grainCount", grains.stream().filter(g -> "active".equals(g.getStatus())).count());
         detail.put("openingMessage", skill.getOpeningMessage());
         detail.put("domain", skill.getDomain());
+        detail.put("talkConfig", skill.getTalkConfig() != null ? skill.getTalkConfig() : "{}");
         detail.put("status", skill.getStatus());
         return detail;
     }

@@ -15,9 +15,11 @@ const getEmoji = (tag: string) => SCENE_EMOJIS[tag] || '💡';
 interface ChatEntryProps {
   skill: SkillDetail;
   onQuestionClick: (question: string) => void;
+  showQuestions?: boolean;
+  showSceneTags?: boolean;
 }
 
-export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
+export function ChatEntry({ skill, onQuestionClick, showQuestions = true, showSceneTags = true }: ChatEntryProps) {
   const [questions, setQuestions] = useState<string[]>([]);
   const name = skill.displayName || skill.ownerName || '专家';
   const initial = name[0];
@@ -77,7 +79,7 @@ export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
       )}
 
       {/* Scene tags — 3 列可点击卡片 */}
-      {skill.sceneTags && skill.sceneTags.length > 0 && (
+      {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (
         <div style={{ maxWidth: 480, width: '100%', marginBottom: 24 }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
             💡 擅长领域 · 点击即可开始
@@ -120,7 +122,7 @@ export function ChatEntry({ skill, onQuestionClick }: ChatEntryProps) {
       )}
 
       {/* Recommended questions */}
-      {questions.length > 0 && (
+      {showQuestions && questions.length > 0 && (
         <div style={{ maxWidth: 420, width: '100%' }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 10 }}>
             试试这些问题

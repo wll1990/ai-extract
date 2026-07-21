@@ -44,6 +44,7 @@ public class PromptAssemblyService {
     private final DomainConfigLoader domainConfigLoader;
     private final PromptLoader promptLoader;
     private final SkillMessageRepository skillMessageRepository;
+    private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final ObjectMapper objectMapper;
 
     // ============================================================
@@ -115,6 +116,32 @@ public class PromptAssemblyService {
         params.put("communication_preferences", commPrefs);
         params.put("experience_context", expCtx.toString());
         params.put("mode_instruction", modeInstruction);
+
+        // boundary_rules: 无颗粒时注入诚实边界规则
+        String boundaryRules = "";
+        if (grouped.isEmpty()) {
+            java.util.List<String> topScenes = grainRepository.findBySpaceId(skill.getSpaceId()).stream()
+                .filter(g -> g.getSceneTag() != null && !g.getSceneTag().isEmpty())
+                .collect(java.util.stream.Collectors.groupingBy(
+                    com.aiextract.model.ExperienceGrain::getSceneTag,
+                    java.util.stream.Collectors.counting()))
+                .entrySet().stream()
+                .sorted(java.util.Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(3)
+                .map(java.util.Map.Entry::getKey)
+                .toList();
+            String sceneGuide = topScenes.isEmpty() ? "通用销售技巧"
+                : String.join("、", topScenes);
+
+            boundaryRules = "## 最高优先级边界\n\n"
+                + "本分身当前缺少关于此问题的经验数据。你必须：\n"
+                + "1. 第一句话诚实告知'我没有完整的实战经验，不敢乱给建议'\n"
+                + "2. 绝不基于直觉编造案例或话术\n"
+                + "3. 用 2-3 句话引向你擅长的方向：" + sceneGuide + "\n"
+                + "4. 语气温暖自然，用'说不定能帮到你'而非'请换个问题'\n";
+        }
+        params.put("boundary_rules", boundaryRules);
+
         String domain = domainConfigLoader.resolveDomain(skill);
         return promptLoader.format(template, params, domain);
     }

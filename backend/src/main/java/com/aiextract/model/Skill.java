@@ -156,6 +156,14 @@ public class Skill {
     private String domain;
 
     /**
+     * Talk 模式开场配置（JSONB）
+     * {"showRecommendedQuestions":false, "greetingMode":"auto", "showSceneTags":false}
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "talk_config", columnDefinition = "JSONB DEFAULT '{}'")
+    private String talkConfig;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false, updatable = false)
