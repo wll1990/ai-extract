@@ -10,12 +10,16 @@
 | 层 | 技术 | 版本 |
 |---|---|---|
 | **前端** | Next.js + TypeScript + Tailwind CSS | 14 |
-| **后端** | Spring Boot + Java + Maven | 3 / 17 / 3.8 |
-| **AI服务** | Python + FastAPI | 3.11 / 0.111 |
+| **后端** | Spring Boot + JPA + pgvector | 3 / 17 |
+| **AI服务** | Python + FastAPI | 3.11 |
 | **数据库** | PostgreSQL + pgvector | 16 |
 | **缓存** | Redis | 7 |
-| **向量存储** | pgvector | 0.7 |
-| **LLM** | DeepSeek (可插拔切换) | deepseek-chat |
+| **LLM** | DeepSeek + Qwen (可插拔) | deepseek-chat |
+
+## 开发工具
+
+- **Graphify** — 代码库知识图谱，`/graphify .` 构建后在任意 session 自动生效
+- **CLAUDE.md** — Claude Code 项目指令，含架构原则和编码规范
 
 ---
 
@@ -88,80 +92,58 @@ docker-compose up -d
 ## 项目结构
 
 ```
-ai-extract/                            # 项目根目录 (Java74 + Python10 + TS26 = 110+文件)
+ai-extract/
 │
-├── frontend/                          # 前端 Next.js 14
+├── frontend/                          # 前端 Next.js 14 (App Router)
 │   └── src/
-│       ├── app/                       # 页面路由 (13页)
-│       │   ├── login/                 # A1 登录页
-│       │   ├── page.tsx               # A2 首页工作台
-│       │   ├── interview/             # B2创建访谈 + B3对话页
-│       │   ├── report/                # B4生成完成 + B5报告详情
-│       │   ├── skill/                 # C4 AI分身对话页
-│       │   ├── explore/               # C1 经验广场
-│       │   ├── tools/                 # C5 工具箱
-│       │   └── admin/                 # D1管理后台 + D2覆盖地图 + D3萃取师库
-│       ├── components/                # 复用组件 (7个)
-│       │   ├── chat/                  # PhaseProgressBar / MessageBubble
-│       │   ├── voice/                 # VoiceInput (语音降级)
-│       │   ├── skill/                 # SkillChatWindow
-│       │   └── modals/                # ResumeModal / UploadExpertModal / ReviewGrainsModal
+│       ├── app/                       # 页面路由 (17页)
+│       │   ├── login/register/        # 认证
+│       │   ├── page.tsx               # 首页工作台
+│       │   ├── interview/             # AI访谈
+│       │   ├── report/                # 报告生成与查看
+│       │   ├── skill/[skillId]/       # 🔥 AI分身广场 (QA/Talk/Practice)
+│       │   ├── s/                     # 分享H5 (游客即聊)
+│       │   ├── explore/               # 经验广场
+│       │   ├── space/                 # 销冠空间
+│       │   └── admin/                 # 管理后台
+│       ├── components/
+│       │   ├── skill/                 # SkillChatView / PracticeView / SkillOpeningView
+│       │   ├── admin/                 # 审核步骤组件
+│       │   └── modals/                # ProductDemoModal / PracticeScenarioModal
 │       └── lib/
-│           ├── api/                   # API封装 (interview / report / skill / expert)
-│           └── sse.ts                 # SSE流式读取工具
+│           ├── api/                   # API 客户端
+│           └── sse.ts                 # SSE 流式读取
 │
 ├── backend/                           # 后端 Spring Boot 3
-│   ├── pom.xml                        # Maven依赖 (Spring Security/JPA/Flyway/Redis/JWT/WebFlux)
-│   └── src/main/
-│       ├── java/com/aiextract/
-│       │   ├── controller/            # 8个Controller (Auth/Expert/Im/Interview/Report/Skill/Space/Tool)
-│       │   ├── service/               # 10个Service (含 FeishuAdapter/SseEmitterService/ReportGeneration)
-│       │   ├── repository/            # 13个Repository (全表覆盖)
-│       │   ├── model/                 # 13个JPA实体 (全表覆盖)
-│       │   ├── dto/                   # 18个DTO
-│       │   ├── config/                # SecurityConfig + JwtAuthFilter
-│       │   ├── client/                # AiServiceClient (WebClient→Python)
-│       │   ├── exception/             # GlobalExceptionHandler + BusinessException
-│       │   ├── common/                # ApiResponse 统一响应
-│       │   └── util/                  # JwtUtil (生成/验证/解析)
-│       └── resources/
-│           ├── application.yml        # 数据源/Redis/JWT/AI服务/存储配置
-│           ├── db/migration/          # Flyway迁移 (V1__init.sql + V2__seed_data.sql)
-│           └── templates/             # report_word.ftl + report_ppt.pptx
+│   └── src/main/java/com/aiextract/
+│       ├── controller/                # 23个Controller
+│       ├── service/                   # 33个Service (含 ChatStreamService/ExpertAnalysisService)
+│       ├── repository/                # 31个Repository
+│       ├── model/                     # 32个JPA实体
+│       ├── dto/                       # DTO
+│       ├── config/                    # Security / SSE / Prompt / Domain
+│       ├── scheduler/                 # 定时任务 (素材清洗/颗粒萃取)
+│       └── common/                    # ApiResponse / GlobalExceptionHandler
 │
 ├── ai-service/                        # AI服务 Python FastAPI
-│   ├── main.py                        # 入口 (含 startup/shutdown 热加载事件)
-│   ├── requirements.txt               # 依赖 (fastapi/uvicorn/openai/watchdog等)
-│   ├── routers/
-│   │   └── interview.py               # /internal/chat + /internal/report/generate + /health
-│   ├── services/
-│   │   ├── interview_engine.py        # 访谈引擎 (流式追问/阶段检测)
-│   │   ├── report_generator.py        # 报告生成器 (六章JSON)
-│   │   ├── skill_loader.py            # Skill加载器 (PromptCache + PromptWatcher热加载)
-│   │   ├── expert_extractor.py        # 萃取师经验提取器
-│   │   └── expert_composer.py         # 多萃取师经验组合器 (共识/独家/矛盾)
-│   ├── prompts/                       # Prompt模板 (13个 .md)
-│   │   ├── interview_system.md        # AI萃取专家
-│   │   ├── skill_qa_system.md         # 分身问答基础模板
-│   │   ├── meta_interview_system.md   # 元萃取访谈
-│   │   ├── interview_opening.md       # 访谈开场
-│   │   ├── interview_completion.md    # 访谈完成致谢
-│   │   ├── interview_resume.md        # 访谈恢复
-│   │   ├── skill_practice_customer.md # 对练客户扮演
-│   │   ├── skill_practice_evaluate.md # 对练评价
-│   │   ├── enterprise_system.md       # 企业分身
-│   │   ├── grain_extraction.md        # 锦囊提取
-│   │   ├── expert_document_extraction.md  # 萃取师材料提取
-│   │   ├── expert_structure_report.md # 萃取师报告格式化
-│   │   └── expert_grain_extraction.md # 萃取法则提取
-│   └── scripts/
-│       └── generate_ppt_template.py   # PPT母版生成 (24页)
+│   ├── main.py                        # 入口
+│   ├── routers/internal.py            # /internal/chat + /internal/report/generate
+│   └── services/                      # 访谈引擎 / 报告生成器 / 萃取器
 │
-├── docker-compose.yml                 # 5容器编排 (db/redis/backend/ai-service/frontend)
-├── .editorconfig                      # 三语言编码风格统一
-├── tests/
-│   └── 手工测试用例.md                # 10个测试场景
-└── README.md                          # 本文件
+├── prompts/                           # Prompt模板 (40+个 .md)
+│   ├── skill_qa_system.md             # 分身问答
+│   ├── skill_practice_customer.md     # 对练客户扮演
+│   ├── interview_*.md                 # 访谈系列
+│   ├── expert_*.md                    # 萃取师系列
+│   ├── practice_*.md                  # 对练评测系列
+│   └── material_*.md                  # 素材处理系列
+│
+├── docs/                              # 设计文档 + API文档 + 测试用例
+├── .claude/                           # Claude Code 配置
+│   ├── settings.json                  # PreToolUse hooks (Graphify)
+│   └── skills/graphify/               # 知识图谱技能
+├── docker-compose.yml                 # 5容器编排
+└── CLAUDE.md                          # Claude Code 项目指令
 ```
 
 ---
@@ -226,19 +208,21 @@ npm run dev
 
 ---
 
-## API接口总览 (56个)
+## API接口总览 (148个)
 
 | 模块 | 数量 | 说明 |
 |---|---|---|
-| 认证 `/auth/*` | 3 | 登录、注册、获取当前用户 |
-| 空间 `/spaces/*` | 4 | 空间CRUD |
-| 访谈 `/interviews/*` | 8 | 创建、对话(SSE)、消息、恢复、暂停 |
-| 报告 `/reports/*` | 4 | 列表、详情、编辑、下载 |
-| 分身 `/skills/*` | 5 | 问答(SSE)、对练、企业总调度、反馈 |
-| 工具 `/tools/*` | 2 | 资料列表、下载 |
-| 管理 `/admin/*` | 7 | 空间管理、场景覆盖、配置、邀请 |
-| 专家经验 `/admin/experts/*` | 10 | 上传、提取、审核、激活、文件管理、综合Skill |
-| IM `/im/*` | 6 | 回调接收、渠道管理、测试 |
+| 认证 `/auth/*` + `/c/*` | 9 | 登录、注册、JWT、C端用户 |
+| 空间 `/spaces/*` | 5 | 空间CRUD |
+| 访谈 `/interviews/*` | 11 | 创建、对话(SSE)、消息、恢复 |
+| 报告 `/reports/*` | 7 | 列表、详情、编辑、下载 |
+| 分身 `/skills/*` | 21 | 问答(SSE)、对练、企业调度、反馈 |
+| 分身画像 `/skill-profiles/*` | 2 | 画像CRUD |
+| 素材 `/materials/*` | 8 | 上传、清洗、管理 |
+| 工具 `/tools/*` | 3 | 资料列表、下载 |
+| 管理后台 `/admin/*` | 60+ | 审核流水线、颗粒管理、萃取师、洞察、分享管理、通知 |
+| IM `/im/*` | 7 | 回调接收、渠道管理 |
+| 公开接口 `/public/*` | 3 | 分享页数据、H5访问 |
 
 完整文档见 `docs/03-API接口文档.md`
 
@@ -275,16 +259,20 @@ cd ai-service && python3 scripts/generate_ppt_template.py   # 生成PPT母版
 
 参见项目文档：
 
+- [CLAUDE.md](CLAUDE.md) — Claude Code 项目指令（架构原则 + 性能红线 + 反模式）
 - `docs/13-编码规范.md` — 阿里巴巴Java规范 + PEP 8 + TypeScript规范
-- `docs/05-代码实现逻辑文档.md` — 全部49个接口实现步骤
+- `docs/05-代码实现逻辑文档.md` — 全部接口实现步骤
 - `.editorconfig` — 统一缩进/换行/编码
+- `.claude/skills/graphify/` — 知识图谱技能，`/graphify .` 构建后自动生效
 
 ### 关键约定
 
-- **所有Java公共方法必须有Javadoc**
+- **Controller 薄，Service 厚** — 业务逻辑、事务、AI调用全部在Service层
+- **长耗时操作异步化** — AI调用/文件处理走 `@Async` 或 Scheduler
+- **SQL只在Repository** — 禁止Scheduler/Controller里写SQL
+- **零Mock零假数据** — AI调用失败抛异常，不造假降级
 - **使用构造器注入 (`@RequiredArgsConstructor`)**
-- **使用 SLF4J 日志，敏感信息不打日志**
-- **Git提交格式**：`feat(module): 描述`
+- **Git提交格式**：`feat: 描述` / `fix: 描述`
 - **Git分支**：`feature/xxx` / `fix/xxx`
 
 ---
