@@ -1,4 +1,5 @@
 // ═══ Chat Components ═══
+export { PracticeView, type PracticeViewProps, type PracticeMessage, type PracticeEval, type PracticeSource, type PracticeData } from './components/PracticeView';
 export { ChatComposer, type ChatComposerProps } from './chat/ChatComposer';
 export { ThinkingCard, type ThinkingCardProps } from './chat/ThinkingCard';
 export { QuickReplies, type QuickRepliesProps } from './chat/QuickReplies';
