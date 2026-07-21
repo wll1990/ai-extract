@@ -102,7 +102,6 @@ export default function MobileChatShell({
             )}
             <PracticeChatSection
               skillId={info.skillId}
-              ownerName={name}
               initialSceneTag={practiceSceneTag}
               setChatMode={onSwitchMode}
               abortRef={abortRef}
