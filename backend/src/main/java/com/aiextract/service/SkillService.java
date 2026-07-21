@@ -600,9 +600,12 @@ public class SkillService {
                 .limit(5)
                 .collect(Collectors.toList());
 
-        // TODO(P0): 发布时 @Async 预生成各场景开场白存库，此处读缓存
-        // 当前临时保留同步 AI 调用，后续迁移至异步预生成模式
-        String customerLine = practiceDemoService.generateCustomerOpening(skillId, sceneTag);
+        // 优先用颗粒常见误区，无误区时模板兜底（HTTP 线程不调 AI）
+        String customerLine = grains.stream()
+                .filter(g -> g.getCommonMistakes() != null && !g.getCommonMistakes().isEmpty())
+                .findFirst()
+                .map(ExperienceGrain::getCommonMistakes)
+                .orElse("你好，我对" + sceneTag + "还有些疑问，能帮我详细分析一下吗？");
 
         // 获取报告信息用于溯源
         String reportTitle = "";
