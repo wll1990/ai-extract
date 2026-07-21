@@ -22,7 +22,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ skill }: ChatViewProps) {
-  const [mode, setMode] = useState<Mode>('qa');
+  const [mode, setMode] = useState<Mode>('talk');
   const [showHistory, setShowHistory] = useState(false);
   const [practiceTag, setPracticeTag] = useState<string | undefined>();
 
@@ -190,7 +190,7 @@ export function ChatView({ skill }: ChatViewProps) {
               onBack={() => {
                 chat.reset();
                 convs.startNew();
-                setMode('qa');
+                setMode('talk');
               }}
             />
           ) : isEntry ? (
