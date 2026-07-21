@@ -10,6 +10,7 @@ export interface Message {
   id: string;
   role: 'user' | 'ai' | 'assistant';
   content: string;
+  grainIds?: string;
   grainTags?: string;
   grainCount?: number;
   avgScore?: string;
@@ -18,6 +19,7 @@ export interface Message {
 }
 
 interface SourceInfo {
+  grainIds?: string;
   grainTags?: string;
   grainCount?: number;
   avgScore?: string;
@@ -150,8 +152,8 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
 
     const callbacks: SseCallbacks = {
       onChunk: (content) => { dispatch({ type: 'CHUNK', content }); },
-      onSource: (_reportId, reportTitle, _grainIds, grainTags, grainCount, avgScore, avgSimilarity) => {
-        sourceInfo = { grainTags, grainCount, avgScore, avgSimilarity, reportTitle };
+      onSource: (_reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity) => {
+        sourceInfo = { grainIds, grainTags, grainCount, avgScore, avgSimilarity, reportTitle };
         dispatch({ type: 'SOURCE', info: sourceInfo });
       },
       onMeta: (conversationId) => {

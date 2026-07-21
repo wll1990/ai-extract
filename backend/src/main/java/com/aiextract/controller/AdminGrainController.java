@@ -26,6 +26,8 @@ public class AdminGrainController {
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
     private final AdminGrainService adminGrainService;
+    private final com.aiextract.repository.SkillMaterialRepository skillMaterialRepository;
+    private final com.aiextract.repository.ReportRepository reportRepository;
 
     /** 颗粒列表 — 按分身空间查询 */
     @GetMapping
@@ -96,5 +98,45 @@ public class AdminGrainController {
         m.put("qualityScore", g.getQualityScore());
         m.put("createdAt", g.getCreatedAt() != null ? g.getCreatedAt().toString() : null);
         return m;
+    }
+
+    /**
+     * 溯源聚合 — 根据 grainIds 批量返回颗粒详情+报告+原始对话片段。
+     */
+    @GetMapping("/traceability")
+    public ApiResponse<List<Map<String, Object>>> getTraceability(@RequestParam String grainIds) {
+        List<UUID> ids = Arrays.stream(grainIds.split(","))
+            .map(String::trim).filter(s -> !s.isEmpty())
+            .map(UUID::fromString).toList();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (UUID gid : ids) {
+            var grain = grainRepository.findById(gid).orElse(null);
+            if (grain == null) continue;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("grainId", gid.toString());
+            item.put("sceneDescription", grain.getSceneDescription());
+            item.put("expertThought", grain.getExpertThought());
+            item.put("standardScript", grain.getStandardScript());
+            item.put("commonMistakes", grain.getCommonMistakes());
+            item.put("qualityScore", grain.getQualityScore());
+            item.put("difficultyLevel", grain.getDifficultyLevel());
+            if (grain.getReportId() != null) {
+                reportRepository.findById(grain.getReportId()).ifPresent(r -> {
+                    item.put("reportTitle", r.getTitle());
+                    item.put("reportId", r.getId().toString());
+                });
+            }
+            if (grain.getSourceMaterialId() != null) {
+                skillMaterialRepository.findById(grain.getSourceMaterialId()).ifPresent(m -> {
+                    item.put("sourceName", m.getFileName());
+                    item.put("sourceType", "file_upload");
+                    String content = m.getParsedContent();
+                    item.put("sourceSnippet", content != null && content.length() > 500
+                        ? content.substring(0, 500) + "…" : content);
+                });
+            }
+            result.add(item);
+        }
+        return ApiResponse.success(result);
     }
 }

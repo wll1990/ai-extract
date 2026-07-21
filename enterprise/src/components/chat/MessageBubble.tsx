@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { Message } from '@/hooks/useChat';
+import { TraceabilityDrawer } from './TraceabilityDrawer';
 
 interface MessageBubbleProps {
   message: Message;
@@ -9,7 +10,7 @@ interface MessageBubbleProps {
 }
 
 export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
-  const [traceOpen, setTraceOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const isUser = message.role === 'user';
   const hasTrace = !!(message.grainTags && message.grainCount);
   const sim = message.avgSimilarity ? Number(message.avgSimilarity) : 0;
@@ -113,7 +114,7 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
 
               {hasTrace && matchLevel !== 'synthetic' && (
                 <button
-                  onClick={() => setTraceOpen(!traceOpen)}
+                  onClick={() => setDrawerOpen(true)}
                   style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     fontSize: 11, color: 'var(--fg-dim)',
@@ -121,34 +122,18 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
                     padding: 0, fontFamily: 'inherit',
                   }}
                 >
-                  <span style={{ transform: traceOpen ? 'rotate(90deg)' : '', transition: 'transform 0.15s' }}>
-                    ›
-                  </span>
-                  溯源 · {message.grainCount} 条
+                  溯源 · {message.grainCount} 条 →
                 </button>
               )}
             </div>
           )}
 
-          {/* Trace detail */}
-          {hasTrace && traceOpen && (
-            <div style={{
-              marginTop: 6, marginLeft: 4, borderRadius: 10,
-              background: 'var(--s3)', padding: '8px 12px',
-            }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                {message.grainTags?.split(',').filter(Boolean).map((tag, i) => (
-                  <span key={i} style={{
-                    padding: '2px 10px', borderRadius: 100,
-                    background: 'rgba(255,92,0,0.08)', fontSize: 11,
-                    color: 'var(--tangerine)',
-                  }}>
-                    {tag.trim()}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Traceability Drawer */}
+          <TraceabilityDrawer
+            grainIds={message.grainIds || ''}
+            open={drawerOpen}
+            onClose={() => setDrawerOpen(false)}
+          />
         </div>
       </div>
     </div>
