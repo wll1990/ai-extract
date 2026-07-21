@@ -54,6 +54,7 @@ export default function ProductStep({
       knowledgeDomains: jsonToText(p?.knowledgeDomains || ''),
       communicationPreferences: jsonToText(p?.communicationPreferences || ''),
       weaknessNotes: p?.weaknessNotes || '',
+      openingMessage: data.skill.openingMessage || '',
     };
   });
 
@@ -72,6 +73,7 @@ export default function ProductStep({
           ownerTitle: inlineEdit.ownerTitle,
           department: inlineEdit.department,
           seniority: inlineEdit.seniority,
+          openingMessage: inlineEdit.openingMessage || '',
         }),
       });
       await fetch(`${API_BASE}/admin/skills/${skillId}/profile`, {
@@ -152,6 +154,14 @@ export default function ProductStep({
                 <input value={inlineEdit.seniority || ''} onChange={e => setInlineEdit(prev => ({...prev, seniority: e.target.value}))}
                   className="w-full border rounded px-2 py-1 text-sm mt-0.5 focus:outline-none focus:border-primary" placeholder="10年" />
               </div>
+            </div>
+
+            {/* 开场白 — 展示在分身入口 */}
+            <div className="mt-3">
+              <label className="text-xs text-muted-foreground-2">开场白（一句话自我介绍，展示在分身入口）</label>
+              <textarea value={inlineEdit.openingMessage || ''} onChange={e => setInlineEdit(prev => ({...prev, openingMessage: e.target.value}))}
+                className="w-full border rounded px-2 py-1 text-sm mt-0.5 focus:outline-none focus:border-primary h-12 resize-none"
+                placeholder="我用10年B2B销售经验，帮你拿下每一个关键客户" />
             </div>
           </div>
 

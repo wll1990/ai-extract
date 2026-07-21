@@ -1,6 +1,8 @@
 package com.aiextract.model;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -71,6 +73,7 @@ public class AutoInsight {
     private String severity;
 
     /** 数据依据（JSONB） */
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "evidence", nullable = false, columnDefinition = "JSONB")
     private String evidence;
 

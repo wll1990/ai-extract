@@ -144,88 +144,63 @@ export function SkillOpeningView({
             {defaultMode === 'qa' ? '选一个场景开始，或直接跳过' : defaultMode === 'practice' ? '选一个场景开始对练' : '选择一个场景开始'}
           </p>
 
-          {defaultMode ? (
-            /* 已选模式：紧凑网格，点击直达 */
-            <div className="grid grid-cols-2 gap-2">
-              {sortedTags.map((s) => (
-                <button
-                  key={s.tag}
-                  type="button"
-                  onClick={() => handleSceneClick(s.tag)}
-                  className="rounded-xl bg-surface-2 border border-border px-3 py-3 text-left hover:border-primary/30 hover:shadow-sm transition-all"
-                >
-                  <span className="text-base">{getEmoji(s.tag)}</span>
-                  <h3 className="mt-1 text-sm font-semibold text-foreground">{s.tag}</h3>
-                  {(s.count || 0) > 0 && (
-                    <p className="mt-0.5 text-[11px] text-muted-foreground-2">{s.count} 条锦囊</p>
-                  )}
-                </button>
+          {/* 电影卡片轮播（统一所有模式） */}
+          <div ref={scrollRef} className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
+            <div className="flex gap-3 px-[15%]">
+              {sortedTags.map((s) => {
+                const isSelected = s.tag === selectedScene;
+                return (
+                  <button
+                    key={s.tag}
+                    type="button"
+                    onClick={() => handleSceneClick(s.tag)}
+                    className={`movie-card snap-center flex-shrink-0 w-[70%] rounded-2xl p-5 text-center shadow-sm transition-all ${
+                      isSelected
+                        ? 'bg-primary text-white shadow-md scale-[1.02]'
+                        : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
+                    }`}
+                  >
+                    <span className="text-2xl">{getEmoji(s.tag)}</span>
+                    <h3 className={`mt-2 text-base font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                      {s.tag}
+                    </h3>
+                    {(s.count || 0) > 0 && (
+                      <p className={`mt-1 text-xs ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
+                        {s.count} 条销冠锦囊
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {sortedTags.length > 1 && (
+            <div className="flex justify-center gap-1.5 mt-2.5">
+              {sortedTags.map((_, i) => (
+                <button key={i} type="button"
+                  className={`rounded-full transition-all duration-200 ${
+                    i === activeIndex ? 'h-1.5 w-4 bg-foreground' : 'h-1.5 w-1.5 bg-muted-foreground-2/30'
+                  }`}
+                />
               ))}
             </div>
-          ) : (
-            /* 初始页：电影卡片轮播 */
-            <>
-              <div ref={scrollRef} className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
-                <div className="flex gap-3 px-[15%]">
-                  {sortedTags.map((s) => {
-                    const isSelected = s.tag === selectedScene;
-                    return (
-                      <button
-                        key={s.tag}
-                        type="button"
-                        onClick={() => handleSceneClick(s.tag)}
-                        className={`movie-card snap-center flex-shrink-0 w-[70%] rounded-2xl p-5 text-center shadow-sm transition-all ${
-                          isSelected
-                            ? 'bg-primary text-white shadow-md scale-[1.02]'
-                            : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
-                        }`}
-                      >
-                        <span className="text-2xl">{getEmoji(s.tag)}</span>
-                        <h3 className={`mt-2 text-base font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
-                          {s.tag}
-                        </h3>
-                        {(s.count || 0) > 0 && (
-                          <p className={`mt-1 text-xs ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
-                            {s.count} 条销冠锦囊
-                          </p>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {sortedTags.length > 1 && (
-                <div className="flex justify-center gap-1.5 mt-2.5">
-                  {sortedTags.map((_, i) => (
-                    <button key={i} type="button"
-                      className={`rounded-full transition-all duration-200 ${
-                        i === activeIndex ? 'h-1.5 w-4 bg-foreground' : 'h-1.5 w-1.5 bg-muted-foreground-2/30'
-                      }`}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
           )}
         </div>
       )}
 
-      {/* 默认模式：点场景直达，无需再选 */}
+      {/* QA 模式跳过按钮 */}
       {defaultMode === 'qa' && (
-        <div className="space-y-2.5">
-          <p className="text-xs font-medium text-muted-foreground text-center">
-            选一个场景开始，或直接跳过
-          </p>
-          <button
-            type="button"
-            onClick={() => onQaStart?.('')}
-            className="w-full rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-muted-foreground hover:border-primary/30 hover:text-foreground transition-all"
-          >
-            跳过，直接开始 →
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => onQaStart?.('')}
+          className="w-full rounded-xl border border-border bg-surface-2 px-4 py-3 text-center text-sm text-muted-foreground hover:border-primary/30 hover:text-foreground transition-all"
+        >
+          跳过，直接开始 →
+        </button>
       )}
+
+      {/* Practice 模式：无跳过按钮，必须选场景 */}
 
       {/* 无默认模式：保持原有"选场景 → 选模式"行为 */}
       {!defaultMode && selectedScene && (

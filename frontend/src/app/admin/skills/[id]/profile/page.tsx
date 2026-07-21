@@ -26,6 +26,7 @@ export default function ProfilePage() {
         seniority: suppData.seniority || dashData?.skill?.seniority || '',
         limitations: suppData.limitations || dashData?.skill?.limitations || '',
         publishNotes: suppData.publishNotes || dashData?.skill?.publishNotes || '',
+        openingMessage: suppData.openingMessage || dashData?.skill?.openingMessage || '',
       });
       const p = dashData?.profile || {};
       setProfile({
@@ -103,6 +104,7 @@ export default function ProfilePage() {
         </div>
         <div className="mt-4">
           <Field label="局限性说明" value={supp.limitations} onChange={v => updateSupp('limitations', v)} textarea placeholder="分身可能在某些场景下回答不够准确..." />
+          <Field label="开场白（一句话自我介绍）" value={supp.openingMessage} onChange={v => updateSupp('openingMessage', v)} textarea placeholder="我用10年B2B销售经验，帮你拿下每一个关键客户" />
           <Field label="审核备注" value={supp.publishNotes} onChange={v => updateSupp('publishNotes', v)} textarea placeholder="管理员审核备注..." />
         </div>
       </div>

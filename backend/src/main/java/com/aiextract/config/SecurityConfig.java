@@ -40,6 +40,8 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                // CORS（使用 CorsConfig 中定义的 CorsConfigurationSource bean）
+                .cors(cors -> {})
                 // 禁用CSRF（API服务不使用Cookie）
                 .csrf(AbstractHttpConfigurer::disable)
 

@@ -200,7 +200,7 @@ export function useQaChat({
   const handleQaStart = useCallback((sceneTag: string) => {
     setChatMode('qa');
     setModeSelected(true);
-    setQaSceneContext(sceneTag || null);
+    setQaSceneContext(sceneTag || '');
     setMessages([]);
     if (sceneTag) {
       fetchRecommendedQuestions(skillId, sceneTag, authToken)

@@ -12,7 +12,7 @@ import java.time.Duration;
  * SSE 适配器 — Flux → SseEmitter 的复用工具
  *
  * <p>所有 Controller 通过此工具将统一的 Flux&lt;ChatChunk&gt; 包装为 SseEmitter，
- * 不再手动操作 HttpServletResponse / PrintWriter。</p>
+ * 
  *
  * <p>新增客户端（小程序、App）只需新增 Controller，复用同一适配器。</p>
  *

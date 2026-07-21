@@ -44,12 +44,16 @@ export default function SkillChatPage() {
 
   const [openTraces, setOpenTraces] = useState<Record<string, boolean>>({});
   const [openingMessage, setOpeningMessage] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!skillId) return;
     fetch(`${API_BASE}/skills/${skillId}/detail`, { credentials: 'include' })
       .then(r => r.json())
-      .then(d => { if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage); })
+      .then(d => {
+        if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage);
+        if (d?.data?.avatarUrl) setAvatarUrl(d.data.avatarUrl);
+      })
       .catch(() => {});
   }, [skillId]);
   const toggleTrace = (msgId: string) => setOpenTraces(prev => ({ ...prev, [msgId]: !prev[msgId] }));
@@ -67,6 +71,8 @@ export default function SkillChatPage() {
             skillId={skillId}
             ownerName={ownerName}
             ownerTitle={ownerTitle}
+            openingMessage={openingMessage}
+            avatarUrl={avatarUrl}
             onTalkStart={qa.handleTalkStart}
             onQaStart={qa.handleQaModeSelect}
             onPracticeStart={() => { setChatMode('practice'); setModeSelected(true); }}
@@ -155,21 +161,47 @@ export default function SkillChatPage() {
               <div className="mx-auto max-w-[720px] space-y-4 px-4">
 
                 {/* ── QA 场景选择界面 ── */}
-                {chatMode === 'qa' && qa.messages.length === 0 && qa.qaSceneContext == null && (
+                {chatMode === 'qa' && qa.messages.length === 0 && !qa.qaSceneContext && (
                   <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
                     defaultMode="qa" onQaStart={qa.handleQaStart} onPracticeStart={(tag) => startPracticeWithScene(tag)} />
                 )}
 
-                {/* ── QA 场景上下文标签 ── */}
-                {qa.messages.length === 0 && qa.qaSceneContext && (
-                  <div className="pt-12 pb-4 text-center">
-                    <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-2 px-4 py-2 text-sm shadow-sm">
-                      <span className="text-primary font-medium">{qa.qaSceneContext}</span>
-                      <button onClick={qa.clearContext} className="text-muted-foreground-2 hover:text-foreground ml-1 transition-colors">✕</button>
+                {/* ── QA 场景上下文标签（含上/下一场景翻页） ── */}
+                {qa.messages.length === 0 && qa.qaSceneContext && (() => {
+                  const sorted = [...qa.sceneTags].sort((a, b) => (b.count || 0) - (a.count || 0));
+                  const curIdx = sorted.findIndex(s => s.tag === qa.qaSceneContext);
+                  const prevTag = curIdx > 0 ? sorted[curIdx - 1].tag : null;
+                  const nextTag = curIdx >= 0 && curIdx < sorted.length - 1 ? sorted[curIdx + 1].tag : null;
+                  return (
+                    <div className="pt-12 pb-4 text-center">
+                      <div className="inline-flex items-center gap-2">
+                        {prevTag ? (
+                          <button onClick={() => qa.handleQaStart(prevTag)}
+                            className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+                            title={`上一场景：${prevTag}`}>
+                            ← {prevTag}
+                          </button>
+                        ) : (
+                          <span className="w-20" />
+                        )}
+                        <div className="inline-flex items-center gap-2 rounded-full border-2 border-primary/30 bg-primary-light px-4 py-2 text-sm shadow-sm">
+                          <span className="text-primary font-medium">{qa.qaSceneContext}</span>
+                          <button onClick={qa.clearContext} className="text-muted-foreground-2 hover:text-foreground ml-1 transition-colors">✕</button>
+                        </div>
+                        {nextTag ? (
+                          <button onClick={() => qa.handleQaStart(nextTag)}
+                            className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+                            title={`下一场景：${nextTag}`}>
+                            {nextTag} →
+                          </button>
+                        ) : (
+                          <span className="w-20" />
+                        )}
+                      </div>
+                      <RecommendedQuestions questions={qa.contextQuestions} onQuestionClick={qa.handleQuestionClick} />
                     </div>
-                    <RecommendedQuestions questions={qa.contextQuestions} onQuestionClick={qa.handleQuestionClick} />
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* ── 分身开场白 ── */}
                 {qa.messages.length === 0 && openingMessage && (chatMode === 'qa' || chatMode === 'talk') && (

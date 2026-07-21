@@ -7,6 +7,7 @@ import com.aiextract.model.*;
 import com.aiextract.repository.*;
 import com.aiextract.service.PracticeDemoService;
 import com.aiextract.service.ExtractionReportService;
+import com.aiextract.service.SkillService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class AdminAuditController {
     private final ExtractionReportService extractionReportService;
     private final ExperienceGrainRepository grainRepository;
     private final PracticeDemoService practiceDemoService;
+    private final SkillService skillService;
     private final ObjectMapper objectMapper;
 
     /** 审核仪表盘 — 聚合返回分身发布前的所有关键数据 */
@@ -54,6 +56,7 @@ public class AdminAuditController {
         skillMap.put("targetScenarios", skill.getTargetScenarios());
         skillMap.put("limitations", skill.getLimitations());
         skillMap.put("publishNotes", skill.getPublishNotes());
+        skillMap.put("openingMessage", skill.getOpeningMessage());
         skillMap.put("createdAt", skill.getCreatedAt() != null ? skill.getCreatedAt().toString() : null);
         data.put("skill", skillMap);
 
@@ -232,6 +235,7 @@ public class AdminAuditController {
         data.put("targetScenarios", skill.getTargetScenarios());
         data.put("limitations", skill.getLimitations());
         data.put("publishNotes", skill.getPublishNotes());
+        data.put("openingMessage", skill.getOpeningMessage());
         if (profile != null) {
             data.put("communicationPreferences", profile.getCommunicationPreferences());
             data.put("weaknessNotes", profile.getWeaknessNotes());
@@ -253,6 +257,7 @@ public class AdminAuditController {
         if (body.containsKey("targetScenarios")) skill.setTargetScenarios((String) body.get("targetScenarios"));
         if (body.containsKey("limitations")) skill.setLimitations((String) body.get("limitations"));
         if (body.containsKey("publishNotes")) skill.setPublishNotes((String) body.get("publishNotes"));
+        if (body.containsKey("openingMessage")) skill.setOpeningMessage((String) body.get("openingMessage"));
         skillRepository.save(skill);
 
         if (body.containsKey("communicationPreferences") || body.containsKey("weaknessNotes")) {
@@ -392,6 +397,8 @@ public class AdminAuditController {
             skill.setStatus("published");
             skill.setPublishedAt(java.time.LocalDateTime.now());
             skillRepository.save(skill);
+            // 异步生成开场白（若已手动填写则跳过）
+            skillService.generateOpeningMessage(skillId);
         } else if ("unpublish".equals(action)) {
             if (!"published".equals(skill.getStatus())) {
                 throw new BusinessException(400, "仅已发布的分身可以撤销发布");

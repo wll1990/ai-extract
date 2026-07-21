@@ -25,8 +25,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.aiextract.config.DomainConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -818,6 +820,78 @@ public class SkillService {
             }
         }
         return questions.stream().limit(3).collect(java.util.stream.Collectors.toList());
+    }
+
+    /**
+     * 异步生成分身开场白 — 发布时触发，不阻塞 HTTP 响应。
+     *
+     * <p>使用 AI 根据分身画像生成一句有质感的自我介绍（15-30 字），
+     * 保存到 skill.openingMessage。若已有手动填写的值则跳过。</p>
+     */
+    @Async("embeddingExecutor")
+    public void generateOpeningMessage(UUID skillId) {
+        try {
+            Skill skill = skillRepository.findById(skillId).orElse(null);
+            if (skill == null) return;
+
+            // 已手动填写则跳过，不覆盖
+            if (skill.getOpeningMessage() != null && !skill.getOpeningMessage().isBlank()) {
+                log.info("开场白已手动填写，跳过自动生成 skillId={}", skillId);
+                return;
+            }
+
+            // 收集 top 3 场景标签
+            List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
+            String scenes = grains.stream()
+                .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
+                .collect(Collectors.groupingBy(ExperienceGrain::getSceneTag, Collectors.counting()))
+                .entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(3)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.joining("、"));
+            if (scenes.isEmpty()) scenes = "通用销售";
+
+            // 解析 tags JSONB
+            List<String> tagList = parseJsonList(skill.getTags());
+            String tags = tagList.isEmpty() ? (skill.getDomain() != null ? skill.getDomain() : "销售") : String.join("、", tagList);
+
+            // 领域名称
+            String domainId = domainConfigLoader.resolveDomain(skill);
+            DomainConfig dc = domainId != null ? domainConfigLoader.load(domainId) : null;
+            String domainName = dc != null && dc.getDomain() != null ? dc.getDomain().getName() : "销售";
+            String roleLabel = dc != null && dc.getDomain() != null ? dc.getDomain().getRoleLabel() : "销冠";
+
+            // 构建 prompt
+            Map<String, String> vars = new LinkedHashMap<>();
+            vars.put("owner_name", Objects.requireNonNullElse(skill.getOwnerName(), "销冠"));
+            vars.put("owner_title", Objects.requireNonNullElse(skill.getOwnerTitle(), ""));
+            vars.put("department", Objects.requireNonNullElse(skill.getDepartment(), ""));
+            vars.put("seniority", Objects.requireNonNullElse(skill.getSeniority(), ""));
+            vars.put("tags", tags);
+            vars.put("scenes", scenes);
+            vars.put("domain_name", domainName);
+
+            String prompt = promptLoader.format("skill_opening_message.md", vars);
+            String generated = chatStreamAdapter.chat(prompt);
+
+            if (generated != null && !generated.isBlank()) {
+                // 清理：去引号/换行，截断
+                generated = generated.trim()
+                    .replaceAll("^[\"'“”‘’]", "")
+                    .replaceAll("[\"'“”‘’]$", "")
+                    .replaceAll("\\n", "");
+                if (generated.length() > 100) {
+                    generated = generated.substring(0, 100);
+                }
+                skill.setOpeningMessage(generated);
+                skillRepository.save(skill);
+                log.info("开场白已生成 skillId={} chars={}", skillId, generated.length());
+            }
+        } catch (Exception e) {
+            log.error("开场白生成失败 skillId={}", skillId, e);
+            // 静默失败，不阻塞发布流程
+        }
     }
 
     // ========== 分身详情（System B 聊天页入口） ==========

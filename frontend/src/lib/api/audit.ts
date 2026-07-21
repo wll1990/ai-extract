@@ -5,7 +5,7 @@ export interface AuditDashboard {
     id: string; status: string; displayName?: string; ownerName?: string;
     ownerTitle?: string; department?: string; seniority?: string;
     tags?: string; targetScenarios?: string; limitations?: string;
-    publishNotes?: string; createdAt?: string;
+    publishNotes?: string; openingMessage?: string; createdAt?: string;
   };
   profile?: {
     personality?: string; speakingStyle?: string; background?: string;
@@ -50,6 +50,7 @@ export interface SupplementData {
   displayName?: string; ownerName?: string; ownerTitle?: string;
   department?: string; seniority?: string; tags?: string;
   targetScenarios?: string; limitations?: string; publishNotes?: string;
+  openingMessage?: string;
   communicationPreferences?: string; weaknessNotes?: string;
 }
 

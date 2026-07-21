@@ -7,6 +7,10 @@ export interface SkillModeSelectorProps {
   skillId: string;
   ownerName: string;
   ownerTitle?: string;
+  /** AI 生成或手动填写的开场白（一句有质感的话） */
+  openingMessage?: string | null;
+  /** 分身头像 URL */
+  avatarUrl?: string | null;
   onTalkStart: () => void;
   onQaStart: () => void;
   onPracticeStart: () => void;
@@ -29,6 +33,8 @@ export function SkillModeSelector({
   skillId,
   ownerName,
   ownerTitle,
+  openingMessage,
+  avatarUrl,
   onTalkStart,
   onQaStart,
   onPracticeStart,
@@ -51,30 +57,57 @@ export function SkillModeSelector({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center px-4 pt-12 pb-8">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-navy to-primary text-xl text-white font-bold shadow-lg mb-4">
-          {initial}
+      <div className="flex flex-col px-4 pt-12 pb-8">
+        <div className="flex items-start gap-4">
+          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl bg-gradient-to-br from-navy to-primary text-2xl text-white font-bold shadow-lg flex-shrink-0">
+            {initial}
+          </div>
+          <div className="flex-1 min-w-0 pt-1">
+            <h2 className="text-xl font-bold text-foreground">{ownerName}</h2>
+            {ownerTitle && <p className="text-sm text-muted-foreground mt-0.5">{ownerTitle}</p>}
+          </div>
         </div>
-        <h2 className="text-xl font-bold text-foreground">{ownerName}</h2>
-        {ownerTitle && <p className="text-sm text-muted-foreground mt-1">{ownerTitle}</p>}
-        <div className="mt-8 text-sm text-muted-foreground">加载中...</div>
+        <div className="mt-8 text-sm text-muted-foreground text-center">加载中...</div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col items-center px-4 pt-12 pb-8">
-      {/* 分身头像 + 信息 */}
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-navy to-primary text-xl text-white font-bold shadow-lg mb-4">
-        {initial}
+    <div className="flex flex-col px-4 pt-12 pb-8">
+      {/* 分身头像 + 信息 + 开场白 — 左图右文布局 */}
+      <div className="flex items-start gap-4">
+        {/* 左侧大头像 */}
+        {avatarUrl ? (
+          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={avatarUrl} alt={ownerName || 'AI分身'} className="h-full w-full object-cover" />
+          </div>
+        ) : (
+          <div className="flex h-[72px] w-[72px] items-center justify-center rounded-2xl bg-gradient-to-br from-navy to-primary text-2xl text-white font-bold shadow-lg flex-shrink-0">
+            {initial}
+          </div>
+        )}
+
+        {/* 右侧信息 */}
+        <div className="flex-1 min-w-0 pt-1">
+          <h2 className="text-xl font-bold text-foreground">{ownerName}</h2>
+          {ownerTitle && (
+            <p className="text-sm text-muted-foreground mt-0.5">{ownerTitle}</p>
+          )}
+
+          {/* Hero 开场白 — 一句有质感的话 */}
+          {openingMessage && (
+            <p className="mt-2.5 text-sm text-foreground/80 leading-relaxed italic
+              bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5
+              rounded-xl px-3.5 py-2">
+              "{openingMessage}"
+            </p>
+          )}
+        </div>
       </div>
-      <h2 className="text-xl font-bold text-foreground">{ownerName}</h2>
-      {ownerTitle && (
-        <p className="text-sm text-muted-foreground mt-1">{ownerTitle}</p>
-      )}
 
       {/* 模式选择 — 标签从领域配置读取 */}
-      <div className="mt-8 grid grid-cols-3 gap-3 w-full max-w-sm">
+      <div className="mt-8 grid grid-cols-3 gap-3 w-full max-w-sm mx-auto">
         <button
           type="button"
           onClick={onTalkStart}
