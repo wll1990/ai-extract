@@ -1,9 +1,11 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
+import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
 type QaHook = ReturnType<typeof useQaChat>;
@@ -45,6 +47,7 @@ export default function MobileChatShell({
   isLimitReached, onRegisterPrompt,
 }: Props) {
   const name = info.ownerName || '销冠';
+  const initial = name.charAt(0);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,7 +60,21 @@ export default function MobileChatShell({
     onAfterSend();
   };
 
-  const initial = name.charAt(0);
+  const [scenesExpanded, setScenesExpanded] = useState(false);
+  const sceneTags = info.sceneTags || [];
+  const INITIAL_SCENE_COUNT = 4;
+  const hasMoreScenes = sceneTags.length > INITIAL_SCENE_COUNT;
+  const visibleScenes = scenesExpanded ? sceneTags : sceneTags.slice(0, INITIAL_SCENE_COUNT);
+
+  // Talk 模式主动加载推荐问题
+  const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
+  useEffect(() => {
+    if (mode === 'talk' && info?.skillId) {
+      fetchRecommendedQuestions(info.skillId)
+        .then(qs => { if (Array.isArray(qs)) setTalkQuestions(qs); })
+        .catch(() => {});
+    }
+  }, [mode, info?.skillId]);
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f7f9ff]">
@@ -116,107 +133,256 @@ export default function MobileChatShell({
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto px-4 py-6">
-            <div className="text-h3 font-semibold text-foreground">选择一个场景开始对练</div>
-            <div className="mt-1 text-xs text-muted-foreground">{name}会扮演客户，每轮给你对比点评</div>
-            <div className="mt-4 flex flex-col gap-2.5">
-              {(info.sceneTags || []).map(s => (
+            {/* 头像 + 问候 */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full shadow-sm overflow-hidden">
+                <img src={info.avatarUrl || '/def-avatar.png'} alt={name} className="h-full w-full object-cover" />
+              </div>
+              <div>
+                <p className="text-[14px] font-semibold text-foreground">
+                  你好，我是 {name} 的 AI 分身 👋
+                </p>
+                <p className="text-[12px] text-muted-foreground leading-relaxed mt-0.5">
+                  选个场景，我扮演客户来考考你
+                </p>
+              </div>
+            </div>
+
+            {/* 信任条 */}
+            <div className="rounded-xl px-3 py-3 mb-5"
+              style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(59,130,246,0.08))', border: '1px solid rgba(59,130,246,0.1)' }}>
+              <div className="flex items-center divide-x divide-black/5">
+                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
+                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" /></svg>
+                  </div>
+                  <span className="text-[11px] font-semibold text-foreground">实战打法</span>
+                  <span className="text-[9px] text-muted-foreground leading-tight">销冠真实案例提炼</span>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
+                    style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><circle cx="11.5" cy="14.5" r="2.5" /><path d="M13.5 16.5L16 19" /></svg>
+                  </div>
+                  <span className="text-[11px] font-semibold text-foreground">溯源可查</span>
+                  <span className="text-[9px] text-muted-foreground leading-tight">每句话有据可依</span>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
+                    style={{ background: 'linear-gradient(135deg, #06b6d4, #0891b2)' }}>
+                    <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M13 2L3 14h7l-2 8 10-12h-7z" /></svg>
+                  </div>
+                  <span className="text-[11px] font-semibold text-foreground">即问即用</span>
+                  <span className="text-[9px] text-muted-foreground leading-tight">30秒拿到可执行话术</span>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[16px] font-semibold text-foreground">他扮演客户来考你，每轮给你实战点评</p>
+            <p className="mt-1 text-[13px] text-muted-foreground">敢试试吗？</p>
+            <div className={`mt-4 flex flex-col gap-2.5 ${scenesExpanded ? 'max-h-[50vh] overflow-y-auto -mx-2 px-2' : ''}`}>
+              {visibleScenes.map(s => (
                 <button key={s.tag} onClick={() => onPickScene(s.tag)}
                   className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 text-left shadow-sm active:scale-[0.98]">
                   <span className="text-body font-medium text-foreground">{s.tag}</span>
                   <span className="text-[11px] text-muted-foreground-2">{s.count ? `${s.count} 条锦囊` : ''} ›</span>
                 </button>
               ))}
-              {(info.sceneTags || []).length === 0 && (
+              {sceneTags.length === 0 && (
                 <div className="py-8 text-center text-xs text-muted-foreground-2">该分身暂无对练场景</div>
               )}
             </div>
+            {hasMoreScenes && (
+              <button
+                onClick={() => setScenesExpanded(!scenesExpanded)}
+                className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-[#eef2ff] hover:text-[#2147ff] active:scale-[0.98]"
+              >
+                {scenesExpanded ? (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4"><path d="M18 15l-6-6-6 6" /></svg>
+                    收起
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-4 w-4"><path d="M6 9l6 6 6-6" /></svg>
+                    展开更多（还有 {sceneTags.length - INITIAL_SCENE_COUNT} 个）
+                  </>
+                )}
+              </button>
+            )}
           </div>
         )
       ) : (
         <>
           {/* qa/talk 消息区 */}
           {qa.isStreaming && (
-            <div className="h-0.5 w-full overflow-hidden bg-gray-100">
-              <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-400" />
+            <div className="px-4">
+              <div className="h-0.5 w-full max-w-[85%] overflow-hidden rounded-full bg-gray-100">
+                <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-400" />
+              </div>
             </div>
           )}
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
-            {/* 紧凑自我介绍卡片 — 首次打开且无消息时展示 */}
+            {/* 首次打开且无消息 — 四层入口 */}
             {qa.messages.length === 0 && !qa.qaStreamText && (
-              <div className="rounded-2xl border border-[#dfe6ff] bg-white/80 px-4 py-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full shadow-sm overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={info.avatarUrl || '/def-avatar.png'} alt={name} className="h-full w-full object-cover" />
+              <div>
+                {/* ① 名片卡片 — Talk 独有：头像+文案+信任卡片一整块 */}
+                {mode === 'talk' && (
+                  <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-3xl bg-white py-5 px-4" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+                    {/* 头部：左头像 + 右文案 */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-[64px] h-[64px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-2xl font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
+                        {info.avatarUrl ? (
+                          <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" />
+                        ) : initial}
+                      </div>
+                      <div className="flex-1 pt-0.5">
+                        <h3 className="text-[17px] font-bold text-foreground leading-tight">
+                          {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
+                        </h3>
+                        <span className="inline-block mt-1.5 text-[12px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
+                          {TALK_NAME_CARD.roleTag}
+                        </span>
+                        <p className="mt-2.5 text-[13px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                          {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
+                            i < arr.length - 1
+                              ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
+                              : <React.Fragment key={i}>{part}</React.Fragment>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* 分隔 + 信任卡片 */}
+                    <div className="pt-3 border-t border-[#E8ECF1]/40">
+                      <TrustBadge />
+                    </div>
                   </div>
+                )}
+
+                {/* ① QA 开场白 — openingMessage 从 DB */}
+                {mode === 'qa' && info.openingMessage && (
+                  <div className="flex justify-start mb-5 animate-[messageArrive_400ms_ease-out]">
+                    <div className="max-w-[82%] rounded-2xl rounded-bl-md bg-[#eef2ff] px-4 py-3">
+                      <p className="text-[11px] text-muted-foreground mb-0.5">{name}</p>
+                      <p className="text-[14px] text-foreground leading-relaxed">{info.openingMessage}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ② 引导语气泡 — Talk 独有，带小头像 */}
+                {mode === 'talk' && (
+                  <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_400ms] opacity-0 [animation-fill-mode:forwards]">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[11px] font-semibold text-[#2563EB] flex-shrink-0 shadow-sm overflow-hidden mt-0.5">
+                      {info.avatarUrl ? (
+                        <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" />
+                      ) : initial}
+                    </div>
+                    <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
+                      <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
+                      <p className="text-[14px] text-foreground leading-relaxed"
+                        dangerouslySetInnerHTML={{
+                          __html: MODE_GUIDE.talk
+                            .replace('{name}', name)
+                            .replace(/\n/g, '<br/>'),
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 行动入口 — 按模式切换 */}
+                {mode === 'qa' && (
                   <div>
-                    <p className="text-[14px] font-semibold text-foreground">
-                      你好，我是 {name} 的 AI 分身 👋
-                    </p>
-                    <p className="text-[12px] text-muted-foreground leading-relaxed mt-0.5">
-                      {mode === 'qa' ? '销售上的难题，随时问我。' : '随便聊聊，就像老同事一样。'}
-                    </p>
+                    <p className="text-[14px] font-semibold text-foreground mb-1">选一个你关心的场景</p>
+                    <p className="text-[12px] text-muted-foreground mb-3">我会给你基于真实销冠经验的答案，不是 AI 瞎编的</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(info.sceneTags || []).slice(0, 6).map((s, i) => {
+                        const tints = ['#fef9f0', '#f5f3ff', '#f0fdf6', '#eff6ff'];
+                        const tint = tints[i % 4];
+                        return (
+                          <button key={s.tag} onClick={() => qa.handleQuestionClick(`聊聊${s.tag}方面的经验？`)}
+                            className="flex flex-col items-start gap-1 rounded-xl px-3 py-3 text-left shadow-sm transition-transform active:scale-[0.97]"
+                            style={{ background: tint, border: '1px solid rgba(0,0,0,0.04)' }}>
+                            <span className="text-[13px] font-semibold text-foreground">
+                              {i === 0 && <span className="inline-flex items-center rounded-pill bg-amber-100 text-[9px] font-medium text-amber-700 px-1.5 py-0.5 mr-1">推荐</span>}
+                              {s.tag}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">{s.count ? `${s.count} 条锦囊` : ''}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(info.sceneTags || []).length > 6 && (
+                      <button className="mt-3 w-full text-center text-[12px] text-muted-foreground py-2 rounded-lg hover:bg-[#eef2ff] transition-colors">
+                        更多场景 ›
+                      </button>
+                    )}
+                    {(info.sceneTags || []).length === 0 && (
+                      <div className="text-center text-xs text-muted-foreground-2 py-4">暂无场景标签</div>
+                    )}
                   </div>
-                </div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-[#f7f9ff] px-2 py-2 text-center">
-                    <div className="text-xs mb-0.5">💬</div>
-                    <div className="text-[10px] font-semibold text-foreground">即问即答</div>
-                    <div className="text-[9px] text-muted-foreground">AI 教你怎么说</div>
+                )}
+
+                {mode === 'talk' && (
+                  <div>
+                    <div className="flex flex-col gap-2">
+                      {/* 推荐话题 — talkQuestions 优先, fallback 前端预设 */}
+                      {(talkQuestions.length > 0
+                        ? talkQuestions
+                        : ['最近在跑什么类型的客户？', '销售里最头疼的是什么？', '分享一个你最近的成交案例']
+                      ).slice(0, 4).map((q, i) => (
+                        <button key={q} onClick={() => qa.handleQuestionClick(q)}
+                          className="flex items-center gap-3 rounded-xl border border-border bg-white px-4 py-3 text-left shadow-sm transition-all hover:border-[#2147ff] hover:bg-[#f7f9ff] active:scale-[0.98]">
+                          <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#eef2ff] text-sm">💬</span>
+                          <span className="flex-1 text-[13px] font-medium text-foreground">{q}</span>
+                          {i === 0 && <span className="rounded-pill bg-amber-100 px-1.5 py-0.5 text-[9px] font-medium text-amber-700">推荐</span>}
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 text-muted-foreground-2"><path d="M9 6l6 6-6 6" /></svg>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-3 text-center text-[11px] text-muted-foreground-2">也可以直接在下面打字说你想聊的 ↓</p>
                   </div>
-                  <div className="rounded-xl bg-[#f7f9ff] px-2 py-2 text-center">
-                    <div className="text-xs mb-0.5">🎯</div>
-                    <div className="text-[10px] font-semibold text-foreground">场景对练</div>
-                    <div className="text-[9px] text-muted-foreground">模拟实战对话</div>
-                  </div>
-                  <div className="rounded-xl bg-[#f7f9ff] px-2 py-2 text-center">
-                    <div className="text-xs mb-0.5">📋</div>
-                    <div className="text-[10px] font-semibold text-foreground">溯源可查</div>
-                    <div className="text-[9px] text-muted-foreground">每句话有据可依</div>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
             {/* 消息列表 */}
-            {qa.messages.map(m => (
-              m.role === 'user' ? (
-                <div key={m.id} className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-br from-[#2147ff] to-[#345dff] px-4 py-3 text-[14px] leading-relaxed text-white shadow-sm">
-                    {m.content}
+            {qa.messages.map(m => {
+              const sepIndex = (m.content || '').indexOf('━━━━━━');
+              const mainText = sepIndex >= 0 ? (m.content || '').substring(0, sepIndex).trim() : (m.content || '');
+              const sourceText = sepIndex >= 0 ? (m.content || '').substring(sepIndex + 6).trim() : '';
+              const sim = m.avgSimilarity ? Number(m.avgSimilarity) : 0;
+              const matchLabel = sim >= 50 ? '🏅精准匹配' : sim >= 30 ? '📎关联匹配' : '';
+              const canTrace = !!(m.source || m.grainTags || sourceText);
+
+              if (m.role === 'user') {
+                return (
+                  <div key={m.id} className="flex justify-end gap-2">
+                    <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-br from-[#2147ff] to-[#345dff] px-4 py-3 text-[14px] leading-relaxed text-white shadow-sm">
+                      {m.content}
+                    </div>
+                    <UserAvatar />
                   </div>
-                </div>
-              ) : (
+                );
+              }
+
+              return (
                 <div key={m.id} className="flex gap-2">
                   <Avatar name={name} avatarUrl={info.avatarUrl} />
                   <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
-                    <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{m.content}</div>
-                    {m.avgSimilarity != null && (
-                      <div className="mt-1.5">
-                        {Number(m.avgSimilarity) >= 50 ? (
-                          <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/30 px-2 py-0.5 text-[10px] font-medium text-amber-700"
-                            style={{ background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))' }}>
-                            🏅 精准匹配
-                          </span>
-                        ) : Number(m.avgSimilarity) >= 30 ? (
-                          <span className="inline-flex items-center gap-1 rounded-r-md border-l-2 border-[#8b9dc3] bg-[#f8f9fb] px-2 py-0.5 text-[10px] font-medium text-[#5a6d8a]">
-                            📎 关联匹配
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] italic text-[#b0b7c3]">
-                            ✦ 综合画像生成
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    {(m.source || m.grainTags) && (
+                    <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{mainText}</div>
+                    {canTrace && (
                       <div className="mt-2 border-t border-[#dfe6ff] pt-2">
                         <details>
                           <summary className="cursor-pointer list-none text-[11px] text-muted-foreground">
-                            ▸ 来源：{m.source || '经验锦囊'}{m.grainCount ? ` · ${m.grainCount} 条锦囊` : ''}
+                            ▸ {matchLabel}{matchLabel ? ' · ' : ''}说法依据{m.grainCount ? ` · ${m.grainCount} 条` : ''}
                           </summary>
                           <div className="mt-1.5 rounded-md bg-[#eef2ff] px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                            {m.grainTags ? `场景：${m.grainTags}` : ''}{m.avgScore ? ` · 质量分 ${m.avgScore}` : ''}
+                            {sourceText && <p className="whitespace-pre-wrap leading-relaxed mb-1">{sourceText}</p>}
+                            {m.source && <p className="mb-0.5">来源：{m.source}</p>}
+                            {m.grainTags && <p>场景：{m.grainTags}{m.avgScore ? ` · 质量分 ${m.avgScore}` : ''}</p>}
                           </div>
                         </details>
                         <div className="mt-1.5 flex justify-end gap-3">
@@ -229,8 +395,8 @@ export default function MobileChatShell({
                     )}
                   </div>
                 </div>
-              )
-            ))}
+              );
+            })}
 
             {/* 流式气泡 — 带打字动画 */}
             {qa.qaStreamText && (
@@ -312,6 +478,17 @@ export default function MobileChatShell({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function UserAvatar() {
+  return (
+    <div className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full shadow-sm"
+      style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" className="h-3.5 w-3.5">
+        <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
+      </svg>
     </div>
   );
 }

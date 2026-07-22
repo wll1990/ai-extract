@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { apiClient } from '@/lib/api/client';
 
 interface GrainTrace {
@@ -46,15 +47,15 @@ export function TraceabilityDrawer({ grainIds, open, onClose }: TraceabilityDraw
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <>
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.2)',
-        backdropFilter: 'blur(4px)', zIndex: 100,
+        backdropFilter: 'blur(4px)', zIndex: 9999,
       }} />
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 400, maxWidth: '90vw',
-        background: 'var(--s1)', zIndex: 101,
+        background: 'var(--s1)', zIndex: 10000,
         boxShadow: '-8px 0 30px rgba(0,0,0,0.12)',
         animation: 'slideInRight 0.3s ease-out',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
@@ -164,6 +165,7 @@ export function TraceabilityDrawer({ grainIds, open, onClose }: TraceabilityDraw
           to { transform: translateX(0); }
         }
       `}</style>
-    </>
+    </>,
+    document.body
   );
 }

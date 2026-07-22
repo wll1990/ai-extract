@@ -3,14 +3,17 @@
 import { useState } from 'react';
 import type { Message } from '@/hooks/useChat';
 import { TraceabilityDrawer } from './TraceabilityDrawer';
+import { submitFeedback } from '@/lib/api/skill';
 
 interface MessageBubbleProps {
   message: Message;
   ownerName: string;
+  skillId?: string;
 }
 
-export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
+export function MessageBubble({ message, ownerName, skillId }: MessageBubbleProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isUser = message.role === 'user';
   const hasTrace = !!(message.grainTags && message.grainCount);
   const sim = message.avgSimilarity ? Number(message.avgSimilarity) : 0;
@@ -18,7 +21,7 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
 
   if (isUser) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 }}>
         <div style={{
           maxWidth: '80%', borderRadius: '20px 20px 6px 20px',
           background: 'var(--tangerine)', color: '#fff',
@@ -26,6 +29,16 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
           boxShadow: 'var(--shadow-btn)',
         }}>
           {message.content}
+        </div>
+        <div style={{
+          width: 28, height: 28, borderRadius: 10, flexShrink: 0,
+          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          marginTop: 2,
+        }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }}>
+            <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
+          </svg>
         </div>
       </div>
     );
@@ -44,90 +57,164 @@ export function MessageBubble({ message, ownerName }: MessageBubbleProps) {
           {ownerName[0]}
         </div>
 
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Bubble */}
-          <div style={{
-            borderRadius: '18px 18px 18px 6px',
-            background: 'var(--surface)', border: '1px solid var(--border-subtle)',
-            padding: '10px 16px', fontSize: 13, color: 'var(--fg-high)',
-            lineHeight: 1.7, boxShadow: 'var(--shadow-sm)',
-          }}>
-            {message.content ? (
-              <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>
-                {message.content}
-              </p>
-            ) : (
-              <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', height: 18 }}>
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite',
-                }} />
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite 0.2s',
-                }} />
-                <span style={{
-                  width: 6, height: 6, borderRadius: '50%',
-                  background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite 0.4s',
-                }} />
-              </span>
-            )}
-          </div>
+        <div style={{ maxWidth: '80%' }}>
+          {(() => {
+            const sepIndex = (message.content || '').indexOf('━━━━━━');
+            const mainText = sepIndex >= 0 ? (message.content || '').substring(0, sepIndex).trim() : (message.content || '');
+            const sourceText = sepIndex >= 0 ? (message.content || '').substring(sepIndex + 6).trim() : '';
 
-          {/* Meta row */}
-          {/* 兼容 ai 和 assistant — DB 存 assistant，前端内部用 ai */}
-          {(message.role === 'ai' || message.role === 'assistant') && message.content && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 12,
-              marginTop: 6, marginLeft: 4,
-            }}>
-              {matchLevel === 'precise' && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '2px 10px', borderRadius: 6,
-                  border: '1px solid #c9a44b',
-                  background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))',
-                  fontSize: 11, fontWeight: 500, color: '#8b6914',
-                  boxShadow: '0 0 6px rgba(201,164,75,0.08)',
+            return (
+              <>
+                {/* Bubble */}
+                <div style={{
+                  borderRadius: '18px 18px 18px 6px',
+                  background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                  padding: '10px 16px', fontSize: 13, color: 'var(--fg-high)',
+                  lineHeight: 1.7, boxShadow: 'var(--shadow-sm)',
                 }}>
-                  <span style={{ fontSize: 13 }}>🏅</span> 精准匹配
-                </span>
-              )}
-              {matchLevel === 'related' && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  padding: '2px 10px', borderRadius: '0 6px 6px 0',
-                  borderLeft: '2px solid #8b9dc3',
-                  background: '#f8f9fb',
-                  fontSize: 11, fontWeight: 500, color: '#5a6d8a',
-                }}>
-                  <span style={{ fontSize: 13 }}>📎</span> 关联匹配
-                </span>
-              )}
-              {matchLevel === 'synthetic' && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 11, fontStyle: 'italic', color: '#b0b7c3',
-                }}>
-                  <span style={{ fontSize: 12 }}>✦</span> 综合画像生成
-                </span>
-              )}
+                  {message.content ? (
+                    <div>
+                      {mainText && <p style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', margin: 0 }}>{mainText}</p>}
+                      {sourceText && (
+                        <div style={{
+                          marginTop: mainText ? 12 : 0,
+                          borderRadius: 12,
+                          background: 'linear-gradient(135deg, rgba(6,182,212,0.04), rgba(59,130,246,0.06))',
+                          border: '1px solid rgba(59,130,246,0.08)',
+                          overflow: 'hidden',
+                        }}>
+                          <div style={{
+                            display: 'flex', alignItems: 'center', gap: 4,
+                            padding: '8px 12px', background: 'rgba(255,255,255,0.6)',
+                            borderBottom: '1px solid rgba(59,130,246,0.06)',
+                          }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#2563EB' }} />
+                            <span style={{ fontSize: 11, fontWeight: 500, color: '#475569' }}>经验溯源</span>
+                          </div>
+                          <div style={{ padding: '10px 12px' }}>
+                            <p style={{
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                              fontSize: 12, color: '#64748B', lineHeight: 1.6, margin: 0,
+                            }}>
+                              {sourceText}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', height: 18 }}>
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite',
+                      }} />
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite 0.2s',
+                      }} />
+                      <span style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: 'var(--fg-dim)', animation: 'pulse-orange 1.4s infinite 0.4s',
+                      }} />
+                    </span>
+                  )}
+                </div>
 
-              {hasTrace && matchLevel !== 'synthetic' && (
-                <button
-                  onClick={() => setDrawerOpen(true)}
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 4,
-                    fontSize: 11, color: 'var(--fg-dim)',
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    padding: 0, fontFamily: 'inherit',
-                  }}
-                >
-                  溯源 · {message.grainCount} 条 →
-                </button>
-              )}
-            </div>
-          )}
+                {/* Meta row */}
+                {(message.role === 'ai' || message.role === 'assistant') && message.content && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    marginTop: 6, marginLeft: 4,
+                  }}>
+                    {matchLevel === 'precise' && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 10px', borderRadius: 6,
+                        border: '1px solid #c9a44b',
+                        background: 'linear-gradient(135deg, rgba(201,164,75,0.08), rgba(201,164,75,0.02))',
+                        fontSize: 11, fontWeight: 500, color: '#8b6914',
+                        boxShadow: '0 0 6px rgba(201,164,75,0.08)',
+                      }}>
+                        <span style={{ fontSize: 13 }}>🏅</span> 精准匹配
+                      </span>
+                    )}
+                    {matchLevel === 'related' && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '2px 10px', borderRadius: '0 6px 6px 0',
+                        borderLeft: '2px solid #8b9dc3',
+                        background: '#f8f9fb',
+                        fontSize: 11, fontWeight: 500, color: '#5a6d8a',
+                      }}>
+                        <span style={{ fontSize: 13 }}>📎</span> 关联匹配
+                      </span>
+                    )}
+                    {matchLevel === 'synthetic' && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, fontStyle: 'italic', color: '#b0b7c3',
+                      }}>
+                        <span style={{ fontSize: 12 }}>✦</span> 综合画像生成
+                      </span>
+                    )}
+
+                    {hasTrace && matchLevel !== 'synthetic' && (
+                      <button
+                        onClick={() => setDrawerOpen(true)}
+                        style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                          fontSize: 11, color: 'var(--fg-dim)',
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: 0, fontFamily: 'inherit',
+                        }}
+                      >
+                        溯源 · {message.grainCount} 条 →
+                      </button>
+                    )}
+
+                    <div style={{ flex: 1 }} />
+
+                    <button
+                      onClick={() => {
+                        if (feedback === 'up') return;
+                        setFeedback('up');
+                        if (skillId) submitFeedback({
+                          skillId, helpful: true,
+                          grainId: message.grainIds?.split(',')[0] || undefined,
+                          messageId: message.id,
+                          aiResponse: (message.content || '').substring(0, 500),
+                        });
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 14, padding: '2px 4px', opacity: feedback === 'up' ? 1 : 0.4,
+                        transition: 'opacity 0.2s',
+                      }} title="有帮助">
+                      👍
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (feedback === 'down') return;
+                        setFeedback('down');
+                        if (skillId) submitFeedback({
+                          skillId, helpful: false,
+                          grainId: message.grainIds?.split(',')[0] || undefined,
+                          messageId: message.id,
+                          aiResponse: (message.content || '').substring(0, 500),
+                        });
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 14, padding: '2px 4px', opacity: feedback === 'down' ? 1 : 0.4,
+                        transition: 'opacity 0.2s',
+                      }} title="没帮助">
+                      👎
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {/* Traceability Drawer */}
           <TraceabilityDrawer

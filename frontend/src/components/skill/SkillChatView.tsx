@@ -61,6 +61,14 @@ export function SkillChatView({
     <div className="flex-1 flex flex-col min-h-0">
       {/* 消息列表 */}
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+        {/* 流式生成动画条 */}
+        {isStreaming && (
+          <div className="max-w-[80%] mb-1">
+            <div className="h-0.5 w-full overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-blue-400 via-indigo-500 to-purple-500" />
+            </div>
+          </div>
+        )}
         {children}
         {isStreaming && !streamText && <ThinkingCard name={ownerName} />}
         <div ref={chatEndRef} />

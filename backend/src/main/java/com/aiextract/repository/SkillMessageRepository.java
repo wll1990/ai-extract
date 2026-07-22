@@ -4,6 +4,7 @@ import com.aiextract.model.SkillMessage;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -43,6 +44,16 @@ public interface SkillMessageRepository extends JpaRepository<SkillMessage, UUID
      * @return 统计数量
      */
     long countUserMessagesByUserId(@Param("userId") UUID userId);
+
+    /**
+     * 统计某用户自指定时间以来的 user 角色消息数（跨会话跨模式），
+     * 用于 C 端游客每日免费额度判定。
+     */
+    @Query("SELECT COUNT(m) FROM SkillMessage m, SkillConversation c " +
+           "WHERE m.conversationId = c.id AND c.userId = :userId AND m.role = 'user' " +
+           "AND m.createdAt >= :since")
+    long countUserMessagesByUserIdSince(@Param("userId") UUID userId,
+                                         @Param("since") LocalDateTime since);
 
     /** 删除会话下所有消息 */
     void deleteByConversationId(UUID conversationId);

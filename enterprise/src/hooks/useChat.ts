@@ -1,8 +1,8 @@
 'use client';
 
 import { useReducer, useCallback, useRef } from 'react';
-import { chat, type ConversationMessage } from '@/lib/api/skill';
-import type { SseCallbacks } from '@/lib/sse';
+import { chat, type SseCallbacks } from '@aiextract/shared-ui';
+import type { ConversationMessage } from '@/lib/api/skill';
 
 // ========== Types ==========
 
@@ -45,7 +45,7 @@ type ChatAction =
   | { type: 'CHUNK'; content: string }
   | { type: 'SOURCE'; info: SourceInfo }
   | { type: 'META'; conversationId: string }
-  | { type: 'DONE' }
+  | { type: 'DONE'; sourceInfo?: SourceInfo }
   | { type: 'ERROR'; message: string }
   | { type: 'WARNING'; message: string }
   | { type: 'SUGGESTED'; questions: string[] }
@@ -68,6 +68,14 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, streamText: state.streamText + action.content };
 
     case 'SOURCE':
+      // 如果 DONE 已经先到，把 source 数据补到最末 AI 消息上
+      if (state.messages.length > 0) {
+        const last = state.messages[state.messages.length - 1];
+        if (last.role === 'ai') {
+          const updated = { ...last, ...action.info };
+          return { ...state, sourceInfo: action.info, messages: [...state.messages.slice(0, -1), updated] };
+        }
+      }
       return { ...state, sourceInfo: action.info };
 
     case 'META':
@@ -77,7 +85,7 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const aiMsg: Message = {
         id: `a-${Date.now()}`, role: 'ai',
         content: state.streamText,
-        ...state.sourceInfo,
+        ...(action.sourceInfo || state.sourceInfo || {}),
       };
       return {
         ...state, phase: 'idle',
@@ -134,6 +142,7 @@ interface UseChatOptions {
 export function useChat({ skillId, ownerName }: UseChatOptions) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortRef = useRef<AbortController | null>(null);
+  const sourceRef = useRef<SourceInfo>({});
 
   const sendMessage = useCallback((text: string, mode: string = 'qa') => {
     const trimmed = text.trim();
@@ -154,6 +163,7 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
       onChunk: (content) => { dispatch({ type: 'CHUNK', content }); },
       onSource: (_reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity) => {
         sourceInfo = { grainIds, grainTags, grainCount, avgScore, avgSimilarity, reportTitle };
+        sourceRef.current = sourceInfo;
         dispatch({ type: 'SOURCE', info: sourceInfo });
       },
       onMeta: (conversationId) => {
@@ -161,7 +171,9 @@ export function useChat({ skillId, ownerName }: UseChatOptions) {
           dispatch({ type: 'META', conversationId });
         }
       },
-      onDone: () => { dispatch({ type: 'DONE' }); },
+      onDone: () => {
+        dispatch({ type: 'DONE', sourceInfo: sourceRef.current });
+      },
       onError: (msg) => { dispatch({ type: 'ERROR', message: msg }); },
       onEvent: (type, data) => {
         if (type === 'suggested' && Array.isArray(data.questions)) {

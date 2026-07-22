@@ -13,7 +13,7 @@ cd "$DIR/ai-service" && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp
 sleep 2 && curl -s -o /dev/null -w "文件解析: HTTP %{http_code}\n" http://localhost:8000/health
 
 echo "=== 启动后端 (dev) :8080 ==="
-cd "$DIR/backend" && mvn spring-boot:run -q &
+cd "$DIR/backend" && mvn clean spring-boot:run -q &
 sleep 18 && curl -s -o /dev/null -w "后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyId":"c0000000-0000-0000-0000-000000000001"}'
 
 echo "=== 启动前端管理后台 (dev) :3000 ==="

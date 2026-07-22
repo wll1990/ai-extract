@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { fetchRecommendedQuestions, type SkillDetail } from '@/lib/api/skill';
+import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 const SCENE_EMOJIS: Record<string, string> = {
   '价格谈判': '💰', '竞品对比': '🤝', '异议处理': '🎯',
@@ -59,63 +60,150 @@ export function ChatEntry({
       justifyContent: 'flex-start', padding: '32px 24px 60px', textAlign: 'center',
       flex: 1,
     }}>
-      {/* Avatar */}
-      <div className="animate-stagger-1">
-        {skill.avatarUrl ? (
-          <img
-            src={skill.avatarUrl} alt={name}
-            style={{
-              width: 72, height: 72, borderRadius: 20, objectFit: 'cover',
-              boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1)',
-              marginBottom: 20,
-            }}
-          />
-        ) : (
-          <div style={{
-            width: 72, height: 72, borderRadius: 20,
-            background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#fff', fontSize: 30, fontWeight: 800,
-            boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1), inset 0 1px 2px 0 rgba(255,255,255,0.5)',
-            marginBottom: 20,
+      {/* ═══ Talk 模式 — 名片卡片（一整块） ═══ */}
+      {mode === 'talk' && (
+        <>
+          <div className="animate-stagger-1 rounded-3xl bg-white py-7 px-7" style={{
+            maxWidth: 500, width: '100%', margin: '0 auto 24px',
+            boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
           }}>
-            {initial}
+            {/* 头部：左头像 + 右文案 */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 }}>
+              {skill.avatarUrl ? (
+                <img src={skill.avatarUrl} alt={name} style={{
+                  width: 80, height: 80, borderRadius: '50%', objectFit: 'cover',
+                  flexShrink: 0,
+                  boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
+                }} />
+              ) : (
+                <div style={{
+                  width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 30, fontWeight: 700, color: '#2563EB',
+                  boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
+                }}>
+                  {initial}
+                </div>
+              )}
+              <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+                <p style={{
+                  fontSize: 18, fontWeight: 700, color: 'var(--fg-high)',
+                  margin: '0 0 12px', lineHeight: 1.3,
+                }}>
+                  {TALK_NAME_CARD.greeting}<span style={{ color: '#2563EB' }}>{name}</span><span style={{ fontSize: 14 }}>&nbsp;✨</span>
+                </p>
+                <span style={{
+                  display: 'inline-block', fontSize: 12, color: '#64748B',
+                  background: '#f1f5f9', borderRadius: 100, padding: '2px 12px',
+                  marginBottom: 10,
+                }}>
+                  {TALK_NAME_CARD.roleTag}
+                </span>
+                <p style={{
+                  fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
+                  margin: 0, whiteSpace: 'pre-wrap',
+                }}>
+                  {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part: string, i: number, arr: string[]) =>
+                    i < arr.length - 1
+                      ? <React.Fragment key={i}>{part}<span style={{ color: '#DC2626', fontWeight: 600 }}>{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
+                      : <React.Fragment key={i}>{part}</React.Fragment>
+                  )}
+                </p>
+                {skill.ownerTitle && (
+                  <p style={{ fontSize: 13, color: 'var(--fg-dim)', margin: '8px 0 0' }}>
+                    {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* 分隔 + 信任卡片 */}
+            <div style={{ paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+              <TrustBadge />
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="animate-stagger-2">
-        <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', color: 'var(--fg-high)' }}>
-          {name}
-        </h1>
-        {skill.ownerTitle && (
-          <p style={{ fontSize: 13, color: 'var(--fg-mid)', marginBottom: 16 }}>
-            {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
-          </p>
-        )}
-      </div>
+          {/* 引导语气泡 — 带小头像 */}
+          <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 460, width: '100%', marginBottom: 20 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+              background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 12, fontWeight: 700,
+            }}>
+              {initial}
+            </div>
+            <div style={{
+              flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
+              background: '#f5f3ff', borderLeft: '2px solid rgba(99,102,241,0.2)',
+            }}>
+              <p style={{ fontSize: 11, color: 'var(--fg-dim)', margin: '0 0 4px' }}>{name}</p>
+              <p style={{
+                fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
+                margin: 0, whiteSpace: 'pre-wrap',
+              }}>
+                {MODE_GUIDE.talk}
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
-      {/* Opening message = "TA 这样说" */}
-      {skill.openingMessage && (
-        <div className="animate-stagger-3" style={{ maxWidth: 460, width: '100%', marginBottom: 24 }}>
-          <p style={{
-            fontSize: 11, color: 'var(--fg-dim)', marginBottom: 6,
-            textAlign: 'center',
-          }}>
-            TA 这样说
-          </p>
-          <p style={{
-            fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
-            padding: '14px 20px', borderRadius: '18px 18px 18px 6px',
-            background: mode === 'qa' ? '#fef9f0' : mode === 'talk' ? '#f5f3ff' : '#f0fdf6',
-            borderLeft: mode === 'qa' ? '2px solid rgba(245,158,11,0.2)' : mode === 'talk' ? '2px solid rgba(99,102,241,0.2)' : '2px solid rgba(16,185,129,0.2)',
-            transition: 'background 0.4s ease, border-color 0.4s ease',
-            margin: 0,
-            textAlign: 'center',
-          }}>
-            {skill.openingMessage}
-          </p>
-        </div>
+      {/* ═══ QA 模式 — 保持原有布局 ═══ */}
+      {mode !== 'talk' && (
+        <>
+          {/* Avatar */}
+          <div className="animate-stagger-1">
+            {skill.avatarUrl ? (
+              <img src={skill.avatarUrl} alt={name} style={{
+                width: 72, height: 72, borderRadius: 20, objectFit: 'cover',
+                boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1)',
+                marginBottom: 20,
+              }} />
+            ) : (
+              <div style={{
+                width: 72, height: 72, borderRadius: 20,
+                background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 30, fontWeight: 800,
+                boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1), inset 0 1px 2px 0 rgba(255,255,255,0.5)',
+                marginBottom: 20,
+              }}>
+                {initial}
+              </div>
+            )}
+          </div>
+
+          <div className="animate-stagger-2">
+            <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', color: 'var(--fg-high)' }}>
+              {name}
+            </h1>
+            {skill.ownerTitle && (
+              <p style={{ fontSize: 13, color: 'var(--fg-mid)', marginBottom: 16 }}>
+                {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
+              </p>
+            )}
+          </div>
+
+          {/* Opening message = "TA 这样说" */}
+          {skill.openingMessage && (
+            <div className="animate-stagger-3" style={{ maxWidth: 460, width: '100%', marginBottom: 24 }}>
+              <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 6, textAlign: 'center' }}>
+                TA 这样说
+              </p>
+              <p style={{
+                fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
+                padding: '14px 20px', borderRadius: '18px 18px 18px 6px',
+                background: mode === 'qa' ? '#fef9f0' : '#f0fdf6',
+                borderLeft: mode === 'qa' ? '2px solid rgba(245,158,11,0.2)' : '2px solid rgba(16,185,129,0.2)',
+                margin: 0, textAlign: 'center',
+              }}>
+                {skill.openingMessage}
+              </p>
+            </div>
+          )}
+        </>
       )}
 
       {/* 擅长领域 — 横向滚动 pill 条 (QA only) */}

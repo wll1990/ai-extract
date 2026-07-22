@@ -54,4 +54,7 @@ public class ShareInfoResponse {
 
     /** 访问者身份：guest / registered / null（未认证） */
     private String viewerStatus;
+
+    /** 分身开场白 — 聊天页入场态展示 */
+    private String openingMessage;
 }

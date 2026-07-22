@@ -24,8 +24,8 @@ public final class SseAdapter {
 
     private SseAdapter() { /* 工具类，禁止实例化 */ }
 
-    /** 默认超时（2 分钟），AI 长回答场景足够 */
-    private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(2);
+    /** 默认超时（3 分钟），安全网 — 主控超时在 ChatStreamService 的 Flux.timeout */
+    private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(3);
 
     /**
      * 将 Flux&lt;ChatChunk&gt; 包装为 SseEmitter

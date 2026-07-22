@@ -1,5 +1,6 @@
 // ═══ Chat Components ═══
 export { PracticeView, type PracticeViewProps, type PracticeMessage, type PracticeEval, type PracticeSource, type PracticeData } from './components/PracticeView';
+export { TrustBadge } from './components/TrustBadge';
 export { ChatComposer, type ChatComposerProps } from './chat/ChatComposer';
 export { ThinkingCard, type ThinkingCardProps } from './chat/ThinkingCard';
 export { QuickReplies, type QuickRepliesProps } from './chat/QuickReplies';
@@ -25,6 +26,8 @@ export {
 export {
   usePracticeFlow, practiceReducer,
   type PracticeFlowInputs,
-  type PracticeMessage, type PracticeEval, type PracticeSource,
 } from './hooks/usePracticeFlow';
 export { resolveConfig, type ChatConfig } from './hooks/types';
+
+// ═══ Lib (constants) ═══
+export { TALK_NAME_CARD, MODE_GUIDE } from './lib/guide-text';

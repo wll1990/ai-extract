@@ -78,6 +78,8 @@ public class PromptLoader {
             log.info("PromptLoader 使用 classpath:/prompts/ (Redis={})",
                     redis != null ? "enabled" : "disabled");
         }
+        // 启动时清缓存，确保模板更新后重启能读到最新版本
+        clearCache();
     }
 
     // ============================================================

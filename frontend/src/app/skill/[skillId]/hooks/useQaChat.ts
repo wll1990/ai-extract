@@ -214,45 +214,11 @@ export function useQaChat({
     setModeSelected(true);
     setMessages([]);
     setQaSceneContext('');
-    setIsStreaming(true);
-    setQaStreamText('正在连接...');
-    const topTags = sceneTags.slice(0, 3).map(s => s.tag);
-    setContextQuestions(topTags.length > 0 ? topTags.map(t => `${t}怎么聊`) : []);
-
-    const aiMsgId = `a-${Date.now()}`;
-    let full = '';
-    let sourceInfo: any = {};
-    const controller = chat(skillId, '你好', {
-      onChunk: (c) => { full += c; setQaStreamText(full); },
-      onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
-        sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
-      },
-      onMeta: (conversationId) => { if (conversationId) setCurrentConvId(conversationId); },
-      onDone: () => {
-        setQaStreamText('');
-        setMessages(prev => [...prev, { id: aiMsgId, role: 'ai', content: full, ...sourceInfo }]);
-        setIsStreaming(false);
-        loadConversations();
-      },
-      onError: (msg) => {
-        setIsStreaming(false);
-        setMessages(prev => [...prev, { id: `err-${Date.now()}`, role: 'ai', content: `⚠️ ${msg || 'AI服务暂不可用'}` }]);
-      },
-      // RAG 无匹配时后端推送推荐问题；limit = 游客额度用尽（开场问候也计数）
-      onEvent: (type, data) => {
-        if (type === 'limit') {
-          setIsStreaming(false);
-          setQaStreamText('');
-          onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: '你好' });
-          return;
-        }
-        if (type === 'suggested' && Array.isArray(data.questions)) {
-          setSuggestedQuestions(data.questions as string[]);
-        }
-      },
-    }, undefined, 'web', 'talk', undefined, authToken);
-    abortRef.current?.abort(); abortRef.current = controller;
-  }, [skillId, sceneTags, setChatMode, setModeSelected, authToken, onLimit]);
+    // 加载 Talk 模式推荐问题（不自动发消息，等用户主动开口）
+    fetchRecommendedQuestions(skillId, undefined, authToken)
+      .then(qs => setContextQuestions(Array.isArray(qs) ? qs : []))
+      .catch(() => setContextQuestions([]));
+  }, [skillId, setChatMode, setModeSelected, authToken]);
 
   const handleBackToModes = useCallback(() => {
     abortRef.current?.abort();

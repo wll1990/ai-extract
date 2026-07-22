@@ -13,6 +13,8 @@ interface Props {
 const MODE_CARDS = [
   {
     mode: 'qa' as const, title: '向他请教', desc: '销售难题直接问，答案带出处',
+    cta: '选一个关心的场景，拿到真实销冠经验',
+    value: '不是 AI 瞎编的',
     rec: true, iconBg: 'bg-primary-light', iconColor: 'text-primary',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -23,6 +25,8 @@ const MODE_CARDS = [
   },
   {
     mode: 'talk' as const, title: '随便聊聊', desc: '像老销售带新人一样自由对话',
+    cta: '像碰到老同事一样聊，越聊越能挖出他的实战打法',
+    value: '想到什么说什么',
     rec: false, iconBg: 'bg-[rgba(6,182,212,0.10)]', iconColor: 'text-[#0891b2]',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -32,6 +36,8 @@ const MODE_CARDS = [
   },
   {
     mode: 'practice' as const, title: '实战对练', desc: '他扮演客户，练完逐轮点评',
+    cta: '他扮演客户来考你，每轮给你实战点评',
+    value: '敢试试吗？',
     rec: false, iconBg: 'bg-[rgba(200,164,92,0.14)]', iconColor: 'text-[#8a6a2f]',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
@@ -87,8 +93,48 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
         )}
       </div>
 
+      {/* 信任条 */}
+      <div className="mx-4 mt-4 rounded-xl px-3 py-3"
+        style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(59,130,246,0.08))', border: '1px solid rgba(59,130,246,0.1)' }}>
+        <div className="flex items-center divide-x divide-black/5">
+          <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" />
+              </svg>
+            </div>
+            <span className="text-[11px] font-semibold text-foreground">实战打法</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">销冠真实案例提炼</span>
+          </div>
+          <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <path d="M14 2v6h6" />
+                <circle cx="11.5" cy="14.5" r="2.5" />
+                <path d="M13.5 16.5L16 19" />
+              </svg>
+            </div>
+            <span className="text-[11px] font-semibold text-foreground">溯源可查</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">每句话有据可依</span>
+          </div>
+          <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full"
+              style={{ background: 'linear-gradient(135deg, #06b6d4, #0891b2)' }}>
+              <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                <path d="M13 2L3 14h7l-2 8 10-12h-7z" />
+              </svg>
+            </div>
+            <span className="text-[11px] font-semibold text-foreground">即问即用</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">30秒拿到可执行话术</span>
+          </div>
+        </div>
+      </div>
+
       {/* 三模式入口 */}
-      <div className="mt-5 flex flex-col gap-3 px-4">
+      <div className="mt-4 flex flex-col gap-3 px-4">
         {MODE_CARDS.map(card => (
           <button
             key={card.mode}
@@ -102,11 +148,12 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
               {card.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="flex items-center gap-2 text-h3 font-semibold text-foreground">
-                {card.title}
+              <span className="flex items-center gap-2">
+                <span className="text-h3 font-semibold text-foreground">{card.title}</span>
                 {card.rec && <span className="rounded-pill bg-primary-light px-1.5 py-0.5 text-[10px] font-medium text-primary">推荐</span>}
               </span>
-              <span className="mt-0.5 block text-xs text-muted-foreground">{card.desc}</span>
+              <span className="mt-0.5 block text-[13px] text-foreground leading-snug">{card.cta}</span>
+              <span className="mt-0.5 block text-[11px] text-muted-foreground">{card.value}</span>
             </span>
             <svg className="h-4 w-4 flex-none text-muted-foreground-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
           </button>

@@ -127,6 +127,10 @@ app:
     auto-evaluate-turns: 12       # 自动评估前需完成的对话轮数
     auto-demo-rounds: 10          # ProductDemoModal 自动演示轮数
 
+  # ---- 聊天流超时（秒） ----
+  chat:
+    timeout-seconds: 180           # Flux SSE 流超时，AI 慢响应时防止误杀
+
   # ---- Practice 对练追问策略 ----
   practice:
     max-retries-per-angle: 2      # 同一角度最多追问次数

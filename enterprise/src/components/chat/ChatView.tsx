@@ -207,6 +207,7 @@ export function ChatView({ skill }: ChatViewProps) {
               ownerName={ownerName}
               placeholder={mode === 'talk' ? '聊聊你的想法...' : '请教专家任何问题...'}
               mode={mode}
+              skillId={skill.id}
             />
           )}
         </div>

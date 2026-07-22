@@ -42,7 +42,7 @@ export async function apiClient<T>(
     Object.assign(headers, options.headers as Record<string, string>);
   }
 
-  const res = await fetch(`${_baseUrl}${path}`, {
+  const res = await fetch(`${_config.baseUrl}${path}`, {
     ...options,
     headers,
     credentials: 'include',

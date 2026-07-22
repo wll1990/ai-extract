@@ -356,17 +356,17 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                     <div style={{
                       width: 30, height: 30, borderRadius: 10, flexShrink: 0,
-                      background: 'linear-gradient(135deg,#16a34a,#4ade80)',
+                      background: 'linear-gradient(135deg, #475569, #64748b)',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#fff', fontSize: 13, fontWeight: 700,
                     }}>
-                      🎯
+                      👤
                     </div>
                     <div style={{
-                      borderRadius: '18px 18px 18px 6px', background: 'var(--surface)',
-                      border: '1px solid var(--border-subtle)', padding: '10px 16px',
-                      fontSize: 13, color: 'var(--fg-high)', lineHeight: 1.7,
-                      boxShadow: 'var(--shadow-sm)',
+                      maxWidth: '80%', borderRadius: '18px 18px 18px 6px',
+                      background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                      padding: '10px 16px', fontSize: 13, color: 'var(--fg-high)',
+                      lineHeight: 1.7, boxShadow: 'var(--shadow-sm)',
                     }}>
                       {msg.content || (
                         <span style={{ display: 'flex', gap: 4 }}>
@@ -542,14 +542,14 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{
                   width: 30, height: 30, borderRadius: 10,
-                  background: 'linear-gradient(135deg,#16a34a,#4ade80)',
+                  background: 'linear-gradient(135deg, #475569, #64748b)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: '#fff', fontSize: 13,
-                }}>🎯</div>
+                }}>👤</div>
                 <div style={{
-                  borderRadius: '18px 18px 18px 6px', background: 'var(--surface)',
-                  border: '1px solid var(--border-subtle)', padding: '10px 16px',
-                  fontSize: 13, lineHeight: 1.7,
+                  maxWidth: '80%', borderRadius: '18px 18px 18px 6px',
+                  background: 'var(--surface)', border: '1px solid var(--border-subtle)',
+                  padding: '10px 16px', fontSize: 13, lineHeight: 1.7,
                 }}>
                   {streamText}<span style={{
                     display: 'inline-block', width: 2, height: 14,

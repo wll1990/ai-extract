@@ -64,16 +64,23 @@ public class ChatStreamAdapter {
      */
     public Flux<Map<String, Object>> chatStream(List<Map<String, String>> messages,
                                                  Map<String, Object> context) {
-        // 将消息列表格式化为单个 prompt
+        // 将消息列表格式化为单个 prompt（去重连续相同消息）
         StringBuilder prompt = new StringBuilder();
+        String prevContent = null;
+        String prevRole = null;
         for (Map<String, String> msg : messages) {
             String role = msg.get("role");
             String content = msg.get("content");
             if (content == null) {
-
                 continue;
-
             }
+            // 跳过连续相同的消息（同角色+同内容=重复发送）
+            if (content.equals(prevContent) && role != null && role.equals(prevRole)) {
+                log.debug("LLM 跳过重复消息 role={} len={}", role, content.length());
+                continue;
+            }
+            prevContent = content;
+            prevRole = role;
             if ("system".equals(role)) {
                 prompt.append("指令：").append(content).append("\n\n");
             } else if ("user".equals(role)) {
@@ -91,6 +98,8 @@ public class ChatStreamAdapter {
             fullPrompt.length() > 500
                 ? fullPrompt.substring(0, 500).replace("\n", "\\n") + "..."
                 : fullPrompt.replace("\n", "\\n"));
+        // 完整 prompt 日志，用于诊断提示词大小和内容
+        log.info("LLM FULL_PROMPT chars={} \n{}", fullPrompt.length(), fullPrompt);
 
         AtomicInteger chunkCount = new AtomicInteger(0);
         AtomicLong totalChars = new AtomicLong(0);

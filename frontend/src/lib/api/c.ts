@@ -33,6 +33,7 @@ export interface ShareInfo {
   ownerName?: string;
   ownerTitle?: string;
   avatarUrl?: string;
+  openingMessage?: string;
   tags?: string[];
   sceneTags?: Array<{ tag: string; count?: number }>;
   guestLimit: number;

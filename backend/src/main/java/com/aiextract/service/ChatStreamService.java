@@ -31,6 +31,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -81,6 +82,9 @@ public class ChatStreamService {
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
 
+    @Value("${app.chat.timeout-seconds:120}")
+    private int chatTimeoutSeconds;
+
     // ============================================================
     // 游客拦截
     // ============================================================
@@ -100,7 +104,8 @@ public class ChatStreamService {
             log.warn("游客消息频率超限 userId={}", userId);
             return Flux.just(ChatChunk.error("发送太频繁，请稍后再试"), ChatChunk.done());
         }
-        long used = skillMessageRepository.countUserMessagesByUserId(userId);
+        long used = skillMessageRepository.countUserMessagesByUserIdSince(
+            userId, LocalDate.now().atStartOfDay());
         if (used >= guestMessageLimit) {
             log.info("游客免费额度已用完 userId={} used={}/{}", userId, used, guestMessageLimit);
             return Flux.just(
@@ -214,7 +219,7 @@ public class ChatStreamService {
                 convPersistence.saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, skill,
                     persistedGrainId, persistedReportId);
             })
-            .timeout(Duration.ofSeconds(120))
+            .timeout(Duration.ofSeconds(chatTimeoutSeconds))
             .doOnError(e -> {
                 hasStreamError.set(true);
                 log.error("SSE流超时或异常", e);
@@ -372,7 +377,7 @@ public class ChatStreamService {
                     log.warn("写入practice stats失败: {}", e.getMessage());
                 }
             })
-            .timeout(Duration.ofSeconds(120))
+            .timeout(Duration.ofSeconds(chatTimeoutSeconds))
             .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
     }
 
@@ -426,7 +431,7 @@ public class ChatStreamService {
                     log.warn("写入enterprise stats失败: {}", e.getMessage());
                 }
             })
-            .timeout(Duration.ofSeconds(120))
+            .timeout(Duration.ofSeconds(chatTimeoutSeconds))
             .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
     }
 
@@ -443,7 +448,7 @@ public class ChatStreamService {
                 }
             })
             .doOnError(err -> log.error("同步企业问答异常: {}", err.getMessage()))
-            .blockLast(Duration.ofSeconds(120));
+            .blockLast(Duration.ofSeconds(chatTimeoutSeconds));
         return CompletableFuture.completedFuture(sb.length() > 0 ? sb.toString() : "抱歉，AI服务暂时不可用。");
     }
 
@@ -470,7 +475,7 @@ public class ChatStreamService {
                 }
             })
             .doOnComplete(() -> persistEvaluation(skillUuid, accumulated.toString(), name, userId))
-            .timeout(Duration.ofSeconds(120))
+            .timeout(Duration.ofSeconds(chatTimeoutSeconds))
             .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
     }
 

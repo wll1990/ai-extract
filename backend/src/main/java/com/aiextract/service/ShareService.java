@@ -26,6 +26,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -193,6 +194,7 @@ public class ShareService {
                 .guestLimit(guestMessageLimit)
                 .remaining(remaining)
                 .viewerStatus(viewerStatus)
+                .openingMessage(skill.getOpeningMessage())
                 .build();
     }
 
@@ -290,7 +292,8 @@ public class ShareService {
     }
 
     private long remainingQuota(UUID userId) {
-        long used = skillMessageRepository.countUserMessagesByUserId(userId);
+        long used = skillMessageRepository.countUserMessagesByUserIdSince(
+            userId, LocalDate.now().atStartOfDay());
         return Math.max(0, guestMessageLimit - used);
     }
 

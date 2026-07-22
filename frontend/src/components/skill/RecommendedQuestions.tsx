@@ -24,11 +24,13 @@ export default function RecommendedQuestions({ questions, onQuestionClick, label
   return (
     <div className="space-y-2 py-2">
       {label && <p className="text-xs text-muted-foreground text-center">{label}</p>}
-      <div className="flex flex-wrap justify-center gap-2">
+      <div className="flex flex-col gap-2 max-w-[420px] mx-auto">
         {visible.map((q, i) => (
           <button key={i} type="button" onClick={() => onQuestionClick(q)}
-            className="rounded-full border border-border px-3.5 py-1.5 text-sm text-foreground hover:border-foreground hover:bg-primary-light transition-colors min-h-[40px]">
-            {q}
+            className="flex items-center gap-3 w-full rounded-xl border border-border bg-white px-4 py-3 text-left shadow-sm hover:border-primary/30 hover:bg-primary-light/50 transition-all">
+            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-[#eef2ff] text-sm">💬</span>
+            <span className="flex-1 text-sm font-medium text-foreground">{q}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4 flex-none text-muted-foreground"><path d="M9 6l6 6-6 6" /></svg>
           </button>
         ))}
       </div>

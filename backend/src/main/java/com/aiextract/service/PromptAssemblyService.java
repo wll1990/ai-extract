@@ -86,9 +86,9 @@ public class PromptAssemblyService {
                     expCtx.append("## ").append(entry.getKey()).append("\n");
                 }
                 for (ExperienceGrain g : entry.getValue()) {
-                    if (g.getExpertThought() != null) expCtx.append("- 我的思考：").append(g.getExpertThought()).append("\n");
-                    if (g.getStandardScript() != null) expCtx.append("- 我说过的话：\"").append(g.getStandardScript()).append("\"\n");
-                    if (g.getCommonMistakes() != null) expCtx.append("- 我见过的坑：").append(g.getCommonMistakes()).append("\n");
+                    if (g.getExpertThought() != null) expCtx.append("- 我的思考：").append(truncate(g.getExpertThought(), 200)).append("\n");
+                    if (g.getStandardScript() != null) expCtx.append("- 我说过的话：\"").append(truncate(g.getStandardScript(), 300)).append("\"\n");
+                    if (g.getCommonMistakes() != null) expCtx.append("- 我见过的坑：").append(truncate(g.getCommonMistakes(), 150)).append("\n");
                 }
                 expCtx.append("\n");
             }
@@ -220,9 +220,9 @@ public class PromptAssemblyService {
                 expCtx.append("## 销冠空间 ").append(entry.getKey().toString().substring(0, 8)).append("\n");
                 for (ExperienceGrain g : entry.getValue()) {
                     if (g.getSceneTag() != null) expCtx.append("- 场景：").append(g.getSceneTag()).append("\n");
-                    if (g.getExpertThought() != null) expCtx.append("  思考：").append(g.getExpertThought()).append("\n");
-                    if (g.getStandardScript() != null) expCtx.append("  话术：\"").append(g.getStandardScript()).append("\"\n");
-                    if (g.getCommonMistakes() != null) expCtx.append("  避坑：").append(g.getCommonMistakes()).append("\n");
+                    if (g.getExpertThought() != null) expCtx.append("  思考：").append(truncate(g.getExpertThought(), 200)).append("\n");
+                    if (g.getStandardScript() != null) expCtx.append("  话术：\"").append(truncate(g.getStandardScript(), 300)).append("\"\n");
+                    if (g.getCommonMistakes() != null) expCtx.append("  避坑：").append(truncate(g.getCommonMistakes(), 150)).append("\n");
                 }
                 expCtx.append("\n");
             }
@@ -289,6 +289,12 @@ public class PromptAssemblyService {
             log.warn("JSONB解析失败", e);
             return "";
         }
+    }
+
+    /** 截断超长文本，保留前 maxChars 字符，超长加 "…" */
+    private String truncate(String text, int maxChars) {
+        if (text == null || text.length() <= maxChars) return text;
+        return text.substring(0, maxChars) + "…";
     }
 
     private Map<String, List<ExperienceGrain>> groupGrainsByScene(List<ExperienceGrain> grains) {
