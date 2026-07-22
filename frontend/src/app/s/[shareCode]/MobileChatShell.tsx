@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
+import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
@@ -66,6 +67,7 @@ export default function MobileChatShell({
   const hasMoreScenes = sceneTags.length > INITIAL_SCENE_COUNT;
   const visibleScenes = scenesExpanded ? sceneTags : sceneTags.slice(0, INITIAL_SCENE_COUNT);
 
+  const [traceGrainIds, setTraceGrainIds] = useState('');
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
   useEffect(() => {
@@ -375,16 +377,19 @@ export default function MobileChatShell({
                     <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{mainText}</div>
                     {canTrace && (
                       <div className="mt-2 border-t border-[#dfe6ff] pt-2">
-                        <details>
-                          <summary className="cursor-pointer list-none text-[11px] text-muted-foreground">
-                            ▸ {matchLabel}{matchLabel ? ' · ' : ''}说法依据{m.grainCount ? ` · ${m.grainCount} 条` : ''}
-                          </summary>
-                          <div className="mt-1.5 rounded-md bg-[#eef2ff] px-2.5 py-1.5 text-[11px] text-muted-foreground">
-                            {sourceText && <p className="whitespace-pre-wrap leading-relaxed mb-1">{sourceText}</p>}
-                            {m.source && <p className="mb-0.5">来源：{m.source}</p>}
-                            {m.grainTags && <p>场景：{m.grainTags}{m.avgScore ? ` · 质量分 ${m.avgScore}` : ''}</p>}
-                          </div>
-                        </details>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {matchLabel && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                              {matchLabel}
+                            </span>
+                          )}
+                          {m.grainIds && m.grainCount && (
+                            <button onClick={() => setTraceGrainIds(m.grainIds!)}
+                              className="text-[11px] text-muted-foreground hover:text-[#2147ff] transition-colors">
+                              溯源 · {m.grainCount} 条 →
+                            </button>
+                          )}
+                        </div>
                         <div className="mt-1.5 flex justify-end gap-3">
                           <FeedbackBtn active={qa.feedbackState[m.id] === 'up'} up
                             onClick={() => qa.handleFeedback(m.id, m.grainId || '', true)} />
@@ -478,6 +483,7 @@ export default function MobileChatShell({
           </div>
         </>
       )}
+      <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
     </div>
   );
 }
