@@ -198,7 +198,15 @@ export default function SharePage() {
         <MobileChatShell
           info={info}
           mode={mode}
-          onSwitchMode={m => { setMode(m); if (m === 'practice') setPracticeHint(''); }}
+          onSwitchMode={m => {
+            if (m !== mode) {
+              qa.setMessages([]);
+              qa.setCurrentConvId('');
+              setPracticeSceneTag('');
+              setPracticeHint('');
+            }
+            setMode(m);
+          }}
           remainingLabel={remainingLabel}
           onOpenHistory={() => { qa.loadConversations(); qa.setShowHistory(true); }}
           qa={qa}
