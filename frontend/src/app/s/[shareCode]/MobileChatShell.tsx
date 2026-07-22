@@ -134,56 +134,47 @@ export default function MobileChatShell({
             />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto px-4 py-6">
-            {/* 头像 + 问候 */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-10 w-10 flex-none items-center justify-center rounded-full shadow-sm overflow-hidden">
-                <img src={info.avatarUrl || '/def-avatar.png'} alt={name} className="h-full w-full object-cover" />
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            {/* ① 名片卡片 — 同 QA/Talk */}
+            <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-3xl bg-white py-5 px-4" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+              <div className="flex items-start gap-4 mb-4">
+                <div className="w-[64px] h-[64px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-2xl font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
+                  {info.avatarUrl ? <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" /> : initial}
+                </div>
+                <div className="flex-1 pt-0.5">
+                  <h3 className="text-[17px] font-bold text-foreground leading-tight">
+                    {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
+                  </h3>
+                  <span className="inline-block mt-1.5 text-[12px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
+                    {TALK_NAME_CARD.roleTag}
+                  </span>
+                  <p className="mt-2.5 text-[13px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                    {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
+                      i < arr.length - 1
+                        ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
+                        : <React.Fragment key={i}>{part}</React.Fragment>
+                    )}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[14px] font-semibold text-foreground">
-                  你好，我是 {name} 的 AI 分身 👋
-                </p>
-                <p className="text-[12px] text-muted-foreground leading-relaxed mt-0.5">
-                  选个场景，我扮演客户来考考你
-                </p>
-              </div>
-            </div>
-
-            {/* 信任条 */}
-            <div className="rounded-xl px-3 py-3 mb-5"
-              style={{ background: 'linear-gradient(135deg, rgba(6,182,212,0.06), rgba(59,130,246,0.08))', border: '1px solid rgba(59,130,246,0.1)' }}>
-              <div className="flex items-center divide-x divide-black/5">
-                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
-                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" /></svg>
-                  </div>
-                  <span className="text-[11px] font-semibold text-foreground">实战打法</span>
-                  <span className="text-[9px] text-muted-foreground leading-tight">销冠真实案例提炼</span>
-                </div>
-                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
-                    style={{ background: 'linear-gradient(135deg, #6366f1, #4f46e5)' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><circle cx="11.5" cy="14.5" r="2.5" /><path d="M13.5 16.5L16 19" /></svg>
-                  </div>
-                  <span className="text-[11px] font-semibold text-foreground">溯源可查</span>
-                  <span className="text-[9px] text-muted-foreground leading-tight">每句话有据可依</span>
-                </div>
-                <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full"
-                    style={{ background: 'linear-gradient(135deg, #06b6d4, #0891b2)' }}>
-                    <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="M13 2L3 14h7l-2 8 10-12h-7z" /></svg>
-                  </div>
-                  <span className="text-[11px] font-semibold text-foreground">即问即用</span>
-                  <span className="text-[9px] text-muted-foreground leading-tight">30秒拿到可执行话术</span>
-                </div>
+              <div className="pt-3 border-t border-[#E8ECF1]/40">
+                <TrustBadge />
               </div>
             </div>
 
-            <p className="text-[16px] font-semibold text-foreground">他扮演客户来考你，每轮给你实战点评</p>
-            <p className="mt-1 text-[13px] text-muted-foreground">敢试试吗？</p>
-            <div className={`mt-4 flex flex-col gap-2.5 ${scenesExpanded ? 'max-h-[50vh] overflow-y-auto -mx-2 px-2' : ''}`}>
+            {/* ② 引导语气泡 — Practice 专属 */}
+            <div className="flex items-start gap-2 mb-5 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+                <span className="text-[13px]">🎯</span>
+              </div>
+              <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f0fdf4] border border-[#dcfce7] px-4 py-3">
+                <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
+                <p className="text-[14px] text-foreground leading-relaxed">{MODE_GUIDE.practice}</p>
+              </div>
+            </div>
+
+            {/* ③ 场景列表 */}
+            <div className={`flex flex-col gap-2.5 ${scenesExpanded ? 'max-h-[50vh] overflow-y-auto -mx-2 px-2' : ''}`}>
               {visibleScenes.map(s => (
                 <button key={s.tag} onClick={() => onPickScene(s.tag)}
                   className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 text-left shadow-sm active:scale-[0.98]">

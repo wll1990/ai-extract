@@ -5,6 +5,8 @@ import {
   startPractice, respondPractice, evaluatePractice, fetchPracticeScenes,
   evaluatePracticeRound, type RoundEval,
 } from '@/lib/api/skill';
+import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TraceabilityDrawer } from './TraceabilityDrawer';
 
 interface PracticeMessage {
   role: 'user' | 'assistant';
@@ -21,6 +23,11 @@ interface PracticeMessage {
   fullAnswer?: string;
   isLastRetry?: boolean;
   retryCount?: number;
+  // 溯源字段（SSE source event）
+  grainIds?: string;
+  grainTags?: string;
+  grainCount?: number;
+  avgSimilarity?: string;
 }
 
 interface PracticeViewProps {
@@ -44,6 +51,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const [angleCurrent, setAngleCurrent] = useState(1);
   const [angleTotal, setAngleTotal] = useState(3);
   const [showHint, setShowHint] = useState(false);
+  const [traceGrainIds, setTraceGrainIds] = useState('');
   const [scenePageSize, setScenePageSize] = useState(6);
   const SCENE_INCREMENT = 4;
   const abortRef = useRef<AbortController | null>(null);
@@ -143,12 +151,22 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
     const history = historyLines.join('\n');
 
     let full = '';
+    let sourceInfo: any = {};
     const ctrl = respondPractice(
       skillId, practiceId, text, {
         onChunk: (c) => { full += c; setStreamText(full); },
+        onSource: (_reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
+          sourceInfo = { grainIds, grainTags, grainCount, avgScore, avgSimilarity, reportTitle, sourceNames };
+        },
         onDone: () => {
           setStreamText('');
-          setMessages(prev => [...prev, { role: 'assistant', content: full }]);
+          setMessages(prev => {
+            const next = [...prev, { role: 'assistant', content: full } as PracticeMessage];
+            if (Object.keys(sourceInfo).length > 0) {
+              next[next.length - 1] = { ...next[next.length - 1], ...sourceInfo };
+            }
+            return next;
+          });
           setIsStreaming(false);
           setAngleCurrent(prev => Math.min(prev + 1, angleTotal));
         },
@@ -195,12 +213,22 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
 
     const nextAngle = Math.min(angleCurrent + 1, angleTotal);
     let full = '';
+    let sInfo: any = {};
     const ctrl = respondPractice(
       skillId, practiceId, '（继续下一轮）', {
         onChunk: (c) => { full += c; setStreamText(full); },
+        onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
+          sInfo = { grainIds, grainTags, grainCount, avgScore, avgSimilarity, reportTitle, sourceNames };
+        },
         onDone: () => {
           setStreamText('');
-          setMessages(prev => [...prev, { role: 'assistant', content: full }]);
+          setMessages(prev => {
+            const next = [...prev, { role: 'assistant', content: full } as PracticeMessage];
+            if (Object.keys(sInfo).length > 0) {
+              next[next.length - 1] = { ...next[next.length - 1], ...sInfo };
+            }
+            return next;
+          });
           setIsStreaming(false);
           setAngleCurrent(nextAngle);
         },
@@ -235,10 +263,65 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
     const allShown = scenePageSize >= scenes.length;
     return (
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '32px 40px 60px', overflowY: 'auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>🎯</div>
-          <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>选择演练场景</h3>
-          <p style={{ fontSize: 13, color: 'var(--fg-mid)' }}>AI 将扮演客户，模拟真实对话场景</p>
+        {/* ① 名片卡片 */}
+        <div className="animate-stagger-1 rounded-3xl bg-white py-7 px-7" style={{
+          maxWidth: 500, width: '100%', marginBottom: 24,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
+              background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 30, fontWeight: 700, color: '#2563EB',
+              boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
+            }}>
+              {ownerName[0]}
+            </div>
+            <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--fg-high)', margin: '0 0 12px', lineHeight: 1.3 }}>
+                {TALK_NAME_CARD.greeting}<span style={{ color: '#2563EB' }}>{ownerName}</span><span style={{ fontSize: 14 }}>&nbsp;✨</span>
+              </p>
+              <span style={{ display: 'inline-block', fontSize: 12, color: '#64748B', background: '#f1f5f9', borderRadius: 100, padding: '2px 12px', marginBottom: 10 }}>
+                {TALK_NAME_CARD.roleTag}
+              </span>
+              <p style={{ fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+                {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
+                  i < arr.length - 1
+                    ? <span key={i}>{part}<span style={{ color: '#DC2626', fontWeight: 600 }}>{TALK_NAME_CARD.valuePropHighlight}</span></span>
+                    : <span key={i}>{part}</span>
+                )}
+              </p>
+            </div>
+          </div>
+          <div style={{ paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
+            <TrustBadge />
+          </div>
+        </div>
+
+        {/* ② 引导语气泡 */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 460, width: '100%', marginBottom: 24 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 10, flexShrink: 0, marginTop: 2,
+            background: 'linear-gradient(135deg, #10b981, #059669)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
+          }}>
+            🎯
+          </div>
+          <div style={{
+            flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
+            background: '#f0fdf4', borderLeft: '2px solid rgba(16,185,129,0.2)',
+          }}>
+            <p style={{ fontSize: 11, color: 'var(--fg-dim)', margin: '0 0 4px' }}>{ownerName}</p>
+            <p style={{ fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
+              {MODE_GUIDE.practice}
+            </p>
+          </div>
+        </div>
+
+        {/* 场景标题 */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>选择演练场景</h3>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, maxWidth: 640, width: '100%' }}>
           {visibleScenes.map(s => (
@@ -376,6 +459,28 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
                         </span>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {/* 客户消息溯源 */}
+                {msg.role === 'assistant' && msg.content && msg.avgSimilarity && Number(msg.avgSimilarity) >= 30 && (
+                  <div style={{ marginLeft: 40, marginTop: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {Number(msg.avgSimilarity) >= 50 ? (
+                      <span style={{ fontSize: 10, fontWeight: 500, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '1px 6px' }}>
+                        🏅 精准匹配
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 10, fontWeight: 500, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 4, padding: '1px 6px' }}>
+                        📎 关联匹配
+                      </span>
+                    )}
+                    {msg.grainIds && msg.grainCount && (
+                      <button onClick={() => setTraceGrainIds(msg.grainIds!)} style={{
+                        background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: 'var(--fg-dim)', fontFamily: 'inherit',
+                      }}>
+                        溯源 · {msg.grainCount} 条 →
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -644,6 +749,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
           </div>
         </div>
       )}
+      <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
     </div>
   );
 }

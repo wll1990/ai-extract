@@ -87,8 +87,8 @@ export default function SkillChatPage() {
 
       {/* ── 主区域 ── */}
       <div className="flex-1 flex flex-col min-w-0">
-        {/* 顶栏 */}
-        <header className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface-2 flex-shrink-0">
+        {/* 顶栏 — sticky 固定，滚动时不隐藏 */}
+        <header className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface-2 flex-shrink-0 sticky top-0 z-10">
           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 overflow-hidden shadow-sm">
             {initial}
           </div>
