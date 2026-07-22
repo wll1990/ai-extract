@@ -62,6 +62,8 @@ export interface PracticeViewProps {
   onRetryWithTechnique?: () => void;
   /** 继续下一轮（下一个角度） */
   onAdvanceRound?: () => void;
+  /** 点击溯源按钮 */
+  onTraceClick?: (grainIds: string) => void;
   inputValue: string;
   onInputChange: (v: string) => void;
   footer?: React.ReactNode;
@@ -81,7 +83,7 @@ export function PracticeView({
   phase, currentScene, messages, evaluation, sources, isStreaming,
   angleInfo, hint, showHint, onToggleHint,
   onSend, onEnd, onRetry, onBackToQa, onRetryWithTechnique, onAdvanceRound,
-  inputValue, onInputChange, footer,
+  onTraceClick, inputValue, onInputChange, footer,
 }: PracticeViewProps) {
 
   // ========== 阶段一：实战对话 ==========
@@ -131,6 +133,33 @@ export function PracticeView({
                       </span>
                     )}
                   </div>
+                  {/* 溯源匹配度 + 溯源按钮 */}
+                  {(() => {
+                    const sim = msg.avgSimilarity ? Number(msg.avgSimilarity) : 0;
+                    const hasTrace = !!(msg.grainIds && msg.grainCount && msg.grainCount > 0);
+                    if (sim >= 30) return (
+                      <div className="flex items-center gap-2 mt-1.5 ml-1">
+                        {sim >= 50 ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-200">
+                            🏅 精准匹配
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                            📎 关联匹配
+                          </span>
+                        )}
+                        {hasTrace && (
+                          <button onClick={() => onTraceClick?.(msg.grainIds!)} className="text-[10px] text-muted-foreground hover:text-primary transition-colors">
+                            溯源 · {msg.grainCount} 条 →
+                          </button>
+                        )}
+                      </div>
+                    );
+                    if (sim > 0 && sim < 30) return (
+                      <p className="text-[10px] text-muted-foreground-2 mt-1 ml-1">✦ 综合画像生成</p>
+                    );
+                    return null;
+                  })()}
                   {/* 画像推断 — AI 对客户人设的推断 */}
                   <p className="text-[10px] text-muted-foreground-2 mt-1 ml-1">
                     💡 画像推断

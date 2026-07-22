@@ -12,6 +12,13 @@ export interface PracticeMessage {
   technique?: string; offTopic?: boolean; grains?: RoundEval['grains'];
   matchLevel?: string; levelLabel?: string; isRetry?: boolean;
   fullAnswer?: string; isLastRetry?: boolean; retryCount?: number;
+  // 溯源字段（SSE source event）
+  grainIds?: string;
+  grainTags?: string;
+  grainCount?: number;
+  avgSimilarity?: string;
+  avgScore?: string;
+  reportTitle?: string;
 }
 
 export interface PracticeEval {
@@ -49,6 +56,7 @@ type PracticeAction =
   | { type: 'ADD_MESSAGE'; message: PracticeMessage }
   | { type: 'UPDATE_LAST_USER'; updates: Partial<PracticeMessage> }
   | { type: 'UPDATE_MESSAGE_BY_ID'; id: string; updates: Partial<PracticeMessage> }
+  | { type: 'UPDATE_LAST_CUSTOMER'; updates: Partial<PracticeMessage> }
   | { type: 'REMOVE_LAST_CUSTOMER' }
   | { type: 'SET_ANGLES'; angles: { current: number; total: number } }
   | { type: 'SET_EVALUATION'; evaluation: PracticeEval }
@@ -110,6 +118,15 @@ function practiceReducer(state: PracticeState, action: PracticeAction): Practice
           m.id === action.id ? { ...m, ...action.updates } : m
         ),
       };
+
+    case 'UPDATE_LAST_CUSTOMER': {
+      const cmsgs = [...state.messages];
+      const cIdx = cmsgs.length - 1 - [...cmsgs].reverse().findIndex(m => m.role === 'customer');
+      if (cIdx >= 0 && cIdx < cmsgs.length && cmsgs[cIdx].role === 'customer') {
+        cmsgs[cIdx] = { ...cmsgs[cIdx], ...action.updates };
+      }
+      return { ...state, messages: cmsgs };
+    }
 
     case 'REMOVE_LAST_CUSTOMER': {
       const lastIdx = [...state.messages].reverse().findIndex(m => m.role === 'customer');
@@ -258,6 +275,7 @@ export function usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onL
         const histStr = state.messages.map(m =>
           `${m.role === 'customer' ? '客户' : '销售'}：${m.content}`).join('\n');
         let fullResponse = '';
+        let sourceInfo: any = {};
         let rafId = 0;
         const controller = respondPractice(skillId, state.data!.practiceId, text, {
           onChunk: (content) => {
@@ -269,7 +287,15 @@ export function usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onL
               });
             }
           },
-          onDone: () => { setIsStreaming(false); },
+          onSource: (_reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
+            sourceInfo = { grainIds, grainTags, grainCount, avgScore, avgSimilarity, reportTitle, sourceNames };
+          },
+          onDone: () => {
+            if (Object.keys(sourceInfo).length > 0) {
+              dispatch({ type: 'UPDATE_LAST_CUSTOMER', updates: sourceInfo });
+            }
+            setIsStreaming(false);
+          },
           onError: () => { setIsStreaming(false); },
           // limit = 游客免费额度用尽：撤掉客户占位气泡，页面弹注册抽屉（注册后点"下一轮"继续）
           onEvent: (type, data) => {

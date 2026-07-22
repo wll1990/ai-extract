@@ -100,23 +100,26 @@ export default function SkillChatPage() {
 
           <div className="flex-1" />
 
-          {/* 模式 tabs（Practice 模式不显示，它有独立 UI） */}
-          {chatMode !== 'practice' && (
-            <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5">
-              {[
-                { key: 'qa' as ChatMode, icon: '💬', label: '经验请教' },
-                { key: 'talk' as ChatMode, icon: '☕', label: '轻松交流' },
-              ].map(m => (
-                <button key={m.key}
-                  onClick={() => { qa.setMessages([]); qa.setCurrentConvId(''); setChatMode(m.key); if (m.key === 'talk') qa.handleTalkStart(); if (m.key === 'qa') qa.handleQaModeSelect(); }}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-                    chatMode === m.key ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground-2 hover:text-foreground'
-                  }`}>
-                  {m.icon} {m.label}
-                </button>
-              ))}
-            </div>
-          )}
+          {/* 模式 tabs — 三模式始终可见 */}
+          <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5">
+            {[
+              { key: 'qa' as ChatMode, icon: '💬', label: '经验请教' },
+              { key: 'talk' as ChatMode, icon: '☕', label: '轻松交流' },
+              { key: 'practice' as ChatMode, icon: '🎯', label: '实战演练' },
+            ].map(m => (
+              <button key={m.key}
+                onClick={() => {
+                  if (m.key === 'practice') { setChatMode('practice'); setModeSelected(true); resetPractice(); return; }
+                  qa.setMessages([]); qa.setCurrentConvId(''); setChatMode(m.key);
+                  if (m.key === 'talk') qa.handleTalkStart(); if (m.key === 'qa') qa.handleQaModeSelect();
+                }}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
+                  chatMode === m.key ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground-2 hover:text-foreground'
+                }`}>
+                {m.icon} {m.label}
+              </button>
+            ))}
+          </div>
 
           <button onClick={() => setShareTarget(true)}
             className="text-muted-foreground-2 hover:text-primary text-sm transition-colors" title="分享">🔗</button>
@@ -126,10 +129,49 @@ export default function SkillChatPage() {
 
         {/* 内容区 */}
         <div className="flex-1 overflow-auto">
-          {/* ── Practice 模式 ── */}
+          {/* ── Practice 场景选择 Hero ── */}
           {chatMode === 'practice' && !practiceSceneTag && (
-            <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
-              defaultMode="practice" onQaStart={qa.handleQaStart} onPracticeStart={(tag) => startPracticeWithScene(tag)} />
+            <div className="mx-auto max-w-[720px] space-y-4 px-4 pt-4">
+              {/* ① 名片卡片 — 同 QA/Talk */}
+              <div className="animate-[messageArrive_500ms_ease-out] rounded-3xl bg-white py-7 px-7" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
+                <div className="flex items-start gap-6 mb-5">
+                  <div className="w-[80px] h-[80px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-[32px] font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
+                    {avatarUrl ? <img src={avatarUrl} alt={ownerName} className="w-full h-full object-cover" /> : initial}
+                  </div>
+                  <div className="flex-1 pt-1">
+                    <h3 className="text-[19px] font-bold text-foreground leading-tight">
+                      {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{ownerName}</span><span className="text-base ml-0.5">✨</span>
+                    </h3>
+                    <span className="inline-block mt-2 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">{TALK_NAME_CARD.roleTag}</span>
+                    <p className="mt-3 text-[14px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                      {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
+                        i < arr.length - 1
+                          ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
+                          : <React.Fragment key={i}>{part}</React.Fragment>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <div className="pt-4 border-t border-[#E8ECF1]/40">
+                  <TrustBadge />
+                </div>
+              </div>
+
+              {/* ② 引导语气泡 — Practice 专属 */}
+              <div className="flex items-start gap-2 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+                  <span className="text-[13px]">🎯</span>
+                </div>
+                <div className="max-w-[78%] rounded-2xl rounded-tl-sm bg-[#f0fdf4] border border-[#dcfce7] px-4 py-3">
+                  <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
+                  <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{MODE_GUIDE.practice}</p>
+                </div>
+              </div>
+
+              {/* ③ 场景选择 */}
+              <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
+                defaultMode="practice" onPracticeStart={(tag) => startPracticeWithScene(tag)} />
+            </div>
           )}
 
           {chatMode === 'practice' && practiceSceneTag && (
@@ -149,58 +191,11 @@ export default function SkillChatPage() {
               }>
               <div className="mx-auto max-w-[720px] space-y-4 px-4">
 
-                {/* ── QA 未选场景时：场景 pill 条 ── */}
-                {chatMode === 'qa' && qa.messages.length === 0 && !qa.qaSceneContext && qa.sceneTags.length > 0 && (
-                  <div className="pt-6">
-                    <p className="text-xs text-muted-foreground text-center mb-2">擅长领域</p>
-                    <SceneTagBar sceneTags={qa.sceneTags} activeTag="" chatMode="qa"
-                      onQaTagClick={qa.handleQaStart}
-                      onTalkTagClick={() => {}} />
-                  </div>
-                )}
-
-                {/* ── QA 场景上下文标签（含上/下一场景翻页） ── */}
-                {qa.messages.length === 0 && qa.qaSceneContext && (() => {
-                  const sorted = [...qa.sceneTags].sort((a, b) => (b.count || 0) - (a.count || 0));
-                  const curIdx = sorted.findIndex(s => s.tag === qa.qaSceneContext);
-                  const prevTag = curIdx > 0 ? sorted[curIdx - 1].tag : null;
-                  const nextTag = curIdx >= 0 && curIdx < sorted.length - 1 ? sorted[curIdx + 1].tag : null;
-                  return (
-                    <div className="pt-12 pb-4 text-center">
-                      <div className="inline-flex items-center gap-2">
-                        {prevTag ? (
-                          <button onClick={() => qa.handleQaStart(prevTag)}
-                            className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
-                            title={`上一场景：${prevTag}`}>
-                            ← {prevTag}
-                          </button>
-                        ) : (
-                          <span className="w-20" />
-                        )}
-                        <div className="inline-flex items-center gap-2 rounded-full border-2 border-primary/30 bg-primary-light px-4 py-2 text-sm shadow-sm">
-                          <span className="text-primary font-medium">{qa.qaSceneContext}</span>
-                          <button onClick={qa.clearContext} className="text-muted-foreground-2 hover:text-foreground ml-1 transition-colors">✕</button>
-                        </div>
-                        {nextTag ? (
-                          <button onClick={() => qa.handleQaStart(nextTag)}
-                            className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
-                            title={`下一场景：${nextTag}`}>
-                            {nextTag} →
-                          </button>
-                        ) : (
-                          <span className="w-20" />
-                        )}
-                      </div>
-                      <RecommendedQuestions questions={qa.contextQuestions} onQuestionClick={qa.handleQuestionClick} />
-                    </div>
-                  );
-                })()}
-
                 {/* ── Hero 区 — detailFetched 后一次性渲染，防布局抖动 ── */}
                 {qa.messages.length === 0 && detailFetched && (
                   <>
-                    {/* ① 名片卡片 — Talk 独有：头像+文案+信任卡片，一整块 */}
-                    {chatMode === 'talk' && (
+                    {/* ① 名片卡片 — QA/Talk 共享 */}
+                    {(chatMode === 'qa' || chatMode === 'talk') && (
                       <div className="animate-[messageArrive_500ms_ease-out] rounded-3xl bg-white py-7 px-7" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
                         {/* 头部：左头像 + 右文案 */}
                         <div className="flex items-start gap-6 mb-5">
@@ -239,17 +234,22 @@ export default function SkillChatPage() {
                       </div>
                     )}
 
-                    {/* QA 模式 — 开场白气泡 */}
-                    {chatMode === 'qa' && openingMessage && (
-                      <div className="flex justify-start animate-[messageArrive_400ms_ease-out]">
-                        <div className="max-w-[75%] rounded-2xl rounded-bl-md bg-primary-light px-5 py-3.5">
+                    {/* ② 引导语气泡 — QA 专属 */}
+                    {chatMode === 'qa' && (
+                      <div className="flex items-start gap-2 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
+                          </svg>
+                        </div>
+                        <div className="max-w-[78%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                           <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
-                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{openingMessage}</p>
+                          <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{MODE_GUIDE.qa}</p>
                         </div>
                       </div>
                     )}
 
-                    {/* ② 引导语气泡 — 带头像的聊天气泡 */}
+                    {/* ② 引导语气泡 — Talk 专属 */}
                     {chatMode === 'talk' && (
                       <div className="flex items-start gap-2.5 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
                         <div className="w-7 h-7 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 shadow-sm mt-0.5">
@@ -264,7 +264,58 @@ export default function SkillChatPage() {
                       </div>
                     )}
 
-                    {/* ③ 精选话题 — 逐条浮现 */}
+                    {/* ③ QA 场景选择 */}
+                    {chatMode === 'qa' && (
+                      <>
+                        {/* 未选场景：SceneTagBar */}
+                        {!qa.qaSceneContext && qa.sceneTags.length > 0 && (
+                          <div>
+                            <p className="text-xs text-muted-foreground text-center mb-2">擅长领域</p>
+                            <SceneTagBar sceneTags={qa.sceneTags} activeTag="" chatMode="qa"
+                              onQaTagClick={qa.handleQaStart}
+                              onTalkTagClick={() => {}} />
+                          </div>
+                        )}
+                        {/* 已选场景：上下文导航 + 精选话题 */}
+                        {qa.qaSceneContext && (() => {
+                          const sorted = [...qa.sceneTags].sort((a, b) => (b.count || 0) - (a.count || 0));
+                          const curIdx = sorted.findIndex(s => s.tag === qa.qaSceneContext);
+                          const prevTag = curIdx > 0 ? sorted[curIdx - 1].tag : null;
+                          const nextTag = curIdx >= 0 && curIdx < sorted.length - 1 ? sorted[curIdx + 1].tag : null;
+                          return (
+                            <div className="text-center">
+                              <div className="inline-flex items-center gap-2">
+                                {prevTag ? (
+                                  <button onClick={() => qa.handleQaStart(prevTag)}
+                                    className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+                                    title={`上一场景：${prevTag}`}>
+                                    ← {prevTag}
+                                  </button>
+                                ) : (
+                                  <span className="w-20" />
+                                )}
+                                <div className="inline-flex items-center gap-2 rounded-full border-2 border-primary/30 bg-primary-light px-4 py-2 text-sm shadow-sm">
+                                  <span className="text-primary font-medium">{qa.qaSceneContext}</span>
+                                  <button onClick={qa.clearContext} className="text-muted-foreground-2 hover:text-foreground ml-1 transition-colors">✕</button>
+                                </div>
+                                {nextTag ? (
+                                  <button onClick={() => qa.handleQaStart(nextTag)}
+                                    className="flex items-center gap-1 rounded-full border border-border bg-surface-2 px-3 py-2 text-xs text-muted-foreground hover:text-foreground hover:border-primary/30 transition-all"
+                                    title={`下一场景：${nextTag}`}>
+                                    {nextTag} →
+                                  </button>
+                                ) : (
+                                  <span className="w-20" />
+                                )}
+                              </div>
+                              <RecommendedQuestions questions={qa.contextQuestions} onQuestionClick={qa.handleQuestionClick} />
+                            </div>
+                          );
+                        })()}
+                      </>
+                    )}
+
+                    {/* ③ 精选话题 — Talk 专属 */}
                     {chatMode === 'talk' && qa.contextQuestions.length > 0 && (
                       <div className="animate-[messageArrive_350ms_ease-out_1000ms] opacity-0 [animation-fill-mode:forwards]">
                         <RecommendedQuestions questions={qa.contextQuestions} onQuestionClick={qa.handleQuestionClick}

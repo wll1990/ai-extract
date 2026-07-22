@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 import { PracticeView } from '@/components/skill/PracticeView';
 import EndConfirmModal from '@/components/skill/EndConfirmModal';
+import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import { usePracticeFlow } from './hooks/usePracticeFlow';
 import type { PracticeEval } from './hooks/usePracticeFlow';
 
@@ -21,6 +22,7 @@ interface Props {
 export default function PracticeChatSection({ skillId, initialSceneTag, setChatMode, abortRef, authToken, onLimit }: Props) {
   // Practice 自有输入状态，不与 QA 共享
   const [practiceInput, setPracticeInput] = useState('');
+  const [traceGrainIds, setTraceGrainIds] = useState('');
 
   const practice = usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onLimit });
 
@@ -109,11 +111,13 @@ export default function PracticeChatSection({ skillId, initialSceneTag, setChatM
             }}
             onAdvanceRound={practice.advanceRound}
             onBackToQa={handleBackToQa}
+            onTraceClick={(grainIds) => setTraceGrainIds(grainIds)}
             inputValue={practiceInput}
             onInputChange={setPracticeInput}
           />
         </div>
       </SkillChatView>
+      <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
 
       {practice.showEndConfirm && (
         <EndConfirmModal

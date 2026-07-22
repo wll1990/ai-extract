@@ -51,6 +51,7 @@ export function SkillOpeningView({
     : []);
 
   const [selectedScene, setSelectedScene] = useState<string | null>(null);
+  const [scenesExpanded, setScenesExpanded] = useState(false);
 
   // 电影卡片轮播
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -144,47 +145,42 @@ export function SkillOpeningView({
             {defaultMode === 'qa' ? '选一个场景开始，或直接跳过' : defaultMode === 'practice' ? '选一个场景开始对练' : '选择一个场景开始'}
           </p>
 
-          {/* 电影卡片轮播（统一所有模式） */}
-          <div ref={scrollRef} className="overflow-x-auto scrollbar-none snap-x snap-mandatory">
-            <div className="flex gap-3 px-[15%]">
-              {sortedTags.map((s) => {
-                const isSelected = s.tag === selectedScene;
-                return (
-                  <button
-                    key={s.tag}
-                    type="button"
-                    onClick={() => handleSceneClick(s.tag)}
-                    className={`movie-card snap-center flex-shrink-0 w-[70%] rounded-2xl p-5 text-center shadow-sm transition-all ${
-                      isSelected
-                        ? 'bg-primary text-white shadow-md scale-[1.02]'
-                        : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
-                    }`}
-                  >
-                    <span className="text-2xl">{getEmoji(s.tag)}</span>
-                    <h3 className={`mt-2 text-base font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
-                      {s.tag}
-                    </h3>
-                    {(s.count || 0) > 0 && (
-                      <p className={`mt-1 text-xs ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
-                        {s.count} 条销冠锦囊
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          {/* 场景卡片网格 — 默认4个，可展开收起 */}
+          <div className={`grid grid-cols-2 gap-3 ${scenesExpanded ? 'max-h-[400px] overflow-y-auto -mx-2 px-2' : ''}`}>
+            {sortedTags.slice(0, scenesExpanded ? undefined : 4).map((s) => {
+              const isSelected = s.tag === selectedScene;
+              return (
+                <button
+                  key={s.tag}
+                  type="button"
+                  onClick={() => handleSceneClick(s.tag)}
+                  className={`rounded-xl p-4 text-left transition-all ${
+                    isSelected
+                      ? 'bg-primary text-white shadow-md'
+                      : 'bg-surface-2 border border-border hover:shadow-md hover:border-primary/30'
+                  }`}
+                >
+                  <span className="text-xl">{getEmoji(s.tag)}</span>
+                  <h3 className={`mt-1.5 text-sm font-semibold ${isSelected ? 'text-white' : 'text-foreground'}`}>
+                    {s.tag}
+                  </h3>
+                  {(s.count || 0) > 0 && (
+                    <p className={`mt-0.5 text-[11px] ${isSelected ? 'text-white/70' : 'text-muted-foreground-2'}`}>
+                      {s.count} 条锦囊
+                    </p>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
-          {sortedTags.length > 1 && (
-            <div className="flex justify-center gap-1.5 mt-2.5">
-              {sortedTags.map((_, i) => (
-                <button key={i} type="button"
-                  className={`rounded-full transition-all duration-200 ${
-                    i === activeIndex ? 'h-1.5 w-4 bg-foreground' : 'h-1.5 w-1.5 bg-muted-foreground-2/30'
-                  }`}
-                />
-              ))}
-            </div>
+          {sortedTags.length > 4 && (
+            <button
+              onClick={() => setScenesExpanded(!scenesExpanded)}
+              className="mt-3 w-full text-center text-xs text-muted-foreground py-2 rounded-lg hover:bg-surface transition-colors"
+            >
+              {scenesExpanded ? '收起 ▲' : `展开更多（还有 ${sortedTags.length - 4} 个）→`}
+            </button>
           )}
         </div>
       )}

@@ -60,11 +60,11 @@ export function ChatEntry({
       justifyContent: 'flex-start', padding: '32px 24px 60px', textAlign: 'center',
       flex: 1,
     }}>
-      {/* ═══ Talk 模式 — 名片卡片（一整块） ═══ */}
-      {mode === 'talk' && (
+      {/* ═══ ① 名片卡片 — QA/Talk 共享 ═══ */}
+      {(mode === 'qa' || mode === 'talk') && (
         <>
           <div className="animate-stagger-1 rounded-3xl bg-white py-7 px-7" style={{
-            maxWidth: 500, width: '100%', margin: '0 auto 24px',
+            maxWidth: 640, width: '100%', margin: '0 auto 24px',
             boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
           }}>
             {/* 头部：左头像 + 右文案 */}
@@ -124,15 +124,16 @@ export function ChatEntry({
             </div>
           </div>
 
-          {/* 引导语气泡 — 带小头像 */}
-          <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 460, width: '100%', marginBottom: 20 }}>
+          {/* ② 引导语气泡 — Talk 专属 */}
+          {mode === 'talk' && (
+          <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 560, width: '100%', marginBottom: 20 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-              background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
+              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 12, fontWeight: 700,
+              fontSize: 14,
             }}>
-              {initial}
+              ☕
             </div>
             <div style={{
               flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
@@ -141,74 +142,43 @@ export function ChatEntry({
               <p style={{ fontSize: 11, color: 'var(--fg-dim)', margin: '0 0 4px' }}>{name}</p>
               <p style={{
                 fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
-                margin: 0, whiteSpace: 'pre-wrap',
+                margin: 0, whiteSpace: 'pre-wrap', textAlign: 'left' as const,
               }}>
                 {MODE_GUIDE.talk}
               </p>
             </div>
           </div>
-        </>
-      )}
-
-      {/* ═══ QA 模式 — 保持原有布局 ═══ */}
-      {mode !== 'talk' && (
-        <>
-          {/* Avatar */}
-          <div className="animate-stagger-1">
-            {skill.avatarUrl ? (
-              <img src={skill.avatarUrl} alt={name} style={{
-                width: 72, height: 72, borderRadius: 20, objectFit: 'cover',
-                boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1)',
-                marginBottom: 20,
-              }} />
-            ) : (
-              <div style={{
-                width: 72, height: 72, borderRadius: 20,
-                background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 30, fontWeight: 800,
-                boxShadow: '0 10px 10px 0 rgba(0,0,0,0.1), 0 4px 4px -2px rgba(0,0,0,0.1), inset 0 1px 2px 0 rgba(255,255,255,0.5)',
-                marginBottom: 20,
-              }}>
-                {initial}
-              </div>
-            )}
-          </div>
-
-          <div className="animate-stagger-2">
-            <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', color: 'var(--fg-high)' }}>
-              {name}
-            </h1>
-            {skill.ownerTitle && (
-              <p style={{ fontSize: 13, color: 'var(--fg-mid)', marginBottom: 16 }}>
-                {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
-              </p>
-            )}
-          </div>
-
-          {/* Opening message = "TA 这样说" */}
-          {skill.openingMessage && (
-            <div className="animate-stagger-3" style={{ maxWidth: 460, width: '100%', marginBottom: 24 }}>
-              <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 6, textAlign: 'center' }}>
-                TA 这样说
-              </p>
-              <p style={{
-                fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
-                padding: '14px 20px', borderRadius: '18px 18px 18px 6px',
-                background: mode === 'qa' ? '#fef9f0' : '#f0fdf6',
-                borderLeft: mode === 'qa' ? '2px solid rgba(245,158,11,0.2)' : '2px solid rgba(16,185,129,0.2)',
-                margin: 0, textAlign: 'center',
-              }}>
-                {skill.openingMessage}
-              </p>
-            </div>
           )}
         </>
       )}
 
+      {/* ② 引导语气泡 — QA 专属 */}
+      {mode === 'qa' && (
+        <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 560, width: '100%', marginBottom: 20 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: 10, flexShrink: 0, marginTop: 2,
+            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><path d="M11 8v6" /><path d="M8 11h6" />
+            </svg>
+          </div>
+          <div style={{
+            flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
+            background: '#f5f3ff', borderLeft: '2px solid rgba(99,102,241,0.2)',
+          }}>
+            <p style={{ fontSize: 11, color: 'var(--fg-dim)', margin: '0 0 4px' }}>{name}</p>
+            <p style={{ fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap', textAlign: 'left' as const }}>
+              {MODE_GUIDE.qa}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* 擅长领域 — 横向滚动 pill 条 (QA only) */}
       {showSceneTags && skill.sceneTags && skill.sceneTags.length > 0 && (
-        <div className="animate-stagger-4" style={{ maxWidth: 520, width: '100%', marginBottom: 24 }}>
+        <div className="animate-stagger-4" style={{ maxWidth: 600, width: '100%', marginBottom: 24 }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 8 }}>
             擅长领域
           </p>
@@ -269,7 +239,7 @@ export function ChatEntry({
 
       {/* 精选话题 — recommended questions (QA only) */}
       {showQuestions && (
-        <div className="animate-stagger-5" style={{ maxWidth: 420, width: '100%' }}>
+        <div className="animate-stagger-5" style={{ maxWidth: 560, width: '100%' }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 6 }}>
             精选话题
           </p>

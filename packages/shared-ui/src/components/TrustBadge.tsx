@@ -6,7 +6,7 @@ import React from 'react';
 
 function StarIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
       <path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" />
     </svg>
   );
@@ -14,7 +14,7 @@ function StarIcon() {
 
 function ShieldIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
       <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
       <path d="M14 2v6h6" />
       <circle cx="11.5" cy="14.5" r="2.5" />
@@ -25,7 +25,7 @@ function ShieldIcon() {
 
 function BoltIcon() {
   return (
-    <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+    <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
       <path d="M13 2L3 14h7l-2 8 10-12h-7z" />
     </svg>
   );
@@ -56,8 +56,7 @@ export function TrustBadge() {
   return (
     <div
       style={{
-        maxWidth: 'var(--trust-max-w, 460px)',
-        margin: '0 auto',
+        width: 'var(--trust-width, 100%)',
         padding: '12px 16px 10px',
         borderRadius: 12,
         background: 'var(--trust-bg, linear-gradient(135deg, rgba(6,182,212,0.04), rgba(59,130,246,0.06)))',
@@ -84,8 +83,8 @@ export function TrustBadge() {
           >
             <div
               style={{
-                width: 28,
-                height: 28,
+                width: 32,
+                height: 32,
                 borderRadius: '50%',
                 background: `linear-gradient(135deg, ${ICON_COLORS[i]}, ${ICON_COLORS[i]}dd)`,
                 display: 'flex',
@@ -95,10 +94,10 @@ export function TrustBadge() {
             >
               <Icon />
             </div>
-            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-high, #1A1D23)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high, #1A1D23)' }}>
               {title}
             </span>
-            <span style={{ fontSize: 10, color: 'var(--fg-dim, #94A3B8)', lineHeight: 1.3 }}>
+            <span style={{ fontSize: 11, color: 'var(--fg-dim, #94A3B8)', lineHeight: 1.3 }}>
               {desc}
             </span>
           </div>
