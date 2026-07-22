@@ -4,6 +4,17 @@
  * Format A (JSON): connectSse — 逐行解析，即时触发 onChunk（打字机效果）
  * Format B (Raw): connectRawSse — sseFetch 引擎 + \n\n 块分隔
  *
+ * @design 为何 Format A 不用标准 SSE \n\n 块分隔？
+ *
+ *   旧架构采用 RFC 标准的 \n\n 块分隔 + 延迟 done 队列，分层清晰，架构更"正确"。
+ *   但 Spring SseEmitter 内部虽以 \n\n 分隔事件，刷新到 TCP 流时却不保证每个事件
+ *   后都有完整空行，导致 parser 在等 \n\n 期间多个 chunk 堆在 buffer 里——
+ *   最终 AI 回复"等半天一下全出来"而非逐字流式。
+ *
+ *   企业端因早期无 Format B 需求，直接写了逐行解析，反而避开了这个问题。
+ *   2026-07-23 统一为逐行解析，用务实换流畅的用户体验。
+ *   若未来 Spring 修复或换用标准 SSE 实现，可恢复块分隔方案。
+ *
  * 所有页面/组件统一通过此模块处理 SSE，禁止内联 fetch + 手写解析。
  */
 import { getToken } from './storage';
