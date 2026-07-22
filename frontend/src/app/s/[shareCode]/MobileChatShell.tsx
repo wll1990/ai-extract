@@ -60,11 +60,7 @@ export default function MobileChatShell({
     onAfterSend();
   };
 
-  const [scenesExpanded, setScenesExpanded] = useState(false);
   const sceneTags = info.sceneTags || [];
-  const INITIAL_SCENE_COUNT = 4;
-  const hasMoreScenes = sceneTags.length > INITIAL_SCENE_COUNT;
-  const visibleScenes = scenesExpanded ? sceneTags : sceneTags.slice(0, INITIAL_SCENE_COUNT);
 
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
@@ -227,8 +223,8 @@ export default function MobileChatShell({
             {/* 首次打开且无消息 — 四层入口 */}
             {qa.messages.length === 0 && !qa.qaStreamText && (
               <div>
-                {/* ① 名片卡片 — Talk 独有：头像+文案+信任卡片一整块 */}
-                {mode === 'talk' && (
+                {/* ① 名片卡片 — Talk/QA 共享：头像+文案+信任卡片一整块 */}
+                {(mode === 'qa' || mode === 'talk') && (
                   <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-3xl bg-white py-5 px-4" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
                     {/* 头部：左头像 + 右文案 */}
                     <div className="flex items-start gap-4 mb-4">
@@ -261,23 +257,28 @@ export default function MobileChatShell({
                   </div>
                 )}
 
-                {/* ① QA 开场白 — openingMessage 从 DB */}
-                {mode === 'qa' && info.openingMessage && (
-                  <div className="flex justify-start mb-5 animate-[messageArrive_400ms_ease-out]">
-                    <div className="max-w-[82%] rounded-2xl rounded-bl-md bg-[#eef2ff] px-4 py-3">
-                      <p className="text-[11px] text-muted-foreground mb-0.5">{name}</p>
-                      <p className="text-[14px] text-foreground leading-relaxed">{info.openingMessage}</p>
+                {/* ② 引导语气泡 — QA 专属 */}
+                {mode === 'qa' && (
+                  <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center text-[13px] flex-shrink-0 shadow-sm mt-0.5">
+                      💡
+                    </div>
+                    <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
+                      <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
+                      <p className="text-[14px] text-foreground leading-relaxed"
+                        dangerouslySetInnerHTML={{
+                          __html: MODE_GUIDE.qa.replace(/\n/g, '<br/>'),
+                        }}
+                      />
                     </div>
                   </div>
                 )}
 
-                {/* ② 引导语气泡 — Talk 独有，带小头像 */}
+                {/* ② 引导语气泡 — Talk 独有 */}
                 {mode === 'talk' && (
-                  <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_400ms] opacity-0 [animation-fill-mode:forwards]">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-[11px] font-semibold text-[#2563EB] flex-shrink-0 shadow-sm overflow-hidden mt-0.5">
-                      {info.avatarUrl ? (
-                        <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" />
-                      ) : initial}
+                  <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
+                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-[13px] flex-shrink-0 shadow-sm mt-0.5">
+                      ☕
                     </div>
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
@@ -295,15 +296,14 @@ export default function MobileChatShell({
                 {/* 行动入口 — 按模式切换 */}
                 {mode === 'qa' && (
                   <div>
-                    <p className="text-[14px] font-semibold text-foreground mb-1">选一个你关心的场景</p>
-                    <p className="text-[12px] text-muted-foreground mb-3">我会给你基于真实销冠经验的答案，不是 AI 瞎编的</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(info.sceneTags || []).slice(0, 6).map((s, i) => {
+                    <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 snap-x"
+                      style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                      {(info.sceneTags || []).slice(0, 10).map((s, i) => {
                         const tints = ['#fef9f0', '#f5f3ff', '#f0fdf6', '#eff6ff'];
                         const tint = tints[i % 4];
                         return (
                           <button key={s.tag} onClick={() => qa.handleQuestionClick(`聊聊${s.tag}方面的经验？`)}
-                            className="flex flex-col items-start gap-1 rounded-xl px-3 py-3 text-left shadow-sm transition-transform active:scale-[0.97]"
+                            className="flex flex-col items-start gap-1 rounded-xl px-4 py-3 text-left shadow-sm transition-transform active:scale-[0.97] flex-shrink-0 w-[140px] snap-start"
                             style={{ background: tint, border: '1px solid rgba(0,0,0,0.04)' }}>
                             <span className="text-[13px] font-semibold text-foreground">
                               {i === 0 && <span className="inline-flex items-center rounded-pill bg-amber-100 text-[9px] font-medium text-amber-700 px-1.5 py-0.5 mr-1">推荐</span>}
@@ -314,11 +314,6 @@ export default function MobileChatShell({
                         );
                       })}
                     </div>
-                    {(info.sceneTags || []).length > 6 && (
-                      <button className="mt-3 w-full text-center text-[12px] text-muted-foreground py-2 rounded-lg hover:bg-[#eef2ff] transition-colors">
-                        更多场景 ›
-                      </button>
-                    )}
                     {(info.sceneTags || []).length === 0 && (
                       <div className="text-center text-xs text-muted-foreground-2 py-4">暂无场景标签</div>
                     )}
@@ -357,6 +352,7 @@ export default function MobileChatShell({
               const matchLabel = sim >= 50 ? '🏅精准匹配' : sim >= 30 ? '📎关联匹配' : '';
               const canTrace = !!(m.source || m.grainTags || sourceText);
 
+              if (m.role !== 'user' && !m.content) return null;
               if (m.role === 'user') {
                 return (
                   <div key={m.id} className="flex justify-end gap-2">

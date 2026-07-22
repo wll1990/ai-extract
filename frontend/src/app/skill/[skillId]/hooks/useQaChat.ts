@@ -144,7 +144,7 @@ export function useQaChat({
   const sendMessageImmediate = useCallback((text: string) => {
     if (isStreaming) return;
     setInputValue('');
-    setSuggestedQuestions([]);  // 新消息 → 清掉上一轮的推荐
+    setSuggestedQuestions([]);
     const ownerName = skillInfo?.ownerName || '销冠';
     const historyText = currentConvId ? undefined : messages.slice(-20).map(m =>
       `${m.role === 'user' ? '销售员' : ownerName}：${m.content}`
@@ -153,25 +153,24 @@ export function useQaChat({
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setIsStreaming(true);
-
-    const aiMsgId = `a-${Date.now()}`;
-    setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: '', source: '', grainId: '', grainIds: '' }]);
+    setQaStreamText('');
 
     let fullContent = '';
+    let sourceInfo: any = {};
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
-        setMessages((prev) => prev.map((m) => m.id === aiMsgId ? { ...m, content: fullContent } : m));
         setQaStreamText(fullContent);
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
-        setMessages((prev) => prev.map((m) => m.id === aiMsgId
-          ? { ...m, reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames } : m));
+        sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
       },
       onDone: () => {
+        const aiMsgId = `a-${Date.now()}`;
+        setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo }]);
         setQaStreamText('');
         setIsStreaming(false);
         loadConversations();
@@ -179,13 +178,11 @@ export function useQaChat({
       onError: () => {
         setQaStreamText('');
         setIsStreaming(false);
-        setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
       },
-      // RAG 无匹配时后端推送推荐问题；limit = 游客额度用尽
       onEvent: (type, data) => {
         if (type === 'limit') {
           setIsStreaming(false);
-          setMessages((prev) => prev.filter((m) => m.id !== aiMsgId && m.id !== userMsg.id));
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
           onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
           return;
         }
