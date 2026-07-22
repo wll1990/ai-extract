@@ -116,7 +116,7 @@ app:
 
   # ---- 分身分享 & C 端游客体系 ----
   share:
-    guest-message-limit: 5        # 游客免费消息额度（跨会话全局计数）
+    guest-message-limit: 25        # 游客免费消息额度（跨会话全局计数）
     guest-token-ttl-days: 7       # 游客 token 有效期（天），每次访问滑动续期
     c-user-token-ttl-days: 30     # C 端注册用户 token 有效期（天）
     guest-create-per-ip-hour: 20  # 单 IP 每小时可创建的游客数（防批量薅额度）
@@ -150,7 +150,7 @@ app:
   insight:
     embed-batch-size: 20          # 每天凌晨嵌入处理批大小
     cluster-threshold: 0.15       # 余弦距离聚类阈值（< 此值视为同类缺口）
-    min-attempts: 5               # 触发洞察的最低累计提问次数
+    min-attempts: 20               # 触发洞察的最低累计提问次数
 
 # ---- 日志 ----
 logging:

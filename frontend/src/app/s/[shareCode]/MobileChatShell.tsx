@@ -60,7 +60,11 @@ export default function MobileChatShell({
     onAfterSend();
   };
 
+  const [scenesExpanded, setScenesExpanded] = useState(false);
   const sceneTags = info.sceneTags || [];
+  const INITIAL_SCENE_COUNT = 4;
+  const hasMoreScenes = sceneTags.length > INITIAL_SCENE_COUNT;
+  const visibleScenes = scenesExpanded ? sceneTags : sceneTags.slice(0, INITIAL_SCENE_COUNT);
 
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);

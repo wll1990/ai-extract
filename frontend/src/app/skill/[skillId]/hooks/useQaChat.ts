@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { apiClient } from '@/lib/api/client';
 import { chat, submitFeedback, fetchRecommendedQuestions } from '@/lib/api/skill';
 import { useConversations } from './useConversations';
@@ -101,7 +102,7 @@ export function useQaChat({
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
-        setQaStreamText(fullContent);
+        flushSync(() => setQaStreamText(fullContent));
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
@@ -160,7 +161,7 @@ export function useQaChat({
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
-        setQaStreamText(fullContent);
+        flushSync(() => setQaStreamText(fullContent));
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
