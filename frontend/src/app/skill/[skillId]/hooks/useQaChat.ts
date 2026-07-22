@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef, useReducer } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { chat, submitFeedback, fetchRecommendedQuestions } from '@/lib/api/skill';
 import { useConversations } from './useConversations';
@@ -49,11 +49,7 @@ export function useQaChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  // useReducer — 逐 chunk dispatch，避免 React 18 auto-batching 合并渲染
-  // dispatch(null) 重置为空；dispatch(chunk) 追加
-  const [qaStreamText, dispatchStream] = useReducer(
-    (state: string, action: string | null) => action === null ? '' : state + action, ''
-  );
+  const [qaStreamText, setQaStreamText] = useState('');
   const [feedbackState, setFeedbackState] = useState<Record<string, 'up' | 'down' | null>>({});
 
   // QA 场景上下文
@@ -96,7 +92,7 @@ export function useQaChat({
     setMessages((prev) => [...prev, userMsg]);
     setInputValue('');
     setIsStreaming(true);
-    dispatchStream(null);
+    setQaStreamText('');
 
     const aiMsgId = `a-${Date.now()}`;
     let sourceInfo: any = {};
@@ -105,7 +101,7 @@ export function useQaChat({
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
-        dispatchStream(content);
+        setQaStreamText(fullContent);
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
@@ -114,7 +110,7 @@ export function useQaChat({
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
       },
       onDone: () => {
-        dispatchStream(null);
+        setQaStreamText('');
         setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo }]);
         setIsStreaming(false);
         loadConversations();
@@ -132,7 +128,7 @@ export function useQaChat({
       onEvent: (type, data) => {
         if (type === 'limit') {
           setIsStreaming(false);
-          dispatchStream(null);
+          setQaStreamText('');
           setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
           onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
           return;
@@ -157,14 +153,14 @@ export function useQaChat({
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: text };
     setMessages((prev) => [...prev, userMsg]);
     setIsStreaming(true);
-    dispatchStream(null);
+    setQaStreamText('');
 
     let fullContent = '';
     let sourceInfo: any = {};
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
-        dispatchStream(content);
+        setQaStreamText(fullContent);
       },
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
@@ -175,12 +171,12 @@ export function useQaChat({
       onDone: () => {
         const aiMsgId = `a-${Date.now()}`;
         setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo }]);
-        dispatchStream(null);
+        setQaStreamText('');
         setIsStreaming(false);
         loadConversations();
       },
       onError: () => {
-        dispatchStream(null);
+        setQaStreamText('');
         setIsStreaming(false);
       },
       onEvent: (type, data) => {
@@ -225,7 +221,7 @@ export function useQaChat({
     abortRef.current?.abort();
     setModeSelected(false);
     setMessages([]);
-    dispatchStream(null);
+    setQaStreamText('');
     setIsStreaming(false);
     setQaSceneContext('');
     setContextQuestions([]);
@@ -275,7 +271,7 @@ export function useQaChat({
     messages, setMessages,
     inputValue, setInputValue,
     isStreaming, setIsStreaming,
-    qaStreamText,
+    qaStreamText, setQaStreamText,
     suggestedQuestions, setSuggestedQuestions,
     feedbackState, setFeedbackState,
     qaSceneContext, setQaSceneContext,
