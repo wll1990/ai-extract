@@ -1,19 +1,10 @@
 /**
  * SSE 流式读取工具 — 项目唯一 SSE 解析入口
  *
- * 支持两种后端 SSE 格式：
- *   Format A (JSON):  data: {"type":"chunk","content":"..."}\n\n
- *   Format B (Raw):   event: chunk\ndata: raw text\n\n
+ * Format A (JSON): connectSse — 逐行解析，即时触发 onChunk（打字机效果）
+ * Format B (Raw): connectRawSse — sseFetch 引擎 + \n\n 块分隔
  *
  * 所有页面/组件统一通过此模块处理 SSE，禁止内联 fetch + 手写解析。
- *
- * 架构：
- *   sseFetch（纯 I/O 层，格式无关）
- *     → createJsonHandler / createRawHandler（事件解析 + 分发）
- *       → connectSse / connectRawSse（薄包装，对外 API）
- *
- * 渲染策略：每个 chunk 事件立即触发 onChunk —— 打字机效果。
- * done 事件延迟到同批所有 chunk 之后执行，彻底消除双重显示 bug。
  */
 import { getToken } from './storage';
 
@@ -71,20 +62,6 @@ function buildFetchOptions(options: SseConnectOptions, controller: AbortControll
   };
   if (options.body) fetchOptions.body = JSON.stringify(options.body);
   return fetchOptions;
-}
-
-function extractJsonFromBlock(block: string): string | null {
-  const lines = block.split('\n').filter(l => l.trim());
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('data:')) {
-      const afterData = trimmed.substring(5).trim();
-      if (afterData.startsWith('{')) return afterData;
-    } else if (trimmed.startsWith('{')) {
-      return trimmed;
-    }
-  }
-  return null;
 }
 
 // ====== 核心 I/O 层（格式无关） ======
@@ -209,101 +186,122 @@ export function sseFetch(
   return controller;
 }
 
-// ====== Format A 事件处理器（JSON SSE） ======
+// ====== Format A 调用入口（connectSse 已内联逐行解析） ======
 
+// 保留 SseHandler 给 Format B 的 connectRawSse 使用
 interface SseHandler {
   parseAndDispatch: ParseAndDispatch;
   flush: FlushDeferred;
 }
 
 /**
- * 创建 JSON 格式 SSE 事件处理器
+ * 连接 JSON 格式 SSE 端点 — 逐行解析，即时触发 onChunk（打字机效果）。
  *
- * chunk/content → 立即 onChunk（打字机效果）
- * done          → 延迟到 flush()（避免双重显示）
- * 其余事件      → 立即执行（行为不变）
- */
-function createJsonHandler(callbacks: SseCallbacks): SseHandler {
-  const deferredDones: Array<() => void> = [];
-
-  const parseAndDispatch = (block: string) => {
-    const jsonStr = extractJsonFromBlock(block);
-    if (!jsonStr) return;
-
-    let event: Record<string, unknown>;
-    try {
-      event = JSON.parse(jsonStr);
-    } catch {
-      console.warn('[SSE] JSON parse failed:', jsonStr);
-      return;
-    }
-
-    const type = event.type as string | undefined;
-    if (!type) return;
-
-    switch (type) {
-      case 'chunk':
-      case 'content':
-        callbacks.onChunk?.((event.content as string) || '');
-        break;
-
-      case 'done':
-        deferredDones.push(() => callbacks.onDone?.());
-        break;
-
-      case 'phase_change':
-        callbacks.onPhaseChange?.((event.content as string) || (event.phase as string) || '');
-        break;
-
-      case 'collect_update':
-        callbacks.onCollectUpdate?.((event.content as string) || (event.module as string) || '');
-        break;
-
-      case 'source':
-        callbacks.onSource?.(
-          (event.reportId as string) || '',
-          (event.reportTitle as string) || '',
-          (event.grainIds as string) || '',
-          (event.grainTags as string) || '',
-          event.grainCount != null ? Number(event.grainCount) : 0,
-          (event.avgScore as string) || '',
-          (event.avgSimilarity as string) || '',
-          (event.sourceNames as string) || '',
-        );
-        break;
-
-      case 'meta':
-        callbacks.onMeta?.((event.conversationId as string) || '');
-        break;
-
-      case 'error':
-        callbacks.onError?.((event.message as string) || '');
-        break;
-
-      default:
-        callbacks.onEvent?.(type, (event.data as Record<string, unknown>) || event);
-        break;
-    }
-  };
-
-  const flush = () => {
-    while (deferredDones.length > 0) {
-      deferredDones.shift()!();
-    }
-  };
-
-  return { parseAndDispatch, flush };
-}
-
-/**
- * 连接 JSON 格式 SSE 端点（Format A）
- *
- * 后端发送格式：data: {"type":"chunk","content":"..."}\n\n
- * 支持 type: chunk | content | phase_change | collect_update | source | meta | done | error
+ * 对齐 @aiextract/shared-ui/src/api/sse.ts 的逐行解析实现。
+ * 后端格式：data: {"type":"content","content":"..."}
  */
 export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks): AbortController {
-  const handler = createJsonHandler(callbacks);
-  return sseFetch(options, handler.parseAndDispatch, (msg) => callbacks.onError?.(msg), handler.flush);
+  const controller = new AbortController();
+  const signal = options.signal || controller.signal;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    ...options.headers,
+  };
+  const token = getToken();
+  if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+
+  fetch(options.url, {
+    method: options.method || 'POST',
+    headers,
+    signal,
+    credentials: 'include',
+    ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+  }).then(async (response) => {
+    if (!response.ok) { callbacks.onError?.(`HTTP ${response.status}`); return; }
+    if (!response.body) { callbacks.onError?.('不支持流式读取'); return; }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          let jsonStr: string | null = null;
+          if (trimmed.startsWith('data:')) {
+            const afterData = trimmed.substring(5).trim();
+            if (afterData.startsWith('{')) jsonStr = afterData;
+          } else if (trimmed.startsWith('{')) {
+            jsonStr = trimmed;
+          }
+          if (!jsonStr) continue;
+
+          let event: Record<string, unknown>;
+          try { event = JSON.parse(jsonStr); } catch { continue; }
+
+          const type = event.type as string | undefined;
+          if (!type) continue;
+
+          switch (type) {
+            case 'chunk':
+            case 'content':
+              callbacks.onChunk?.((event.content as string) || '');
+              break;
+            case 'done':
+              callbacks.onDone?.();
+              break;
+            case 'phase_change':
+              callbacks.onPhaseChange?.((event.content as string) || (event.phase as string) || '');
+              break;
+            case 'collect_update':
+              callbacks.onCollectUpdate?.((event.content as string) || (event.module as string) || '');
+              break;
+            case 'source':
+              callbacks.onSource?.(
+                (event.reportId as string) || '',
+                (event.reportTitle as string) || '',
+                (event.grainIds as string) || '',
+                (event.grainTags as string) || '',
+                event.grainCount != null ? Number(event.grainCount) : 0,
+                (event.avgScore as string) || '',
+                (event.avgSimilarity as string) || '',
+                (event.sourceNames as string) || '',
+              );
+              break;
+            case 'meta':
+              callbacks.onMeta?.((event.conversationId as string) || '');
+              break;
+            case 'error':
+              callbacks.onError?.((event.message as string) || '');
+              break;
+            default:
+              callbacks.onEvent?.(type, (event.data as Record<string, unknown>) || event);
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        callbacks.onError?.('连接中断，请检查网络');
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }).catch((err) => {
+    if (err.name !== 'AbortError') {
+      callbacks.onError?.('网络错误，请检查连接');
+    }
+  });
+
+  return controller;
 }
 
 /**
