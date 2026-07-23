@@ -66,6 +66,8 @@ public class SkillService {
     private final PracticeDemoService practiceDemoService;
     private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
     private final SkillEvaluationRepository skillEvaluationRepository;
+    @org.springframework.beans.factory.annotation.Value("${storage.local.path:}")
+    private String storageBasePath;
 
     // ==================== Helper methods（ChatStreamService 复用） ====================
 
@@ -989,5 +991,40 @@ public class SkillService {
             m.put("createdAt", e.getCreatedAt() != null ? e.getCreatedAt().toString() : null);
             return m;
         }).collect(Collectors.toList());
+    }
+
+    /**
+     * 上传分身头像，保存文件并更新 skill.avatarUrl。
+     */
+    @Transactional
+    public Map<String, String> uploadAvatar(String skillId, org.springframework.web.multipart.MultipartFile file) {
+        Skill skill = skillRepository.findById(UUID.fromString(skillId))
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "分身不存在"));
+
+        // 构建目标路径
+        String basePath = storageBasePath != null && !storageBasePath.isBlank() ? storageBasePath : "data/files";
+        String dir = basePath + "/avatars/" + skillId + "/";
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
+        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+
+        java.io.File destDir = new java.io.File(dir).getAbsoluteFile();
+        if (!destDir.exists()) destDir.mkdirs();
+        java.io.File dest = new java.io.File(destDir, safeName);
+
+        try {
+            file.transferTo(dest);
+        } catch (Exception e) {
+            log.error("头像保存失败, skillId={}, path={}", skillId, dest.getAbsolutePath(), e);
+            throw new RuntimeException("头像保存失败: " + e.getMessage());
+        }
+
+        // 写入相对路径作为 URL
+        String avatarUrl = "/files/avatars/" + safeName;
+        skill.setAvatarUrl(avatarUrl);
+        skillRepository.save(skill);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("avatarUrl", avatarUrl);
+        return result;
     }
 }

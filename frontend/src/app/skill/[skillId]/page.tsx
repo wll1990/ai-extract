@@ -14,7 +14,7 @@ import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import SceneTagBar from '@/components/skill/SceneTagBar';
 import { getOrCreateSkillShare, toggleSkillShare } from '@/lib/api/skill';
-import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
 
@@ -56,7 +56,7 @@ export default function SkillChatPage() {
       .then(r => r.json())
       .then(d => {
         if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage);
-        if (d?.data?.avatarUrl) setAvatarUrl(d.data.avatarUrl);
+        setAvatarUrl(d?.data?.avatarUrl || null);
       })
       .catch(() => {})
       .finally(() => setDetailFetched(true));
@@ -89,9 +89,7 @@ export default function SkillChatPage() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* 顶栏 — sticky 固定，滚动时不隐藏 */}
         <header className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface-2 flex-shrink-0 sticky top-0 z-10">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-xs font-semibold text-white flex-shrink-0 overflow-hidden shadow-sm">
-            {initial}
-          </div>
+          <ChatAvatar role="ai" src={avatarUrl || undefined} size={32} />
 
           <div className="min-w-0 leading-tight">
             <p className="text-sm font-semibold text-foreground truncate">{ownerName}</p>
@@ -109,6 +107,7 @@ export default function SkillChatPage() {
             ].map(m => (
               <button key={m.key}
                 onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
                   if (m.key === 'practice') { setChatMode('practice'); setModeSelected(true); resetPractice(); return; }
                   qa.setMessages([]); qa.setCurrentConvId(''); setChatMode(m.key);
                   if (m.key === 'talk') qa.handleTalkStart(); if (m.key === 'qa') qa.handleQaModeSelect();
@@ -133,17 +132,19 @@ export default function SkillChatPage() {
           {chatMode === 'practice' && !practiceSceneTag && (
             <div className="mx-auto max-w-[720px] space-y-4 px-4 pt-4">
               {/* ① 名片卡片 — 同 QA/Talk */}
-              <div className="animate-[messageArrive_500ms_ease-out] rounded-3xl bg-white py-7 px-7" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
-                <div className="flex items-start gap-6 mb-5">
-                  <div className="w-[80px] h-[80px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-[32px] font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
-                    {avatarUrl ? <img src={avatarUrl} alt={ownerName} className="w-full h-full object-cover" /> : initial}
-                  </div>
-                  <div className="flex-1 pt-1">
-                    <h3 className="text-[19px] font-bold text-foreground leading-tight">
+              <div className="animate-[messageArrive_500ms_ease-out] rounded-[26px] bg-white py-7 px-[34px] border border-[#e1e7ff] overflow-hidden"
+                style={{
+                  background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                  boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+                }}>
+                <div className="grid grid-cols-[250px_1fr] items-center gap-6 max-sm:grid-cols-1 max-sm:text-center max-sm:gap-2">
+                  <PortraitCard src={avatarUrl || undefined} alt={ownerName} />
+                  <div>
+                    <h3 className="text-[29px] font-bold text-foreground leading-tight" style={{ letterSpacing: '-1px' }}>
                       {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{ownerName}</span><span className="text-base ml-0.5">✨</span>
                     </h3>
-                    <span className="inline-block mt-2 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">{TALK_NAME_CARD.roleTag}</span>
-                    <p className="mt-3 text-[14px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                    <span className="inline-block mt-2 text-[14px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">{TALK_NAME_CARD.roleTag}</span>
+                    <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
                       {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
                         i < arr.length - 1
                           ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
@@ -152,16 +153,12 @@ export default function SkillChatPage() {
                     </p>
                   </div>
                 </div>
-                <div className="pt-4 border-t border-[#E8ECF1]/40">
-                  <TrustBadge />
-                </div>
+                <TrustBadge />
               </div>
 
               {/* ② 引导语气泡 — Practice 专属 */}
               <div className="flex items-start gap-2 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-                  <span className="text-[13px]">🎯</span>
-                </div>
+                <ChatAvatar role="ai" src={avatarUrl || undefined} size={28} />
                 <div className="max-w-[78%] rounded-2xl rounded-tl-sm bg-[#f0fdf4] border border-[#dcfce7] px-4 py-3">
                   <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
                   <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{MODE_GUIDE.practice}</p>
@@ -196,25 +193,25 @@ export default function SkillChatPage() {
                   <>
                     {/* ① 名片卡片 — QA/Talk 共享 */}
                     {(chatMode === 'qa' || chatMode === 'talk') && (
-                      <div className="animate-[messageArrive_500ms_ease-out] rounded-3xl bg-white py-7 px-7" style={{ boxShadow: '0 4px 24px rgba(0,0,0,0.05)' }}>
+                      <div className="animate-[messageArrive_500ms_ease-out] rounded-[26px] bg-white py-7 px-[34px] border border-[#e1e7ff] overflow-hidden"
+                        style={{
+                          background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                          boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+                        }}>
                         {/* 头部：左头像 + 右文案 */}
-                        <div className="flex items-start gap-6 mb-5">
-                          <div className="w-[80px] h-[80px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-[32px] font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
-                            {avatarUrl ? (
-                              <img src={avatarUrl} alt={ownerName} className="w-full h-full object-cover" />
-                            ) : initial}
-                          </div>
-                          <div className="flex-1 pt-1">
+                        <div className="grid grid-cols-[250px_1fr] items-center gap-6 max-sm:grid-cols-1 max-sm:text-center max-sm:gap-2">
+                          <PortraitCard src={avatarUrl || undefined} alt={ownerName} />
+                          <div>
                             {/* 第一行：你好我是 + 名字蓝色 */}
-                            <h3 className="text-[19px] font-bold text-foreground leading-tight">
+                            <h3 className="text-[29px] font-bold text-foreground leading-tight" style={{ letterSpacing: '-1px' }}>
                               {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{ownerName}</span><span className="text-base ml-0.5">✨</span>
                             </h3>
                             {/* 第二行：定位标签 */}
-                            <span className="inline-block mt-2 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">
+                            <span className="inline-block mt-2 text-[14px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">
                               {TALK_NAME_CARD.roleTag}
                             </span>
                             {/* 第三行：价值主张，关键词红色 */}
-                            <p className="mt-3 text-[14px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                            <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
                               {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
                                 i < arr.length - 1
                                   ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
@@ -222,26 +219,18 @@ export default function SkillChatPage() {
                               )}
                             </p>
                             {ownerTitle && (
-                              <p className="text-[13px] text-muted-foreground mt-2.5 font-medium">{ownerTitle}</p>
+                              <p className="text-[14px] text-muted-foreground mt-2.5 font-medium">{ownerTitle}</p>
                             )}
                           </div>
                         </div>
-
-                        {/* 分隔 + 信任卡片 */}
-                        <div className="pt-4 border-t border-[#E8ECF1]/40">
-                          <TrustBadge />
-                        </div>
+                        <TrustBadge />
                       </div>
                     )}
 
                     {/* ② 引导语气泡 — QA 专属 */}
                     {chatMode === 'qa' && (
                       <div className="flex items-start gap-2 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-                        <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/><path d="M11 8v6"/><path d="M8 11h6"/>
-                          </svg>
-                        </div>
+                        <ChatAvatar role="ai" src={avatarUrl || undefined} size={28} />
                         <div className="max-w-[78%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                           <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
                           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{MODE_GUIDE.qa}</p>
@@ -252,9 +241,7 @@ export default function SkillChatPage() {
                     {/* ② 引导语气泡 — Talk 专属 */}
                     {chatMode === 'talk' && (
                       <div className="flex items-start gap-2.5 animate-[messageArrive_400ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-                        <div className="w-7 h-7 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 shadow-sm mt-0.5">
-                          {initial}
-                        </div>
+                        <ChatAvatar role="ai" src={avatarUrl || undefined} size={28} />
                         <div className="max-w-[78%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                           <p className="text-xs text-muted-foreground mb-1">{ownerName}</p>
                           <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">
@@ -347,9 +334,7 @@ export default function SkillChatPage() {
                     <div key={msg.id}>
                       {isAi ? (
                         <div className="flex items-start gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 shadow-sm mt-0.5">
-                            {ownerName[0]}
-                          </div>
+                          <ChatAvatar role="ai" src={avatarUrl || undefined} size={28} />
                           <div className="max-w-[80%]">
                             {/* 主气泡 */}
                             <div className="rounded-2xl rounded-tl-sm bg-white border border-[#E8ECF1] px-4 py-3 text-sm text-[#1A1D23] leading-relaxed shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
@@ -433,12 +418,7 @@ export default function SkillChatPage() {
                           <div className="max-w-[80%] rounded-2xl rounded-tr-sm bg-[#2563EB] text-white px-4 py-2.5 text-sm leading-relaxed shadow-[0_1px_3px_rgba(37,99,235,0.15)]">
                             <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                           </div>
-                          <div className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full shadow-sm"
-                            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" className="h-3.5 w-3.5">
-                              <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
-                            </svg>
-                          </div>
+                          <ChatAvatar role="user" size={28} />
                         </div>
                       )}
                     </div>
@@ -448,9 +428,7 @@ export default function SkillChatPage() {
                 {/* 流式文本 */}
                 {qa.qaStreamText && (
                   <div className="flex items-start gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-navy to-primary flex items-center justify-center text-[11px] font-semibold text-white flex-shrink-0 shadow-sm mt-0.5">
-                      {ownerName[0]}
-                    </div>
+                    <ChatAvatar role="ai" src={avatarUrl || undefined} size={28} />
                     <div className="flex-1 min-w-0">
                       <div className="rounded-2xl rounded-tl-sm bg-white border border-[#E8ECF1] px-4 py-3 text-sm text-[#1A1D23] leading-relaxed shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                         <p className="whitespace-pre-wrap break-words">{qa.qaStreamText}

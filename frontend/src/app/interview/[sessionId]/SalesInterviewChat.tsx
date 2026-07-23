@@ -27,8 +27,8 @@ const COLLECT_LABELS: Record<string, string> = {
 };
 
 const PHASE_ADVANCE_LABELS: Record<string, string> = {
-  opening: '我开始讲了 →', storytelling: '故事讲完了，提炼方法 →',
-  modeling: '步骤清楚了，说说边界 →', closing: '都聊完了，生成报告 ✓',
+  opening: '开始萃取 →', storytelling: '故事讲完了，进入下一阶段 →',
+  modeling: '步骤清楚了，提炼方法论 →', closing: '聊完了，生成萃取报告 ✓',
 };
 
 const PHASE_ADVANCE_TIPS: Record<string, string> = {
@@ -62,6 +62,8 @@ export function SalesInterviewChat() {
   const [ending, setEnding] = useState(false);
   const [advancing, setAdvancing] = useState(false);
   const [thinking, setThinking] = useState(false);
+  const [skipTopicClicked, setSkipTopicClicked] = useState(false);
+  const [newAngleClicked, setNewAngleClicked] = useState(false);
 
   const heroTraits = [
     { icon: '♡', title: '充分理解你', desc: '像朋友一样倾听，尊重你的经历与思考' },
@@ -108,21 +110,34 @@ export function SalesInterviewChat() {
 
   // 隐式反馈：不想聊这个话题
   const handleSkipTopic = useCallback(() => {
+    setSkipTopicClicked(true);
+    setTimeout(() => setSkipTopicClicked(false), 1500);
     h.setInputValue('[换个话题]');
     h.handleSend();
   }, [h]);
 
   // 隐式反馈：换个角度
   const handleNewAngle = useCallback(() => {
+    setNewAngleClicked(true);
+    setTimeout(() => setNewAngleClicked(false), 1500);
     h.setInputValue('[换个角度聊聊]');
     h.handleSend();
   }, [h]);
 
   // Pause
   const handlePause = useCallback(async () => {
-    try { await pauseSession(sessionId); router.push('/interview/create'); }
-    catch (err) { console.error('暂停失败:', err); }
-  }, [sessionId, router]);
+    try {
+      await pauseSession(sessionId);
+      router.push(`/interview/create?_=${Date.now()}`);
+    } catch (err) {
+      const msg = (err as Error)?.message || '';
+      if (msg.includes('不允许暂停')) {
+        h.setErrorBanner('访谈还没正式开始，请先发送一条消息后再暂停');
+      } else {
+        h.setErrorBanner('暂停失败，请重试');
+      }
+    }
+  }, [sessionId, router, h.setErrorBanner]);
 
   const handleTranscription = useCallback((text: string) => { h.setInputValue(prev => prev + text); }, [h.setInputValue]);
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); h.handleSend(); } }, [h.handleSend]);
@@ -158,8 +173,12 @@ export function SalesInterviewChat() {
           </span>
           <div className="flex items-center gap-2">
             {!state.isCompleted && (
-              <button type="button" onClick={handlePause} disabled={h.isStreaming}
-                className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-primary-light disabled:opacity-40 transition-colors" title="暂停访谈">⏸</button>
+              <div className="flex flex-col items-center gap-0.5">
+                <button type="button" onClick={handlePause} disabled={h.isStreaming}
+                  className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-primary-light disabled:opacity-40 transition-colors" title="保存进度并退出，随时回来继续">⏸</button>
+                <span className="text-[9px] text-muted-foreground-2 leading-none">稍后继续</span>
+                <span className="text-[9px] text-muted-foreground-2 leading-none">保存并退出</span>
+              </div>
             )}
             <div className="relative">
               <button type="button" onClick={() => h.setShowMoreMenu(!h.showMoreMenu)}
@@ -176,6 +195,50 @@ export function SalesInterviewChat() {
           </div>
         </div>
       </div>
+
+      {/* 进度条 */}
+      {state.session?.phases && state.session.phases.length > 0 && (
+        <div className="sticky top-[52px] z-20 border-b border-border bg-surface px-4 sm:px-6 py-2">
+          <div className="mx-auto max-w-[720px]">
+            {/* 阶段行 */}
+            <div className="flex items-center gap-1.5">
+              {state.session.phases.map((p, i) => {
+                const isDone = p.status === 'completed';
+                const isCurrent = p.status === 'current' || p.name === state.session?.currentPhase;
+                const dotColor = isDone ? 'text-green-500' : isCurrent ? 'text-amber-500' : 'text-muted-foreground-2';
+                const dot = isDone ? '●' : isCurrent ? '◉' : '○';
+                return (
+                  <React.Fragment key={p.name}>
+                    <span className={`text-xs ${dotColor}`}>{dot} {p.label}</span>
+                    {i < state.session!.phases.length - 1 && (
+                      <span className="text-muted-foreground-2 text-[10px]">─</span>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+            {/* 模块行 */}
+            {state.session?.collectStatus && (
+              <div className="mt-1 text-[11px] text-muted-foreground">
+                {(() => {
+                  const cs = state.session.collectStatus;
+                  const entries = Object.entries(cs || {});
+                  const done = entries.filter(([,v]) => v === 'collected').map(([k]) => COLLECT_LABELS[k] || k);
+                  const next = entries.filter(([,v]) => v !== 'collected').map(([k]) => COLLECT_LABELS[k] || k);
+                  return (
+                    <>
+                      已采集 {done.length}/6 模块
+                      {done.length > 0 && <span className="text-green-600"> {done.join('、')}</span>}
+                      {next.length > 0 && <span className="text-muted-foreground-2"> · 下一步 </span>}
+                      {next.length > 0 && <span className="text-amber-600">{next[0]}</span>}
+                    </>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 消息区 */}
       <div className="flex flex-1 overflow-hidden">
@@ -229,7 +292,7 @@ export function SalesInterviewChat() {
                     <button type="button" onClick={() => router.push(`/report/${state.completionReportId}/done`)}
                       className="rounded-lg bg-foreground px-6 py-2.5 text-sm text-white hover:bg-primary transition-colors">查看萃取报告 →</button>
                   )}
-                  <button type="button" onClick={() => router.push('/skill')}
+                  <button type="button" onClick={() => router.push('/admin/skills')}
                     className="rounded-lg border border-border px-6 py-2.5 text-sm text-muted-foreground hover:text-foreground hover:bg-primary-light transition-colors">返回分身广场</button>
                 </div>
               </div>
@@ -254,11 +317,11 @@ export function SalesInterviewChat() {
           <div className="mx-auto flex max-w-[720px] justify-center gap-2 mb-2 sm:mb-3">
             <button type="button" onClick={handleSkipTopic} disabled={h.isStreaming}
               className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors disabled:opacity-40 min-h-[36px]">
-              🙅 不想聊这个
+              {skipTopicClicked ? '✓ 已切换话题' : '🙅 不想聊这个'}
             </button>
             <button type="button" onClick={handleNewAngle} disabled={h.isStreaming}
               className="rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-muted-foreground transition-colors disabled:opacity-40 min-h-[36px]">
-              🔄 换个角度
+              {newAngleClicked ? '✓ 已切换角度' : '🔄 换个角度'}
             </button>
           </div>
 
@@ -276,7 +339,7 @@ export function SalesInterviewChat() {
               disabled={advancing || h.isStreaming}
               className={`rounded-full border px-5 py-2 text-sm font-medium transition-all disabled:opacity-40 min-h-[44px] ${
                 h.suggestAdvance
-                  ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse ring-2 ring-amber-400 hover:bg-amber-100'
+                  ? 'border-primary bg-primary-light text-primary animate-pulse ring-2 ring-primary hover:bg-primary-light/80'
                   : 'border-border text-muted-foreground hover:border-foreground hover:text-foreground'
               }`}
             >

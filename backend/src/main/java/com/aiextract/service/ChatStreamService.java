@@ -152,6 +152,8 @@ public class ChatStreamService {
             return Flux.just(ChatChunk.error("分身未发布"));
         }
 
+        // 游客拦截已迁移至 QueryGate.audit() → Layer 4（Controller 层前置执行）
+        // 此处仅保留 null check 向后兼容（Controller 层未注入 QueryGate 时仍走老逻辑）
         Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
         if (guestBlock != null) {
             TraceContext.clear();
@@ -290,6 +292,7 @@ public class ChatStreamService {
             return Flux.just(ChatChunk.error(ErrorMessages.SKILL_NOT_FOUND));
         }
 
+        // 游客拦截已迁移至 QueryGate.audit() → Layer 4（Controller 层前置执行）
         Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
         if (guestBlock != null) {
             return guestBlock;

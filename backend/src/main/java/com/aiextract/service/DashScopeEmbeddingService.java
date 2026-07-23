@@ -1,6 +1,7 @@
 package com.aiextract.service;
 
 import com.aiextract.common.TraceContext;
+import com.aiextract.config.TokenContext;
 import com.aiextract.model.ExperienceGrain;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +30,7 @@ public class DashScopeEmbeddingService {
     private final RestTemplate rest = new RestTemplate();
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final TokenUsageService tokenUsageService;
 
     @Value("${ai.qwen.api-key}")
     private String apiKey;
@@ -62,6 +64,9 @@ public class DashScopeEmbeddingService {
                 JsonNode vec = embeddings.get(0).path("embedding");
                 float[] result = new float[vec.size()];
                 { for (int i = 0; i < vec.size(); i++) result[i] = (float) vec.get(i).asDouble(); }
+
+                int totalTokens = root.path("usage").path("total_tokens").asInt(0);
+                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0);
 
                 log.info("向量模型返回 dim={} {}ms text={}",
                     result.length, System.currentTimeMillis() - t0,
@@ -118,6 +123,8 @@ public class DashScopeEmbeddingService {
                         allResults.add(arr);
                     }
                 }
+                int totalTokens = root.path("usage").path("total_tokens").asInt(0);
+                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0);
             }
 
             log.info("批量向量 dim={} count={} chunks={} {}ms",

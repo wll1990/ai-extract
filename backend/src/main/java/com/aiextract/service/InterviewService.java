@@ -129,6 +129,16 @@ public class InterviewService {
         UUID spaceId = parseUuid(request.getSpaceId());
         log.info("创建访谈会话, spaceId: {}, topic: {}, userId: {}", spaceId, request.getTopic(), userId);
 
+        // 0. 检查是否已有进行中的同类型访谈 — 两类独立，互不阻塞
+        List<UUID> userSpaceIds = spaceRepository.findByUserId(userId)
+            .stream().map(com.aiextract.model.Space::getId).toList();
+        long activeCount = sessionRepository.countBySpaceIdInAndStatusInAndInterviewType(
+            userSpaceIds, ACTIVE_STATUSES, interviewType);
+        if (activeCount > 0) {
+            throw new BusinessException(HttpStatus.CONFLICT.value(),
+                "你已有进行中的访谈，请先完成或放弃后再创建新的");
+        }
+
         // 1. 解析萃取师：有指定 → 单个萃取师名称；无 → "综合"
         String expertSkillUsed = resolveExpertSkillUsed(request.getExpertSkillId());
         UUID expertSkillId = parseExpertSkillId(request.getExpertSkillId());
@@ -161,8 +171,7 @@ public class InterviewService {
                 .topic(request.getTopic())
                 .status(STATUS_CREATED)
                 .currentPhase(PHASE_OPENING)
-                .collectCaseStory(false).collectSteps(false).collectDecision(false)
-                .collectMindset(false).collectBoundary(false).collectChecklist(false)
+                .collectStatus("{}")
                 .inviteCode(request.getInviteCode())
                 .expertSkillId(expertSkillId)
                 .interviewType(interviewType)
@@ -484,22 +493,20 @@ public class InterviewService {
      * </ul>
      */
     void markCollectForPhase(InterviewSession session, String phase) {
+        Map<String, String> cs = parseCollectStatus(session.getCollectStatus());
         switch (phase) {
             case PHASE_OPENING:
-                session.setCollectCaseStory(true);
-                break;
+                cs.put("caseStory", "collected"); break;
             case PHASE_STORYTELLING:
-                session.setCollectSteps(true);
-                session.setCollectDecision(true);
-                break;
+                cs.put("steps", "collected");
+                cs.put("decision", "collected"); break;
             case PHASE_MODELING:
-                session.setCollectMindset(true);
-                session.setCollectBoundary(true);
-                break;
+                cs.put("mindset", "collected");
+                cs.put("boundary", "collected"); break;
             case PHASE_CLOSING:
-                session.setCollectChecklist(true);
-                break;
+                cs.put("checklist", "collected"); break;
         }
+        session.setCollectStatus(toCollectJson(cs));
     }
 
     /**
@@ -551,12 +558,9 @@ public class InterviewService {
             return null;
         }
 
-        session.setCollectCaseStory(true);
-        session.setCollectSteps(true);
-        session.setCollectDecision(true);
-        session.setCollectMindset(true);
-        session.setCollectBoundary(true);
-        session.setCollectChecklist(true);
+        Map<String, String> cs = new LinkedHashMap<>();
+        COLLECT_MODULE_KEYS.forEach(k -> cs.put(k, "collected"));
+        session.setCollectStatus(toCollectJson(cs));
         session.setStatus(STATUS_COMPLETED);
         session.setCurrentPhase(PHASE_CLOSING);
         session.setFinishedAt(LocalDateTime.now());
@@ -585,10 +589,11 @@ public class InterviewService {
         ctx.put("domain", session.getDomain());
         ctx.put("phase", session.getCurrentPhase());
         ctx.put("phaseLabel", phaseLabel(session.getCurrentPhase()));
-        ctx.put("collectCaseStory", session.getCollectCaseStory());
-        ctx.put("collectSteps", session.getCollectSteps());
-        ctx.put("collectMindset", session.getCollectMindset());
-        ctx.put("collectBoundary", session.getCollectBoundary());
+        Map<String, String> cs = parseCollectStatus(session.getCollectStatus());
+        ctx.put("collectCaseStory", isCollected(cs, "caseStory"));
+        ctx.put("collectSteps", isCollected(cs, "steps"));
+        ctx.put("collectMindset", isCollected(cs, "mindset"));
+        ctx.put("collectBoundary", isCollected(cs, "boundary"));
         ctx.put("interviewType", session.getInterviewType());
         return ctx;
     }
@@ -849,12 +854,13 @@ public class InterviewService {
 
         // 构建模板模块预览
         List<InterviewSessionResponse.ModuleInfo> modules = new ArrayList<>();
-        modules.add(buildModuleInfo("案例故事", session.getCollectCaseStory()));
-        modules.add(buildModuleInfo("核心步骤", session.getCollectSteps()));
-        modules.add(buildModuleInfo("关键决策", session.getCollectDecision()));
-        modules.add(buildModuleInfo("专家心法", session.getCollectMindset()));
-        modules.add(buildModuleInfo("适用边界", session.getCollectBoundary()));
-        modules.add(buildModuleInfo("检查清单", session.getCollectChecklist()));
+        Map<String, String> cs = parseCollectStatus(session.getCollectStatus());
+        modules.add(buildModuleInfo("案例故事", isCollected(cs, "caseStory")));
+        modules.add(buildModuleInfo("核心步骤", isCollected(cs, "steps")));
+        modules.add(buildModuleInfo("关键决策", isCollected(cs, "decision")));
+        modules.add(buildModuleInfo("专家心法", isCollected(cs, "mindset")));
+        modules.add(buildModuleInfo("适用边界", isCollected(cs, "boundary")));
+        modules.add(buildModuleInfo("检查清单", isCollected(cs, "checklist")));
 
         InterviewSessionResponse.TemplatePreview templatePreview =
                 InterviewSessionResponse.TemplatePreview.builder().modules(modules).build();
@@ -862,12 +868,12 @@ public class InterviewService {
         // 构建采集状态
         InterviewSessionResponse.CollectStatus collectStatus =
                 InterviewSessionResponse.CollectStatus.builder()
-                        .caseStory(getCollectStatus(session.getCollectCaseStory()))
-                        .steps(getCollectStatus(session.getCollectSteps()))
-                        .decision(getCollectStatus(session.getCollectDecision()))
-                        .mindset(getCollectStatus(session.getCollectMindset()))
-                        .boundary(getCollectStatus(session.getCollectBoundary()))
-                        .checklist(getCollectStatus(session.getCollectChecklist()))
+                        .caseStory(cs.getOrDefault("caseStory", "pending"))
+                        .steps(cs.getOrDefault("steps", "pending"))
+                        .decision(cs.getOrDefault("decision", "pending"))
+                        .mindset(cs.getOrDefault("mindset", "pending"))
+                        .boundary(cs.getOrDefault("boundary", "pending"))
+                        .checklist(cs.getOrDefault("checklist", "pending"))
                         .build();
 
         return InterviewSessionResponse.builder()
@@ -917,9 +923,40 @@ public class InterviewService {
                 .build();
     }
 
-    /** Boolean 采集状态 → 字符串状态 */
-    private String getCollectStatus(Boolean collected) {
-        return Boolean.TRUE.equals(collected) ? "completed" : "pending";
+    // ── collect_status JSONB 辅助方法 ──
+
+    private static final List<String> COLLECT_MODULE_KEYS = List.of(
+        "caseStory", "steps", "decision", "mindset", "boundary", "checklist");
+
+    /** JSONB collect_status → Map。null/"{}" 时返回全 pending。一次解析，下游复用 */
+    private Map<String, String> parseCollectStatus(String json) {
+        if (json == null || json.isBlank() || "{}".equals(json)) {
+            Map<String, String> m = new LinkedHashMap<>();
+            COLLECT_MODULE_KEYS.forEach(k -> m.put(k, "pending"));
+            return m;
+        }
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<LinkedHashMap<String, String>>() {});
+        } catch (Exception e) {
+            log.warn("解析 collectStatus 失败: {}", e.getMessage());
+            Map<String, String> m = new LinkedHashMap<>();
+            COLLECT_MODULE_KEYS.forEach(k -> m.put(k, "pending"));
+            return m;
+        }
+    }
+
+    /** Map → JSONB 字符串。序列化失败时记录日志并返回兜底值 */
+    private String toCollectJson(Map<String, String> map) {
+        try { return objectMapper.writeValueAsString(map); }
+        catch (Exception e) {
+            log.warn("序列化 collectStatus 失败: {}", e.getMessage());
+            return "{}";
+        }
+    }
+
+    /** "collected"/"pending" → Boolean */
+    private Boolean isCollected(Map<String, String> cs, String key) {
+        return "collected".equals(cs.get(key));
     }
 
     /**

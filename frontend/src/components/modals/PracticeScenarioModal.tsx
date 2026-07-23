@@ -5,13 +5,19 @@ import { API_BASE } from '@/lib/api/client';
 import { connectRawSse } from '@/lib/sse';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 
+type GrainInfo = {
+  id?: string; sceneTag?: string; sceneDescription?: string;
+  expertThought?: string; standardScript?: string; commonMistakes?: string;
+  qualityScore?: number;
+};
+
 interface Props {
   skillId: string;
-  grain: {
-    id: string; sceneTag: string; sceneDescription: string;
-    expertThought: string; standardScript: string; commonMistakes: string;
-    qualityScore?: number;
-  };
+  grain: GrainInfo;
+  grains: GrainInfo[];
+  grainIdx: number;
+  onPrev: () => void;
+  onNext: () => void;
   onClose: () => void;
 }
 
@@ -45,7 +51,7 @@ function buildOpening(sceneDescription: string): string {
   return `你好，我这边是做${prefix}的，最近在考虑换方案，你能介绍一下吗？`;
 }
 
-export default function PracticeScenarioModal({ skillId, grain, onClose }: Props) {
+export default function PracticeScenarioModal({ skillId, grain, grains, grainIdx, onPrev, onNext, onClose }: Props) {
   const [mode, setMode] = useState<'with_skill' | 'without_skill'>('with_skill');
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -137,18 +143,35 @@ export default function PracticeScenarioModal({ skillId, grain, onClose }: Props
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
       <div className="bg-surface-2 rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="px-6 py-3 border-b">
+          {/* 顶行：返回 + 场景导航 + 关闭 */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-3">
+              <button onClick={onClose} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <span>←</span> 返回场景列表
+              </button>
+              {/* 场景导航 */}
+              <div className="flex items-center gap-1 ml-2 pl-2 border-l">
+                <button onClick={onPrev} disabled={grainIdx === 0}
+                  className="px-2 py-0.5 text-xs border rounded hover:bg-surface disabled:opacity-20 disabled:cursor-not-allowed">◀</button>
+                <span className="text-xs text-muted-foreground-2 min-w-[36px] text-center">{grainIdx + 1}/{grains.length}</span>
+                <button onClick={onNext} disabled={grainIdx >= grains.length - 1}
+                  className="px-2 py-0.5 text-xs border rounded hover:bg-surface disabled:opacity-20 disabled:cursor-not-allowed">▶</button>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {grain.qualityScore != null && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                  grain.qualityScore! >= 4 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                }`}>⭐ {grain.qualityScore!.toFixed(1)}</span>
+              )}
+              <button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-lg">✕</button>
+            </div>
+          </div>
+          {/* 标题行 */}
           <div>
             <h2 className="text-lg font-bold">🎯 场景对练：{grain.sceneTag}</h2>
             <p className="text-xs text-muted-foreground-2 mt-0.5">{grain.sceneDescription?.substring(0, 80)}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            {grain.qualityScore != null && (
-              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                grain.qualityScore >= 4 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
-              }`}>⭐ {grain.qualityScore.toFixed(1)}</span>
-            )}
-            <button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
           </div>
         </div>
 

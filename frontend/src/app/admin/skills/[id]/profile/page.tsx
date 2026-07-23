@@ -9,6 +9,8 @@ export default function ProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Record<string, string>>({});
   const [supp, setSupp] = useState<Record<string, string>>({});
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -18,6 +20,7 @@ export default function ProfilePage() {
       apiClient<any>(`/admin/skills/${id}/supplement`),
       apiClient<any>(`/admin/skills/${id}/audit-dashboard`)
     ]).then(([suppData, dashData]) => {
+      setAvatarUrl(dashData?.skill?.avatarUrl || '');
       setSupp({
         displayName: suppData.displayName || dashData?.skill?.displayName || '',
         ownerName: suppData.ownerName || dashData?.skill?.ownerName || '',
@@ -43,6 +46,22 @@ export default function ProfilePage() {
 
   const updateProfile = (k: string, v: string) => setProfile(p => ({ ...p, [k]: v }));
   const updateSupp = (k: string, v: string) => setSupp(p => ({ ...p, [k]: v }));
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await apiClient<{ avatarUrl: string }>(`/admin/skills/${id}/avatar`, {
+        method: 'POST', body: formData,
+      });
+      const url = (res as any)?.data?.avatarUrl || (res as any)?.avatarUrl || '';
+      setAvatarUrl(url);
+    } catch { alert('头像上传失败'); }
+    setUploading(false);
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -94,7 +113,29 @@ export default function ProfilePage() {
       <div className="bg-surface-2 rounded-xl border border-border p-6">
         <h2 className="text-lg font-semibold mb-4">📋 发布信息</h2>
         <p className="text-sm text-muted-foreground-2 mb-4">销冠本人的基本信息，用于审核和对外展示。</p>
-        
+
+        {/* 头像上传 */}
+        <div className="flex items-center gap-5 mb-6 p-4 bg-surface rounded-xl border border-border">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center flex-shrink-0">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-2xl text-[#2563EB] font-bold">{supp.ownerName?.[0] || '?'}</span>
+            )}
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground mb-1">分身头像</p>
+            <p className="text-xs text-muted-foreground-2 mb-2">上传销冠本人照片，用于问答和聊天模式中的 AI 分身头像</p>
+            <label className={`inline-block px-4 py-1.5 text-xs rounded-lg cursor-pointer transition-colors ${uploading ? 'bg-muted text-muted-foreground' : 'bg-primary text-white hover:bg-primary-hover'}`}>
+              {uploading ? '上传中...' : avatarUrl ? '更换头像' : '上传头像'}
+              <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+            {avatarUrl && (
+              <button onClick={() => setAvatarUrl('')} className="ml-2 text-xs text-muted-foreground hover:text-danger">移除</button>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <Field label="展示名称" value={supp.displayName} onChange={v => updateSupp('displayName', v)} placeholder="潘露婷" />
           <Field label="真实姓名" value={supp.ownerName} onChange={v => updateSupp('ownerName', v)} placeholder="潘露婷" />

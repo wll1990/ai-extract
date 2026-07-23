@@ -634,5 +634,15 @@ public class AdminAuditController {
         }
     }
 
+    /**
+     * 上传分身头像。
+     */
+    @PostMapping("/admin/skills/{skillId}/avatar")
+    public ApiResponse<Map<String, String>> uploadAvatar(
+            @PathVariable String skillId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return ApiResponse.success(skillService.uploadAvatar(skillId, file));
+    }
+
     private String nn(String s) { return s != null ? s : ""; }
 }

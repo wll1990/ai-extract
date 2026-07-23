@@ -77,4 +77,12 @@ public class ApiResponse<T> {
                 .data(null)
                 .build();
     }
+
+    public static <T> ApiResponse<T> error(int code, T data) {
+        return ApiResponse.<T>builder()
+                .code(code)
+                .data(data)
+                .message(null)
+                .build();
+    }
 }

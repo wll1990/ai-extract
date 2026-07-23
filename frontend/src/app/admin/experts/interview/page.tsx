@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getSpaces } from '@/lib/api/spaces';
 import { getAvailableExperts, getExperts } from '@/lib/api/expert';
 import { createInterview, getActiveSessions, type ActiveSessionItem } from '@/lib/api/interview';
@@ -18,6 +18,7 @@ interface ExpertOption { id: string; name: string; styleTags?: string[]; industr
 
 export default function ExpertInterviewPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedTopic, setSelectedTopic] = useState('');
   const [customTopic, setCustomTopic] = useState('');
   const [isCustom, setIsCustom] = useState(false);
@@ -40,6 +41,7 @@ export default function ExpertInterviewPage() {
     }).catch(() => {});
     getActiveSessions().then(data => {
       if (data.hasActive && data.sessions.length > 0) setActiveSession(data.sessions[0]);
+      else setActiveSession(null);
     }).catch(() => {});
     // 加载萃取风格
     getAvailableExperts().then(data => {
@@ -50,7 +52,7 @@ export default function ExpertInterviewPage() {
     }).catch(() => {});
     // 加载已有萃取师列表（作为访谈对象）
     getExperts(1, 50).then((d: any) => setExpertList(d.content || [])).catch(() => {});
-  }, []);
+  }, [searchParams]);
 
   const getTopic = useCallback(() => isCustom ? customTopic.trim() : selectedTopic, [isCustom, customTopic, selectedTopic]);
 
@@ -157,8 +159,11 @@ export default function ExpertInterviewPage() {
         {/* 操作 */}
         <div className="flex items-center justify-between">
           <button onClick={() => router.back()} className="btn btn-secondary">取消</button>
-          <button onClick={handleStart} disabled={!getTopic() || loading}
+          <button onClick={handleStart} disabled={!getTopic() || loading || activeSession !== null}
             className="btn btn-primary px-8 py-3">{loading ? '创建中...' : '开始萃取师访谈'}</button>
+          {activeSession && (
+            <p className="mt-1 text-center text-xs text-muted-foreground">请先完成或放弃进行中的访谈</p>
+          )}
         </div>
       </div>
     </div>

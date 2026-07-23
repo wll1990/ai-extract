@@ -48,5 +48,16 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
             + "ORDER BY s.lastActiveAt DESC")
     List<InterviewSession> findBySpaceIdInAndStatusIn(@Param("spaceIds") List<UUID> spaceIds,
                                                        @Param("statuses") List<String> statuses);
+
+    /**
+     * 按访谈类型统计活跃会话数。
+     * 用于创建新访谈前检查同类型是否已有进行中的会话。
+     */
+    @Query("SELECT COUNT(s) FROM InterviewSession s WHERE s.spaceId IN :spaceIds "
+         + "AND s.status IN :statuses AND s.interviewType = :interviewType")
+    long countBySpaceIdInAndStatusInAndInterviewType(
+        @Param("spaceIds") List<UUID> spaceIds,
+        @Param("statuses") List<String> statuses,
+        @Param("interviewType") String interviewType);
 }
 

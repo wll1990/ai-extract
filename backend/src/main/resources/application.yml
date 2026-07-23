@@ -98,6 +98,10 @@ jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000           # 24 小时（毫秒）
 
+# ---- 合作方对接 ----
+partner:
+  aes-key: ${PARTNER_AES_KEY:v0zCxOESUMnpHFP6t6JtIxgghkUEBpXg2DiTNNLmZ24=}
+
 # ---- 文件存储（local / oss / s3） ----
 storage:
   type: local
@@ -113,6 +117,38 @@ app:
     allowed-origins:
       - http://localhost:3000
       - http://localhost:3001
+
+  # ============================================================
+  # Query Gate — 统一安全门控（Controller 层前置拦截）
+  # 运行时开关：redis-cli SET query_gate:enabled "false" 即时停用
+  # ============================================================
+  query-gate:
+    # 总开关 — false 时所有规则停用，零性能损耗
+    # Redis key "query_gate:enabled" 优先级更高，运维秒级操作无需重启
+    enabled: true
+    # 单条消息最大字符数 — 超过返回"消息过长"
+    max-message-length: 8000
+
+    # ── 频率控制（固定窗口，分钟级） ──
+    rate-limit:
+      ip-per-min: 60           # 单 IP 全局上限，兜底防 DDoS
+      guest-per-min: 6         # C 端游客限频
+      user-per-min: 20         # C 端注册用户限频
+      employee-per-min: 30     # B 端员工限频
+      b-end-im-per-min: -1     # IM 回调不限频（-1 跳过）
+
+    # Redis 违禁词 Set — 热更新命令：SADD query_gate:banned_words "词"
+    banned-words-redis-key: "query_gate:banned_words"
+
+    # ── 敏感模式正则（编译时预编译，运行时 O(1)） ──
+    sensitive-patterns:
+      phone: '\b1[3-9]\d{9}\b'              # 手机号 — 误伤风险极低
+      id-card: '\b\d{17}[\dXx]\b'           # 身份证号 — 误伤风险极低
+      prompt-injection:                      # Prompt 注入攻击 — .{0,N} 防 ReDoS
+        - '忽略.{0,50}(指令|上文|提示|规则|设定|限制)'
+        - '(ignore|forget|override).{0,30}(instruction|prompt|rule)'
+        - '(system|user|assistant).{0,20}(prompt|message)'
+        - '从现在开始.{0,30}(角色|身份)'
 
   # ---- 分身分享 & C 端游客体系 ----
   share:

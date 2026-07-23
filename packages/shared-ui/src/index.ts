@@ -1,6 +1,9 @@
 // ═══ Chat Components ═══
 export { PracticeView, type PracticeViewProps, type PracticeMessage, type PracticeEval, type PracticeSource, type PracticeData } from './components/PracticeView';
 export { TrustBadge } from './components/TrustBadge';
+export { DefaultAvatar } from './components/DefaultAvatar';
+export { PortraitCard } from './components/PortraitCard';
+export { ChatAvatar } from './components/ChatAvatar';
 export { ChatComposer, type ChatComposerProps } from './chat/ChatComposer';
 export { ThinkingCard, type ThinkingCardProps } from './chat/ThinkingCard';
 export { QuickReplies, type QuickRepliesProps } from './chat/QuickReplies';

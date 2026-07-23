@@ -53,3 +53,9 @@ export function adminToggleShare(skillId: string, enabled: boolean): Promise<Ski
   });
 }
 
+/** 自定义短码 */
+export function adminUpdateShareCode(skillId: string, shareCode: string): Promise<SkillShareInfo> {
+  return apiClient<SkillShareInfo>(`/admin/skills/${skillId}/share/code`, {
+    method: 'PUT', body: JSON.stringify({ shareCode }),
+  });
+}

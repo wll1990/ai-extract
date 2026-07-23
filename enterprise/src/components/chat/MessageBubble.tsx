@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { Message } from '@/hooks/useChat';
 import { TraceabilityDrawer } from './TraceabilityDrawer';
 import { submitFeedback } from '@/lib/api/skill';
+import { ChatAvatar } from '@aiextract/shared-ui';
 
 interface MessageBubbleProps {
   message: Message;
@@ -30,16 +31,7 @@ export function MessageBubble({ message, ownerName, skillId }: MessageBubbleProp
         }}>
           {message.content}
         </div>
-        <div style={{
-          width: 28, height: 28, borderRadius: 10, flexShrink: 0,
-          background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginTop: 2,
-        }}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" style={{ width: 14, height: 14 }}>
-            <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
-          </svg>
-        </div>
+        <ChatAvatar role="user" size={28} />
       </div>
     );
   }
@@ -48,14 +40,7 @@ export function MessageBubble({ message, ownerName, skillId }: MessageBubbleProp
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
         {/* Avatar */}
-        <div style={{
-          width: 30, height: 30, borderRadius: 10, flexShrink: 0,
-          background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: '#fff', fontSize: 13, fontWeight: 700, marginTop: 2,
-        }}>
-          {ownerName[0]}
-        </div>
+        <ChatAvatar role="ai" size={30} />
 
         <div style={{ maxWidth: '80%' }}>
           {(() => {

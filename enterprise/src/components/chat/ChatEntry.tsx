@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { fetchRecommendedQuestions, type SkillDetail } from '@/lib/api/skill';
-import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 const SCENE_EMOJIS: Record<string, string> = {
   '价格谈判': '💰', '竞品对比': '🤝', '异议处理': '🎯',
@@ -65,36 +65,24 @@ export function ChatEntry({
         <>
           <div className="animate-stagger-1 rounded-3xl bg-white py-7 px-7" style={{
             maxWidth: 640, width: '100%', margin: '0 auto 24px',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
+            borderRadius: 26,
+            background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+            border: '1px solid #e1e7ff',
+            boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+            overflow: 'hidden',
           }}>
             {/* 头部：左头像 + 右文案 */}
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 }}>
-              {skill.avatarUrl ? (
-                <img src={skill.avatarUrl} alt={name} style={{
-                  width: 80, height: 80, borderRadius: '50%', objectFit: 'cover',
-                  flexShrink: 0,
-                  boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
-                }} />
-              ) : (
-                <div style={{
-                  width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
-                  background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 30, fontWeight: 700, color: '#2563EB',
-                  boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
-                }}>
-                  {initial}
-                </div>
-              )}
-              <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '250px 1fr', alignItems: 'center', gap: 24, marginBottom: 24 }}>
+              <PortraitCard src={skill.avatarUrl || undefined} alt={name} />
+              <div>
                 <p style={{
-                  fontSize: 18, fontWeight: 700, color: 'var(--fg-high)',
-                  margin: '0 0 12px', lineHeight: 1.3,
+                  fontSize: 26, fontWeight: 700, color: 'var(--fg-high)',
+                  margin: '0 0 10px', lineHeight: 1.3, letterSpacing: '-1px',
                 }}>
                   {TALK_NAME_CARD.greeting}<span style={{ color: '#2563EB' }}>{name}</span><span style={{ fontSize: 14 }}>&nbsp;✨</span>
                 </p>
                 <span style={{
-                  display: 'inline-block', fontSize: 12, color: '#64748B',
+                  display: 'inline-block', fontSize: 13, color: '#64748B',
                   background: '#f1f5f9', borderRadius: 100, padding: '2px 12px',
                   marginBottom: 10,
                 }}>
@@ -117,24 +105,13 @@ export function ChatEntry({
                 )}
               </div>
             </div>
-
-            {/* 分隔 + 信任卡片 */}
-            <div style={{ paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-              <TrustBadge />
-            </div>
+            <TrustBadge />
           </div>
 
           {/* ② 引导语气泡 — Talk 专属 */}
           {mode === 'talk' && (
-          <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 560, width: '100%', marginBottom: 20 }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-              background: 'linear-gradient(135deg, #6366f1, #818cf8)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 14,
-            }}>
-              ☕
-            </div>
+          <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 640, width: '100%', marginBottom: 20 }}>
+            <ChatAvatar role="ai" src={skill.avatarUrl || undefined} size={28} />
             <div style={{
               flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
               background: '#f5f3ff', borderLeft: '2px solid rgba(99,102,241,0.2)',
@@ -154,16 +131,8 @@ export function ChatEntry({
 
       {/* ② 引导语气泡 — QA 专属 */}
       {mode === 'qa' && (
-        <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 560, width: '100%', marginBottom: 20 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 10, flexShrink: 0, marginTop: 2,
-            background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" /><path d="M11 8v6" /><path d="M8 11h6" />
-            </svg>
-          </div>
+        <div className="animate-stagger-2" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 640, width: '100%', marginBottom: 20 }}>
+          <ChatAvatar role="ai" src={skill.avatarUrl || undefined} size={28} />
           <div style={{
             flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
             background: '#f5f3ff', borderLeft: '2px solid rgba(99,102,241,0.2)',
@@ -239,7 +208,7 @@ export function ChatEntry({
 
       {/* 精选话题 — recommended questions (QA only) */}
       {showQuestions && (
-        <div className="animate-stagger-5" style={{ maxWidth: 560, width: '100%' }}>
+        <div className="animate-stagger-5" style={{ maxWidth: 640, width: '100%' }}>
           <p style={{ fontSize: 11, color: 'var(--fg-dim)', marginBottom: 6 }}>
             精选话题
           </p>

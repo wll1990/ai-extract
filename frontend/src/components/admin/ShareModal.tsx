@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { adminGetOrCreateShare, adminToggleShare, type SkillShareInfo } from '@/lib/api/admin';
+import { adminGetOrCreateShare, adminToggleShare, adminUpdateShareCode, type SkillShareInfo } from '@/lib/api/admin';
 
 interface Props {
   skillId: string;
@@ -28,6 +28,9 @@ export default function ShareModal({ skillId, ownerName, onClose, getOrCreate, t
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [editCode, setEditCode] = useState('');
+  const [codeSaving, setCodeSaving] = useState(false);
+  const [codeMsg, setCodeMsg] = useState('');
 
   const shareUrl = share ? `${window.location.origin}/s/${share.shareCode}` : '';
 
@@ -67,6 +70,21 @@ export default function ShareModal({ skillId, ownerName, onClose, getOrCreate, t
     }
   };
 
+  const saveCode = async () => {
+    if (!share || !editCode.trim() || codeSaving) return;
+    setCodeSaving(true); setCodeMsg('');
+    try {
+      const updated = await adminUpdateShareCode(skillId, editCode.trim());
+      setShare(updated); setEditCode('');
+      setCodeMsg('已保存');
+      setTimeout(() => setCodeMsg(''), 2000);
+    } catch (e) {
+      setCodeMsg((e as Error)?.message || '保存失败');
+    } finally {
+      setCodeSaving(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 p-4" onClick={onClose}>
       <div className="w-full max-w-[400px] rounded-xl bg-bg p-6 shadow-xl" onClick={e => e.stopPropagation()}>
@@ -98,6 +116,30 @@ export default function ShareModal({ skillId, ownerName, onClose, getOrCreate, t
                 className="h-10 flex-none rounded-lg bg-primary px-4 text-xs font-semibold text-white hover:bg-primary-hover">
                 {copied ? '已复制 ✓' : '复制链接'}
               </button>
+            </div>
+
+            {/* 短码自定义 */}
+            <div className="mt-3 rounded-lg bg-surface px-4 py-3">
+              <div className="text-body font-medium text-foreground mb-2">自定义短码</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground-2 shrink-0">{window.location.origin}/s/</span>
+                <input
+                  value={editCode || share.shareCode}
+                  onChange={e => { setEditCode(e.target.value); setCodeMsg(''); }}
+                  placeholder="如 alibaba-sales"
+                  className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-bg px-3 text-xs outline-none focus:border-primary"
+                />
+                <button onClick={saveCode} disabled={codeSaving || (!editCode.trim())}
+                  className="h-9 flex-none rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-hover disabled:opacity-50">
+                  {codeSaving ? '...' : '保存'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[10px] text-muted-foreground-2">字母数字+连字符，4-30位，修改即时生效</span>
+                {codeMsg && (
+                  <span className={`text-[10px] ${codeMsg === '已保存' ? 'text-green-600' : 'text-red-500'}`}>{codeMsg}</span>
+                )}
+              </div>
             </div>
 
             {/* 共享开关 */}

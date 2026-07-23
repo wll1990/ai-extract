@@ -68,6 +68,22 @@ public class AdminShareController {
         return ApiResponse.success(toMap(shareService.toggleShare(skillId, enabled)));
     }
 
+    /**
+     * 自定义短码 — 字母数字+连字符，4-30位，全局唯一。
+     */
+    @PutMapping("/code")
+    public ApiResponse<Map<String, Object>> updateCode(
+            @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
+        String customCode = (String) body.get("shareCode");
+        if (customCode == null || customCode.isBlank()) {
+            throw new BusinessException(400, "shareCode 不能为空");
+        }
+        if (!customCode.matches("^[a-zA-Z0-9\\-]{4,30}$")) {
+            throw new BusinessException(400, "格式: 字母数字+连字符，4-30位");
+        }
+        return ApiResponse.success(toMap(shareService.updateShareCode(skillId, customCode)));
+    }
+
     private Map<String, Object> toMap(SkillShare share) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("skillId", share.getSkillId().toString());

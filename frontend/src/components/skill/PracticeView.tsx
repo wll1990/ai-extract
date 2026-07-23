@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { ChatAvatar } from '@aiextract/shared-ui';
 
 // ---- Types ----
 
@@ -115,9 +116,7 @@ export function PracticeView({
             {msg.role === 'customer' ? (
               /* ---- 客户消息 ---- */
               <div className="flex items-start gap-3">
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-orange to-warning flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm">
-                  客
-                </div>
+                <ChatAvatar role="customer" size={32} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-warning-text mb-1 font-medium">
                     👤 客户{msg.levelLabel ? ` · ${msg.levelLabel}` : ''}
@@ -168,10 +167,10 @@ export function PracticeView({
               </div>
             ) : (
               /* ---- 销售消息 + 评价卡片 ---- */
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
                 <div className="max-w-[80%]">
                   <div className="rounded-2xl rounded-tr-sm bg-gradient-to-br from-blue-500 to-indigo-600 text-white px-4 py-3 text-sm shadow-sm">
-                    <p className="text-xs text-blue-100 mb-1">👤 销售（你）{msg.isRetry ? '· 再试' : ''}</p>
+                    <p className="text-xs text-blue-100 mb-1">销售（你）{msg.isRetry ? '· 再试' : ''}</p>
                     <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                   </div>
 
@@ -281,6 +280,7 @@ export function PracticeView({
                     </div>
                   )}
                 </div>
+                <ChatAvatar role="user" size={28} />
               </div>
             )}
           </div>

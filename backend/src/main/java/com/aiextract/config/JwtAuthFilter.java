@@ -39,6 +39,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private static final int BEARER_PREFIX_LENGTH = BEARER_PREFIX.length();
 
     private final JwtUtil jwtUtil;
+    private final PartnerJwtFilter partnerJwtFilter;
 
     /**
      * 过滤器执行逻辑
@@ -56,15 +57,34 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        String token = extractToken(request);
-
         // 无条件生成 traceId（未认证请求也需要追踪）
         TraceContext.init(java.util.UUID.randomUUID());
         response.setHeader("X-Trace-Id", TraceContext.get());
 
+        // ── 合作方 JWT 验证（URL ?token= 参数） ──
+        String partnerToken = request.getParameter("token");
+        if (partnerToken != null && !partnerToken.isBlank()) {
+            try {
+                UUID userId = partnerJwtFilter.authenticate(partnerToken);
+                setAuthentication(userId, "c_partner", request);
+                filterChain.doFilter(request, response);
+                return;
+            } catch (Exception e) {
+                log.warn("Partner JWT 验证失败: {}", e.getMessage());
+                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, e.getMessage());
+                return;
+            } finally {
+                TraceContext.clear();
+                TokenContext.clear();
+            }
+        }
+
+        String token = extractToken(request);
+
         if (token == null) {
             filterChain.doFilter(request, response);
             TraceContext.clear();
+            TokenContext.clear();
             return;
         }
 
@@ -73,13 +93,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 UUID userId = jwtUtil.getUserIdFromToken(token);
                 String role = jwtUtil.getRoleFromToken(token);
 
-                List<SimpleGrantedAuthority> authorities = Collections.singletonList(
-                        new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(userId, token, authorities);
-                authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                SecurityContextHolder.getContext().setAuthentication(authentication);
+                setAuthentication(userId, role, request);
                 request.setAttribute("token", token);
                 log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
             } else {
@@ -93,6 +107,17 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
         filterChain.doFilter(request, response);
         TraceContext.clear();
+        TokenContext.clear();
+    }
+
+    private void setAuthentication(UUID userId, String role, HttpServletRequest request) {
+        List<SimpleGrantedAuthority> authorities = Collections.singletonList(
+            new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
+        UsernamePasswordAuthenticationToken authentication =
+            new UsernamePasswordAuthenticationToken(userId, null, authorities);
+        authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        TokenContext.set(userId);
     }
 
     /** 清除客户端过期 token cookie */

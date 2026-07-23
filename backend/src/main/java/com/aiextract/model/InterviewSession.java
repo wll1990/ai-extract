@@ -64,40 +64,14 @@ public class InterviewSession {
     private String currentPhase;
 
     /**
-     * 是否已采集案例故事
+     * 模块采集状态，JSONB 格式。
+     * 结构: {"caseStory":"collected","steps":"pending",...}
+     * 值: "collected" / "pending" / "skipped"
+     * 仅 sales 销冠访谈使用，expert 元萃取保持 {}。
      */
-    @Column(name = "collect_case_story", nullable = false)
-    private Boolean collectCaseStory;
-
-    /**
-     * 是否已采集核心步骤
-     */
-    @Column(name = "collect_steps", nullable = false)
-    private Boolean collectSteps;
-
-    /**
-     * 是否已采集关键决策
-     */
-    @Column(name = "collect_decision", nullable = false)
-    private Boolean collectDecision;
-
-    /**
-     * 是否已采集专家心法
-     */
-    @Column(name = "collect_mindset", nullable = false)
-    private Boolean collectMindset;
-
-    /**
-     * 是否已采集适用边界
-     */
-    @Column(name = "collect_boundary", nullable = false)
-    private Boolean collectBoundary;
-
-    /**
-     * 是否已采集检查清单
-     */
-    @Column(name = "collect_checklist", nullable = false)
-    private Boolean collectChecklist;
+    @Builder.Default
+    @Column(name = "collect_status", columnDefinition = "jsonb")
+    private String collectStatus = "{}";
 
     /**
      * 邀请码

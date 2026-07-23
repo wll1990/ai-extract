@@ -5,7 +5,7 @@ import {
   startPractice, respondPractice, evaluatePractice, fetchPracticeScenes,
   evaluatePracticeRound, type RoundEval,
 } from '@/lib/api/skill';
-import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 import { TraceabilityDrawer } from './TraceabilityDrawer';
 
 interface PracticeMessage {
@@ -265,24 +265,22 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', padding: '32px 40px 60px', overflowY: 'auto' }}>
         {/* ① 名片卡片 */}
         <div className="animate-stagger-1 rounded-3xl bg-white py-7 px-7" style={{
-          maxWidth: 500, width: '100%', marginBottom: 24,
-          boxShadow: '0 4px 24px rgba(0,0,0,0.05)',
+          maxWidth: 640, width: '88%', marginBottom: 24,
+          borderRadius: 26,
+          background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+          border: '1px solid #e1e7ff',
+          boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+          overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20, marginBottom: 24 }}>
-            <div style={{
-              width: 80, height: 80, borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg, #dbeafe, #bfdbfe)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 30, fontWeight: 700, color: '#2563EB',
-              boxShadow: '0 0 0 4px rgba(37,99,235,0.08)',
-            }}>
-              {ownerName[0]}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 24 }}>
+            <div style={{ width: 180, flexShrink: 0 }}>
+              <PortraitCard alt={ownerName} />
             </div>
-            <div style={{ flex: 1, minWidth: 0, paddingTop: 4 }}>
-              <p style={{ fontSize: 18, fontWeight: 700, color: 'var(--fg-high)', margin: '0 0 12px', lineHeight: 1.3 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 26, fontWeight: 700, color: 'var(--fg-high)', margin: '0 0 10px', lineHeight: 1.3, letterSpacing: '-1px' }}>
                 {TALK_NAME_CARD.greeting}<span style={{ color: '#2563EB' }}>{ownerName}</span><span style={{ fontSize: 14 }}>&nbsp;✨</span>
               </p>
-              <span style={{ display: 'inline-block', fontSize: 12, color: '#64748B', background: '#f1f5f9', borderRadius: 100, padding: '2px 12px', marginBottom: 10 }}>
+              <span style={{ display: 'inline-block', fontSize: 13, color: '#64748B', background: '#f1f5f9', borderRadius: 100, padding: '2px 12px', marginBottom: 8 }}>
                 {TALK_NAME_CARD.roleTag}
               </span>
               <p style={{ fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7, margin: 0, whiteSpace: 'pre-wrap' }}>
@@ -294,20 +292,12 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
               </p>
             </div>
           </div>
-          <div style={{ paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-            <TrustBadge />
-          </div>
+          <TrustBadge />
         </div>
 
         {/* ② 引导语气泡 */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 460, width: '100%', marginBottom: 24 }}>
-          <div style={{
-            width: 28, height: 28, borderRadius: 10, flexShrink: 0, marginTop: 2,
-            background: 'linear-gradient(135deg, #10b981, #059669)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14,
-          }}>
-            🎯
-          </div>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: 640, width: '88%', marginBottom: 24 }}>
+          <ChatAvatar role="ai" size={28} />
           <div style={{
             flex: 1, padding: '12px 16px', borderRadius: '18px 18px 18px 6px',
             background: '#f0fdf4', borderLeft: '2px solid rgba(16,185,129,0.2)',
@@ -323,7 +313,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>选择演练场景</h3>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, maxWidth: 640, width: '100%' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, maxWidth: 640, width: '88%' }}>
           {visibleScenes.map(s => (
             <button key={s.label} onClick={() => handleStart(s.label)}
               style={{
@@ -421,7 +411,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
               <div key={i} style={{ marginBottom: 12 }}>
                 {/* 用户消息 */}
                 {msg.role === 'user' ? (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <div style={{
                       maxWidth: '80%', borderRadius: '20px 20px 6px 20px',
                       background: 'var(--tangerine)', color: '#fff',
@@ -429,22 +419,16 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
                       boxShadow: 'var(--shadow-btn)',
                     }}>
                       <div style={{ fontSize: 11, marginBottom: 4, opacity: 0.7 }}>
-                        👤 {ownerName || '销售'}（你）{msg.retryCount ? `· 再试${msg.retryCount}` : ''}
+                        {ownerName || '销售'}（你）{msg.retryCount ? `· 再试${msg.retryCount}` : ''}
                       </div>
                       <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.content}</div>
                     </div>
+                    <ChatAvatar role="user" size={28} />
                   </div>
                 ) : (
                   /* 客户消息 */
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                    <div style={{
-                      width: 30, height: 30, borderRadius: 10, flexShrink: 0,
-                      background: 'linear-gradient(135deg, #475569, #64748b)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 13, fontWeight: 700,
-                    }}>
-                      👤
-                    </div>
+                    <ChatAvatar role="customer" size={30} />
                     <div style={{
                       maxWidth: '80%', borderRadius: '18px 18px 18px 6px',
                       background: 'var(--surface)', border: '1px solid var(--border-subtle)',

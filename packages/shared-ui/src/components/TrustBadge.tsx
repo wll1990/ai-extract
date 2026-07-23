@@ -2,124 +2,88 @@
 
 import React from 'react';
 
-/* ── 内联 SVG icon（三端统一，不依赖外部图标库）── */
-
-function StarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-      <path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" />
-    </svg>
-  );
-}
-
-function ShieldIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
-      <path d="M14 2v6h6" />
-      <circle cx="11.5" cy="14.5" r="2.5" />
-      <path d="M13.5 16.5L16 19" />
-    </svg>
-  );
-}
-
-function BoltIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round" style={{ width: 16, height: 16 }}>
-      <path d="M13 2L3 14h7l-2 8 10-12h-7z" />
-    </svg>
-  );
-}
-
-/* ── 数据 ── */
-
-const BADGES = [
-  { Icon: StarIcon,   title: '实战打法', desc: '销冠真实案例提炼' },
-  { Icon: ShieldIcon, title: '溯源可查', desc: '每句话有据可依' },
-  { Icon: BoltIcon,   title: '即问即用', desc: '30秒拿到可执行话术' },
+/* ── 信任条数据 ── */
+const TRAITS = [
+  { icon: '♡', title: '真实案例', desc: '销冠真实对话与文档提炼' },
+  { icon: '✦', title: '溯源可查', desc: '每句回答有据可依' },
+  { icon: '▤', title: '即学即用', desc: '30秒拿到可执行话术' },
 ];
 
-const ICON_COLORS = ['#f59e0b', '#6366f1', '#06b6d4'];
-
-/* ── 组件 ── */
+const ICON_COLORS = ['#ff4d5f', '#2147ff', '#8b5cf6'];
 
 /**
- * 信任卡片 — 三列品牌信任条。
- *
- * 通过 CSS 变量换肤，三端共用同一组件：
- *   --trust-bg        背景
- *   --trust-border    边框
- *   --trust-max-w     最大宽度
- *   --trust-divider   列分隔线颜色
+ * TrustBadge — 品牌信任条，三列横排（左图标+右文字），flex-nowrap 绝不折行。
  */
 export function TrustBadge() {
   return (
     <div
       style={{
         width: 'var(--trust-width, 100%)',
-        padding: '12px 16px 10px',
-        borderRadius: 12,
-        background: 'var(--trust-bg, linear-gradient(135deg, rgba(6,182,212,0.04), rgba(59,130,246,0.06)))',
-        border: '1px solid var(--trust-border, rgba(59,130,246,0.08))',
+        padding: '14px 14px 8px',
+        background: 'var(--trust-bg, transparent)',
+        borderTop: '1px solid var(--trust-divider, #edf0fb)',
       }}
     >
-      {/* 三列 badge */}
-      <div style={{ display: 'flex', width: '100%' }}>
-        {BADGES.map(({ Icon, title, desc }, i) => (
+      {/* 三列信任条 — flex-nowrap */}
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'nowrap',
+          gap: 8,
+          width: '100%',
+        }}
+      >
+        {TRAITS.map((t, i) => (
           <div
             key={i}
             style={{
-              flex: 1,
               display: 'flex',
-              flexDirection: 'column',
+              flex: 1,
+              gap: 6,
               alignItems: 'center',
-              gap: 2,
-              padding: '0 4px',
-              borderRight:
-                i < BADGES.length - 1
-                  ? '1px solid var(--trust-divider, rgba(0,0,0,0.05))'
-                  : 'none',
+              padding: '2px 2px',
+              minWidth: 0,
             }}
           >
+            {/* 图标圆 */}
             <div
               style={{
-                width: 32,
-                height: 32,
+                width: 26,
+                height: 26,
                 borderRadius: '50%',
-                background: `linear-gradient(135deg, ${ICON_COLORS[i]}, ${ICON_COLORS[i]}dd)`,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                background: '#f3f6ff',
+                color: ICON_COLORS[i],
+                fontSize: 14,
+                flex: '0 0 auto',
               }}
             >
-              <Icon />
+              {t.icon}
             </div>
-            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high, #1A1D23)' }}>
-              {title}
-            </span>
-            <span style={{ fontSize: 11, color: 'var(--fg-dim, #94A3B8)', lineHeight: 1.3 }}>
-              {desc}
-            </span>
+            {/* 文字 */}
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 1, whiteSpace: 'nowrap' }}>{t.title}</div>
+              <div style={{ fontSize: 10, color: '#55617d', lineHeight: 1.4 }}>{t.desc}</div>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* 隐私承诺 — 置底细线分隔 */}
-      <div style={{
-        marginTop: 10,
-        paddingTop: 8,
-        borderTop: '1px solid var(--trust-divider, rgba(0,0,0,0.04))',
-      }}>
-        <p style={{
-          margin: 0,
-          fontSize: 10,
-          lineHeight: 1.5,
-          color: 'var(--fg-dim, #94A3B8)',
+      {/* 隐私承诺 */}
+      <div
+        style={{
+          borderTop: '1px solid #edf0fb',
           textAlign: 'center',
-          letterSpacing: '0.03em',
-        }}>
-          &#x25A3;&ensp;我们的对话内容仅用于服务你，绝不外泄，请放心分享
-        </p>
+          color: '#77819e',
+          fontSize: 10,
+          padding: '10px 0 0',
+          marginTop: 12,
+        }}
+      >
+        <span style={{ color: '#2147ff', marginRight: 5 }}>▣</span>
+        我们的对话内容仅用于服务你，绝不外泄，请放心分享
       </div>
     </div>
   );

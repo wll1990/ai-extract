@@ -9,6 +9,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -29,6 +31,15 @@ public class GlobalExceptionHandler {
      * @param e 业务异常
      * @return 错误响应
      */
+    @ExceptionHandler(PartnerException.class)
+    public ResponseEntity<ApiResponse<Map<String, String>>> handlePartnerException(PartnerException e) {
+        log.warn("合作方对接异常, errorCode: {}, message: {}", e.getPartnerErrorCode(), e.getMessage());
+        Map<String, String> data = new java.util.LinkedHashMap<>();
+        data.put("errorCode", e.getPartnerErrorCode());
+        data.put("message", e.getMessage());
+        return ResponseEntity.status(e.getErrorCode()).body(ApiResponse.error(e.getErrorCode(), data));
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
         log.warn("业务异常, code: {}, message: {}", e.getErrorCode(), e.getMessage());

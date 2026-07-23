@@ -1,7 +1,9 @@
 package com.aiextract.config;
 
+import com.aiextract.service.TokenUsageService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -14,10 +16,30 @@ import java.util.concurrent.Executor;
 @Configuration
 public class AiConfig {
 
-    /** Chat: DeepSeek (spring.ai.openai 自动配置) */
+    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    private String modelName;
+
+    /** Chat: DeepSeek（包装 ChatModel 自动记录 token，无循环依赖） */
     @Bean
-    public ChatClient chatClient(ChatModel chatModel) {
-        return ChatClient.builder(chatModel).build();
+    public ChatClient chatClient(ChatModel chatModel, TokenUsageService tokenUsageService) {
+        return ChatClient.builder(
+            new TokenAwareChatModel(chatModel, tokenUsageService, modelName)
+        ).build();
+    }
+
+    /** Token 记录异步线程池 */
+    @Bean("tokenLogExecutor")
+    public Executor tokenLogExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(200);
+        executor.setThreadNamePrefix("token-log-");
+        executor.setRejectedExecutionHandler(
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
+        executor.initialize();
+        return executor;
     }
 
     /** 异步线程池（embedding + 清洗管道） */
@@ -30,6 +52,7 @@ public class AiConfig {
         executor.setThreadNamePrefix("embedding-");
         executor.setRejectedExecutionHandler(
             new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
         executor.initialize();
         return executor;
     }
@@ -44,6 +67,7 @@ public class AiConfig {
         executor.setThreadNamePrefix("parse-");
         executor.setRejectedExecutionHandler(
             new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
         executor.initialize();
         return executor;
     }
@@ -58,6 +82,7 @@ public class AiConfig {
         executor.setThreadNamePrefix("clean-");
         executor.setRejectedExecutionHandler(
             new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
         executor.initialize();
         return executor;
     }

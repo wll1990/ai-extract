@@ -4,7 +4,9 @@ import com.aiextract.common.ApiResponse;
 import com.aiextract.dto.ImChannelRequest;
 import com.aiextract.dto.ImChannelResponse;
 import com.aiextract.service.ImGatewayService;
+import com.aiextract.service.QueryGate;
 import com.aiextract.util.JwtUtil;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class ImController {
 
     private final ImGatewayService imGatewayService;
     private final JwtUtil jwtUtil;
+    private final QueryGate queryGate;
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder

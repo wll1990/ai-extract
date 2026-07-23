@@ -5,7 +5,7 @@ import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
-import { TrustBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -87,9 +87,8 @@ export default function MobileChatShell({
             className="flex h-[34px] w-[34px] items-center justify-center rounded-md text-foreground active:bg-surface">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
           </button>
-          <div className="relative flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full shadow-sm">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={info.avatarUrl || '/def-avatar.png'} alt={name} className="h-full w-full rounded-full object-cover" />
+          <div className="relative">
+            <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={30} />
             <span className="absolute -bottom-px -right-px h-[9px] w-[9px] rounded-full border-2 border-white bg-success" />
           </div>
           <div className="min-w-0 flex-1">
@@ -136,19 +135,23 @@ export default function MobileChatShell({
         ) : (
           <div className="flex-1 overflow-y-auto px-4 py-4">
             {/* ① 名片卡片 — 同 QA/Talk */}
-            <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-3xl bg-white py-5 px-4" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
-              <div className="flex items-start gap-4 mb-4">
-                <div className="w-[64px] h-[64px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-2xl font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
-                  {info.avatarUrl ? <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" /> : initial}
+            <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-[26px] bg-white py-5 px-4 border border-[#e1e7ff] overflow-hidden"
+              style={{
+                background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+              }}>
+              <div className="flex items-center gap-4">
+                <div className="w-[170px] shrink-0">
+                  <PortraitCard src={info.avatarUrl || undefined} alt={name} />
                 </div>
-                <div className="flex-1 pt-0.5">
-                  <h3 className="text-[17px] font-bold text-foreground leading-tight">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-[20px] font-bold text-foreground leading-tight">
                     {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
                   </h3>
-                  <span className="inline-block mt-1.5 text-[12px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
+                  <span className="inline-block mt-1.5 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
                     {TALK_NAME_CARD.roleTag}
                   </span>
-                  <p className="mt-2.5 text-[13px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                  <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
                     {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
                       i < arr.length - 1
                         ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
@@ -157,16 +160,12 @@ export default function MobileChatShell({
                   </p>
                 </div>
               </div>
-              <div className="pt-3 border-t border-[#E8ECF1]/40">
-                <TrustBadge />
-              </div>
+              <TrustBadge />
             </div>
 
             {/* ② 引导语气泡 — Practice 专属 */}
             <div className="flex items-start gap-2 mb-5 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-green-600 flex items-center justify-center flex-shrink-0 shadow-sm mt-0.5">
-                <span className="text-[13px]">🎯</span>
-              </div>
+              <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
               <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f0fdf4] border border-[#dcfce7] px-4 py-3">
                 <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
                 <p className="text-[14px] text-foreground leading-relaxed">{MODE_GUIDE.practice}</p>
@@ -222,22 +221,24 @@ export default function MobileChatShell({
               <div>
                 {/* ① 名片卡片 — Talk/QA 共享：头像+文案+信任卡片一整块 */}
                 {(mode === 'qa' || mode === 'talk') && (
-                  <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-3xl bg-white py-5 px-4" style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.04)' }}>
+                  <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-[26px] bg-white py-5 px-4 border border-[#e1e7ff] overflow-hidden"
+                    style={{
+                      background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                      boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
+                    }}>
                     {/* 头部：左头像 + 右文案 */}
-                    <div className="flex items-start gap-4 mb-4">
-                      <div className="w-[64px] h-[64px] rounded-full bg-gradient-to-br from-blue-100 to-blue-50 ring-2 ring-blue-100/50 flex items-center justify-center text-2xl font-bold text-[#2563EB] shadow-sm flex-shrink-0 overflow-hidden">
-                        {info.avatarUrl ? (
-                          <img src={info.avatarUrl} alt={name} className="w-full h-full object-cover" />
-                        ) : initial}
+                    <div className="flex items-center gap-4">
+                      <div className="w-[170px] shrink-0">
+                        <PortraitCard src={info.avatarUrl || undefined} alt={name} />
                       </div>
-                      <div className="flex-1 pt-0.5">
-                        <h3 className="text-[17px] font-bold text-foreground leading-tight">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-[20px] font-bold text-foreground leading-tight">
                           {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
                         </h3>
-                        <span className="inline-block mt-1.5 text-[12px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
+                        <span className="inline-block mt-1.5 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
                           {TALK_NAME_CARD.roleTag}
                         </span>
-                        <p className="mt-2.5 text-[13px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
+                        <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
                           {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
                             i < arr.length - 1
                               ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
@@ -246,20 +247,14 @@ export default function MobileChatShell({
                         </p>
                       </div>
                     </div>
-
-                    {/* 分隔 + 信任卡片 */}
-                    <div className="pt-3 border-t border-[#E8ECF1]/40">
-                      <TrustBadge />
-                    </div>
+                    <TrustBadge />
                   </div>
                 )}
 
                 {/* ② 引导语气泡 — QA 专属 */}
                 {mode === 'qa' && (
                   <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center text-[13px] flex-shrink-0 shadow-sm mt-0.5">
-                      💡
-                    </div>
+                    <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
                       <p className="text-[14px] text-foreground leading-relaxed"
@@ -274,9 +269,7 @@ export default function MobileChatShell({
                 {/* ② 引导语气泡 — Talk 独有 */}
                 {mode === 'talk' && (
                   <div className="flex items-start gap-2 mb-4 animate-[messageArrive_350ms_ease-out_500ms] opacity-0 [animation-fill-mode:forwards]">
-                    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-[13px] flex-shrink-0 shadow-sm mt-0.5">
-                      ☕
-                    </div>
+                    <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
                       <p className="text-[14px] text-foreground leading-relaxed"
@@ -356,14 +349,14 @@ export default function MobileChatShell({
                     <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-gradient-to-br from-[#2147ff] to-[#345dff] px-4 py-3 text-[14px] leading-relaxed text-white shadow-sm">
                       {m.content}
                     </div>
-                    <UserAvatar />
+                    <ChatAvatar role="user" size={28} />
                   </div>
                 );
               }
 
               return (
                 <div key={m.id} className="flex gap-2">
-                  <Avatar name={name} avatarUrl={info.avatarUrl} />
+                  <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                   <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
                     <div className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{mainText}</div>
                     {canTrace && (
@@ -397,7 +390,7 @@ export default function MobileChatShell({
             {/* 流式气泡 — 带打字动画 */}
             {qa.qaStreamText && (
               <div className="flex gap-2 animate-[fadeIn_200ms_ease-out]">
-                <Avatar name={name} avatarUrl={info.avatarUrl} />
+                <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                 <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-4 py-3 shadow-sm">
                   <span className="whitespace-pre-wrap text-[14px] leading-relaxed text-foreground">{qa.qaStreamText}</span>
                   <span className="ml-0.5 inline-block h-4 w-1 animate-pulse rounded-full bg-[#2147ff] align-middle" />
@@ -408,7 +401,7 @@ export default function MobileChatShell({
             {/* 思考中 — ThinkingCard */}
             {qa.isStreaming && !qa.qaStreamText && (
               <div className="flex gap-2">
-                <Avatar name={name} avatarUrl={info.avatarUrl} />
+                <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                 <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-5 py-3 shadow-sm">
                   <div className="flex items-center gap-2">
                     <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2147ff]" style={{ animationDelay: '0ms' }} />
@@ -475,26 +468,6 @@ export default function MobileChatShell({
         </>
       )}
       <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
-    </div>
-  );
-}
-
-function UserAvatar() {
-  return (
-    <div className="mt-0.5 flex h-7 w-7 flex-none items-center justify-center rounded-full shadow-sm"
-      style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" className="h-3.5 w-3.5">
-        <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 4-7 8-7s8 3 8 7" />
-      </svg>
-    </div>
-  );
-}
-
-function Avatar({ name, avatarUrl }: { name: string; avatarUrl?: string }) {
-  return (
-    <div className="flex h-[28px] w-[28px] flex-none items-center justify-center overflow-hidden rounded-full shadow-sm">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={avatarUrl || '/def-avatar.png'} alt={name} className="h-full w-full object-cover" />
     </div>
   );
 }

@@ -46,6 +46,17 @@ export default function AuditPage() {
   const [practiceGrain, setPracticeGrain] = useState<any>(null);
   const [sceneTag, setSceneTag] = useState('');
   const [grainIdx, setGrainIdx] = useState(0);
+
+  // 当前场景标签下的所有颗粒
+  const grains = (data?.scenarioGrains?.[sceneTag] || []) as any[];
+  const safeIdx = Math.min(grainIdx, grains.length - 1);
+
+  // 弹窗打开时 grainIdx 变化 → 同步 practiceGrain
+  useEffect(() => {
+    if (practiceGrain && grains[safeIdx] && grains[safeIdx].id !== practiceGrain.id) {
+      setPracticeGrain(grains[safeIdx]);
+    }
+  }, [grainIdx, practiceGrain, grains, safeIdx]);
   const [showDemoModal, setShowDemoModal] = useState(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [productSubStep, setProductSubStep] = useState<'profile' | 'verify' | 'publish'>('profile');
@@ -181,7 +192,15 @@ export default function AuditPage() {
       </div>
 
 {practiceGrain && (
-        <PracticeScenarioModal skillId={id} grain={practiceGrain} onClose={() => setPracticeGrain(null)} />
+        <PracticeScenarioModal
+          skillId={id}
+          grain={practiceGrain}
+          grains={grains}
+          grainIdx={safeIdx}
+          onPrev={() => setGrainIdx(Math.max(0, grainIdx - 1))}
+          onNext={() => setGrainIdx(Math.min(grains.length - 1, grainIdx + 1))}
+          onClose={() => setPracticeGrain(null)}
+        />
       )}
 
       {showPreviewModal && (

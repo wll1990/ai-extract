@@ -12,8 +12,10 @@ import com.aiextract.service.ChatStreamService;
 import com.aiextract.service.ConversationService;
 import com.aiextract.service.GrainRecommendationService;
 import com.aiextract.service.PracticeDemoService;
+import com.aiextract.service.QueryGate;
 import com.aiextract.service.SkillService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +49,19 @@ public class SkillController {
     private final SkillRepository skillRepository;
     private final ExperienceGrainRepository grainRepository;
     private final PracticeDemoService practiceDemoService;
+    private final QueryGate queryGate;
+
+    /**
+     * 从 HttpServletRequest 提取客户端 IP。
+     * 优先取 X-Forwarded-For 头（代理/负载均衡后），fallback 到 remoteAddr。
+     */
+    private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();   // 第一个 IP 是原始客户端
+        }
+        return request.getRemoteAddr();
+    }
     private final com.aiextract.service.ShareService shareService;
 
     private String getToken() {
@@ -66,7 +81,12 @@ public class SkillController {
     @PostMapping(value = "/{skillId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(
             @PathVariable String skillId,
-            @Valid @RequestBody SkillChatRequest request) {
+            @Valid @RequestBody SkillChatRequest request,
+            HttpServletRequest httpRequest) {
+        // QueryGate 前置拦截 — 四层门控，短路返回
+        var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
+        if (blocked != null) return SseAdapter.fromFlux(blocked);
+
         return SseAdapter.fromFlux(
             chatStreamService.chat(UUID.fromString(skillId), request, extractUserId(), extractRole()));
     }
@@ -99,7 +119,12 @@ public class SkillController {
     @PostMapping(value = "/{skillId}/practice/respond", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter respondPractice(
             @PathVariable String skillId,
-            @Valid @RequestBody PracticeRespondRequest request) {
+            @Valid @RequestBody PracticeRespondRequest request,
+            HttpServletRequest httpRequest) {
+        // QueryGate 前置拦截 — 四层门控
+        var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
+        if (blocked != null) return SseAdapter.fromFlux(blocked);
+
         return SseAdapter.fromFlux(
             chatStreamService.respondPractice(UUID.fromString(skillId), request, extractUserId(), extractRole()));
     }
@@ -298,5 +323,15 @@ public class SkillController {
         UUID userId = extractUserId();
         var evaluations = skillService.getPracticeScoreTrend(skillId, userId);
         return ApiResponse.success(evaluations);
+    }
+
+    /**
+     * 上传分身头像。
+     */
+    @PostMapping("/{skillId}/avatar")
+    public ApiResponse<Map<String, String>> uploadAvatar(
+            @PathVariable String skillId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        return ApiResponse.success(skillService.uploadAvatar(skillId, file));
     }
 }

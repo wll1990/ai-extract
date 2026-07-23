@@ -150,6 +150,24 @@ public class ShareService {
         return share;
     }
 
+    /**
+     * 自定义短码 — 校验唯一性后更新。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SkillShare updateShareCode(UUID skillId, String customCode) {
+        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_DEFAULT)
+                .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
+        if (!share.getShareCode().equals(customCode)
+                && shareRepository.findByShareCode(customCode).isPresent()) {
+            throw new BusinessException(400, "该短码已被使用");
+        }
+        share.setShareCode(customCode);
+        share.setUpdatedAt(LocalDateTime.now());
+        shareRepository.save(share);
+        log.info("短码已更新 skillId={} shareCode={}", skillId, customCode);
+        return share;
+    }
+
     // ============================================================
     // 公开端
     // ============================================================

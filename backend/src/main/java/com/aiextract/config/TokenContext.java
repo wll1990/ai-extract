@@ -1,0 +1,48 @@
+package com.aiextract.config;
+
+import org.springframework.core.task.TaskDecorator;
+import org.springframework.lang.Nullable;
+
+import java.util.UUID;
+
+/**
+ * Token 统计上下文 — ThreadLocal 传递 userId，不侵入业务代码。
+ *
+ * <p>Filter 层自动设置，ChatModel 包装器自动读取，请求结束自动清理。
+ * TaskDecorator 确保 @Async 线程池复用时不丢失上下文。
+ */
+public final class TokenContext {
+
+    private static final ThreadLocal<UUID> USER_ID = new ThreadLocal<>();
+
+    private TokenContext() {}
+
+    public static void set(@Nullable UUID userId) {
+        USER_ID.set(userId);
+    }
+
+    @Nullable
+    public static UUID get() {
+        return USER_ID.get();
+    }
+
+    public static void clear() {
+        USER_ID.remove();
+    }
+
+    /** 异步线程池装饰器 — 把父线程的 userId 传递给子线程 */
+    public static class Decorator implements TaskDecorator {
+        @Override
+        public Runnable decorate(Runnable runnable) {
+            UUID parentUserId = USER_ID.get();
+            return () -> {
+                try {
+                    USER_ID.set(parentUserId);
+                    runnable.run();
+                } finally {
+                    USER_ID.remove();
+                }
+            };
+        }
+    }
+}
