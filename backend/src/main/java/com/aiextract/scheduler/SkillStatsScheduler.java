@@ -21,11 +21,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>防重入：AtomicBoolean 保证同一时刻只有一个任务在执行。</p>
  * <p>数据口径：使用 batchStatsOverviewExcludeTest 排除 is_test=true 的管理员测试数据。</p>
  *
- * <p>TODO: 当分身数量超过10000时，改为分页批量处理（每批500），避免一次性加载过多实体到内存。</p>
- * <p>TODO: 当前为全量定时扫描（每5分钟扫全部 conversation_stats + feedback_log），
- * 长期应改为异步增量统计——在 ChatStreamService/PracticeDemoService 的 doFinally 回调中
- * 直接更新 skill.conversation_count/user_count/satisfaction_rate/last_active_at，
- * 消除周期性全表扫描，变成 O(1) 的逐次写入。</p>
+ * <h3>演进路线</h3>
+ * <pre>
+ * Phase 1（当前）— 每5分钟全量扫 conversation_stats + feedback_log
+ *   适用：分身 &lt; 10,000，每次 &lt; 200ms，零额外依赖
+ *   瓶颈：分身数增长后全表扫描耗时线性增长
+ *
+ * Phase 2 — 异步增量自增 conversationCount + lastActiveAt
+ *   doFinally 回调中直接 UPDATE skill SET conversation_count = conversation_count + 1
+ *   userCount/satisfactionRate 仍保留定时聚合（去重和百分比需聚合窗口数据）
+ *   适用：分身 &lt; 100,000
+ *   瓶颈：userCount 去重和 30 天窗口衰减无法纯增量解决
+ *
+ * Phase 3 — Redis Sorted Set 滑动窗口 + 定时回写 PostgreSQL
+ *   ZADD skill:conv:{skillId} {timestamp} {conversationId}   -- 自动去重
+ *   ZADD skill:user:{skillId} {timestamp} {userId}            -- 自动去重
+ *   ZCOUNT 计算 30 天内元素个数（O(log N)）
+ *   定期 flush 快照到 skill 表做持久化兜底
+ *   适用：任意规模
+ *   成本：引入 Redis 依赖，需处理缓存穿透和降级
+ * </pre>
  *
  * @author AI Extract Team
  * @since 2026-07-28
