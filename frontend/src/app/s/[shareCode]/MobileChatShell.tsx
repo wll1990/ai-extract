@@ -153,12 +153,9 @@ export default function MobileChatShell({
                   <span className="inline-block mt-1.5 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
                     {TALK_NAME_CARD.roleTag}
                   </span>
-                  <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
-                    {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
-                      i < arr.length - 1
-                        ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
-                        : <React.Fragment key={i}>{part}</React.Fragment>
-                    )}
+                  <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed">
+                    已采集 {totalGrains > 0 ? totalGrains : '...'} 条实战经验
+                    {(info.sceneTags?.length || 0) > 0 && <>，覆盖 {info.sceneTags!.length} 个业务场景</>}
                   </p>
 {info.stats && info.stats.conversationCount > 0 && (
   <div className="mt-2 flex items-center gap-3">
