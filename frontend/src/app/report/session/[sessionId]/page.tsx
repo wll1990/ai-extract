@@ -59,6 +59,16 @@ export default function ReportSessionPage() {
         return;
       }
 
+      // 非200/202 — 停止轮询，显示错误
+      if (r.status !== 202) {
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = undefined; }
+        setPollStopped(true);
+        let msg = '报告加载失败';
+        try { const err = await r.json(); if (err.message) msg = err.message; } catch {}
+        setError(msg);
+        return;
+      }
+
       // 202: parse grain info
       const body = await r.json();
       const grains: number = body.grains || 0;
@@ -77,9 +87,14 @@ export default function ReportSessionPage() {
     } catch { /* retry next interval */ }
   }, [sessionId]);
 
+  // 首次标记加载完成
   useEffect(() => {
-    if (!sessionId) return;
-    setLoading(false);
+    if (sessionId) setLoading(false);
+  }, [sessionId]);
+
+  // 启动轮询
+  useEffect(() => {
+    if (!sessionId || loading) return;
 
     checkReport();
     timerRef.current = setInterval(checkReport, 10_000);

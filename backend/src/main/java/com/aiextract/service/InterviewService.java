@@ -729,7 +729,7 @@ public class InterviewService {
      *   <li>设置 status=completed + phase=closing + finishedAt</li>
      *   <li>根据 interviewType 选择萃取管道：
      *       <ul>
-     *         <li>expert → {@link ExpertInterviewProcessor#processCompletedInterview}</li>
+     *         <li>expert → {@link ExpertInterviewProcessor#processExpertInterview}</li>
      *         <li>sales → {@link InterviewTranscriptExtractor#extractFromInterview}</li>
      *       </ul>
      *   </li>

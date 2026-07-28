@@ -137,7 +137,7 @@ public class InterviewController {
      * 强制完成访谈。
      *
      * @param sessionId 会话ID
-     * @return reportId（完成时触发的报告标识）
+     * @return sessionId（前端使用此值访问 /reports/by-session/{sessionId}）
      */
     @PostMapping("/{sessionId}/force-complete")
     public ApiResponse<Map<String, Object>> forceComplete(@PathVariable String sessionId) {

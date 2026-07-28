@@ -320,6 +320,9 @@ public class SkillService {
             stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
             stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
             stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+            if (skill.getLastActiveAt() != null) {
+                stats.put("lastActive", skill.getLastActiveAt().toString());
+            }
             item.put("stats", stats);
             result.add(item);
         }

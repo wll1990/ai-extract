@@ -1,6 +1,7 @@
 'use client';
 
 import type { ShareInfo } from '@/lib/api/c';
+import { StatBadge } from '@aiextract/shared-ui';
 
 interface Props {
   info: ShareInfo;

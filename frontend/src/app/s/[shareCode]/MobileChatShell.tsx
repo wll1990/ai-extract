@@ -78,6 +78,8 @@ export default function MobileChatShell({
     }
   }, [mode, info?.skillId]);
 
+  const totalGrains = (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0);
+
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#f7f9ff]">
       {/* 顶栏 */}
@@ -174,8 +176,7 @@ export default function MobileChatShell({
                 </div>
               </div>
               <TrustBadge
-                grainCount={(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
-                  ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : undefined}
+                grainCount={totalGrains > 0 ? totalGrains : undefined}
                 sceneCount={(info.sceneTags?.length || 0) > 0 ? info.sceneTags!.length : undefined}
                 satisfactionRate={info.stats?.satisfactionRate}
               />
@@ -196,7 +197,7 @@ export default function MobileChatShell({
                 <button key={s.tag} onClick={() => onPickScene(s.tag)}
                   className="flex items-center justify-between rounded-lg border border-border bg-white px-4 py-3 text-left shadow-sm active:scale-[0.98]">
                   <span className="text-body font-medium text-foreground">{s.tag}</span>
-                  <span className="text-[11px] text-muted-foreground-2">{s.count ? `${s.count} 条锦囊` : ''} ›</span>
+                  <span className="text-[11px] text-muted-foreground-2">{s.count ? `${s.count} 条经验` : ''} ›</span>
                 </button>
               ))}
               {sceneTags.length === 0 && (
@@ -257,8 +258,7 @@ export default function MobileChatShell({
                           {TALK_NAME_CARD.roleTag}
                         </span>
                         <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed">
-                          已采集 {(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
-                            ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : '...'} 条实战经验
+                          已采集 {totalGrains > 0 ? totalGrains : '...'} 条实战经验
                           {(info.sceneTags?.length || 0) > 0 && <>，覆盖 {info.sceneTags!.length} 个业务场景</>}
                         </p>
 {info.stats && info.stats.conversationCount > 0 && (
@@ -277,8 +277,7 @@ export default function MobileChatShell({
                       </div>
                     </div>
                     <TrustBadge
-                      grainCount={(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
-                        ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : undefined}
+                      grainCount={totalGrains > 0 ? totalGrains : undefined}
                       sceneCount={(info.sceneTags?.length || 0) > 0 ? info.sceneTags!.length : undefined}
                       satisfactionRate={info.stats?.satisfactionRate}
                     />
@@ -333,7 +332,7 @@ export default function MobileChatShell({
                               {i === 0 && <span className="inline-flex items-center rounded-pill bg-amber-100 text-[9px] font-medium text-amber-700 px-1.5 py-0.5 mr-1">推荐</span>}
                               {s.tag}
                             </span>
-                            <span className="text-[11px] text-muted-foreground">{s.count ? `${s.count} 条锦囊` : ''}</span>
+                            <span className="text-[11px] text-muted-foreground">{s.count ? `${s.count} 条经验` : ''}</span>
                           </button>
                         );
                       })}

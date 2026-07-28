@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { fetchRecommendedQuestions, type SkillDetail } from '@/lib/api/skill';
-import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 const SCENE_EMOJIS: Record<string, string> = {
   '价格谈判': '💰', '竞品对比': '🤝', '异议处理': '🎯',
@@ -98,21 +98,15 @@ export function ChatEntry({
                   </p>
                 )}
                 {skill.stats && skill.stats.conversationCount > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
-                      💬 {skill.stats.conversationCount.toLocaleString()} 次对话
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 10 }}>
+                    <StatBadge icon="💬" value={skill.stats.conversationCount} label="次对话" size="md" />
                     {skill.stats.satisfactionRate > 0 && (
                       <><span style={{ color: 'var(--fg-dim)' }}>·</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
-                        👍 {skill.stats.satisfactionRate}% 满意
-                      </span></>
+                      <StatBadge icon="👍" value={skill.stats.satisfactionRate} label="% 满意" size="md" /></>
                     )}
                     {skill.stats.userCount > 0 && (
                       <><span style={{ color: 'var(--fg-dim)' }}>·</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
-                        👤 {skill.stats.userCount} 人
-                      </span></>
+                      <StatBadge icon="👤" value={skill.stats.userCount} label="人" size="md" /></>
                     )}
                   </div>
                 )}

@@ -18,6 +18,18 @@ import { TrustBadge, StatBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GU
 
 type ChatMode = 'qa' | 'talk' | 'practice';
 
+function formatRelativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return '刚刚';
+  if (min < 60) return `${min} 分钟前`;
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+  return `${Math.floor(days / 30)} 个月前`;
+}
+
 export default function SkillChatPage() {
   const params = useParams();
   const router = useRouter();
@@ -53,7 +65,7 @@ export default function SkillChatPage() {
   const [openingMessage, setOpeningMessage] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [detailFetched, setDetailFetched] = useState(false);
-  const [skillStats, setSkillStats] = useState<{ conversationCount: number; userCount: number; satisfactionRate: number } | null>(null);
+  const [skillStats, setSkillStats] = useState<{ conversationCount: number; userCount: number; satisfactionRate: number; lastActive?: string } | null>(null);
   const [grainCount, setGrainCount] = useState(0);
   const [sceneCount, setSceneCount] = useState(0);
   const [skillTags, setSkillTags] = useState<string[]>([]);
@@ -168,6 +180,19 @@ export default function SkillChatPage() {
                       已采集 {grainCount > 0 ? grainCount : '...'} 条实战经验
                       {sceneCount > 0 && <>，覆盖 {sceneCount} 个业务场景</>}
                     </p>
+                            {skillStats && skillStats.conversationCount > 0 && (
+                              <div className="mt-2 flex items-center gap-3">
+                                <StatBadge icon="💬" value={skillStats.conversationCount} label="次对话" size="md" />
+                                {skillStats.satisfactionRate > 0 && (
+                                  <><span className="text-[#d4d8e0] text-sm">·</span>
+                                  <StatBadge icon="👍" value={skillStats.satisfactionRate} label="% 满意" size="md" /></>
+                                )}
+                                {skillStats.userCount > 0 && (
+                                  <><span className="text-[#d4d8e0] text-sm">·</span>
+                                  <StatBadge icon="👤" value={skillStats.userCount} label="人用过" size="md" /></>
+                                )}
+                              </div>
+                            )}
                   </div>
                 </div>
                 {skillTags.length > 0 && (
@@ -183,6 +208,7 @@ export default function SkillChatPage() {
                   grainCount={grainCount > 0 ? grainCount : undefined}
                   sceneCount={sceneCount > 0 ? sceneCount : undefined}
                   satisfactionRate={skillStats?.satisfactionRate}
+                  lastActive={skillStats?.lastActive ? formatRelativeTime(skillStats.lastActive) : undefined}
                 />
               </div>
 
@@ -244,21 +270,15 @@ export default function SkillChatPage() {
                               <p className="text-[14px] text-muted-foreground mt-2.5 font-medium">{ownerTitle}</p>
                             )}
                             {skillStats && skillStats.conversationCount > 0 && (
-                              <div className="mt-2 flex items-center gap-4">
-                                <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
-                                  💬 {skillStats.conversationCount.toLocaleString()}<span className="text-[11px] font-normal text-[#64748b]">次对话</span>
-                                </span>
+                              <div className="mt-2 flex items-center gap-3">
+                                <StatBadge icon="💬" value={skillStats.conversationCount} label="次对话" size="md" />
                                 {skillStats.satisfactionRate > 0 && (
-                                  <><span className="text-[#d4d8e0]">·</span>
-                                  <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
-                                    👍 {skillStats.satisfactionRate}<span className="text-[11px] font-normal text-[#64748b]">% 满意</span>
-                                  </span></>
+                                  <><span className="text-[#d4d8e0] text-sm">·</span>
+                                  <StatBadge icon="👍" value={skillStats.satisfactionRate} label="% 满意" size="md" /></>
                                 )}
                                 {skillStats.userCount > 0 && (
-                                  <><span className="text-[#d4d8e0]">·</span>
-                                  <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
-                                    👤 {skillStats.userCount.toLocaleString()}<span className="text-[11px] font-normal text-[#64748b]">人用过</span>
-                                  </span></>
+                                  <><span className="text-[#d4d8e0] text-sm">·</span>
+                                  <StatBadge icon="👤" value={skillStats.userCount} label="人用过" size="md" /></>
                                 )}
                               </div>
                             )}
@@ -281,6 +301,7 @@ export default function SkillChatPage() {
                           grainCount={grainCount > 0 ? grainCount : undefined}
                           sceneCount={sceneCount > 0 ? sceneCount : undefined}
                           satisfactionRate={skillStats?.satisfactionRate}
+                          lastActive={skillStats?.lastActive ? formatRelativeTime(skillStats.lastActive) : undefined}
                         />
                       </div>
                     )}
