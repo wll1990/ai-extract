@@ -32,8 +32,11 @@ import java.util.UUID;
 @AllArgsConstructor
 public class SkillShare {
 
-    /** 默认渠道 */
-    public static final String CHANNEL_DEFAULT = "default";
+    /** 对外分享渠道 */
+    public static final String CHANNEL_PUBLIC = "public";
+
+    /** 对内分享渠道 */
+    public static final String CHANNEL_INTERNAL = "internal";
 
     /**
      * 分享唯一标识
@@ -48,9 +51,10 @@ public class SkillShare {
     private UUID skillId;
 
     /**
-     * 分身所属企业ID（建码时经 skill→space→user 解析冗余，归因用）
+     * 分身所属企业ID（建码时经 skill→space→user 解析冗余，归因用）。
+     * C 端分身分享时为 null。
      */
-    @Column(name = "company_id", nullable = false)
+    @Column(name = "company_id")
     private UUID companyId;
 
     /**

@@ -13,7 +13,7 @@ import { useQaChat } from './hooks/useQaChat';
 import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import SceneTagBar from '@/components/skill/SceneTagBar';
-import { getOrCreateSkillShare, toggleSkillShare } from '@/lib/api/skill';
+import { getOrCreateSkillShare, toggleSkillShare, createInternalShare } from '@/lib/api/skill';
 import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -26,6 +26,11 @@ export default function SkillChatPage() {
   const ownerName = searchParams.get('name') || 'AI分身';
   const ownerTitle = searchParams.get('title') || '';
   const initial = (ownerName || '?')[0];
+
+  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollToTop = useCallback(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+  }, []);
 
   const [chatMode, setChatMode] = useState<ChatMode>('talk');
   const [modeSelected, setModeSelected] = useState(true);
@@ -107,7 +112,7 @@ export default function SkillChatPage() {
             ].map(m => (
               <button key={m.key}
                 onClick={() => {
-                  window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
+                  scrollToTop();
                   if (m.key === 'practice') { setChatMode('practice'); setModeSelected(true); resetPractice(); return; }
                   qa.setMessages([]); qa.setCurrentConvId(''); setChatMode(m.key);
                   if (m.key === 'talk') qa.handleTalkStart(); if (m.key === 'qa') qa.handleQaModeSelect();
@@ -120,14 +125,21 @@ export default function SkillChatPage() {
             ))}
           </div>
 
-          <button onClick={() => setShareTarget(true)}
-            className="text-muted-foreground-2 hover:text-primary text-sm transition-colors" title="分享">🔗</button>
+          <div style={{ position: 'relative' }}>
+            <button onClick={() => setShareTarget(!shareTarget)}
+              className="text-muted-foreground-2 hover:text-primary text-sm transition-colors" title="分享">🔗</button>
+            {shareTarget && (
+              <ShareModal skillId={skillId} ownerName={ownerName} onClose={() => setShareTarget(false)}
+                getOrCreatePublic={getOrCreateSkillShare} togglePublic={toggleSkillShare}
+                getOrCreateInternal={createInternalShare} />
+            )}
+          </div>
           <button onClick={() => { qa.setShowHistory(!qa.showHistory); if (!qa.showHistory) qa.loadConversations(); }}
             className="text-muted-foreground-2 hover:text-foreground text-sm transition-colors">📋</button>
         </header>
 
         {/* 内容区 */}
-        <div className="flex-1 overflow-auto">
+        <div ref={contentRef} className="flex-1 overflow-auto">
           {/* ── Practice 场景选择 Hero ── */}
           {chatMode === 'practice' && !practiceSceneTag && (
             <div className="mx-auto max-w-[720px] space-y-4 px-4 pt-4">
@@ -448,13 +460,6 @@ export default function SkillChatPage() {
           )}
         </div>
 
-        {/* 分享弹窗 */}
-        {shareTarget && (
-          <ShareModal skillId={skillId} ownerName={ownerName} onClose={() => setShareTarget(false)}
-            getOrCreate={getOrCreateSkillShare} toggleShare={toggleSkillShare} />
-        )}
-
-        {/* 溯源抽屉 */}
         {traceGrainIds && (
           <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds}
             onClose={() => setTraceGrainIds('')} />

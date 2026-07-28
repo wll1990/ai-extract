@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useRef } from 'react';
 import { useInterviewCreate, type ExpertOption } from './useInterviewCreate';
+import { createInvite } from '@/lib/api/admin';
+import QRCode from 'qrcode';
 
 const PRESET_TOPICS = [
   '搞定说太贵了的客户', '如何在复杂决策链中找到关键人', '大客户破冰技巧',
@@ -12,6 +13,41 @@ const PRESET_TOPICS = [
 export default function CreateInterviewPage() {
   const h = useInterviewCreate();
   const [showConfirm, setShowConfirm] = useState(false);
+
+  // 邀请码分享
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteData, setInviteData] = useState<{ inviteCode: string; inviteUrl: string } | null>(null);
+  const [inviteQr, setInviteQr] = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const inviteRef = useRef<HTMLDivElement>(null);
+
+  const handleGenerateInvite = async () => {
+    if (inviteOpen) { setInviteOpen(false); return; }
+    setInviteOpen(true);
+    if (inviteData) return;
+    setInviteLoading(true);
+    try {
+      const data = await createInvite();
+      setInviteData(data);
+      const qr = await QRCode.toDataURL(data.inviteUrl, { width: 200, margin: 2 });
+      setInviteQr(qr);
+    } catch { setInviteOpen(false); }
+    finally { setInviteLoading(false); }
+  };
+
+  const copyInviteUrl = async () => {
+    if (!inviteData) return;
+    try { await navigator.clipboard.writeText(inviteData.inviteUrl); setInviteCopied(true); setTimeout(() => setInviteCopied(false), 2000); } catch {}
+  };
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (inviteRef.current && !inviteRef.current.contains(e.target as Node)) setInviteOpen(false);
+    };
+    if (inviteOpen) document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [inviteOpen]);
 
   const handleStartClick = () => {
     if (h.isFirstInterview) {
@@ -39,8 +75,39 @@ export default function CreateInterviewPage() {
       <div className="mx-auto max-w-[640px] px-4 sm:px-6 pb-12 pt-6 sm:pt-8">
         {/* 顶部导航 */}
         <div className="mb-6 flex items-center justify-between">
-          <Link href="/skill" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">← 返回分身广场</Link>
-          <button type="button" onClick={() => window.history.back()} className="text-muted-foreground-2 hover:text-foreground text-lg transition-colors" aria-label="关闭">✕</button>
+          <div />
+          <div ref={inviteRef} style={{ position: 'relative' }}>
+            <button type="button" onClick={handleGenerateInvite}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light transition-colors">
+              🔗 邀请销冠
+            </button>
+            {inviteOpen && (
+              <div className="absolute top-full right-0 mt-2 z-50 w-[360px] rounded-xl border border-border bg-white shadow-xl p-5">
+                <div className="absolute -top-1.5 right-4 w-3 h-3 rotate-45 bg-white border-l border-t border-border" />
+                <h3 className="text-sm font-semibold text-foreground mb-3">邀请销冠参与访谈</h3>
+                {inviteLoading && <p className="text-xs text-muted-foreground py-4 text-center">生成中...</p>}
+                {inviteData && (
+                  <>
+                    <div className="flex justify-center mb-3">
+                      {inviteQr ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={inviteQr} alt="邀请二维码" className="h-[160px] w-[160px] rounded-lg border border-border" />
+                      ) : (
+                        <div className="flex h-[160px] w-[160px] items-center justify-center rounded-lg border border-border text-xs text-muted-foreground-2">生成中…</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <input readOnly value={inviteData.inviteUrl} className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-surface px-3 text-xs text-muted-foreground outline-none" />
+                      <button onClick={copyInviteUrl} className="h-9 flex-none rounded-lg bg-primary px-3 text-xs font-semibold text-white hover:bg-primary-hover">
+                        {inviteCopied ? '已复制 ✓' : '复制'}
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted-foreground-2">销冠用手机扫码即可开始访谈，链接永久有效</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         <h1 className="mb-8 text-[26px] sm:text-[28px] font-bold text-foreground">
@@ -158,8 +225,10 @@ export default function CreateInterviewPage() {
         </div>
 
         {/* 底部操作区 */}
-        <div className="flex items-center justify-between">
-          <Link href="/skill" className="rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-primary-light min-h-[44px] flex items-center">返回</Link>
+        <div className="flex items-center justify-end">
+
+
+
           <button
             type="button"
             onClick={handleStartClick}

@@ -59,6 +59,16 @@ public class CAuthController {
     }
 
     /**
+     * C 端独立注册（非游客升级，source='platform'）。
+     * 用户在 platform 直接注册，没有经过分享链接。
+     */
+    @PostMapping("/register/new")
+    public ApiResponse<GuestSessionResponse> registerNew(@Valid @RequestBody CRegisterRequest request) {
+        return ApiResponse.success(cAuthService.registerNew(
+            request.getAccount(), request.getPassword(), request.getNickname()));
+    }
+
+    /**
      * 当前 C 端身份探测（B 端 token 会 404 — 前端按无 C 端身份处理）
      */
     @GetMapping("/me")

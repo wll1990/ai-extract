@@ -59,11 +59,12 @@ public class SecurityConfig {
                         // B 端认证接口：无需认证
                         .requestMatchers(HttpMethod.POST, "/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/auth/register").permitAll()
-                        // 对外公开接口（分享落地信息、游客发证）：无需认证
+                        // 对外公开接口（分享落地信息、游客发证、企业注册码信息、邀请码信息）：无需认证
                         .requestMatchers("/public/**").permitAll()
-                        // C 端认证接口：登录公开；注册=游客升级（需游客身份）；me 需任意认证
+                        // C 端认证接口：登录公开；注册=游客升级（需游客身份）；独立注册公开；me 需任意认证
                         .requestMatchers(HttpMethod.POST, "/c/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/c/auth/register").hasRole("C_GUEST")
+                        .requestMatchers(HttpMethod.POST, "/c/auth/register/new").permitAll()
                         .requestMatchers(HttpMethod.GET, "/c/auth/me").authenticated()
                         // Swagger文档（如后续集成）
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
@@ -73,18 +74,31 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/health").permitAll()
                         // 获取当前用户信息：需要认证
                         .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+                        // 对内分享落地页信息：无需认证（登录页需要公司名，分享码本身就是密钥）
+                        .requestMatchers(HttpMethod.GET, "/i/*/info").permitAll()
+                        // 对内分享：需认证（公司校验在业务层做）
+                        .requestMatchers("/i/**").authenticated()
                         // 管理接口：仅超级管理员
                         .requestMatchers("/admin/**").hasRole("SUPER_ADMIN")
-                        // 分身状态变更：仅超级管理员（收敛原"任何登录用户可改"的越权面）
-                        .requestMatchers(HttpMethod.PUT, "/skills/*/status").hasRole("SUPER_ADMIN")
-                        // 分身列表：仅 B 端（防 C 端游客枚举全量分身）
-                        .requestMatchers(HttpMethod.GET, "/skills/list").hasAnyRole("SUPER_ADMIN", "EMPLOYEE")
-                        // 企业总调度问答：仅 B 端（C 端 token 无 companyId claim）
-                        .requestMatchers(HttpMethod.POST, "/skills/enterprise/chat").hasAnyRole("SUPER_ADMIN", "EMPLOYEE")
+                        // 访谈：B 端全员 + C 端
+                        .requestMatchers("/interviews/**").hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN", "EMPLOYEE", "C_USER", "C_PARTNER")
+                        // C 端颗粒操作接口
+                        .requestMatchers("/grains/**").authenticated()
+                        // 分身状态变更：B端管理员 + C端属主
+                        .requestMatchers(HttpMethod.PUT, "/skills/*/status").hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN", "C_USER")
+                        // 分身列表：B 端全员 + C 端
+                        .requestMatchers(HttpMethod.GET, "/skills/list").hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN", "EMPLOYEE", "C_USER")
+                        // 企业总调度问答：B 端全员
+                        .requestMatchers(HttpMethod.POST, "/skills/enterprise/chat").hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN", "EMPLOYEE")
                         // 聊天全家桶（chat/practice/conversations/scene-tags...）：任意认证身份，含 C 端
                         .requestMatchers("/skills/**").authenticated()
-                        // 其余内部接口（spaces/reports/interviews...）：仅 B 端，对 C 端关门
-                        .anyRequest().hasAnyRole("SUPER_ADMIN", "EMPLOYEE"))
+                        // 报告详情查看：所有认证用户可读（含 C端 H5 报告页）
+                        // 仅单层路径 /reports/{id}，不包含 /reports/{id}/download 等子路径
+                        .requestMatchers(HttpMethod.GET, "/reports/*").authenticated()
+                        // H5 按 sessionId 查报告 HTML（含就绪检查和轮询）
+                        .requestMatchers(HttpMethod.GET, "/reports/by-session/**").authenticated()
+                        // 其余内部接口：B 端全员，对 C 端关门
+                        .anyRequest().hasAnyRole("SUPER_ADMIN", "COMPANY_ADMIN", "EMPLOYEE"))
 
                 // 添加JWT过滤器（在UsernamePasswordAuthenticationFilter之前）
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

@@ -4,12 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { getSpaces, type SpaceInfo } from '@/lib/api/spaces';
+import { useRoleGuard } from '@/lib/hooks/useRoleGuard';
 
 /**
- * 空间总览页 — 销冠知识大盘
+ * 空间总览页 — 销冠知识大盘（仅管理员可访问）
  */
 export default function SpacesOverviewPage() {
   const router = useRouter();
+  const { allowed, checked } = useRoleGuard(['super_admin', 'company_admin']);
+
   const [spaces, setSpaces] = useState<SpaceInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,6 +23,8 @@ export default function SpacesOverviewPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  if (!checked) return <LoadingSpinner />;
+  if (!allowed) return null; // redirecting...
   if (loading) return <LoadingSpinner />;
 
   const totalReports = spaces.reduce((s, x) => s + (x.reportCount || 0), 0);

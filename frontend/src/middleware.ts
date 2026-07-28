@@ -12,8 +12,8 @@ import type { NextRequest } from 'next/server';
 // 无需登录即可访问的路径
 const PUBLIC_PATHS = ['/login', '/register'];
 
-// 公开路径前缀（C 端分享页，游客无 Cookie 直接访问）
-const PUBLIC_PREFIXES = ['/s/'];
+// 公开路径前缀（C 端分享页 + H5 移动端 + 对内分享，无需 B 端 cookie）
+const PUBLIC_PREFIXES = ['/s/', '/h5/', '/i/'];
 
 // 静态资源和 API 路由不拦截
 const SKIP_PREFIXES = ['/_next', '/api', '/favicon.ico', '/robots.txt'];

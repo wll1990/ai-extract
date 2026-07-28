@@ -35,9 +35,19 @@ function safeRemoveItem(key: string): void {
 
 // ==================== Token & User ====================
 
-/** 获取 JWT token（SSR 安全，服务端返回 null） */
+/** 获取 JWT token（SSR 安全，服务端返回 null）。B端 token 优先，fallback C端 c_auth */
 export function getToken(): string | null {
-  return safeGetItem(KEYS.TOKEN);
+  const bToken = safeGetItem(KEYS.TOKEN);
+  if (bToken) return bToken;
+  // C 端 Bearer token（分享页/注册/登录写入 localStorage.c_auth）
+  const cAuth = safeGetItem('c_auth');
+  if (cAuth) {
+    try {
+      const session = JSON.parse(cAuth);
+      return session?.token || null;
+    } catch { return null; }
+  }
+  return null;
 }
 
 /** 获取当前登录用户信息 */
@@ -61,6 +71,7 @@ export function setAuth(token: string, user: Record<string, unknown>): void {
 export function clearAuth(): void {
   safeRemoveItem(KEYS.TOKEN);
   safeRemoveItem(KEYS.USER);
+  safeRemoveItem('c_auth');
 }
 
 // ==================== 报告检查清单 ====================

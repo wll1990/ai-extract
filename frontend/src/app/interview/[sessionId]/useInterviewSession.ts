@@ -14,6 +14,7 @@ interface SessionState {
   messages: InterviewMessageData[];
   isCompleted: boolean;
   completionReportId: string | null;
+  completionGrainCount: number;
   showCompletionCard: boolean;
   showCollectPanel: boolean;
 }
@@ -25,12 +26,14 @@ type SessionAction =
   | { type: 'ADD_MESSAGE'; message: InterviewMessageData }
   | { type: 'UPDATE_AI_MESSAGE'; id: string; content: string }
   | { type: 'REMOVE_MESSAGE'; id: string }
-  | { type: 'MARK_COMPLETED'; reportId: string | null }
+  | { type: 'MARK_COMPLETED'; reportId: string | null; grainCount?: number }
+  | { type: 'RESUME_CHAT' }
   | { type: 'SET_COLLECT_PANEL'; show: boolean };
 
 const initialSessionState: SessionState = {
   session: null, messages: [], isCompleted: false,
-  completionReportId: null, showCompletionCard: false, showCollectPanel: true,
+  completionReportId: null, completionGrainCount: 0,
+  showCompletionCard: false, showCollectPanel: true,
 };
 
 function sessionReducer(state: SessionState, action: SessionAction): SessionState {
@@ -51,13 +54,19 @@ function sessionReducer(state: SessionState, action: SessionAction): SessionStat
       return { ...state, messages: state.messages.filter(m => m.id !== action.id) };
     case 'MARK_COMPLETED':
       return { ...state, isCompleted: true, completionReportId: action.reportId,
-        showCompletionCard: true };
+        completionGrainCount: action.grainCount || 0, showCompletionCard: true };
+    case 'RESUME_CHAT':
+      return { ...state, isCompleted: false, showCompletionCard: false,
+        completionGrainCount: 0, completionReportId: null };
     case 'SET_COLLECT_PANEL':
       return { ...state, showCollectPanel: action.show };
     default:
       return state;
   }
 }
+
+/** AI 在流式回复中输出此标记时，前端点亮阶段推进按钮 */
+const SUGGEST_ADVANCE_MARKER = '【建议推进】';
 
 // ---- Hook ----
 
@@ -130,7 +139,7 @@ export function useInterviewSession(sessionId: string) {
     const controller = sendMessage(sessionId, text, {
       onChunk: (content) => {
         streamingContentRef.current += content;
-        if (streamingContentRef.current.includes('【建议推进】')) setSuggestAdvance(true);
+        if (streamingContentRef.current.includes(SUGGEST_ADVANCE_MARKER)) setSuggestAdvance(true);
         dispatch({ type: 'UPDATE_AI_MESSAGE', id: aiMsgId, content: streamingContentRef.current });
       },
       onPhaseChange: (phase) => {
@@ -164,7 +173,7 @@ export function useInterviewSession(sessionId: string) {
         setIsStreaming(false);
         getSession(sessionId).then(s => {
           dispatch({ type: 'SET_SESSION', session: s });
-          if (s.status === 'completed' && s.reportId) dispatch({ type: 'MARK_COMPLETED', reportId: s.reportId });
+          if (s.status === 'completed') dispatch({ type: 'MARK_COMPLETED', reportId: s.reportId || null, grainCount: s.grainCount });
         }).catch(console.error);
       },
       onError: (msg) => {
@@ -178,24 +187,44 @@ export function useInterviewSession(sessionId: string) {
   // Resume
   const handleResume = useCallback(() => {
     setShowResumeModal(false); setIsStreaming(true);
+
+    const aiMsgId = `resume-${Date.now()}`;
+    dispatch({ type: 'ADD_MESSAGE', message: {
+      id: aiMsgId, role: 'ai', content: '', depth: 0,
+      phase: state.session?.currentPhase || 'opening', createdAt: new Date().toISOString(),
+    }});
+
+    let fullContent = '';
     const ctrl = resumeSession(sessionId, {
-      onChunk: () => {},
+      onChunk: (content) => {
+        fullContent += content;
+        dispatch({ type: 'UPDATE_AI_MESSAGE', id: aiMsgId, content: fullContent });
+      },
       onDone: () => {
         setIsStreaming(false);
         getMessages(sessionId).then(msgs => dispatch({ type: 'SET_MESSAGES', messages: msgs })).catch(console.error);
         getSession(sessionId).then(s => dispatch({ type: 'SET_SESSION', session: s })).catch(console.error);
       },
-      onError: (msg) => { setIsStreaming(false); setErrorBanner(msg); },
+      onError: (msg) => {
+        setIsStreaming(false); setErrorBanner(msg);
+        dispatch({ type: 'REMOVE_MESSAGE', id: aiMsgId });
+      },
     });
     abortRef.current = ctrl;
-  }, [sessionId]);
+  }, [sessionId, state.session, dispatch]);
 
-  // Restart
+  const isH5 = typeof window !== 'undefined' && window.location.pathname.startsWith('/h5/');
+
+  // Restart — 旧会话标记 abandoned，新建会话，直接进聊天
   const handleRestart = useCallback(async () => {
     setShowResumeModal(false);
-    try { await restartSession(sessionId); router.push('/interview/create'); }
+    try {
+      const result = await restartSession(sessionId);
+      if (isH5) router.push(`/h5/interview/chat/${result.sessionId}`);
+      else router.push(`/interview/${result.sessionId}`);
+    }
     catch (err) { console.error('重新开始失败:', err); }
-  }, [sessionId, router]);
+  }, [sessionId, router, isH5]);
 
   return {
     state, dispatch, inputValue, setInputValue, isLoading, isStreaming, setIsStreaming, isOnline,

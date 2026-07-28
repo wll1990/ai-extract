@@ -55,6 +55,10 @@ export function Navbar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         <Link href="/discover" className="btn btn-ghost">发现专家</Link>
 
+        {mounted && isLoggedIn && (
+          <Link href="/platform/my" className="btn btn-ghost">我的分身</Link>
+        )}
+
         {!mounted ? (
           // hydration 前与 SSR 一致：显示占位，避免布局跳动
           <span style={{ width: 56, height: 34 }} />

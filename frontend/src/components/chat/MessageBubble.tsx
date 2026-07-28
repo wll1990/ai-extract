@@ -3,6 +3,7 @@
 import React from 'react';
 import { cn } from '@/lib/utils';
 import { PHASE_LABELS } from '@/lib/constants';
+import { ChatAvatar } from '@aiextract/shared-ui';
 
 /** 消息气泡 Props */
 export interface MessageBubbleProps {
@@ -91,11 +92,14 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
   return (
     <div
       className={cn(
-        'flex w-full',
+        'flex w-full items-start gap-2',
         isUser ? 'justify-end' : 'justify-start',
         isNew && 'animate-[fadeIn_200ms_ease-out]',
       )}
     >
+      {/* AI 头像 */}
+      {isAi && <ChatAvatar role="ai" size={28} />}
+
       <div
         className={cn(
           'relative max-w-[80%]',
@@ -135,6 +139,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({
           )}
         </div>
       </div>
+
+      {/* 用户头像 */}
+      {isUser && <ChatAvatar role="user" size={28} />}
     </div>
   );
 };

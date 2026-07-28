@@ -133,6 +133,11 @@ export function toggleSkillShare(skillId: string, enabled: boolean): Promise<Ski
   return apiClient<SkillShareInfo>(`/skills/${skillId}/share`, { method: 'PUT', body: JSON.stringify({ enabled }) });
 }
 
+/** 生成（或获取已有）对内分享链接 */
+export function createInternalShare(skillId: string): Promise<SkillShareInfo> {
+  return apiClient<SkillShareInfo>(`/i/${skillId}/share/internal`, { method: 'POST' });
+}
+
 /** 提交反馈 */
 /** 提交用户反馈 —— 传递完整上下文供管理员审查 */
 export function submitFeedback(params: {

@@ -150,6 +150,13 @@ app:
         - '(system|user|assistant).{0,20}(prompt|message)'
         - '从现在开始.{0,30}(角色|身份)'
 
+  # ---- C 端萃取 & 访谈颗粒分级 ----
+  interview:
+    c-user-free-limit: 3           # C端用户免费萃取次数
+    # 颗粒分级阈值（商业化运营调参）
+    grain-enough: 10              # 报告就绪最低颗粒数（与 report.min-grains 保持一致）
+    grain-suggest-more: 5         # 低于此值强烈引导用户继续补充
+
   # ---- 分身分享 & C 端游客体系 ----
   share:
     guest-message-limit: 25        # 游客免费消息额度（跨会话全局计数）
@@ -177,6 +184,7 @@ app:
       - "「%s」时，有没有特别有效的具体话术？"
       - "如果「%s」失败了，复盘时最常发现什么原因？"
 
+  # ---- 访谈颗粒与报告阈值（可配置，商业化运营调参） ----
   # ---- 报告生成门槛 ----
   report:
     min-grains: 10                # 触发报告生成的最小活跃颗粒数

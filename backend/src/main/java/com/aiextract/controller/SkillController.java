@@ -6,6 +6,7 @@ import com.aiextract.config.SseAdapter;
 import com.aiextract.dto.*;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Skill;
+import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.service.ChatStreamService;
@@ -47,6 +48,7 @@ public class SkillController {
     private final ObjectMapper objectMapper;
     private final com.aiextract.util.JwtUtil jwtUtil;
     private final SkillRepository skillRepository;
+    private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final ExperienceGrainRepository grainRepository;
     private final PracticeDemoService practiceDemoService;
     private final QueryGate queryGate;
@@ -58,11 +60,13 @@ public class SkillController {
     private String getClientIp(HttpServletRequest request) {
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) {
-            return xff.split(",")[0].trim();   // 第一个 IP 是原始客户端
+            return xff.split(",")[0].trim(); // 第一个 IP 是原始客户端
         }
         return request.getRemoteAddr();
     }
+
     private final com.aiextract.service.ShareService shareService;
+    private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
@@ -79,16 +83,16 @@ public class SkillController {
     }
 
     @PostMapping(value = "/{skillId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chat(
-            @PathVariable String skillId,
+    public SseEmitter chat(@PathVariable String skillId,
             @Valid @RequestBody SkillChatRequest request,
             HttpServletRequest httpRequest) {
         // QueryGate 前置拦截 — 四层门控，短路返回
         var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
-        if (blocked != null) return SseAdapter.fromFlux(blocked);
+        if (blocked != null)
+            return SseAdapter.fromFlux(blocked);
 
         return SseAdapter.fromFlux(
-            chatStreamService.chat(UUID.fromString(skillId), request, extractUserId(), extractRole()));
+                chatStreamService.chat(UUID.fromString(skillId), request, extractUserId(), extractRole()));
     }
 
     @GetMapping("/{skillId}/conversations")
@@ -123,10 +127,11 @@ public class SkillController {
             HttpServletRequest httpRequest) {
         // QueryGate 前置拦截 — 四层门控
         var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
-        if (blocked != null) return SseAdapter.fromFlux(blocked);
+        if (blocked != null)
+            return SseAdapter.fromFlux(blocked);
 
         return SseAdapter.fromFlux(
-            chatStreamService.respondPractice(UUID.fromString(skillId), request, extractUserId(), extractRole()));
+                chatStreamService.respondPractice(UUID.fromString(skillId), request, extractUserId(), extractRole()));
     }
 
     /** 对练每轮评价 — 销冠答案对比 + 技法 + 溯源（非流式，直接返回 JSON） */
@@ -144,8 +149,9 @@ public class SkillController {
         }
         try {
             return ApiResponse.success(
-                practiceDemoService.evaluatePracticeResponse(
-                    UUID.fromString(skillId), sceneTag, customerMessage, myResponse, previousChampionAnswer, retryCount));
+                    practiceDemoService.evaluatePracticeResponse(
+                            UUID.fromString(skillId), sceneTag, customerMessage, myResponse, previousChampionAnswer,
+                            retryCount));
         } catch (Exception e) {
             log.error("evaluate-round error", e);
             return ApiResponse.error(500, "评估服务暂时不可用，请稍后重试");
@@ -172,12 +178,12 @@ public class SkillController {
     @GetMapping("/{skillId}/suggested")
     public ApiResponse<List<String>> getSuggestedQuestions(@PathVariable String skillId) {
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
-            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
         return ApiResponse.success(grainRecommendationService.generateSuggestedQuestions(skill));
     }
 
     /**
-     * 获取所有分身列表（管理员/首页用）
+     * 获取所有分身列表（管理员/首页/C端我的分身）
      */
     @GetMapping("/list")
     public ApiResponse<Map<String, Object>> listSkills(
@@ -185,7 +191,9 @@ public class SkillController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID userId) {
-        return ApiResponse.success(skillService.listAllSkills(page, size, status, userId));
+        UUID companyId = jwtUtil.getCompanyIdFromToken(getToken());
+        String role = extractRole();
+        return ApiResponse.success(skillService.listAllSkills(page, size, status, userId, companyId, role));
     }
 
     /**
@@ -198,13 +206,47 @@ public class SkillController {
     }
 
     /**
-     * 更新分身状态（公开/停用）
+     * 更新分身状态。
+     * B端管理员：可改任意状态（审核流水线）。
+     * C端用户：只能对自己的分身操作 published（发布）。
      */
     @PutMapping("/{skillId}/status")
     public ApiResponse<Void> updateSkillStatus(
             @PathVariable String skillId,
             @RequestBody Map<String, String> body) {
-        skillService.updateSkillStatus(skillId, body.getOrDefault("status", "active"));
+        String newStatus = body.getOrDefault("status", "active");
+        String role = extractRole();
+        if ("c_user".equalsIgnoreCase(role)) {
+            // C端：只能发布自己的分身
+            Skill skill = skillRepository.findById(UUID.fromString(skillId))
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+            Space space = spaceRepository.findById(skill.getSpaceId())
+                .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+            if (!space.isOwnedBy(extractUserId())) {
+                throw new BusinessException(403, "无权操作");
+            }
+            if (!"published".equals(newStatus)) {
+                throw new BusinessException(400, "只能发布");
+            }
+        }
+        skillService.updateSkillStatus(skillId, newStatus);
+
+        // C端发布时写审计日志
+        if ("c_user".equalsIgnoreCase(extractRole()) && "published".equals(newStatus)) {
+            try {
+                auditLogRepository.save(com.aiextract.model.AdminAuditLog.builder()
+                    .id(UUID.randomUUID())
+                    .adminId(extractUserId())
+                    .action("publish_skill_self")
+                    .targetType("skill")
+                    .targetId(UUID.fromString(skillId))
+                    .detail(objectMapper.writeValueAsString(Map.of("source", "c_user")))
+                    .createdAt(java.time.LocalDateTime.now())
+                    .build());
+            } catch (Exception e) {
+                log.warn("C端发布审计日志写入失败 skillId={}", skillId, e);
+            }
+        }
         return ApiResponse.success();
     }
 
@@ -268,9 +310,9 @@ public class SkillController {
         Set<String> all = new LinkedHashSet<>();
         if (skill != null) {
             grainRepository.findBySpaceId(skill.getSpaceId()).stream()
-                .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
-                .map(g -> g.getSceneTag()).distinct()
-                .forEach(tag -> all.addAll(practiceDemoService.generateRecommendedQuestions(tag)));
+                    .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
+                    .map(g -> g.getSceneTag()).distinct()
+                    .forEach(tag -> all.addAll(practiceDemoService.generateRecommendedQuestions(tag)));
         }
         return ApiResponse.success(new ArrayList<>(all));
     }
@@ -278,8 +320,10 @@ public class SkillController {
     /**
      * 获取分身场景标签
      *
-     * <p>从experience_grain表按scene_tag分组统计，
-     * 返回该分身擅长的领域列表，用于前端开场区展示。</p>
+     * <p>
+     * 从experience_grain表按scene_tag分组统计，
+     * 返回该分身擅长的领域列表，用于前端开场区展示。
+     * </p>
      */
     @GetMapping("/{skillId}/scene-tags")
     public ApiResponse<List<Map<String, Object>>> getSceneTags(@PathVariable String skillId) {
@@ -289,8 +333,10 @@ public class SkillController {
     /**
      * 获取对练场景列表
      *
-     * <p>从experience_grain表提取真实案例构建对练场景，
-     * 替代前端硬编码的预设场景。</p>
+     * <p>
+     * 从experience_grain表提取真实案例构建对练场景，
+     * 替代前端硬编码的预设场景。
+     * </p>
      */
     @GetMapping("/{skillId}/practice-scenes")
     public ApiResponse<List<Map<String, Object>>> getPracticeScenes(@PathVariable String skillId) {
@@ -300,18 +346,20 @@ public class SkillController {
     /**
      * 对练综合评价（SSE流式）
      *
-     * <p>对练结束后，以销冠分身视角对完整对话进行复盘评价。
-     * 接收完整对话记录和场景描述，流式返回结构化评价JSON。</p>
+     * <p>
+     * 对练结束后，以销冠分身视角对完整对话进行复盘评价。
+     * 接收完整对话记录和场景描述，流式返回结构化评价JSON。
+     * </p>
      */
     @PostMapping(value = "/{skillId}/practice/evaluate", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter evaluatePractice(
             @PathVariable String skillId,
             @RequestBody Map<String, String> body) {
         return SseAdapter.fromFlux(
-            chatStreamService.evaluatePractice(skillId,
-                body.getOrDefault("conversation", ""),
-                body.getOrDefault("scene", ""),
-                extractUserId()));
+                chatStreamService.evaluatePractice(skillId,
+                        body.getOrDefault("conversation", ""),
+                        body.getOrDefault("scene", ""),
+                        extractUserId()));
     }
 
     /**
@@ -323,6 +371,36 @@ public class SkillController {
         UUID userId = extractUserId();
         var evaluations = skillService.getPracticeScoreTrend(skillId, userId);
         return ApiResponse.success(evaluations);
+    }
+
+    /**
+     * 获取分身下所有颗粒（C端审核用）。
+     * 按 spaceId 查，覆盖访谈产生和素材直传产生的颗粒。
+     */
+    @GetMapping("/{skillId}/grains")
+    public ApiResponse<List<Map<String, Object>>> getSkillGrains(@PathVariable String skillId) {
+        Skill skill = skillRepository.findById(UUID.fromString(skillId))
+            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        UUID userId = extractUserId();
+        Space space = spaceRepository.findById(skill.getSpaceId())
+            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权访问");
+        }
+        List<Map<String, Object>> grains = grainRepository.findBySpaceId(skill.getSpaceId()).stream()
+            .map(g -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", g.getId().toString());
+                m.put("sceneTag", g.getSceneTag());
+                m.put("sceneDescription", g.getSceneDescription());
+                m.put("expertThought", g.getExpertThought());
+                m.put("standardScript", g.getStandardScript());
+                m.put("commonMistakes", g.getCommonMistakes());
+                m.put("status", g.getStatus());
+                m.put("sourceType", g.getSourceType());
+                return m;
+            }).toList();
+        return ApiResponse.success(grains);
     }
 
     /**

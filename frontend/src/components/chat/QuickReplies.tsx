@@ -3,17 +3,15 @@
 import React from 'react';
 
 export interface QuickRepliesProps {
-  /** 快捷回复选项 */
   replies: string[];
-  /** 点击回调，传入选中的文本 */
   onSelect: (text: string) => void;
-  /** 是否禁用（流式输出中禁用） */
   disabled?: boolean;
 }
 
 /**
  * 快捷回复按钮组 — 降低销冠输入门槛。
- * AI 开场或追问后提供 2-4 个可点击选项，点击即发送。
+ * 注意：此组件由 @aiextract/shared-ui 统一提供，这里仅为类型声明占位。
+ * 实际渲染的是 packages/shared-ui/src/chat/QuickReplies.tsx。
  */
 export const QuickReplies: React.FC<QuickRepliesProps> = ({ replies, onSelect, disabled }) => {
   if (!replies || replies.length === 0) return null;

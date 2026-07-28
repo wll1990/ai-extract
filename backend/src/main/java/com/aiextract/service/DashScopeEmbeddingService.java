@@ -66,7 +66,7 @@ public class DashScopeEmbeddingService {
                 { for (int i = 0; i < vec.size(); i++) result[i] = (float) vec.get(i).asDouble(); }
 
                 int totalTokens = root.path("usage").path("total_tokens").asInt(0);
-                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0);
+                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0, 0, 0);
 
                 log.info("向量模型返回 dim={} {}ms text={}",
                     result.length, System.currentTimeMillis() - t0,
@@ -124,7 +124,7 @@ public class DashScopeEmbeddingService {
                     }
                 }
                 int totalTokens = root.path("usage").path("total_tokens").asInt(0);
-                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0);
+                tokenUsageService.log(TokenContext.get(), "EMBEDDING", "text-embedding-v4", totalTokens, 0, 0, 0);
             }
 
             log.info("批量向量 dim={} count={} chunks={} {}ms",

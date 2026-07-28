@@ -15,7 +15,15 @@ function isBrowser(): boolean { return typeof window !== 'undefined'; }
 
 export function getToken(): string | null {
   if (!isBrowser()) return null;
-  return localStorage.getItem(KEYS.TOKEN);
+  const bToken = localStorage.getItem(KEYS.TOKEN);
+  if (bToken) return bToken;
+  // C 端 Bearer token 降级（个人登录存 localStorage.c_auth）
+  const cAuth = localStorage.getItem('c_auth');
+  if (cAuth) {
+    try { const session = JSON.parse(cAuth); return session?.token || null; }
+    catch { return null; }
+  }
+  return null;
 }
 
 export function getUser(): { name: string; role: string; [key: string]: unknown } | null {
@@ -35,4 +43,5 @@ export function clearAuth(): void {
   if (!isBrowser()) return;
   localStorage.removeItem(KEYS.TOKEN);
   localStorage.removeItem(KEYS.USER);
+  localStorage.removeItem('c_auth');
 }

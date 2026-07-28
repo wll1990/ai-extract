@@ -48,6 +48,14 @@ public class TokenUsageLog {
     @Column(name = "output_tokens")
     private int outputTokens;
 
+    /** 请求 prompt 总字符数（发前计算，不依赖 API 返回） */
+    @Column(name = "prompt_chars")
+    private int promptChars;
+
+    /** 响应 completion 总字符数（流式累积，不依赖 API 返回） */
+    @Column(name = "completion_chars")
+    private int completionChars;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 }

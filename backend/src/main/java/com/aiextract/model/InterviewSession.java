@@ -10,6 +10,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -70,6 +72,7 @@ public class InterviewSession {
      * 仅 sales 销冠访谈使用，expert 元萃取保持 {}。
      */
     @Builder.Default
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "collect_status", columnDefinition = "jsonb")
     private String collectStatus = "{}";
 

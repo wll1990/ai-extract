@@ -24,6 +24,7 @@ export interface InterviewSessionData {
   lastActiveAt?: string;
   reportId?: string;
   interviewType?: string;
+  grainCount?: number;
 }
 
 export interface PhaseInfo {
@@ -78,25 +79,20 @@ export function getMessages(sessionId: string): Promise<InterviewMessageData[]> 
 
 /** 中断恢复（SSE流式） */
 export function resumeSession(sessionId: string, callbacks: SseCallbacks): AbortController {
-  return connectSse({ url: `${API_BASE}/interviews/${sessionId}/resume`, method: 'POST', body: { action: 'resume' } }, callbacks);
+  return connectSse({ url: `${API_BASE}/interviews/${sessionId}/resume`, method: 'POST' }, callbacks);
 }
 
 /** 重新开始 */
-export function restartSession(sessionId: string): Promise<void> {
-  return apiClient<void>(`/interviews/${sessionId}/restart`, { method: 'POST', body: JSON.stringify({ action: 'restart' }) });
+export function restartSession(sessionId: string): Promise<{ sessionId: string }> {
+  return apiClient<{ sessionId: string }>(`/interviews/${sessionId}/restart`, { method: 'POST' });
 }
 
 /** 暂停访谈 */
 export function pauseSession(sessionId: string): Promise<void> {
-  return apiClient<void>(`/interviews/${sessionId}/pause`, { method: 'POST', body: JSON.stringify({ action: 'pause' }) });
+  return apiClient<void>(`/interviews/${sessionId}/pause`, { method: 'POST' });
 }
 
 /** 获取活跃会话 */
 export function getActiveSessions(): Promise<ActiveSessionInfo> {
   return apiClient<ActiveSessionInfo>('/interviews/active');
-}
-
-/** 标记阶段完成 */
-export function markPhaseComplete(sessionId: string): Promise<void> {
-  return apiClient<void>(`/interviews/${sessionId}/mark-phase-complete`, { method: 'POST' });
 }

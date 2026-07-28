@@ -10,7 +10,7 @@ export default function AdminSkillsPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [shareTarget, setShareTarget] = useState<{ id: string; ownerName: string } | null>(null);
+  const [shareOpenId, setShareOpenId] = useState<string | null>(null);
 
   const loadData = () => {
     listSkills(1, 50)
@@ -77,7 +77,16 @@ export default function AdminSkillsPage() {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setShareTarget({ id: s.id, ownerName: s.ownerName || '分身' })} className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light">🔗 共享</button>
+                    <div style={{ position: 'relative' }}>
+                      <button onClick={() => setShareOpenId(shareOpenId === s.id ? null : s.id)} className="rounded-lg px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary-light">🔗 共享</button>
+                      {shareOpenId === s.id && (
+                        <ShareModal
+                          skillId={s.id}
+                          ownerName={s.ownerName || '分身'}
+                          onClose={() => setShareOpenId(null)}
+                        />
+                      )}
+                    </div>
                     <button onClick={() => router.push(`/skill/${s.id}`)} className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-primary-light">查看</button>
                     <button onClick={() => router.push(`/admin/skills/${s.id}/audit`)} className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-primary-light">审核</button>
                     <button onClick={() => router.push(`/admin/skills/${s.id}/materials`)} className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-primary-light">素材</button>
@@ -131,14 +140,6 @@ export default function AdminSkillsPage() {
           </div>
         )}
       </div>
-
-      {shareTarget && (
-        <ShareModal
-          skillId={shareTarget.id}
-          ownerName={shareTarget.ownerName}
-          onClose={() => setShareTarget(null)}
-        />
-      )}
     </div>
   );
 }

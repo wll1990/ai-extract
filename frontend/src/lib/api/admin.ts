@@ -24,11 +24,9 @@ export function getSceneCoverage(): Promise<SceneCoverageData> {
   return apiClient<SceneCoverageData>('/admin/scene-coverage');
 }
 
-/** 发起萃取邀请 */
-export function createInvite(sceneTag: string, userId: string): Promise<InviteResult> {
-  return apiClient<InviteResult>('/admin/invite', {
-    method: 'POST', body: JSON.stringify({ sceneTag, userId }),
-  });
+/** 生成访谈邀请码 */
+export function createInvite(): Promise<InviteResult> {
+  return apiClient<InviteResult>('/admin/invite', { method: 'POST', body: JSON.stringify({}) });
 }
 
 // ========== 分身对外分享 ==========
@@ -58,4 +56,54 @@ export function adminUpdateShareCode(skillId: string, shareCode: string): Promis
   return apiClient<SkillShareInfo>(`/admin/skills/${skillId}/share/code`, {
     method: 'PUT', body: JSON.stringify({ shareCode }),
   });
+}
+
+// ========== 分身对内分享 ==========
+
+/** 生成（或获取已有）对内分享链接 */
+export function adminCreateInternalShare(skillId: string): Promise<SkillShareInfo> {
+  return apiClient<SkillShareInfo>(`/i/${skillId}/share/internal`, { method: 'POST' });
+}
+
+// ========== Token 用量统计 ==========
+
+export interface TokenSummary {
+  today: { inputTokens: number; outputTokens: number; count: number };
+  month: { inputTokens: number; outputTokens: number; count: number };
+  total: { inputTokens: number; outputTokens: number };
+}
+
+export interface DailyTokenRow {
+  date: string;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+
+export interface TokenLogItem {
+  id: string;
+  userId: string | null;
+  usageDate: string;
+  modelType: string;
+  modelName: string;
+  inputTokens: number;
+  outputTokens: number;
+  promptChars: number;
+  completionChars: number;
+  createdAt: string;
+}
+
+/** Token 用量汇总 */
+export function getTokenSummary(): Promise<TokenSummary> {
+  return apiClient<TokenSummary>('/admin/token-usage/summary');
+}
+
+/** 按天趋势 */
+export function getTokenDaily(days: number = 30): Promise<DailyTokenRow[]> {
+  return apiClient<DailyTokenRow[]>(`/admin/token-usage/daily?days=${days}`);
+}
+
+/** 分页明细 */
+export function getTokenLogs(page: number = 0, size: number = 20): Promise<{ items: TokenLogItem[]; page: number; size: number; total: number }> {
+  return apiClient(`/admin/token-usage/logs?page=${page}&size=${size}`);
 }

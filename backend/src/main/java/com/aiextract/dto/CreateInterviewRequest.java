@@ -21,9 +21,8 @@ import lombok.Setter;
 public class CreateInterviewRequest {
 
     /**
-     * 所属空间ID（必填）
+     * 所属空间ID。B 端必填，C 端不传（自动建 space）。
      */
-    @NotBlank(message = "空间ID不能为空")
     private String spaceId;
 
     /**

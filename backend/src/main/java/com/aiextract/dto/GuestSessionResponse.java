@@ -39,4 +39,10 @@ public class GuestSessionResponse {
 
     /** 免费额度上限（仅游客） */
     private Integer limit;
+
+    /** 剩余免费萃取次数（仅已注册 C 端用户） */
+    private Long extractionRemaining;
+
+    /** 免费萃取总次数（仅已注册 C 端用户） */
+    private Integer extractionLimit;
 }

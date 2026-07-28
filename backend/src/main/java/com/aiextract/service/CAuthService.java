@@ -9,7 +9,9 @@ import com.aiextract.model.AnalyticsEvent;
 import com.aiextract.model.AppUser;
 import com.aiextract.repository.AnalyticsEventRepository;
 import com.aiextract.repository.AppUserRepository;
+import com.aiextract.repository.InterviewSessionRepository;
 import com.aiextract.repository.SkillMessageRepository;
+import com.aiextract.repository.SpaceRepository;
 import com.aiextract.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +44,8 @@ public class CAuthService {
 
     private final AppUserRepository appUserRepository;
     private final SkillMessageRepository skillMessageRepository;
+    private final SpaceRepository spaceRepository;
+    private final InterviewSessionRepository sessionRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final AnalyticsEventRepository analyticsEventRepository;
@@ -54,6 +59,9 @@ public class CAuthService {
 
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
+
+    @Value("${app.interview.c-user-free-limit:3}")
+    private int cUserFreeLimit;
 
     /**
      * 游客升级注册（userId 从 JWT 取，SecurityConfig 已限定 hasRole(C_GUEST)）
@@ -80,6 +88,10 @@ public class CAuthService {
             user.setNickname(request.getNickname().trim());
         }
         user.setStatus(AppUser.STATUS_REGISTERED);
+        // 游客升级注册的，来源标记为分享链接
+        if (user.getSource() == null) {
+            user.setSource(AppUser.SOURCE_SHARE);
+        }
         user.setLastActiveAt(now);
         user.setUpdatedAt(now);
         try {
@@ -89,8 +101,49 @@ public class CAuthService {
             throw new BusinessException(400, "账号已被占用，换一个试试");
         }
 
+        // 自动创建个人空间（如果还没有）
+        if (spaceRepository.findByUserId(userId).isEmpty()) {
+            spaceRepository.save(com.aiextract.model.Space.builder()
+                .id(UUID.randomUUID()).userId(userId)
+                .title((user.getNickname() != null ? user.getNickname() : account) + "的空间")
+                .isPublic(false).status("active")
+                .createdAt(now).updatedAt(now)
+                .build());
+        }
+
         recordEvent("guest_registered", user);
         log.info("游客升级注册成功 userId={} account={}", userId, account);
+        return buildSession(user, issueToken(user));
+    }
+
+    /**
+     * C 端独立注册（非游客升级，source='platform'）。
+     * 用户在 platform 直接注册，没有经过分享链接。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public GuestSessionResponse registerNew(String account, String password, String nickname) {
+        if (appUserRepository.existsByAccount(account)) {
+            throw new BusinessException(400, "账号已被占用");
+        }
+        AppUser user = AppUser.builder()
+            .id(UUID.randomUUID())
+            .account(account)
+            .passwordHash(passwordEncoder.encode(password))
+            .nickname(nickname)
+            .status(AppUser.STATUS_REGISTERED)
+            .source(AppUser.SOURCE_PLATFORM)
+            .createdAt(LocalDateTime.now())
+            .updatedAt(LocalDateTime.now())
+            .build();
+        appUserRepository.save(user);
+        // 自动创建个人空间
+        spaceRepository.save(com.aiextract.model.Space.builder()
+            .id(UUID.randomUUID()).userId(user.getId())
+            .title((nickname != null ? nickname : account) + "的空间")
+            .isPublic(false).status("active")
+            .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+            .build());
+        log.info("C端独立注册成功 userId={} account={}", user.getId(), account);
         return buildSession(user, issueToken(user));
     }
 
@@ -117,13 +170,24 @@ public class CAuthService {
 
     /**
      * 当前 C 端身份探测（token 为 null — 不重签；B 端 token 的 userId 在 app_user 查不到 → 404，
-     * 前端据此按"无 C 端身份"处理）
+     * 前端据此按"无 C 端身份"处理）。
+     * 返回萃取剩余次数（用于前端展示）。
      */
     @Transactional(readOnly = true)
     public GuestSessionResponse me(UUID userId) {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
-        return buildSession(user, null);
+        GuestSessionResponse resp = buildSession(user, null);
+
+        // 统计已完成的访谈数，计算剩余免费次数
+        List<UUID> spaceIds = spaceRepository.findByUserId(userId).stream()
+                .map(com.aiextract.model.Space::getId).toList();
+        long completed = spaceIds.isEmpty() ? 0
+                : sessionRepository.countBySpaceIdInAndStatus(spaceIds, "completed");
+        long remaining = Math.max(0, cUserFreeLimit - completed);
+        resp.setExtractionRemaining(remaining);
+        resp.setExtractionLimit(cUserFreeLimit);
+        return resp;
     }
 
     private String issueToken(AppUser user) {

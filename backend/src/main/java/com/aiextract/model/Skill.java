@@ -171,6 +171,26 @@ public class Skill {
     @Column(name = "talk_config", columnDefinition = "JSONB DEFAULT '{}'")
     private String talkConfig;
 
+    // ═══════════════════════════════════════════════════════════
+    // 互动统计（SkillStatsScheduler 每5分钟批量聚合写入，API 直接读列）
+    // ═══════════════════════════════════════════════════════════
+
+    /** 近30天不重复对话次数（来自 conversation_stats，已过滤 is_test） */
+    @Column(name = "conversation_count")
+    private Integer conversationCount;
+
+    /** 近30天不重复用户数（来自 conversation_stats，已过滤 is_test） */
+    @Column(name = "user_count")
+    private Integer userCount;
+
+    /** 满意度 0-100（feedback_log 中 up/(up+down)×100，0 表示无反馈数据） */
+    @Column(name = "satisfaction_rate")
+    private Integer satisfactionRate;
+
+    /** 最近一次对话时间（来自 conversation_stats.MAX(created_at)） */
+    @Column(name = "last_active_at")
+    private LocalDateTime lastActiveAt;
+
     /**
      * 创建时间
      */

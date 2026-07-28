@@ -28,7 +28,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -54,18 +53,26 @@ public class ReportService {
     private final UserRepository userRepository;
     private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final com.aiextract.repository.SkillRepository skillRepository;
+    private final com.aiextract.repository.InterviewSessionRepository sessionRepository;
+    private final ExtractionReportService extractionReportService;
     private final ObjectMapper objectMapper;
+
+    @org.springframework.beans.factory.annotation.Value("${app.report.min-grains:10}")
+    private int reportMinGrains;
+    @org.springframework.beans.factory.annotation.Value("${app.report.min-scenes:3}")
+    private int reportMinScenes;
 
     /**
      * 提交评分
      */
     @Transactional(rollbackFor = Exception.class)
     public void rateReport(String reportId, int rating) {
-        Report report = reportRepository.findById(UUID.fromString(reportId)).orElse(null);
-        if (report != null && rating > 0 && rating <= MAX_RATING) {
-            report.setRating(java.math.BigDecimal.valueOf(rating));
-            reportRepository.save(report);
-        }
+        Report report = reportRepository.findById(UUID.fromString(reportId))
+            .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        if (rating <= 0 || rating > MAX_RATING)
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "评分范围1-5");
+        report.setRating(java.math.BigDecimal.valueOf(rating));
+        reportRepository.save(report);
     }
 
     /**
@@ -308,6 +315,46 @@ public class ReportService {
                 .createdAt(report.getCreatedAt() != null ? report.getCreatedAt().toString() : null)
                 .updatedAt(report.getUpdatedAt() != null ? report.getUpdatedAt().toString() : null)
                 .build();
+    }
+
+    /**
+     * 按访谈 sessionId 检查报告就绪状态并返回 HTML。
+     * sessionId → spaceId → Skill → 检查颗粒/场景数 → generateHtml。
+     *
+     * @return ReportHtmlResult(ready, html|grains|scenes)
+     */
+    @Transactional(readOnly = true)
+    public ReportHtmlResult getReportHtmlBySession(UUID sessionId, UUID userId) {
+        var session = sessionRepository.findById(sessionId).orElse(null);
+        if (session == null) return ReportHtmlResult.notReady(0, 0, reportMinGrains, reportMinScenes);
+
+        // 属主校验：session → space → space.isOwnedBy(userId)
+        var space = spaceRepository.findById(session.getSpaceId()).orElse(null);
+        if (space == null || !space.isOwnedBy(userId))
+            return ReportHtmlResult.notReady(0, 0, reportMinGrains, reportMinScenes);
+
+        var skill = skillRepository.findBySpaceId(session.getSpaceId()).orElse(null);
+        if (skill == null) return ReportHtmlResult.notReady(0, 0, reportMinGrains, reportMinScenes);
+
+        long grains = grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active");
+        long scenes = grainRepository.countDistinctSceneTagsBySpaceIdAndStatus(session.getSpaceId(), "active");
+        boolean ready = grains >= reportMinGrains && scenes >= reportMinScenes;
+
+        if (!ready) return ReportHtmlResult.notReady(grains, scenes, reportMinGrains, reportMinScenes);
+
+        String html = extractionReportService.generateHtml(skill.getId());
+        return ReportHtmlResult.ready(html, grains, scenes);
+    }
+
+    public record ReportHtmlResult(boolean ready, String html, long grains, long scenes,
+                                   long needGrains, long needScenes) {
+        public static ReportHtmlResult notReady(long grains, long scenes, int minGrains, int minScenes) {
+            return new ReportHtmlResult(false, null, grains, scenes,
+                    Math.max(0, minGrains - grains), Math.max(0, minScenes - scenes));
+        }
+        public static ReportHtmlResult ready(String html, long grains, long scenes) {
+            return new ReportHtmlResult(true, html, grains, scenes, 0, 0);
+        }
     }
 
     /**

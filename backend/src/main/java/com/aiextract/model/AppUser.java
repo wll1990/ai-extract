@@ -38,6 +38,15 @@ public class AppUser {
     /** 已注册状态 */
     public static final String STATUS_REGISTERED = "registered";
 
+    /** 来源：从分享链接来的（/s/{code}） */
+    public static final String SOURCE_SHARE = "share";
+
+    /** 来源：自己到 platform 注册的 */
+    public static final String SOURCE_PLATFORM = "platform";
+
+    /** 来源：合作方嵌入自动创建的 */
+    public static final String SOURCE_PARTNER = "partner";
+
     /**
      * 用户唯一标识（= 访客身份本体，注册后不变）
      */
@@ -67,6 +76,21 @@ public class AppUser {
      */
     @Column(nullable = false, length = 20)
     private String status;
+
+    /**
+     * 用户来源。
+     * share=分享链接来的 / platform=平台注册 / partner=合作方嵌入
+     */
+    @Column(length = 10)
+    private String source;
+
+    /**
+     * 所属企业 UUID。
+     * 仅 source='partner' 时有值 = PartnerApp.app_id（即 Company UUID）。
+     * C 端独立用户（share/platform）为 null。
+     */
+    @Column(name = "company_id")
+    private UUID companyId;
 
     /**
      * 来源分享ID（skill_share.id），转化归因

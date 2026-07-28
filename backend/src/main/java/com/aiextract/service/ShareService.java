@@ -8,6 +8,7 @@ import com.aiextract.model.AnalyticsEvent;
 import com.aiextract.model.AppUser;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillShare;
+import com.aiextract.model.Space;
 import com.aiextract.model.User;
 import com.aiextract.repository.AnalyticsEventRepository;
 import com.aiextract.repository.AppUserRepository;
@@ -57,9 +58,6 @@ public class ShareService {
     /** C 端注册用户角色（JWT role claim） */
     public static final String ROLE_C_USER = "c_user";
 
-    /** V1 种子默认企业 — 分身归属解析失败时的兜底 */
-    private static final UUID DEFAULT_COMPANY_ID = UUID.fromString("c0000000-0000-0000-0000-000000000001");
-
     private static final String BASE62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SHARE_CODE_LENGTH = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -100,7 +98,7 @@ public class ShareService {
         Skill skill = skillRepository.findById(skillId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
 
-        Optional<SkillShare> existing = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_DEFAULT);
+        Optional<SkillShare> existing = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -116,7 +114,7 @@ public class ShareService {
                         .skillId(skillId)
                         .companyId(companyId)
                         .shareCode(code)
-                        .channel(SkillShare.CHANNEL_DEFAULT)
+                        .channel(SkillShare.CHANNEL_PUBLIC)
                         .enabled(true)
                         .createdBy(adminUserId)
                         .createdAt(now)
@@ -133,7 +131,7 @@ public class ShareService {
      * 查询分享（管理端回显，未生成时返回空）
      */
     public Optional<SkillShare> findShare(UUID skillId) {
-        return shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_DEFAULT);
+        return shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC);
     }
 
     /**
@@ -141,7 +139,7 @@ public class ShareService {
      */
     @Transactional(rollbackFor = Exception.class)
     public SkillShare toggleShare(UUID skillId, boolean enabled) {
-        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_DEFAULT)
+        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
         share.setEnabled(enabled);
         share.setUpdatedAt(LocalDateTime.now());
@@ -155,7 +153,7 @@ public class ShareService {
      */
     @Transactional(rollbackFor = Exception.class)
     public SkillShare updateShareCode(UUID skillId, String customCode) {
-        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_DEFAULT)
+        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
         if (!share.getShareCode().equals(customCode)
                 && shareRepository.findByShareCode(customCode).isPresent()) {
@@ -278,16 +276,78 @@ public class ShareService {
                 .orElseThrow(() -> new BusinessException(404, "分身未发布"));
     }
 
+    /**
+     * 解析分身的企业归属。双表降级：先查 B 端 user，查不到再查 C 端 app_user。
+     * B端 → user.companyId
+     * Partner → app_user.companyId
+     * 纯C端 → null
+     */
     private UUID resolveCompanyId(Skill skill) {
         try {
-            return spaceRepository.findById(skill.getSpaceId())
-                    .flatMap(space -> userRepository.findById(space.getUserId()))
-                    .map(User::getCompanyId)
-                    .orElse(DEFAULT_COMPANY_ID);
+            Space space = spaceRepository.findById(skill.getSpaceId()).orElse(null);
+            if (space == null) return null;
+            UUID ownerId = space.getUserId();
+            // 先查 B 端 user 表
+            User bUser = userRepository.findById(ownerId).orElse(null);
+            if (bUser != null) return bUser.getCompanyId();
+            // 降级查 C 端 app_user 表
+            AppUser cUser = appUserRepository.findById(ownerId).orElse(null);
+            if (cUser != null && AppUser.SOURCE_PARTNER.equals(cUser.getSource())) {
+                return cUser.getCompanyId();
+            }
+            return null; // 纯 C 端独立用户 → 无企业归属
         } catch (Exception e) {
-            log.warn("分身企业归属解析失败，回退默认企业 skillId={}: {}", skill.getId(), e.getMessage());
-            return DEFAULT_COMPANY_ID;
+            log.warn("分身企业归属解析失败 skillId={}: {}", skill.getId(), e.getMessage());
+            return null;
         }
+    }
+
+    /**
+     * 属主校验：创建分享的人必须是 skill 所属 space 的 owner。
+     */
+    private void validateOwnership(UUID skillId, UUID userId) {
+        Skill skill = skillRepository.findById(skillId)
+            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        Space space = spaceRepository.findById(skill.getSpaceId())
+            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权操作");
+        }
+    }
+
+    /**
+     * 获取或创建对内分享（channel='internal'）。
+     * 对内分享 → /i/{code}，需本公司员工或平台登录用户访问。
+     * super_admin 免属主校验，可管理任意分身的内对分享。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public SkillShare getOrCreateInternalShare(UUID skillId, UUID userId, String role) {
+        if (!"super_admin".equalsIgnoreCase(role)) {
+            validateOwnership(skillId, userId);
+        }
+
+        return shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_INTERNAL)
+            .orElseGet(() -> {
+                Skill skill = skillRepository.findById(skillId).orElseThrow();
+                UUID companyId = resolveCompanyId(skill);
+                String code;
+                for (int i = 0; i < MAX_SHARE_CODE_RETRIES; i++) {
+                    code = randomShareCode();
+                    if (shareRepository.findByShareCode(code).isEmpty()) {
+                        SkillShare share = shareRepository.save(SkillShare.builder()
+                            .id(UUID.randomUUID()).skillId(skillId)
+                            .companyId(companyId)
+                            .shareCode(code)
+                            .channel(SkillShare.CHANNEL_INTERNAL)
+                            .enabled(true).createdBy(userId)
+                            .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                            .build());
+                        log.info("对内分享码已生成 skillId={} shareCode={}", skillId, code);
+                        return share;
+                    }
+                }
+                throw new BusinessException(500, "分享码生成失败，请重试");
+            });
     }
 
     private String issueToken(AppUser user) {

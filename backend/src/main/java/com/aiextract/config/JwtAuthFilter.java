@@ -66,7 +66,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (partnerToken != null && !partnerToken.isBlank()) {
             try {
                 UUID userId = partnerJwtFilter.authenticate(partnerToken);
-                setAuthentication(userId, "c_partner", request);
+                setAuthentication(userId, "c_partner", partnerToken, request);
                 filterChain.doFilter(request, response);
                 return;
             } catch (Exception e) {
@@ -93,7 +93,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 UUID userId = jwtUtil.getUserIdFromToken(token);
                 String role = jwtUtil.getRoleFromToken(token);
 
-                setAuthentication(userId, role, request);
+                setAuthentication(userId, role, token, request);
                 request.setAttribute("token", token);
                 log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
             } else {
@@ -110,11 +110,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         TokenContext.clear();
     }
 
-    private void setAuthentication(UUID userId, String role, HttpServletRequest request) {
+    private void setAuthentication(UUID userId, String role, String credentials, HttpServletRequest request) {
         List<SimpleGrantedAuthority> authorities = Collections.singletonList(
             new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
         UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            new UsernamePasswordAuthenticationToken(userId, credentials, authorities);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         TokenContext.set(userId);

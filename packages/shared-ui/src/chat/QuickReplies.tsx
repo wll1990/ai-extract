@@ -19,18 +19,22 @@ export const QuickReplies: React.FC<QuickRepliesProps> = ({ replies, onSelect, d
   if (!replies || replies.length === 0) return null;
 
   return (
-    <div className="mx-auto mb-4 flex max-w-[720px] flex-wrap gap-2">
-      {replies.map((text, i) => (
-        <button
-          key={i}
-          type="button"
-          disabled={disabled}
-          onClick={() => onSelect(text)}
-          className="rounded-full border border-border px-4 py-2 text-sm text-foreground transition-colors hover:border-foreground hover:bg-primary-light disabled:opacity-40 min-h-[40px]"
-        >
-          {text}
-        </button>
-      ))}
+    <div className="mx-auto mb-4 max-w-[720px] rounded-xl px-4 py-3"
+      style={{ background: '#f0f3ff', borderLeft: '3px solid #2147ff' }}>
+      <p className="text-xs text-[#747f9e] mb-2 font-medium">💬 试试这些问题</p>
+      <div className="flex flex-col gap-2">
+        {replies.map((text, i) => (
+          <button
+            key={i}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(text)}
+            className="rounded-lg bg-white border border-[#dfe6ff] px-4 py-2.5 text-sm text-[#10162f] text-left transition-colors hover:border-[#2147ff] hover:bg-[#eef2ff] disabled:opacity-40"
+          >
+            {text}
+          </button>
+        ))}
+      </div>
     </div>
   );
 };

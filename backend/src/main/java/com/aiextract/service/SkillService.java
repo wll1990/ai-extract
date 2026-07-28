@@ -9,6 +9,7 @@ import com.aiextract.dto.SkillChatRequest;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.common.TraceContext;
 import com.aiextract.exception.BusinessException;
+import com.aiextract.model.AppUser;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
@@ -217,28 +218,64 @@ public class SkillService {
      *
      * @throws BusinessException 404 会话不存在 / 403 无权访问
      */
-    @Transactional(readOnly = true)
     // ========== 会话管理 — 已迁移到 ConversationService ==========
 
     // ========== 分身列表 ==========
 
-    public Map<String, Object> listAllSkills(int page, int size, String status, UUID userId) {
+    private final com.aiextract.repository.AppUserRepository appUserRepository;
+
+    public Map<String, Object> listAllSkills(int page, int size, String status, UUID userId,
+                                              UUID companyId, String role) {
         org.springframework.data.domain.Pageable pageable =
                 org.springframework.data.domain.PageRequest.of(page - 1, size);
         org.springframework.data.domain.Page<Skill> skillPage;
 
-        // 按 userId 过滤：只返回该用户的 space 下的分身（"我的分身"）
+        boolean isSuperAdmin = "super_admin".equalsIgnoreCase(role);
+        boolean isCEnd = "c_user".equalsIgnoreCase(role);
+
         if (userId != null) {
+            // 显式传了 userId → "我的分身"，所有角色（含 super_admin）都按 userId 过滤
             List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
                     .map(Space::getId).toList();
-            if (userSpaceIds.isEmpty()) {
-                return emptyPage(page, size);
-            }
+            if (userSpaceIds.isEmpty()) return emptyPage(page, size);
             if (status != null && !status.isEmpty()) {
                 skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
                         userSpaceIds, status, pageable);
             } else {
                 skillPage = skillRepository.findBySpaceIdIn(userSpaceIds, pageable);
+            }
+        } else if (isSuperAdmin) {
+            // super_admin 且未指定 userId → 看全量
+            if (status != null && !status.isEmpty()) {
+                skillPage = skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+            } else {
+                skillPage = skillRepository.findAll(pageable);
+            }
+        } else if (isCEnd) {
+            // C端 → 只查自己的 space 下的分身
+            List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
+                .map(Space::getId).toList();
+            if (userSpaceIds.isEmpty()) return emptyPage(page, size);
+            if (status != null && !status.isEmpty()) {
+                skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
+                    userSpaceIds, status, pageable);
+            } else {
+                skillPage = skillRepository.findBySpaceIdIn(userSpaceIds, pageable);
+            }
+        } else if (companyId != null) {
+            // B端按 company 过滤：本公司所有员工的 space → skill
+            // Partner 是独立企业，不混入 B 端企业列表
+            List<UUID> companyUserIds = userRepository.findByCompanyId(companyId).stream()
+                .map(User::getId).toList();
+            if (companyUserIds.isEmpty()) return emptyPage(page, size);
+            List<UUID> companySpaceIds = spaceRepository.findByUserIdIn(companyUserIds).stream()
+                .map(Space::getId).toList();
+            if (companySpaceIds.isEmpty()) return emptyPage(page, size);
+            if (status != null && !status.isEmpty()) {
+                skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
+                    companySpaceIds, status, pageable);
+            } else {
+                skillPage = skillRepository.findBySpaceIdIn(companySpaceIds, pageable);
             }
         } else if (status != null && !status.isEmpty()) {
             skillPage = skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
@@ -251,9 +288,11 @@ public class SkillService {
         List<UUID> spaceIds = allSkills.stream().map(Skill::getSpaceId).distinct().toList();
         Map<UUID, Space> spaceMap = spaceRepository.findAllById(spaceIds).stream()
                 .collect(Collectors.toMap(Space::getId, s -> s, (a, b) -> a));
-        List<UUID> userIds = spaceMap.values().stream().map(Space::getUserId).distinct().toList();
-        Map<UUID, String> userNameMap = userRepository.findAllById(userIds).stream()
-                .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        List<UUID> ownerIds = spaceMap.values().stream().map(Space::getUserId).distinct().toList();
+        // 同时查 B 端 user 和 C 端 app_user
+        Map<UUID, String> userNameMap = new HashMap<>();
+        userRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getName()));
+        appUserRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getNickname()));
         // 批量查活跃锦囊数
         Map<UUID, Long> grainCountMap = grainRepository.countBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));

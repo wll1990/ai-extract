@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>分身聊天 UI 改版 — 原型对比</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif; background: #f1f5f9; color: #1e293b; }
+  .page { max-width: 1400px; margin: 0 auto; padding: 24px 16px; }
+
+  /* section header */
+  .section-title { font-size: 22px; font-weight: 800; margin: 48px 0 16px; padding-bottom: 8px; border-bottom: 2px solid #e2e8f0; display: flex; align-items: center; gap: 12px; }
+  .section-title .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 100px; }
+  .badge-current { background: #fee2e2; color: #dc2626; }
+  .badge-new { background: #dcfce7; color: #16a34a; }
+  .section-subtitle { font-size: 14px; color: #64748b; margin: -8px 0 20px; }
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 8px; }
+
+  /* card */
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; }
+  .card-header { padding: 10px 16px; font-size: 12px; font-weight: 700; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid #f1f5f9; }
+  .card-header.current { background: #fef2f2; color: #dc2626; }
+  .card-header.new { background: #f0fdf4; color: #16a34a; }
+  .card-body { padding: 20px; }
+
+  /* ─── 分身广场卡片 ─── */
+  .gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .skill-card { background: #fff; border: 1px solid #e8ecf1; border-radius: 14px; padding: 20px 16px; cursor: pointer; transition: all .2s; }
+  .skill-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+  .skill-card .avatar-circle { width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: #fff; margin: 0 auto 10px; background: linear-gradient(135deg, #1a2b4c, #2563eb); }
+  .skill-card .avatar-egg { width: 72px; height: 58px; border-radius: 48% 48% 42% 42% / 54% 54% 38% 38%; object-fit: cover; margin: 0 auto 8px; display: block; background: linear-gradient(135deg, #e8ecf1, #d4d8e0); filter: drop-shadow(0 8px 12px rgba(36,68,185,.12)); }
+  .skill-card .name { font-size: 14px; font-weight: 700; text-align: center; }
+  .skill-card .title { font-size: 11px; color: #94a3b8; text-align: center; margin-top: 2px; }
+  .skill-card .meta { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 8px; font-size: 11px; }
+  .skill-card .online-dot { display: inline-flex; align-items: center; gap: 3px; background: #f0fdf4; color: #16a34a; padding: 2px 10px; border-radius: 100px; font-size: 11px; font-weight: 500; }
+  .skill-card .stats-bar { display: flex; justify-content: center; gap: 10px; margin-top: 8px; padding: 6px 8px; background: #f8faff; border-radius: 8px; font-size: 11px; }
+  .skill-card .stat-item { display: flex; align-items: center; gap: 3px; font-weight: 600; color: #334155; }
+  .skill-card .stat-label { font-weight: 400; color: #94a3b8; }
+  .skill-card .tag-pills { display: flex; justify-content: center; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+  .skill-card .tag-pill { font-size: 10px; background: #eef2ff; color: #475569; padding: 2px 8px; border-radius: 100px; }
+  .skill-card .bottom-meta { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 6px; }
+  .divider-dot { color: #d4d8e0; }
+
+  /* ─── 名片卡片 Hero ─── */
+  .hero-card { border-radius: 24px; background: radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9); border: 1px solid #e1e7ff; padding: 28px 32px; box-shadow: 0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04); }
+  .hero-row { display: flex; gap: 24px; align-items: center; }
+  .hero-portrait { width: 220px; flex-shrink: 0; }
+  .hero-portrait-inner { width: 100%; padding-bottom: 81.8%; position: relative; }
+  .hero-portrait-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 48% 48% 42% 42% / 54% 54% 38% 38%; background: linear-gradient(135deg, #e0e4f0, #c8d0e0); filter: drop-shadow(0 15px 22px rgba(36,68,185,.15)); }
+  .hero-text h3 { font-size: 26px; font-weight: 800; letter-spacing: -1px; }
+  .hero-text h3 .blue { color: #2563EB; }
+  .hero-text .role-pill { display: inline-block; margin-top: 8px; font-size: 13px; color: #64748B; background: #f1f5f9; border-radius: 100px; padding: 4px 14px; }
+  .hero-text .value-prop { margin-top: 10px; font-size: 15px; color: #475569; line-height: 1.7; white-space: pre-wrap; }
+  .hero-text .value-prop .red { color: #DC2626; font-weight: 600; }
+  .hero-text .data-fact { margin-top: 10px; font-size: 15px; color: #334155; line-height: 1.7; }
+  .hero-text .owner-title { font-size: 13px; color: #94a3b8; margin-top: 6px; }
+  .hero-stats-row { display: flex; gap: 16px; margin-top: 10px; }
+  .hero-stat { display: flex; align-items: baseline; gap: 4px; font-size: 14px; font-weight: 600; color: #1e293b; }
+  .hero-stat .hl { font-weight: 400; font-size: 12px; color: #64748b; }
+  .hero-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .hero-tag { font-size: 11px; background: #eef2ff; color: #475569; padding: 3px 10px; border-radius: 100px; }
+
+  /* ─── TrustBadge ─── */
+  .trust-bar { display: flex; border-top: 1px solid #edf0fb; margin-top: 16px; padding-top: 12px; gap: 8px; }
+  .trust-col { flex: 1; display: flex; gap: 6px; align-items: center; }
+  .trust-icon { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; background: #f3f6ff; flex-shrink: 0; }
+  .trust-col-title { font-size: 11px; font-weight: 800; white-space: nowrap; }
+  .trust-col-desc { font-size: 9px; color: #55617d; line-height: 1.4; }
+  .trust-privacy { border-top: 1px solid #edf0fb; text-align: center; padding-top: 8px; margin-top: 10px; font-size: 10px; color: #77819e; }
+
+  /* ─── 注释标签 ─── */
+  .annotation { position: relative; }
+  .callout { position: absolute; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; white-space: nowrap; z-index: 5; }
+  .callout.add { background: #dcfce7; color: #16a34a; border: 1px solid #86efac; }
+  .callout.del { background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; }
+  .callout.change { background: #fef9c3; color: #a16207; border: 1px solid #fde047; }
+
+  /* ─── H5 对比 ─── */
+  .h5-frame { width: 375px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 24px; overflow: hidden; background: #fff; box-shadow: 0 4px 20px rgba(0,0,0,.08); }
+  .h5-hero { background: linear-gradient(135deg, #06b6d4, #3b82f6); padding: 28px 20px 48px; text-align: center; position: relative; }
+  .h5-hero .glow { position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(255,255,255,.22), transparent 60%); pointer-events: none; }
+  .h5-avatar { width: 72px; height: 72px; border-radius: 50%; border: 3px solid rgba(255,255,255,.95); object-fit: cover; margin: 0 auto; display: block; background: linear-gradient(135deg, #93c5fd, #3b82f6); }
+  .h5-name { color: #fff; font-size: 20px; font-weight: 700; margin-top: 10px; }
+  .h5-title { color: rgba(255,255,255,.85); font-size: 12px; margin-top: 4px; }
+  .h5-stats-inline { display: flex; justify-content: center; gap: 10px; margin-top: 10px; font-size: 11px; color: rgba(255,255,255,.75); }
+  .h5-stats-inline span { opacity: .85; }
+  .h5-white-card { margin: -32px 16px 0; background: #fff; border-radius: 16px; border: 1px solid rgba(255,255,255,.6); padding: 16px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.06); position: relative; z-index: 5; }
+  .h5-white-card .intro { font-size: 14px; color: #334155; line-height: 1.6; }
+  .h5-white-card .tags-row { display: flex; justify-content: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .h5-white-card .chip { font-size: 11px; background: #eef2ff; color: #2563eb; padding: 3px 10px; border-radius: 100px; }
+  .h5-white-card .meta-mini { font-size: 10px; color: #94a3b8; margin-top: 8px; }
+  .h5-trust { margin: 10px 16px 0; padding: 10px 12px; border-radius: 12px; background: linear-gradient(135deg, rgba(6,182,212,.06), rgba(59,130,246,.08)); border: 1px solid rgba(59,130,246,.1); display: flex; }
+  .h5-trust-col { flex: 1; text-align: center; }
+  .h5-trust-col .ticon { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .h5-trust-col .tlabel { font-size: 10px; font-weight: 700; }
+  .h5-trust-col .tdesc { font-size: 8px; color: #94a3b8; }
+  .h5-mode-cards { margin: 10px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .h5-mode-card { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 10px; border: 1px solid #e2e8f0; background: #fff; cursor: pointer; }
+  .h5-mode-card.rec { border-color: #2563eb; }
+  .h5-mode-icon { width: 38px; height: 38px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+  .h5-mode-info { flex: 1; min-width: 0; }
+  .h5-mode-info .mtitle { font-size: 13px; font-weight: 700; }
+  .h5-mode-info .mcta { font-size: 11px; color: #475569; margin-top: 2px; }
+  .h5-mode-info .mvalue { font-size: 10px; color: #94a3b8; margin-top: 1px; }
+  .h5-mode-info .mstat { font-size: 9px; color: #94a3b8; margin-top: 1px; }
+
+  /* ─── 企业端 ExpertRow ─── */
+  .expert-row { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border-radius: 14px; border: 1px solid #e8ecf1; background: #fff; }
+  .expert-row:hover { background: #f8fafc; }
+  .expert-avatar { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; flex-shrink: 0; background: linear-gradient(135deg, #ff5c00, #ff8c40); }
+  .expert-avatar.egg { border-radius: 48% 48% 42% 42% / 54% 54% 38% 38%; width: 56px; height: 46px; }
+  .expert-info { width: 130px; flex-shrink: 0; }
+  .expert-info .ename { font-size: 13px; font-weight: 700; }
+  .expert-info .etitle { font-size: 10px; color: #94a3b8; margin-top: 2px; }
+  .expert-info .emeta { font-size: 9px; color: #94a3b8; margin-top: 3px; }
+  .expert-question { flex: 1; background: #f1f5f9; border-radius: 16px 16px 16px 4px; padding: 10px 14px; font-size: 12px; color: #64748b; line-height: 1.5; min-width: 0; }
+
+  /* utility */
+  .text-muted { color: #94a3b8; }
+  .text-xs { font-size: 10px; }
+  .text-sm { font-size: 12px; }
+  .mt-2 { margin-top: 8px; }
+  .mt-3 { margin-top: 12px; }
+  .gap-1 { gap: 4px; }
+  .gap-2 { gap: 8px; }
+  .flex { display: flex; }
+  .items-center { align-items: center; }
+  .justify-center { justify-content: center; }
+
+  .diff-highlight { background: linear-gradient(135deg, #fef9c3, #fef3c7); border: 1px dashed #f59e0b; border-radius: 6px; padding: 2px 6px; }
+  .new-highlight { background: linear-gradient(135deg, #dcfce7, #f0fdf4); border: 1px dashed #22c55e; border-radius: 6px; padding: 2px 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ═══════════════════════════════════════════════ -->
+<h1 style="font-size:28px;font-weight:900;margin-bottom:4px;">🤖 分身聊天 UI 改版 — 原型对比</h1>
+<p style="color:#64748b;font-size:14px;">左侧 = 当前线上版本 · 右侧 = 改版后（数据驱动 + 社会证明）</p>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 1. 分身广场卡片 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title">
+  <span>📋 1. 分身广场卡片</span>
+  <span style="font-size:12px;color:#94a3b8;font-weight:400;">页面: /skills · 3列网格</span>
+</div>
+<p class="section-subtitle">核心改动：首字母圆圈 → 蛋形头像 + 新增 stats 条 + 场景标签 + 删除假"在线"徽章 + 颗粒→场景meta</p>
+
+<div class="compare-grid">
+  <!-- CURRENT -->
+  <div class="card">
+    <div class="card-header current">🔴 当前版本</div>
+    <div class="card-body">
+      <div class="gallery">
+        <div class="skill-card">
+          <div class="avatar-circle">张</div>
+          <div class="name">张经理</div>
+          <div class="title">金融事业部销冠</div>
+          <div class="meta">
+            <span class="online-dot">● 在线</span>
+            <span class="text-xs text-muted">45 条锦囊</span>
+          </div>
+        </div>
+        <div class="skill-card">
+          <div class="avatar-circle">李</div>
+          <div class="name">李明远</div>
+          <div class="title">华东大区总监</div>
+          <div class="meta">
+            <span class="online-dot">● 在线</span>
+            <span class="text-xs text-muted">32 条锦囊</span>
+          </div>
+        </div>
+        <div class="skill-card">
+          <div class="avatar-circle">王</div>
+          <div class="name">王思涵</div>
+          <div class="title">SaaS 解决方案专家</div>
+          <div class="meta">
+            <span class="online-dot">● 在线</span>
+            <span class="text-xs text-muted">67 条锦囊</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#dc2626;background:#fef2f2;padding:6px 10px;border-radius:6px;">
+        ⚠️ "在线"是硬编码假数据 · 只有颗粒数 · 所有卡片看起来一样
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW -->
+  <div class="card">
+    <div class="card-header new">🟢 改版后</div>
+    <div class="card-body">
+      <div class="gallery">
+        <div class="skill-card">
+          <img class="avatar-egg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='58'%3E%3Cdefs%3E%3ClinearGradient id='g1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23e0e7ff'/%3E%3Cstop offset='100%25' style='stop-color:%2393a5f0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g1)' width='72' height='58' rx='32'/%3E%3Ctext x='36' y='34' text-anchor='middle' fill='white' font-size='20' font-weight='700'%3E%E5%BC%A0%3C/text%3E%3C/svg%3E" alt="">
+          <div class="name">张经理</div>
+          <div class="title">金融事业部销冠</div>
+          <div class="stats-bar">
+            <span class="stat-item">💬 128<span class="stat-label">次</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👍 94<span class="stat-label">%</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👤 89<span class="stat-label">人</span></span>
+          </div>
+          <div class="tag-pills">
+            <span class="tag-pill">价格谈判</span>
+            <span class="tag-pill">异议处理</span>
+            <span class="tag-pill">大客户经营</span>
+          </div>
+          <div class="bottom-meta">45 条经验 · 8 个场景</div>
+        </div>
+        <div class="skill-card">
+          <img class="avatar-egg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='58'%3E%3Cdefs%3E%3ClinearGradient id='g2' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23fef3c7'/%3E%3Cstop offset='100%25' style='stop-color:%23fbbf24'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g2)' width='72' height='58' rx='32'/%3E%3Ctext x='36' y='34' text-anchor='middle' fill='white' font-size='20' font-weight='700'%3E%E6%9D%8E%3C/text%3E%3C/svg%3E" alt="">
+          <div class="name">李明远</div>
+          <div class="title">华东大区总监</div>
+          <div class="stats-bar">
+            <span class="stat-item">💬 56<span class="stat-label">次</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👍 88<span class="stat-label">%</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👤 34<span class="stat-label">人</span></span>
+          </div>
+          <div class="tag-pills">
+            <span class="tag-pill">竞品对比</span>
+            <span class="tag-pill">决策推进</span>
+          </div>
+          <div class="bottom-meta">32 条经验 · 5 个场景</div>
+        </div>
+        <div class="skill-card">
+          <img class="avatar-egg" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='58'%3E%3Cdefs%3E%3ClinearGradient id='g3' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23dcfce7'/%3E%3Cstop offset='100%25' style='stop-color:%234ade80'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23g3)' width='72' height='58' rx='32'/%3E%3Ctext x='36' y='34' text-anchor='middle' fill='white' font-size='20' font-weight='700'%3E%E7%8E%8B%3C/text%3E%3C/svg%3E" alt="">
+          <div class="name">王思涵</div>
+          <div class="title">SaaS 解决方案专家</div>
+          <div class="stats-bar">
+            <span class="stat-item">💬 203<span class="stat-label">次</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👍 96<span class="stat-label">%</span></span>
+            <span class="divider-dot">·</span>
+            <span class="stat-item">👤 145<span class="stat-label">人</span></span>
+          </div>
+          <div class="tag-pills">
+            <span class="tag-pill">SaaS 销售</span>
+            <span class="tag-pill">需求挖掘</span>
+            <span class="tag-pill">方案演示</span>
+          </div>
+          <div class="bottom-meta">67 条经验 · 11 个场景</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#16a34a;background:#f0fdf4;padding:6px 10px;border-radius:6px;">
+        ✅ 蛋形头像 · 真实stats · 场景标签 · 经验+场景数 · 数据全来自库
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 2. 分身详情 Hero — 平台端 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title">
+  <span>🖥️ 2. 分身详情 Hero 区</span>
+  <span style="font-size:12px;color:#94a3b8;font-weight:400;">页面: /skill/[id] · B端平台 · QA/Talk 模式空态</span>
+</div>
+<p class="section-subtitle">核心改动：静态 TALK_NAME_CARD → 数据驱动文案 + Stats 条 + 场景标签 + TrustBadge 动态化</p>
+
+<div class="compare-grid">
+  <!-- CURRENT -->
+  <div class="card">
+    <div class="card-header current">🔴 当前版本</div>
+    <div class="card-body">
+      <div class="hero-card">
+        <div class="hero-row">
+          <div class="hero-portrait">
+            <div class="hero-portrait-inner">
+              <div class="hero-portrait-img"></div>
+            </div>
+          </div>
+          <div class="hero-text">
+            <h3>你好，我是<span class="blue">张经理</span><span style="font-size:14px;"> ✨</span></h3>
+            <span class="role-pill">把顶级销冠的经验，变成你签单的底气</span>
+            <p class="value-prop">销冠怎么谈客户，我就怎么回答你。
+              每句话背后，都是<span class="red">真实的实战经验</span>。</p>
+            <p class="owner-title">金融事业部销冠</p>
+          </div>
+        </div>
+        <div class="trust-bar">
+          <div class="trust-col"><div class="trust-icon" style="color:#ff4d5f;">♡</div><div><div class="trust-col-title">真实案例</div><div class="trust-col-desc">销冠真实对话与文档提炼</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#2147ff;">✦</div><div><div class="trust-col-title">溯源可查</div><div class="trust-col-desc">每句回答有据可依</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#8b5cf6;">▤</div><div><div class="trust-col-title">即学即用</div><div class="trust-col-desc">30秒拿到可执行话术</div></div></div>
+        </div>
+        <div class="trust-privacy">▣ 我们的对话内容仅用于服务你，绝不外泄，请放心分享</div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#dc2626;background:#fef2f2;padding:6px 10px;border-radius:6px;">
+        ⚠️ 所有分身用同一套文案 · TrustBadge 纯静态 · 无社会证明 · 无场景标签
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW -->
+  <div class="card">
+    <div class="card-header new">🟢 改版后</div>
+    <div class="card-body">
+      <div class="hero-card">
+        <div class="hero-row">
+          <div class="hero-portrait">
+            <div class="hero-portrait-inner">
+              <div class="hero-portrait-img"></div>
+            </div>
+          </div>
+          <div class="hero-text">
+            <h3>你好，我是<span class="blue">张经理</span><span style="font-size:14px;"> ✨</span></h3>
+            <span class="role-pill">把顶级销冠的经验，变成你签单的底气</span>
+            <p class="owner-title">金融事业部销冠</p>
+            <div class="hero-stats-row">
+              <span class="hero-stat">💬 128<span class="hl">次对话</span></span>
+              <span style="color:#d4d8e0;">·</span>
+              <span class="hero-stat">👍 94<span class="hl">% 满意</span></span>
+              <span style="color:#d4d8e0;">·</span>
+              <span class="hero-stat">👤 89<span class="hl">人用过</span></span>
+            </div>
+            <p class="data-fact">已采集 <strong>45</strong> 条实战经验，覆盖 <strong>8</strong> 个业务场景</p>
+            <div class="hero-tags">
+              <span class="hero-tag">价格谈判</span>
+              <span class="hero-tag">异议处理</span>
+              <span class="hero-tag">大客户经营</span>
+              <span class="hero-tag">催单逼单</span>
+            </div>
+          </div>
+        </div>
+        <div class="trust-bar">
+          <div class="trust-col"><div class="trust-icon" style="color:#ff4d5f;">♡</div><div><div class="trust-col-title">45 条真实经验</div><div class="trust-col-desc">来自销冠对话与文档</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#2147ff;">✦</div><div><div class="trust-col-title">8 个场景覆盖</div><div class="trust-col-desc">👍94% 满意</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#8b5cf6;">▤</div><div><div class="trust-col-title">2 小时前活跃</div><div class="trust-col-desc">经验保持新鲜</div></div></div>
+        </div>
+        <div class="trust-privacy">▣ 我们的对话内容仅用于服务你，绝不外泄，请放心分享</div>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#16a34a;background:#f0fdf4;padding:6px 10px;border-radius:6px;">
+        ✅ Stats条 · 数据事实文案 · 场景标签 · TrustBadge用真实数字 · 每分身不同
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 3. H5 分享落地页 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title">
+  <span>📱 3. H5 分享落地页</span>
+  <span style="font-size:12px;color:#94a3b8;font-weight:400;">页面: /s/[shareCode] · ShareLanding</span>
+</div>
+<p class="section-subtitle">核心改动：Hero 内嵌数据证明 + 上叠白卡社会证明 + 信任条数字驱动 + 模式卡片底部统计</p>
+
+<div class="compare-grid">
+  <!-- CURRENT -->
+  <div class="card">
+    <div class="card-header current">🔴 当前版本</div>
+    <div class="card-body" style="display:flex;justify-content:center;">
+      <div class="h5-frame">
+        <div class="h5-hero">
+          <div class="glow"></div>
+          <div style="position:relative;">
+            <div class="h5-avatar"></div>
+            <div style="position:absolute;bottom:-2px;right:4px;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;" title="销冠">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-1.8 11H4.8L3 7z"/></svg>
+            </div>
+          </div>
+          <div class="h5-name">张经理</div>
+          <div class="h5-title">金融事业部销冠</div>
+        </div>
+        <div class="h5-white-card">
+          <div class="intro">把张经理的实战打法，浓缩成你随时可问的 AI 分身</div>
+          <div class="tags-row">
+            <span class="chip">金融</span><span class="chip">B2B</span><span class="chip">大客户</span>
+          </div>
+        </div>
+        <div class="h5-trust">
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#f59e0b,#d97706);">★</div><div class="tlabel">实战打法</div><div class="tdesc">销冠真实案例提炼</div></div>
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">📄</div><div class="tlabel">溯源可查</div><div class="tdesc">每句话有据可依</div></div>
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">⚡</div><div class="tlabel">即问即用</div><div class="tdesc">30秒拿到可执行话术</div></div>
+        </div>
+        <div class="h5-mode-cards">
+          <div class="h5-mode-card rec">
+            <div class="h5-mode-icon" style="background:#eef2ff;color:#2563eb;">💬</div>
+            <div class="h5-mode-info"><div class="mtitle">向他请教 <span style="font-size:10px;background:#eef2ff;color:#2563eb;padding:2px 6px;border-radius:100px;">推荐</span></div><div class="mcta">选一个关心的场景，拿到真实销冠经验</div><div class="mvalue">不是 AI 瞎编的</div></div>
+          </div>
+          <div class="h5-mode-card">
+            <div class="h5-mode-icon" style="background:rgba(6,182,212,.1);color:#0891b2;">☕</div>
+            <div class="h5-mode-info"><div class="mtitle">随便聊聊</div><div class="mcta">像老销售带新人一样自由对话</div><div class="mvalue">想到什么说什么</div></div>
+          </div>
+          <div class="h5-mode-card">
+            <div class="h5-mode-icon" style="background:rgba(200,164,92,.14);color:#8a6a2f;">🎯</div>
+            <div class="h5-mode-info"><div class="mtitle">实战对练</div><div class="mcta">他扮演客户来考你，每轮给你实战点评</div><div class="mvalue">敢试试吗？</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW -->
+  <div class="card">
+    <div class="card-header new">🟢 改版后</div>
+    <div class="card-body" style="display:flex;justify-content:center;">
+      <div class="h5-frame">
+        <div class="h5-hero">
+          <div class="glow"></div>
+          <div style="position:relative;">
+            <div class="h5-avatar"></div>
+            <div style="position:absolute;bottom:-2px;right:4px;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#f59e0b,#d97706);border:2.5px solid #fff;display:flex;align-items:center;justify-content:center;" title="销冠">
+              <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:white;"><path d="M3 7l4.5 4L12 4l4.5 7L21 7l-1.8 11H4.8L3 7z"/></svg>
+            </div>
+          </div>
+          <div class="h5-name">张经理</div>
+          <div class="h5-title">金融事业部销冠</div>
+          <div class="h5-stats-inline"><span>💬 128 次对话</span><span style="opacity:.4;">·</span><span>👍 94% 满意</span></div>
+        </div>
+        <div class="h5-white-card">
+          <div class="intro" style="font-weight:600;">已帮助 <span style="color:#2563eb;">89</span> 位销售同行解决实际问题</div>
+          <div style="font-size:12px;color:#64748b;margin-top:4px;">把张经理的实战打法，浓缩成你随时可问的 AI 分身</div>
+          <div class="tags-row">
+            <span class="chip">金融</span><span class="chip">B2B</span><span class="chip">大客户</span>
+          </div>
+          <div class="meta-mini">94% 满意 · 8 个场景</div>
+        </div>
+        <div class="h5-trust">
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#f59e0b,#d97706);">★</div><div class="tlabel">128 次</div><div class="tdesc">真实对话交流</div></div>
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#6366f1,#4f46e5);">📄</div><div class="tlabel">94% 满意</div><div class="tdesc">回答被认可</div></div>
+          <div class="h5-trust-col"><div class="ticon" style="background:linear-gradient(135deg,#06b6d4,#0891b2);">⚡</div><div class="tlabel">8 个场景</div><div class="tdesc">经验全面覆盖</div></div>
+        </div>
+        <div class="h5-mode-cards">
+          <div class="h5-mode-card rec">
+            <div class="h5-mode-icon" style="background:#eef2ff;color:#2563eb;">💬</div>
+            <div class="h5-mode-info"><div class="mtitle">向他请教 <span style="font-size:10px;background:#eef2ff;color:#2563eb;padding:2px 6px;border-radius:100px;">推荐</span></div><div class="mcta">选一个关心的场景，拿到真实销冠经验</div><div class="mstat">128 次对话</div></div>
+          </div>
+          <div class="h5-mode-card">
+            <div class="h5-mode-icon" style="background:rgba(6,182,212,.1);color:#0891b2;">☕</div>
+            <div class="h5-mode-info"><div class="mtitle">随便聊聊</div><div class="mcta">像老销售带新人一样自由对话</div><div class="mstat">89 人用过</div></div>
+          </div>
+          <div class="h5-mode-card">
+            <div class="h5-mode-icon" style="background:rgba(200,164,92,.14);color:#8a6a2f;">🎯</div>
+            <div class="h5-mode-info"><div class="mtitle">实战对练</div><div class="mcta">他扮演客户来考你，每轮给你实战点评</div><div class="mstat">8 个练习场景</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 4. 企业端 ExpertRow -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title">
+  <span>🏢 4. 企业端发现页卡片</span>
+  <span style="font-size:12px;color:#94a3b8;font-weight:400;">页面: /discover · ExpertRow</span>
+</div>
+<p class="section-subtitle">核心改动：首字母头像 → 蛋形头像 + 底部行从纯颗粒数 → 对话数优先（有则显示）</p>
+
+<div class="compare-grid">
+  <div class="card">
+    <div class="card-header current">🔴 当前版本</div>
+    <div class="card-body">
+      <div class="expert-row">
+        <div class="expert-avatar" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;">张</div>
+        <div class="expert-info">
+          <div class="ename">张经理</div>
+          <div class="etitle">金融事业部销冠 · 金融</div>
+          <div class="emeta">45 条经验 · sales</div>
+        </div>
+        <div class="expert-question">B2B大客户怎么突破决策链？<span style="display:inline-block;width:5px;height:13px;background:#ff5c00;border-radius:3px;margin-left:4px;vertical-align:middle;animation:blink .8s infinite;"></span></div>
+      </div>
+      <div style="margin-top:8px;">
+      <div class="expert-row">
+        <div class="expert-avatar" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;background:linear-gradient(135deg,#16a34a,#4ade80);">王</div>
+        <div class="expert-info">
+          <div class="ename">王思涵</div>
+          <div class="etitle">SaaS 解决方案专家 · SaaS</div>
+          <div class="emeta">67 条经验 · SaaS</div>
+        </div>
+        <div class="expert-question">SaaS 产品怎么设计试用转化路径？<span style="display:inline-block;width:5px;height:13px;background:#ff5c00;border-radius:3px;margin-left:4px;vertical-align:middle;animation:blink .8s infinite;"></span></div>
+      </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header new">🟢 改版后</div>
+    <div class="card-body">
+      <div class="expert-row">
+        <div class="expert-avatar egg" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;background:linear-gradient(135deg,#ff5c00,#ff8c40);">张</div>
+        <div class="expert-info">
+          <div class="ename">张经理</div>
+          <div class="etitle">金融事业部销冠 · 金融</div>
+          <div class="emeta">💬 128 次对话 · 👍 94%</div>
+        </div>
+        <div class="expert-question">B2B大客户怎么突破决策链？<span style="display:inline-block;width:5px;height:13px;background:#ff5c00;border-radius:3px;margin-left:4px;vertical-align:middle;animation:blink .8s infinite;"></span></div>
+      </div>
+      <div style="margin-top:8px;">
+      <div class="expert-row">
+        <div class="expert-avatar egg" style="display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:700;background:linear-gradient(135deg,#16a34a,#4ade80);">王</div>
+        <div class="expert-info">
+          <div class="ename">王思涵</div>
+          <div class="etitle">SaaS 解决方案专家 · SaaS</div>
+          <div class="emeta">💬 203 次对话 · 👍 96%</div>
+        </div>
+        <div class="expert-question">SaaS 产品怎么设计试用转化路径？<span style="display:inline-block;width:5px;height:13px;background:#ff5c00;border-radius:3px;margin-left:4px;vertical-align:middle;animation:blink .8s infinite;"></span></div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 5. 降级状态 -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title">
+  <span>🆕 5. 降级状态 — 新发布分身（stats 全为 0）</span>
+  <span style="font-size:12px;color:#94a3b8;font-weight:400;">Scheduler 还没跑或全新分身</span>
+</div>
+<p class="section-subtitle">核心原则：有数据就展示，没数据就隐藏，绝不展示 "0 次对话"</p>
+
+<div class="compare-grid">
+  <div class="card">
+    <div class="card-header current">🔴 新分身 — 当前版本</div>
+    <div class="card-body">
+      <div class="hero-card">
+        <div class="hero-row">
+          <div class="hero-portrait"><div class="hero-portrait-inner"><div class="hero-portrait-img"></div></div></div>
+          <div class="hero-text">
+            <h3>你好，我是<span class="blue">新销冠</span><span style="font-size:14px;"> ✨</span></h3>
+            <span class="role-pill">把顶级销冠的经验，变成你签单的底气</span>
+            <p class="value-prop">销冠怎么谈客户，我就怎么回答你。每句话背后，都是<span class="red">真实的实战经验</span>。</p>
+            <p class="owner-title">销售总监</p>
+          </div>
+        </div>
+        <div class="trust-bar">
+          <div class="trust-col"><div class="trust-icon" style="color:#ff4d5f;">♡</div><div><div class="trust-col-title">真实案例</div><div class="trust-col-desc">销冠真实对话与文档提炼</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#2147ff;">✦</div><div><div class="trust-col-title">溯源可查</div><div class="trust-col-desc">每句回答有据可依</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#8b5cf6;">▤</div><div><div class="trust-col-title">即学即用</div><div class="trust-col-desc">30秒拿到可执行话术</div></div></div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#94a3b8;text-align:center;">无对话数据 → 展示与所有分身相同</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header new">🟢 新分身 — 改版后（降级到与当前一致）</div>
+    <div class="card-body">
+      <div class="hero-card">
+        <div class="hero-row">
+          <div class="hero-portrait"><div class="hero-portrait-inner"><div class="hero-portrait-img"></div></div></div>
+          <div class="hero-text">
+            <h3>你好，我是<span class="blue">新销冠</span><span style="font-size:14px;"> ✨</span></h3>
+            <span class="role-pill">把顶级销冠的经验，变成你签单的底气</span>
+            <p class="data-fact">已采集 <strong>...</strong> 条实战经验，正在积累中</p>
+            <p class="owner-title">销售总监</p>
+          </div>
+        </div>
+        <div class="trust-bar">
+          <div class="trust-col"><div class="trust-icon" style="color:#ff4d5f;">♡</div><div><div class="trust-col-title">真实案例</div><div class="trust-col-desc">销冠真实对话与文档提炼</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#2147ff;">✦</div><div><div class="trust-col-title">溯源可查</div><div class="trust-col-desc">每句回答有据可依</div></div></div>
+          <div class="trust-col"><div class="trust-icon" style="color:#8b5cf6;">▤</div><div><div class="trust-col-title">即学即用</div><div class="trust-col-desc">30秒拿到可执行话术</div></div></div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:11px;color:#16a34a;text-align:center;">stats 全 0 → Stats 条自动隐藏 → TrustBadge 回退静态文案 → 与当前完全一致 ✅</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════ -->
+<!-- 6. Summary -->
+<!-- ═══════════════════════════════════════════════ -->
+<div class="section-title"><span>📊 改动概览</span></div>
+<div class="card">
+  <div class="card-body">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead>
+        <tr style="border-bottom:2px solid #e2e8f0;text-align:left;">
+          <th style="padding:8px;">页面</th><th style="padding:8px;">当前</th><th style="padding:8px;">改版后</th><th style="padding:8px;">数据来源</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px;font-weight:600;">分身广场卡片</td>
+          <td style="padding:8px;font-size:12px;color:#64748b;">首字母圆圈 + "在线"假徽章 + 颗粒数</td>
+          <td style="padding:8px;font-size:12px;">蛋形头像 + stats条 + 场景pill + 经验·场景数</td>
+          <td style="padding:8px;font-size:11px;color:#2563eb;">skill.conversation_count / satisfaction_rate / user_count</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px;font-weight:600;">分身详情 Hero</td>
+          <td style="padding:8px;font-size:12px;color:#64748b;">静态 TALK_NAME_CARD + 静态 TrustBadge</td>
+          <td style="padding:8px;font-size:12px;">数据事实文案 + Stats条 + 场景标签 + 动态 TrustBadge</td>
+          <td style="padding:8px;font-size:11px;color:#2563eb;">skill.conversation_count / grain count / scene count / last_active_at</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px;font-weight:600;">H5 ShareLanding</td>
+          <td style="padding:8px;font-size:12px;color:#64748b;">Hero 仅姓名+title · 信任条纯静态</td>
+          <td style="padding:8px;font-size:12px;">Hero 内嵌数据 · 白卡社会证明 · 信任条数字 · 模式卡底统计</td>
+          <td style="padding:8px;font-size:11px;color:#2563eb;">skill.conversation_count / satisfaction_rate / scene count</td>
+        </tr>
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:8px;font-weight:600;">企业端 ExpertRow</td>
+          <td style="padding:8px;font-size:12px;color:#64748b;">首字母头像 + "45 条经验 · sales"</td>
+          <td style="padding:8px;font-size:12px;">蛋形头像 + "💬 128 次对话 · 👍 94%"</td>
+          <td style="padding:8px;font-size:11px;color:#2563eb;">skill.conversation_count / satisfaction_rate</td>
+        </tr>
+        <tr>
+          <td style="padding:8px;font-weight:600;">降级（新分身）</td>
+          <td style="padding:8px;font-size:12px;color:#64748b;">固定静态展示</td>
+          <td style="padding:8px;font-size:12px;">stats 全 0 → 自动回退到静态展示，<strong>与当前完全一致</strong></td>
+          <td style="padding:8px;font-size:11px;color:#16a34a;">零风险</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</div>
+
+<style>
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+</style>
+</body>
+</html>

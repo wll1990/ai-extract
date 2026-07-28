@@ -22,6 +22,4 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
      * @return 是否满足条件
      */
     boolean existsByAccount(String account);
-
-
 }

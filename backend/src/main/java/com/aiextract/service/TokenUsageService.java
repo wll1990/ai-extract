@@ -22,7 +22,8 @@ public class TokenUsageService {
     private final TokenUsageLogRepository repository;
 
     @Async("tokenLogExecutor")
-    public void log(UUID userId, String modelType, String modelName, int inputTokens, int outputTokens) {
+    public void log(UUID userId, String modelType, String modelName, int inputTokens, int outputTokens,
+                    int promptChars, int completionChars) {
         try {
             repository.save(TokenUsageLog.builder()
                 .userId(userId)
@@ -31,11 +32,13 @@ public class TokenUsageService {
                 .modelName(modelName)
                 .inputTokens(inputTokens)
                 .outputTokens(outputTokens)
+                .promptChars(promptChars)
+                .completionChars(completionChars)
                 .createdAt(LocalDateTime.now())
                 .build());
         } catch (Exception e) {
-            log.warn("Token 用量记录失败 userId={} model={} input={} output={}",
-                userId, modelName, inputTokens, outputTokens, e);
+            log.warn("Token 用量记录失败 userId={} model={} input={} output={} promptChars={} completionChars={}",
+                userId, modelName, inputTokens, outputTokens, promptChars, completionChars, e);
         }
     }
 }

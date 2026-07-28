@@ -17,11 +17,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   // ── 产品功能 ──
-  { icon: '🤖', label: '分身广场', path: '/skills', roles: ['super_admin', 'space_owner', 'employee'] },
+  { icon: '🤖', label: '分身广场', path: '/skills', roles: ['super_admin', 'company_admin', 'employee'] },
   { icon: '👤', label: '我的空间', path: '/space/me', roles: ['employee'] },
   { icon: '🏢', label: '空间总览', path: '/spaces', roles: ['super_admin'] },
-  { icon: '💼', label: '销冠访谈', path: '/interview/create', roles: ['super_admin', 'employee'] },
-  { icon: '📚', label: '经验广场', path: '/explore', roles: ['super_admin', 'space_owner', 'employee'] },
+  { icon: '💼', label: '销冠访谈', path: '/interview/create', roles: ['super_admin', 'company_admin', 'employee'] },
+  { icon: '📚', label: '经验广场', path: '/explore', roles: ['super_admin', 'company_admin', 'employee'] },
   // ── 管理后台 ──
   { icon: '📊', label: '工作台', path: '/admin', roles: ['super_admin'] },
   { icon: '📈', label: '数据看板', path: '/admin/insights', roles: ['super_admin'] },
@@ -33,6 +33,8 @@ const NAV_ITEMS: NavItem[] = [
   { icon: '💬', label: '对话历史', path: '/admin/conversations', roles: ['super_admin'] },
   { icon: '🗺️', label: '场景地图', path: '/admin/coverage', roles: ['super_admin'] },
   { icon: '⚙️', label: 'IM管理', path: '/admin/im', roles: ['super_admin'] },
+  { icon: '🔗', label: '合作方管理', path: '/admin/partners', roles: ['super_admin'] },
+  { icon: '🪙', label: 'Token 统计', path: '/admin/token-usage', roles: ['super_admin'] },
 ];
 
 /**
@@ -46,7 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // 公开页面无需检查：登录/注册页（修复原先 /register 被 401 弹回 /login 的问题）
   // 与 C 端分享页（/s/*，独立布局与凭证体系，不走 B 端 /auth/me）
-  const isPublicPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/s/');
+  const isPublicPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
 
   useEffect(() => {
     if (isPublicPage) { setLoading(false); return; }

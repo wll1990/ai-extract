@@ -153,24 +153,26 @@ public class AdminController {
         return ApiResponse.success(Map.of("message", "配置已更新"));
     }
 
+    private final com.aiextract.service.InterviewService interviewService;
+
     // ==================== /admin/invite ====================
 
+    /**
+     * 生成访谈邀请码。不绑定 space，space 由扫码登录的员工自己决定。
+     * 写入 interview_invite_code 表，UNIQUE 约束防重。
+     */
     @PostMapping("/invite")
     public ApiResponse<Map<String, Object>> createInvite(
             @RequestBody Map<String, Object> body) {
-        String inviteCode = UUID.randomUUID().toString().substring(0, 8);
-        String sceneTag = (String) body.getOrDefault("sceneTag", "");
-        String userId = (String) body.getOrDefault("userId", "");
-
-        // 后期优化：邀请码可存 Redis 设 TTL 过期，当前直接持久化到 DB
-        log.info("生成萃取邀请, inviteCode: {}, sceneTag: {}, userId: {}", inviteCode, sceneTag, userId);
-
-        String baseUrl = frontendUrl;
-        String inviteUrl = baseUrl + "/interview/create?invite=" + inviteCode;
+        UUID companyId = extractCompanyId();
+        // expireDays 不传或传 0 = 永久有效
+        int expireDays = body.containsKey("expireDays") ? ((Number) body.get("expireDays")).intValue() : 0;
+        String inviteCode = interviewService.generateInviteCode(companyId, expireDays,
+            jwtUtil.getUserIdFromToken(getToken()));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("inviteCode", inviteCode);
-        result.put("inviteUrl", inviteUrl);
+        result.put("inviteUrl", frontendUrl + "/h5/interview/m/" + inviteCode);
         return ApiResponse.success(result);
     }
 

@@ -5,6 +5,9 @@ import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
 import com.aiextract.dto.UserInfoResponse;
+import com.aiextract.exception.BusinessException;
+import com.aiextract.model.CompanyRegisterCode;
+import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.service.AuthService;
 import com.aiextract.util.JwtUtil;
 import jakarta.servlet.http.Cookie;
@@ -15,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -33,6 +38,7 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
+    private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
 
     @PostMapping("/login")
@@ -80,6 +86,48 @@ public class AuthController {
         }
         UUID userId = jwtUtil.getUserIdFromToken(token);
         UserInfoResponse response = authService.getCurrentUser(userId);
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * B端注册（使用企业注册码）。新员工扫码后注册，自动归入企业。
+     */
+    @PostMapping("/register/with-code")
+    public ApiResponse<LoginResponse> registerWithCode(@RequestBody Map<String, Object> body,
+                                                        HttpServletResponse httpResponse) {
+        String companyCode = (String) body.get("companyCode");
+        String account = (String) body.get("account");
+        String password = (String) body.get("password");
+        String name = (String) body.get("name");
+
+        if (companyCode == null || account == null || password == null || name == null) {
+            return ApiResponse.error(400, "请填写所有字段");
+        }
+
+        CompanyRegisterCode c = registerCodeRepository.findByCode(companyCode)
+            .orElseThrow(() -> new BusinessException(400, "注册码无效"));
+        if (Boolean.FALSE.equals(c.getEnabled())) {
+            throw new BusinessException(400, "注册码已失效");
+        }
+        if (c.getExpiresAt() != null && c.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(400, "注册码已过期");
+        }
+        if (c.getMaxUses() > 0 && c.getUsedCount() >= c.getMaxUses()) {
+            throw new BusinessException(400, "注册码已达使用上限");
+        }
+
+        // 创建用户
+        RegisterRequest request = RegisterRequest.builder()
+            .companyId(c.getCompanyId().toString())
+            .account(account).password(password).name(name)
+            .role("employee").build();
+        LoginResponse response = authService.register(request);
+
+        // 消费注册码
+        c.setUsedCount(c.getUsedCount() + 1);
+        registerCodeRepository.save(c);
+
+        setTokenCookie(httpResponse, response.getToken());
         return ApiResponse.success(response);
     }
 

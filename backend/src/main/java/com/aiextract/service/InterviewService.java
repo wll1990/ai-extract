@@ -10,6 +10,7 @@ import com.aiextract.exception.BusinessException;
 import com.aiextract.model.ChatChunk;
 import com.aiextract.model.ExpertGrain;
 import com.aiextract.model.ExpertSkill;
+import com.aiextract.model.InterviewInviteCode;
 import com.aiextract.model.InterviewMessage;
 import com.aiextract.model.InterviewSession;
 import com.aiextract.model.Space;
@@ -66,11 +67,13 @@ public class InterviewService {
     // ==================== 依赖注入 ====================
 
     private final InterviewSessionRepository sessionRepository;
+    private final com.aiextract.repository.InterviewInviteCodeRepository inviteCodeRepository;
     private final ObjectMapper objectMapper;
     private final InterviewMessageRepository messageRepository;
     private final ChatStreamAdapter chatStreamAdapter;
     private final ReportGenerationService reportGenerationService;
     private final ReportRepository reportRepository;
+    private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final ExpertSkillRepository expertSkillRepository;
     private final ExpertGrainRepository expertGrainRepository;
     private final SpaceRepository spaceRepository;
@@ -108,30 +111,68 @@ public class InterviewService {
 
     // ==================== 公开 API — Controller 直接调用 ====================
 
+    /** C 端免费萃取上限 */
+    @org.springframework.beans.factory.annotation.Value("${app.interview.c-user-free-limit:3}")
+    private int cUserFreeLimit;
+
+    /** 报告就绪最低颗粒数，与 report.min-grains 保持一致 */
+    @org.springframework.beans.factory.annotation.Value("${app.interview.grain-enough:10}")
+    private int grainEnough;
+
+    /** 低于此值强烈引导用户继续补充 */
+    @org.springframework.beans.factory.annotation.Value("${app.interview.grain-suggest-more:5}")
+    private int grainSuggestMore;
+
     /**
      * 创建访谈会话。
      *
-     * <p>流程:
-     * <ol>
-     *   <li>校验空间归属，解析领域配置</li>
-     *   <li>判断是否首次访谈（决定开场白风格）</li>
-     *   <li>创建 InterviewSession（status=created, phase=opening）</li>
-     *   <li>生成 AI 开场引导消息并持久化</li>
-     * </ol>
+     * <p>B端：spaceId 由前端传入（管理员选了 space）。
+     * C端：spaceId 不传，从当前 userId（app_user.id）找/建 personal Space。</p>
      *
-     * @param request       创建请求（spaceId, topic, inviteCode, expertSkillId）
+     * @param request       创建请求
      * @param userId        当前登录用户
      * @param interviewType 访谈类型：sales / expert
-     * @return 会话详情（含四阶段进度、采集状态、开场白消息）
+     * @param role          当前用户角色（JWT role claim）
+     * @return 会话详情
      */
     @Transactional(rollbackFor = Exception.class)
-    public InterviewSessionResponse createSession(CreateInterviewRequest request, UUID userId, String interviewType) {
-        UUID spaceId = parseUuid(request.getSpaceId());
-        log.info("创建访谈会话, spaceId: {}, topic: {}, userId: {}", spaceId, request.getTopic(), userId);
+    public InterviewSessionResponse createSession(CreateInterviewRequest request, UUID userId,
+                                                   String interviewType, String role) {
+        UUID spaceId;
+        if (request.getSpaceId() != null && !request.getSpaceId().isBlank()) {
+            // 桌面端传了 spaceId → 直接用
+            spaceId = parseUuid(request.getSpaceId());
+        } else {
+            // H5/移动端没传 → 查找个人 Space（注册时已建；Partner 等未走注册的兜底创建）
+            Space space = spaceRepository.findByUserId(userId).stream().findFirst().orElse(null);
+            if (space == null) {
+                space = Space.builder()
+                    .id(UUID.randomUUID()).userId(userId)
+                    .title(request.getTopic() != null ? request.getTopic() : "我的经验空间")
+                    .isPublic(false).status("active")
+                    .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                    .build();
+                space = spaceRepository.save(space);
+            }
+            spaceId = space.getId();
+        }
+
+        // 一次查询用户所有 Space，复用给后续 C 端限制和 TOCTOU 检查
+        List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
+            .map(Space::getId).toList();
+
+        // C端免费次数限制
+        if ("c_user".equalsIgnoreCase(role)) {
+            long completedCount = userSpaceIds.isEmpty() ? 0
+                : sessionRepository.countBySpaceIdInAndStatus(userSpaceIds, STATUS_COMPLETED);
+            if (completedCount >= cUserFreeLimit) {
+                throw new BusinessException(402, "免费萃取次数已用完，请升级会员");
+            }
+        }
+
+        log.info("创建访谈会话, spaceId: {}, topic: {}, userId: {}, role: {}", spaceId, request.getTopic(), userId, role);
 
         // 0. 检查是否已有进行中的同类型访谈 — 两类独立，互不阻塞
-        List<UUID> userSpaceIds = spaceRepository.findByUserId(userId)
-            .stream().map(com.aiextract.model.Space::getId).toList();
         long activeCount = sessionRepository.countBySpaceIdInAndStatusInAndInterviewType(
             userSpaceIds, ACTIVE_STATUSES, interviewType);
         if (activeCount > 0) {
@@ -163,7 +204,20 @@ public class InterviewService {
         });
         String domain = domainConfigLoader.resolveDomain(skill);
 
-        // 4. 构建并保存会话实体
+        // 4. 验证邀请码（防止绕过前端直接调 API 或使用已失效的邀请码）
+        String inviteCode = request.getInviteCode();
+        if (inviteCode != null && !inviteCode.isBlank()) {
+            InterviewInviteCode code = inviteCodeRepository.findByCode(inviteCode)
+                .orElseThrow(() -> new BusinessException(400, "邀请码无效"));
+            if (Boolean.FALSE.equals(code.getEnabled())) {
+                throw new BusinessException(400, "邀请码已失效");
+            }
+            if (code.getExpiresAt() != null && code.getExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new BusinessException(400, "邀请码已过期");
+            }
+        }
+
+        // 5. 构建并保存会话实体
         LocalDateTime now = LocalDateTime.now();
         InterviewSession session = InterviewSession.builder()
                 .id(UUID.randomUUID())
@@ -181,7 +235,19 @@ public class InterviewService {
                 .build();
         sessionRepository.save(session);
 
-        // 5. 生成并保存开场引导消息（AI 角色，depth=-1 表示系统引导）
+        // 尾校验：save 后再次检查活跃会话数，防止 TOCTOU 竞态窗口
+        // （pre-check 和 INSERT 之间有多次 DB 往返，另一并发请求可能也通过了 pre-check）
+        long recheckCount = sessionRepository.countBySpaceIdInAndStatusInAndInterviewType(
+            userSpaceIds, ACTIVE_STATUSES, interviewType);
+        if (recheckCount > 1) {
+            // 本次 save 产生了第 2 个活跃会话，标记为 abandoned 并回滚本次创建
+            session.setStatus(STATUS_ABANDONED);
+            sessionRepository.save(session);
+            throw new BusinessException(HttpStatus.CONFLICT.value(),
+                "你已有进行中的访谈，请先完成或放弃后再创建新的");
+        }
+
+        // 6. 生成并保存开场引导消息（AI 角色，depth=-1 表示系统引导）
         String openingMessage = generateOpeningMessage(isFirstInterview, interviewType, domain);
         InterviewMessage guideMessage = InterviewMessage.builder()
                 .id(UUID.randomUUID())
@@ -206,13 +272,14 @@ public class InterviewService {
      * 前端据此渲染访谈进度条和阶段指示器。
      */
     @Transactional(readOnly = true)
-    public InterviewSessionResponse getSession(String sessionId) {
+    public InterviewSessionResponse getSession(String sessionId, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> {
                     log.warn("会话不存在, sessionId: {}", sessionId);
                     return new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND);
                 });
+        validateOwnership(session, userId);
         String expertSkillUsed = resolveExpertSkillUsed(session.getExpertSkillId());
         return buildSessionResponse(session, expertSkillUsed);
     }
@@ -221,8 +288,11 @@ public class InterviewService {
      * 获取会话的历史消息列表（按时间升序）。
      */
     @Transactional(readOnly = true)
-    public List<InterviewMessageResponse> getMessages(String sessionId) {
-        UUID id = UUID.fromString(sessionId);
+    public List<InterviewMessageResponse> getMessages(String sessionId, UUID userId) {
+        UUID id = parseUuid(sessionId);
+        InterviewSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
         List<InterviewMessage> messages = messageRepository.findBySessionIdOrderByCreatedAtAsc(id);
 
         List<InterviewMessageResponse> responses = new ArrayList<>();
@@ -251,10 +321,12 @@ public class InterviewService {
      *   <li>通过 ChatStreamAdapter 调用 LLM 流式返回</li>
      * </ol>
      */
-    public reactor.core.publisher.Flux<ChatChunk> processMessageFlux(String sessionId, String message) {
+    @Transactional(rollbackFor = Exception.class)
+    public reactor.core.publisher.Flux<ChatChunk> processMessageFlux(String sessionId, String message, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
 
         // 首次发言：created → in_progress
         if (STATUS_CREATED.equals(session.getStatus())) {
@@ -291,10 +363,12 @@ public class InterviewService {
      * <p>仅 in_progress 和 paused 状态可恢复。
      * 加载完整历史上下文后，AI 从中断处继续追问。
      */
-    public reactor.core.publisher.Flux<ChatChunk> resumeSessionFlux(String sessionId) {
+    @Transactional(rollbackFor = Exception.class)
+    public reactor.core.publisher.Flux<ChatChunk> resumeSessionFlux(String sessionId, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
 
         if (!INTERRUPTIBLE_STATUSES.contains(session.getStatus())) {
             return reactor.core.publisher.Flux.just(
@@ -322,10 +396,12 @@ public class InterviewService {
      *   <li>否则 → 推进到下一阶段，AI 以新阶段角色继续引导</li>
      * </ol>
      */
-    public reactor.core.publisher.Flux<ChatChunk> markPhaseCompleteFlux(String sessionId, String phase) {
+    @Transactional(rollbackFor = Exception.class)
+    public reactor.core.publisher.Flux<ChatChunk> markPhaseCompleteFlux(String sessionId, String phase, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
 
         // 标记该阶段的采集数据
         markCollectForPhase(session, phase);
@@ -351,8 +427,8 @@ public class InterviewService {
             });
         }
 
-        // 推进阶段 → 触发新阶段的 AI 引导
-        self.markPhaseAndSaveTransition(id, nextPhase);
+        // 推进阶段 → 触发新阶段的 AI 引导（传 entity 而非 ID，避免重新加载丢失 collectStatus）
+        self.markPhaseAndSaveTransition(session, nextPhase);
         String systemPrompt = loadInterviewSystemPrompt(session);
         List<Map<String, String>> historyMsgs = buildMessagesList(session);
 
@@ -366,12 +442,14 @@ public class InterviewService {
      *
      * <p>管理员或用户手动结束访谈，触发完成逻辑：
      * 标记所有采集 → 调用萃取管道 → 返回报告 ID。
+     * 无 @Transactional — DB 状态更新和萃取管道各自独立事务，
+     * 萃取管道不在事务内执行（遵循"事务内禁止 AI 调用"原则）。
      */
-    @Transactional(rollbackFor = Exception.class)
-    public String forceCompleteSession(String sessionId) {
+    public String forceCompleteSession(String sessionId, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
 
         // 已完成会话：expert 不支持重复触发，sales 幂等重触发萃取管道
         if (STATUS_COMPLETED.equals(session.getStatus())) {
@@ -383,7 +461,7 @@ public class InterviewService {
             return null;
         }
 
-        UUID reportId = checkAndCompleteSession(session);
+        UUID reportId = self.checkAndCompleteSession(session);
         return reportId != null ? reportId.toString() : null;
     }
 
@@ -394,15 +472,45 @@ public class InterviewService {
      * 保留历史消息但清除采集进度。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void restartSession(String sessionId) {
+    public String restartSession(String sessionId, UUID userId) {
         UUID id = parseUuid(sessionId);
-        InterviewSession session = sessionRepository.findById(id)
+        InterviewSession oldSession = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
-        session.setStatus(STATUS_CREATED);
-        session.setCurrentPhase(PHASE_OPENING);
-        session.setLastActiveAt(LocalDateTime.now());
-        sessionRepository.save(session);
-        log.info("访谈已重新开始, sessionId: {}", sessionId);
+        validateOwnership(oldSession, userId);
+        // 旧会话标记为 abandoned，保留历史
+        oldSession.setStatus(STATUS_ABANDONED);
+        oldSession.setLastActiveAt(LocalDateTime.now());
+        sessionRepository.save(oldSession);
+
+        // 新建会话，复用 topic、spaceId、inviteCode
+        InterviewSession newSession = InterviewSession.builder()
+                .id(UUID.randomUUID())
+                .spaceId(oldSession.getSpaceId())
+                .topic(oldSession.getTopic())
+                .status(STATUS_CREATED)
+                .currentPhase(PHASE_OPENING)
+                .collectStatus("{}")
+                .inviteCode(oldSession.getInviteCode())
+                .expertSkillId(oldSession.getExpertSkillId())
+                .interviewType(oldSession.getInterviewType())
+                .domain(oldSession.getDomain())
+                .lastActiveAt(LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
+                .build();
+        sessionRepository.save(newSession);
+
+        // 生成新开场白
+        boolean isFirstInterview = sessionRepository
+            .countBySpaceIdAndStatus(oldSession.getSpaceId(), STATUS_COMPLETED) == 0;
+        String openingMessage = generateOpeningMessage(isFirstInterview, oldSession.getInterviewType(), oldSession.getDomain());
+        messageRepository.save(InterviewMessage.builder()
+                .id(UUID.randomUUID()).sessionId(newSession.getId())
+                .role("ai").content(openingMessage).depth(-1)
+                .phase(PHASE_OPENING).stageStatus("{}")
+                .createdAt(LocalDateTime.now()).build());
+
+        log.info("访谈已重新开始 oldSessionId={} newSessionId={}", sessionId, newSession.getId());
+        return newSession.getId().toString();
     }
 
     /**
@@ -412,10 +520,11 @@ public class InterviewService {
      * 暂停后可通过 resume 恢复。
      */
     @Transactional(rollbackFor = Exception.class)
-    public void pauseSession(String sessionId) {
+    public void pauseSession(String sessionId, UUID userId) {
         UUID id = parseUuid(sessionId);
         InterviewSession session = sessionRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
         if (!INTERRUPTIBLE_STATUSES.contains(session.getStatus())) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "当前状态不允许暂停: " + session.getStatus());
         }
@@ -456,8 +565,81 @@ public class InterviewService {
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("hasActive", !list.isEmpty());
         result.put("sessions", list);
         return result;
+    }
+
+    /**
+     * 获取指定访谈会话产生的颗粒列表（C端审核用）。
+     * 属主校验：session → space → space.isOwnedBy(currentUserId)。
+     */
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getSessionGrains(String sessionId, UUID userId) {
+        InterviewSession session = sessionRepository.findById(parseUuid(sessionId))
+            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SESSION_NOT_FOUND));
+        Space space = spaceRepository.findById(session.getSpaceId())
+            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权访问");
+        }
+        // 注：颗粒由萃取管道异步生成，这里查的是已生成的颗粒
+        return grainRepository.findBySourceInterviewId(session.getId()).stream()
+            .map(g -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", g.getId().toString());
+                m.put("sceneTag", g.getSceneTag());
+                m.put("sceneDescription", g.getSceneDescription());
+                m.put("expertThought", g.getExpertThought());
+                m.put("standardScript", g.getStandardScript());
+                m.put("commonMistakes", g.getCommonMistakes());
+                m.put("status", g.getStatus());
+                return m;
+            }).toList();
+    }
+
+    /**
+     * 生成访谈邀请码（8 位 base62），写入 interview_invite_code 表。
+     * 不创建 session，不绑定 space。UNIQUE 约束兜底，冲突自动重试 3 次。
+     */
+    public String generateInviteCode(UUID companyId, int expireDays, UUID createdBy) {
+        String chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        for (int i = 0; i < 3; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < 8; j++) sb.append(chars.charAt(random.nextInt(62)));
+            String code = sb.toString();
+            try {
+                var builder = com.aiextract.model.InterviewInviteCode.builder()
+                    .id(UUID.randomUUID()).companyId(companyId).code(code)
+                    .enabled(true).maxUses(0).usedCount(0)
+                    .createdBy(createdBy).createdAt(LocalDateTime.now());
+                // expireDays <= 0 表示永久有效，不设过期时间
+                if (expireDays > 0) {
+                    builder.expiresAt(LocalDateTime.now().plusDays(expireDays));
+                }
+                inviteCodeRepository.save(builder.build());
+                return code;
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                log.warn("邀请码 UNIQUE 冲突，重试中 companyId={} attempt={}", companyId, i + 1);
+            }
+        }
+        throw new BusinessException(500, "邀请码生成失败");
+    }
+
+    // ==================== 内部方法 — 鉴权 ====================
+
+    /**
+     * 校验当前用户是否拥有该访谈会话的访问权限。
+     * 通过 session → space → space.isOwnedBy(userId) 链路校验，
+     * 与 {@link #getSessionGrains} 属主校验模式一致。
+     */
+    private void validateOwnership(InterviewSession session, UUID userId) {
+        Space space = spaceRepository.findById(session.getSpaceId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "无权访问该访谈会话");
+        }
     }
 
     // ==================== 内部方法 — 状态管理 ====================
@@ -465,19 +647,20 @@ public class InterviewService {
     /**
      * 保存阶段推进并记录到数据库。
      *
-     * <p>通过 self 代理调用，确保 @Transactional 生效
-     * （Spring AOP 不会拦截同类内部直接调用）。
+     * <p>直接操作调用者传入的 entity（含 collectStatus 等已修改字段），
+     * 不重新从 DB 加载，避免覆盖调用者在内存中的修改。
+     * 通过 self 代理调用，确保 @Transactional 生效。
      *
+     * @param session   调用者已加载并可能修改过的会话实体
+     * @param nextPhase 下一阶段标识
      * @return 下一阶段标识
      */
     @Transactional(rollbackFor = Exception.class)
-    public String markPhaseAndSaveTransition(UUID sessionId, String nextPhase) {
-        InterviewSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+    public String markPhaseAndSaveTransition(InterviewSession session, String nextPhase) {
         session.setCurrentPhase(nextPhase);
         session.setLastActiveAt(LocalDateTime.now());
         sessionRepository.save(session);
-        log.info("阶段推进, sessionId: {}, phase: {}", sessionId, phaseLabel(nextPhase));
+        log.info("阶段推进, sessionId: {}, phase: {}", session.getId(), phaseLabel(nextPhase));
         return nextPhase;
     }
 
@@ -553,14 +736,13 @@ public class InterviewService {
      *
      * @return 会话 ID（后续可关联报告）
      */
+    @Transactional(rollbackFor = Exception.class)
     UUID checkAndCompleteSession(InterviewSession session) {
         if (!STATUS_IN_PROGRESS.equals(session.getStatus()) && !STATUS_PAUSED.equals(session.getStatus())) {
             return null;
         }
 
-        Map<String, String> cs = new LinkedHashMap<>();
-        COLLECT_MODULE_KEYS.forEach(k -> cs.put(k, "collected"));
-        session.setCollectStatus(toCollectJson(cs));
+        // 保留 markCollectForPhase 逐阶段积累的真实采集状态，不强制覆盖
         session.setStatus(STATUS_COMPLETED);
         session.setCurrentPhase(PHASE_CLOSING);
         session.setFinishedAt(LocalDateTime.now());
@@ -574,8 +756,81 @@ public class InterviewService {
             interviewTranscriptExtractor.extractFromInterview(session.getId());
         }
 
-        log.info("访谈已完成, sessionId: {}", session.getId());
+        log.info("访谈已完成, sessionId: {} grainCount={} enough={}", session.getId(),
+            grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active"), grainEnough);
         return session.getId();
+    }
+
+    // ==================== "继续补充" — 颗粒不足时重新打开已完成的会话 ====================
+
+    /** 模块 key → 中文标签，用于补充指令 */
+    private static final Map<String, String> MODULE_CN = Map.of(
+        "caseStory", "案例故事", "steps", "核心步骤", "decision", "关键决策",
+        "mindset", "专家心法", "boundary", "适用边界", "checklist", "行动清单"
+    );
+
+    /**
+     * 将已完成的会话重新打开，用于"继续补充"场景。
+     * 状态 completed → in_progress，阶段回到 modeling（针对性引导补充未采集模块）。
+     * collectStatus 保留，AI 据此聚焦未采集部分，不会从零开始。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public InterviewSession reopenForSupplement(UUID sessionId, UUID userId) {
+        InterviewSession session = sessionRepository.findById(sessionId)
+            .orElseThrow(() -> new BusinessException(404, "会话不存在"));
+        validateOwnership(session, userId);
+        if (!STATUS_COMPLETED.equals(session.getStatus())) {
+            throw new BusinessException(400, "当前状态不允许补充");
+        }
+        String oldStatus = session.getStatus();
+        String oldPhase = session.getCurrentPhase();
+        session.setStatus(STATUS_IN_PROGRESS);
+        session.setCurrentPhase(PHASE_MODELING);
+        session.setLastActiveAt(LocalDateTime.now());
+        sessionRepository.save(session);
+        log.info("补充模式已启动 sessionId={} status={}→{} phase={}→{}", sessionId, oldStatus, STATUS_IN_PROGRESS, oldPhase, PHASE_MODELING);
+        return session;
+    }
+
+    /**
+     * "继续补充" SSE 端点。
+     * 1. reopenForSupplement 将状态改回 in_progress + modeling
+     * 2. 构建补充指令告知 AI 哪些模块已采集/未采集
+     * 3. AI 以 modeling 阶段角色继续追问，加载完整历史消息上下文
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public reactor.core.publisher.Flux<ChatChunk> supplementSessionFlux(String sessionId, UUID userId) {
+        UUID id = parseUuid(sessionId);
+        InterviewSession session = self.reopenForSupplement(id, userId);
+
+        log.info("用户触发补充模式 sessionId={} grainCount={} collectStatus={}",
+            sessionId, grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active"),
+            session.getCollectStatus());
+
+        String systemPrompt = loadInterviewSystemPrompt(session);
+        List<Map<String, String>> historyMsgs = buildMessagesList(session);
+
+        // 补充指令作为 user 消息传入，AI 据此聚焦未采集模块
+        String supplementMsg = buildSupplementMessage(session);
+        return callChatStream(session, systemPrompt, supplementMsg, historyMsgs);
+    }
+
+    /** 根据 collectStatus 生成补充指令，模块名用中文 */
+    private String buildSupplementMessage(InterviewSession session) {
+        Map<String, String> cs = parseCollectStatus(session.getCollectStatus());
+        List<String> done = new ArrayList<>();
+        List<String> todo = new ArrayList<>();
+        for (String key : COLLECT_MODULE_KEYS) {
+            String label = MODULE_CN.getOrDefault(key, key);
+            if ("collected".equals(cs.get(key))) done.add(label);
+            else todo.add(label);
+        }
+        if (todo.isEmpty()) {
+            return "用户选择了继续补充。已经完成了所有模块的采集，请从整体角度再深挖一下细节，特别是具体话术和决策背后的思考。";
+        }
+        return "用户选择了继续补充。以下模块已经采集完成：" + String.join("、", done)
+            + "。以下模块还需要继续深入：" + String.join("、", todo)
+            + "。请自然地引导用户补充缺失的模块，不要重复已采集的内容，直接切入主题。";
     }
 
     // ==================== 内部方法 — 上下文构建 ====================
@@ -881,12 +1136,15 @@ public class InterviewService {
                 .topic(session.getTopic())
                 .status(session.getStatus())
                 .currentPhase(session.getCurrentPhase())
+                // space 级别活跃颗粒数（非 session 级别：同一 space 多次访谈累计，与报告就绪检查口径一致）
+                .grainCount((int) grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active"))
                 .expertSkillUsed(expertSkillUsed)
                 .phases(phases)
                 .templatePreview(templatePreview)
                 .collectStatus(collectStatus)
                 .lastActiveAt(session.getLastActiveAt() != null ? session.getLastActiveAt().toString() : null)
-                .reportId(null)
+                .reportId(reportRepository.findBySessionId(session.getId())
+                    .map(r -> r.getId().toString()).orElse(null))
                 .interviewType(session.getInterviewType())
                 .build();
     }

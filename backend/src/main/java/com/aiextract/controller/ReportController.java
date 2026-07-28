@@ -21,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 报告控制器
@@ -38,6 +39,12 @@ import java.util.Map;
 public class ReportController {
 
     private final ReportService reportService;
+    private final com.aiextract.util.JwtUtil jwtUtil;
+
+    private String getToken() {
+        return (String) org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication().getCredentials();
+    }
 
     /**
      * 获取报告列表
@@ -67,6 +74,22 @@ public class ReportController {
     public ApiResponse<ReportDetailResponse> getReport(@PathVariable String reportId) {
         ReportDetailResponse response = reportService.getReport(reportId);
         return ApiResponse.success(response);
+    }
+
+    /**
+     * 按访谈 sessionId 获取报告 HTML（含就绪检查）。
+     * 报告未就绪时返回 202 + 颗粒/场景统计；就绪时返回 200 + HTML。
+     */
+    @GetMapping("/by-session/{sessionId}/html")
+    public org.springframework.http.ResponseEntity<?> getReportHtmlBySession(@PathVariable String sessionId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        ReportService.ReportHtmlResult result = reportService.getReportHtmlBySession(UUID.fromString(sessionId), userId);
+        if (!result.ready()) {
+            return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED)
+                    .body(Map.of("ready", false, "grains", result.grains(), "scenes", result.scenes(),
+                            "needGrains", result.needGrains(), "needScenes", result.needScenes()));
+        }
+        return org.springframework.http.ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(result.html());
     }
 
     /**
@@ -142,7 +165,7 @@ public class ReportController {
 
             // 文件尚未生成，返回报告 JSON 作为降级
             log.warn("报告文件尚未生成, reportId: {}, format: {}, path: {}", reportId, format, filePath);
-            com.aiextract.dto.ReportDetailResponse report = reportService.getReport(reportId);
+            ReportDetailResponse report = reportService.getReport(reportId);
             Object raw = report.getContentJson();
             String fallbackContent = raw != null ? raw.toString() : "{}";
             byte[] fallback = fallbackContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);

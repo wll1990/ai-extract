@@ -35,8 +35,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String ROLE_EMPLOYEE = "employee";
-
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
     private final JwtUtil jwtUtil;
@@ -136,20 +134,18 @@ public class AuthService {
 
         userRepository.save(user);
 
-        // 仅员工角色自动创建个人空间，管理员不需要空间
-        if (ROLE_EMPLOYEE.equals(request.getRole())) {
-            com.aiextract.model.Space space = com.aiextract.model.Space.builder()
-                    .id(UUID.randomUUID())
-                    .userId(user.getId())
-                    .title(user.getName() + "的空间")
-                    .isPublic(true)
-                    .status("active")
-                    .createdAt(now)
-                    .updatedAt(now)
-                    .build();
-            spaceRepository.save(space);
-            log.info("自动创建员工空间, userId: {}, spaceId: {}", user.getId(), space.getId());
-        }
+        // 所有 B 端角色注册时自动创建个人空间（H5 邀请访谈需要）
+        com.aiextract.model.Space space = com.aiextract.model.Space.builder()
+                .id(UUID.randomUUID())
+                .userId(user.getId())
+                .title(user.getName() + "的空间")
+                .isPublic(true)
+                .status("active")
+                .createdAt(now)
+                .updatedAt(now)
+                .build();
+        spaceRepository.save(space);
+        log.info("注册自动创建空间, userId: {}, role: {}, spaceId: {}", user.getId(), request.getRole(), space.getId());
 
         // 生成Token
         String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole());

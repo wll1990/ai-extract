@@ -2,10 +2,11 @@ package com.aiextract.service;
 
 import com.aiextract.model.Skill;
 import com.aiextract.repository.*;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.task.TaskExecutor;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Executor;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -18,7 +19,6 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AdminInsightService {
 
     private final ConversationStatsRepository conversationStatsRepository;
@@ -26,7 +26,22 @@ public class AdminInsightService {
     private final KnowledgeGapRepository knowledgeGapRepository;
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
-    private final TaskExecutor taskExecutor;
+    private final Executor taskExecutor;
+
+    public AdminInsightService(
+            ConversationStatsRepository conversationStatsRepository,
+            FeedbackLogRepository feedbackLogRepository,
+            KnowledgeGapRepository knowledgeGapRepository,
+            ExperienceGrainRepository grainRepository,
+            SkillRepository skillRepository,
+            @Qualifier("embeddingExecutor") Executor taskExecutor) {
+        this.conversationStatsRepository = conversationStatsRepository;
+        this.feedbackLogRepository = feedbackLogRepository;
+        this.knowledgeGapRepository = knowledgeGapRepository;
+        this.grainRepository = grainRepository;
+        this.skillRepository = skillRepository;
+        this.taskExecutor = taskExecutor;
+    }
 
     /** 单分身概览（同步，复用现有查询） */
     public Map<String, Object> getSkillOverview(UUID skillId) {

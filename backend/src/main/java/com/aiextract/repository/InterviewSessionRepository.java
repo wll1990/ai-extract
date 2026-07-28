@@ -50,6 +50,12 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
                                                        @Param("statuses") List<String> statuses);
 
     /**
+     * 统计多个空间中指定状态的会话数。
+     */
+    @Query("SELECT COUNT(s) FROM InterviewSession s WHERE s.spaceId IN :spaceIds AND s.status = :status")
+    long countBySpaceIdInAndStatus(@Param("spaceIds") List<UUID> spaceIds, @Param("status") String status);
+
+    /**
      * 按访谈类型统计活跃会话数。
      * 用于创建新访谈前检查同类型是否已有进行中的会话。
      */

@@ -42,6 +42,11 @@ public class InterviewSessionResponse {
     private String currentPhase;
 
     /**
+     * 当前 space 下活跃颗粒数（完成时用于分级提示）
+     */
+    private Integer grainCount;
+
+    /**
      * 使用的萃取师标识
      */
     private String expertSkillUsed;

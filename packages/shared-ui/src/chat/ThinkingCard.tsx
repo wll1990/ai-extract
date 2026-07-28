@@ -2,44 +2,99 @@
 
 import React from 'react';
 
+/* ── 音波柱 keyframes（对齐 preview.html @keyframes bars）── */
+const STYLE_ID = 'thinking-card-bars';
+if (typeof document !== 'undefined' && !document.getElementById(STYLE_ID)) {
+  const s = document.createElement('style');
+  s.id = STYLE_ID;
+  s.textContent = `
+    @keyframes thinking-bars {
+      50% { height: 5px; opacity: 0.45; }
+    }
+    @keyframes thinking-slide {
+      0%   { transform: translateX(-100%); }
+      100% { transform: translateX(290%); }
+    }
+  `;
+  document.head.appendChild(s);
+}
+
 export interface ThinkingCardProps {
-  /** 分身名称，默认"分身" */
+  /** 分身名称，默认"萃萃" */
   name?: string;
-  /** 自定义文案，优先级高于 name */
+  /** 自定义思考文案，优先级高于 name */
   text?: string;
-  /** 是否可见，首 chunk 到达后置 false 隐藏 */
+  /** 是否可见 */
   visible?: boolean;
 }
 
 /**
- * 思考中动画卡片 — AI 生成回复前的过渡反馈。
- * 三个跳动点 + 顶部彩色跑马灯进度条。
+ * 思考中动画卡片 — 对齐 preview.html "萃萃正在思考"。
+ * 音波柱 ▏▎▋▊ + 渐变色跑马灯进度条 + 思考文案。
  */
 export const ThinkingCard: React.FC<ThinkingCardProps> = ({
-  name = '分身',
+  name = '萃萃',
   text,
   visible = true,
 }) => {
   if (!visible) return null;
 
-  const label = text || `${name}正在思考…`;
+  const title = `${name}正在思考`;
+  const copy = text || '正在尊重你的原话，整理表达，并发现可能被忽略的价值线索……';
 
   return (
-    <div className="mx-auto mb-4 max-w-[720px] animate-[fadeIn_300ms_ease-out]">
-      {/* 彩色跑马灯进度条 */}
-      <div className="mb-3 h-0.5 w-full overflow-hidden rounded-full bg-gray-100">
-        <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-400" />
+    <div className="mx-auto mb-4 w-full max-w-[720px]">
+
+      {/* 音波柱 + 标题行 */}
+      <div className="mb-2 flex items-center gap-3 pl-1"
+        style={{ color: '#2147ff', fontWeight: 800, fontSize: 14 }}>
+        <span>{title}</span>
+        <span
+          className="inline-flex items-end gap-[3px]"
+          style={{ height: 17 }}
+        >
+          <span style={{
+            width: 3, borderRadius: 4, background: '#2147ff',
+            height: 7, display: 'inline-block',
+            animation: 'thinking-bars 1s ease-in-out infinite',
+          }} />
+          <span style={{
+            width: 3, borderRadius: 4, background: '#2147ff',
+            height: 13, display: 'inline-block',
+            animation: 'thinking-bars 1s ease-in-out infinite',
+            animationDelay: '0.15s',
+          }} />
+          <span style={{
+            width: 3, borderRadius: 4, background: '#2147ff',
+            height: 17, display: 'inline-block',
+            animation: 'thinking-bars 1s ease-in-out infinite',
+            animationDelay: '0.3s',
+          }} />
+          <span style={{
+            width: 3, borderRadius: 4, background: '#2147ff',
+            height: 10, display: 'inline-block',
+            animation: 'thinking-bars 1s ease-in-out infinite',
+            animationDelay: '0.45s',
+          }} />
+        </span>
       </div>
 
-      <div className="rounded-2xl rounded-bl-md bg-primary-light px-5 py-4 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '0ms' }} />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '200ms' }} />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" style={{ animationDelay: '400ms' }} />
-          </div>
-          <span className="text-sm text-muted-foreground">{label}</span>
-        </div>
+      {/* 思考文案 */}
+      <div className="mb-2 pl-1"
+        style={{ fontSize: 12.5, color: '#65708d', lineHeight: 1.6 }}>
+        {copy}
+      </div>
+
+      {/* 渐变色跑马灯进度条（对齐 preview.html @keyframes slide） */}
+      <div style={{
+        height: 3, background: '#e8ecff', borderRadius: 99,
+        overflow: 'hidden', width: '100%',
+      }}>
+        <span style={{
+          display: 'block', width: '46%', height: '100%', borderRadius: 99,
+          background: 'linear-gradient(90deg, #2147ff, #946cff, #ff4d5f)',
+          animation: 'thinking-slide 1.5s ease-in-out infinite',
+        }} />
       </div>
     </div>
   );

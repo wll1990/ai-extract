@@ -363,3 +363,64 @@
   from { opacity: 0; transform: scale(0.96); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* ── Toast 滑入（对齐 preview.html toast transition）── */
+@keyframes toast-in {
+  from { opacity: 0; transform: translate(-50%, 20px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ── 访谈页 Hero card（对齐 preview.html .hero）── */
+.interview-hero {
+  border: 1px solid #e1e7ff;
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(65,91,255,0.13), transparent 24%),
+    radial-gradient(circle at 80% 10%, rgba(255,77,95,0.05), transparent 20%),
+    rgba(255,255,255,0.9);
+  box-shadow: 0 18px 50px rgba(42,74,177,0.10), 0 3px 12px rgba(34,55,126,0.05);
+  overflow: hidden;
+}
+
+/* ── 访谈页玻璃态底部栏（对齐 preview.html .composer-wrap）── */
+.interview-composer-wrap {
+  background: linear-gradient(180deg,
+    rgba(247,249,255,0) 0%,
+    rgba(247,249,255,0.92) 24%,
+    rgba(247,249,255,0.98) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+:root.theme-dark .interview-composer-wrap {
+  background: linear-gradient(180deg,
+    transparent 0%,
+    rgba(15,23,42,0.92) 24%,
+    rgba(15,23,42,0.98) 100%);
+}
+
+:root.theme-dark .interview-hero {
+  background:
+    radial-gradient(circle at 18% 28%, rgba(96,165,250,0.08), transparent 24%),
+    radial-gradient(circle at 80% 10%, rgba(248,113,113,0.04), transparent 20%),
+    rgba(30,41,59,0.9);
+  border-color: #334155;
+}
+
+/* ── 访谈页发送按钮 hover（对齐 preview.html .send:hover）── */
+.interview-send-btn {
+  transition: transform 0.2s ease;
+}
+.interview-send-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+}
+
+/* ── 工具按钮 hover 上浮（对齐 preview.html .tool:hover）── */
+.interview-tool-btn {
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.interview-tool-btn:hover {
+  transform: translateY(-1px);
+  border-color: #2147ff;
+  background: #f6f8ff;
+}

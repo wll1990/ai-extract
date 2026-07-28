@@ -18,6 +18,7 @@ export default function AdminUsersPage() {
   const [name, setName] = useState('');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  const [role, setRole] = useState('employee');
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
@@ -39,14 +40,14 @@ export default function AdminUsersPage() {
     try {
       const currentUser = getUser();
       const companyId = (currentUser?.companyId as string) || '';
-      await register({ companyId, name, account, password, role: 'employee' });
+      await register({ companyId, name, account, password, role });
       setMsg('创建成功');
-      setName(''); setAccount(''); setPassword('');
+      setName(''); setAccount(''); setPassword(''); setRole('employee');
       setShowCreate(false);
       loadUsers();
     } catch (err) { setError(err instanceof Error ? err.message : '创建失败'); }
     finally { setCreating(false); }
-  }, [name, account, password, loadUsers]);
+  }, [name, account, password, role, loadUsers]);
 
   if (loading) return <LoadingSpinner fullScreen={false} />;
 
@@ -86,6 +87,14 @@ export default function AdminUsersPage() {
               <input type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="请输入密码"
                 className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-foreground mb-1">角色</label>
+              <select value={role} onChange={e => setRole(e.target.value)}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary">
+                <option value="employee">员工 (employee)</option>
+                <option value="company_admin">企业管理员 (company_admin)</option>
+              </select>
             </div>
             {error && <p className="text-sm text-danger">{error}</p>}
             {msg && <p className="text-sm text-success">{msg}</p>}

@@ -247,6 +247,71 @@ public class SkillMaterialController {
         return ApiResponse.success();
     }
 
+    /**
+     * 非管理员素材上传 — C端/普通用户给分身传素材。
+     * 属主校验：skill → space → space.isOwnedBy(currentUserId)。
+     */
+    @PostMapping("/skills/{skillId}/materials/upload")
+    public ApiResponse<Map<String, Object>> uploadMaterial(
+            @PathVariable UUID skillId,
+            @RequestParam("file") MultipartFile file) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        Skill skill = skillRepository.findById(skillId)
+            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        com.aiextract.model.Space space = spaceRepository.findById(skill.getSpaceId())
+            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权操作");
+        }
+
+        // 文件格式校验
+        String originalName = file.getOriginalFilename();
+        if (originalName == null || originalName.isBlank()) {
+            throw new BusinessException(400, "文件名不能为空");
+        }
+        String lower = originalName.toLowerCase();
+        if (!lower.endsWith(".pdf") && !lower.endsWith(".doc") && !lower.endsWith(".docx")
+            && !lower.endsWith(".txt") && !lower.endsWith(".mp3") && !lower.endsWith(".m4a")
+            && !lower.endsWith(".wav") && !lower.endsWith(".jpg") && !lower.endsWith(".jpeg")
+            && !lower.endsWith(".png")) {
+            throw new BusinessException(400, "不支持的文件格式，支持 pdf/doc/docx/txt/mp3/m4a/wav/jpg/png");
+        }
+        if (file.getSize() > 20 * 1024 * 1024) {
+            throw new BusinessException(400, "文件不能超过 20MB");
+        }
+
+        // 创建素材记录
+        SkillMaterial material = SkillMaterial.builder()
+            .id(UUID.randomUUID())
+            .skillId(skillId)
+            .fileName(originalName)
+            .fileType(detectFileType(lower))
+            .fileSize(file.getSize())
+            .status("uploaded")
+            .retryCount(0)
+            .createdAt(java.time.LocalDateTime.now())
+            .updatedAt(java.time.LocalDateTime.now())
+            .build();
+        material = materialRepository.save(material);
+
+        log.info("素材上传成功 materialId={} skillId={} fileName={}", material.getId(), skillId, originalName);
+
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("materialId", material.getId().toString());
+        result.put("fileName", material.getFileName());
+        result.put("status", material.getStatus());
+        return ApiResponse.success(result);
+    }
+
+    private String detectFileType(String lowerName) {
+        if (lowerName.endsWith(".pdf")) return "pdf";
+        if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx")) return "doc";
+        if (lowerName.endsWith(".txt")) return "txt";
+        if (lowerName.endsWith(".mp3") || lowerName.endsWith(".m4a") || lowerName.endsWith(".wav")) return "audio";
+        if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png")) return "image";
+        return "other";
+    }
+
     private boolean isNoTargetSpecified(UUID spaceId, UUID skillId, String skillName) {
         return spaceId == null && skillId == null && (skillName == null || skillName.isBlank());
     }

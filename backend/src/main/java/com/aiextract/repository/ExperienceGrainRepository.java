@@ -71,6 +71,12 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      */
     List<ExperienceGrain> findBySourceMaterialId(UUID sourceMaterialId);
     /**
+     * 按来源访谈会话ID查询颗粒。
+     * @param sourceInterviewId 访谈会话ID
+     * @return 结果列表
+     */
+    List<ExperienceGrain> findBySourceInterviewId(UUID sourceInterviewId);
+    /**
      * 统计（Space,Id）。
      * @param spaceId spaceId
      * @return 统计数量

@@ -39,10 +39,17 @@ export interface SseConnectOptions {
   timeout?: number;
 }
 
-/** 从 localStorage 取 token（向后兼容，企业端主要用 HttpOnly Cookie） */
+/** 从 localStorage 取 token（B端优先，降级 C端 c_auth） */
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem('token');
+  const bToken = localStorage.getItem('token');
+  if (bToken) return bToken;
+  const cAuth = localStorage.getItem('c_auth');
+  if (cAuth) {
+    try { const session = JSON.parse(cAuth); return session?.token || null; }
+    catch { return null; }
+  }
+  return null;
 }
 
 function buildFetchOptions(options: SseConnectOptions, controller: AbortController): RequestInit {

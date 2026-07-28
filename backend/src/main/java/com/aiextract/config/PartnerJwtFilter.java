@@ -1,11 +1,11 @@
 package com.aiextract.config;
 
 import com.aiextract.exception.PartnerException;
+import com.aiextract.model.AppUser;
 import com.aiextract.model.PartnerApp;
 import com.aiextract.model.PartnerApp.PartnerStatus;
-import com.aiextract.model.User;
+import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.PartnerAppRepository;
-import com.aiextract.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
@@ -23,7 +23,10 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 合作方 JWT 验证器 — 解析 ?token= 参数，验证签名，自动注册/查找用户。
+ * 合作方 JWT 验证器 — 解析 ?token= 参数，验证签名，自动注册/查找用户到 app_user 表。
+ *
+ * <p>合作方用户属于 C 端外部用户体系，与 B 端 user 表完全独立。
+ * account = "partner:{appId}:{externalUserId}"，status = "partner"。</p>
  */
 @Slf4j
 @Component
@@ -32,11 +35,11 @@ public class PartnerJwtFilter {
 
     private final PartnerAppRepository partnerAppRepository;
     private final PartnerCrypto partnerCrypto;
-    private final UserRepository userRepository;
+    private final AppUserRepository appUserRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 验证合作方 JWT，返回我方用户 UUID（新用户自动创建）。
+     * 验证合作方 JWT，返回 app_user 的 UUID（新用户自动创建）。
      */
     public UUID authenticate(String rawToken) {
         // 1. 不解签名先读 appId
@@ -59,11 +62,18 @@ public class PartnerJwtFilter {
             throw PartnerException.tokenInvalid("缺少 userId 字段");
         }
 
-        // 3. account = partner:{appId}:{externalUserId}
-        String account = "partner:" + appId + ":" + externalUserId;
-        User user = findOrCreateUser(account, userName != null ? userName : externalUserId);
+        // 3. 校验 companyId 与 PartnerApp.app_id 一致
+        String companyId = claims.get("companyId", String.class);
+        if (companyId == null || !companyId.equals(app.getAppId())) {
+            throw PartnerException.tokenInvalid("companyId 不匹配");
+        }
 
-        log.info("Partner auth success: appId={} externalUserId={} internalId={}",
+        // 4. account = partner:{appId}:{externalUserId}，存入 app_user
+        String account = "partner:" + appId + ":" + externalUserId;
+        UUID companyUuid = UUID.fromString(companyId);
+        AppUser user = findOrCreateAppUser(account, userName != null ? userName : externalUserId, companyUuid);
+
+        log.info("Partner auth success: appId={} externalUserId={} appUserId={}",
             appId, externalUserId, user.getId());
         return user.getId();
     }
@@ -105,30 +115,29 @@ public class PartnerJwtFilter {
             .parseSignedClaims(token).getPayload();
     }
 
-    private User findOrCreateUser(String account, String name) {
-        // 查 account 字段（企业内唯一，合作方用户用 partner:appId:userId 格式）
-        Optional<User> existing = userRepository.findByCompanyIdAndAccount(
-            getPartnerCompanyId(), account);
-        if (existing.isPresent()) return existing.get();
+    private AppUser findOrCreateAppUser(String account, String nickname, UUID companyId) {
+        Optional<AppUser> existing = appUserRepository.findByAccount(account);
+        if (existing.isPresent()) {
+            // 更新最后活跃时间
+            AppUser u = existing.get();
+            u.setLastActiveAt(LocalDateTime.now());
+            u.setUpdatedAt(LocalDateTime.now());
+            return appUserRepository.save(u);
+        }
 
-        User user = User.builder()
+        AppUser user = AppUser.builder()
             .id(UUID.randomUUID())
-            .companyId(getPartnerCompanyId())
             .account(account)
-            .name(name)
-            .role("c_partner")
-            .passwordHash("")
-            .isActive(true)
+            .nickname(nickname)
+            .status(AppUser.STATUS_REGISTERED)
+            .source(AppUser.SOURCE_PARTNER)
+            .companyId(companyId)
+            .lastActiveAt(LocalDateTime.now())
             .createdAt(LocalDateTime.now())
             .updatedAt(LocalDateTime.now())
             .build();
-        return userRepository.save(user);
-    }
-
-    /** 合作方用户的统一 companyId — 不需要真实企业，用一个固定的 UUID */
-    private static final UUID PARTNER_COMPANY_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
-
-    private UUID getPartnerCompanyId() {
-        return PARTNER_COMPANY_ID;
+        AppUser saved = appUserRepository.save(user);
+        log.info("合作方用户已创建 appUserId={} account={}", saved.getId(), account);
+        return saved;
     }
 }
