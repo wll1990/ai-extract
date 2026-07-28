@@ -58,5 +58,11 @@ public interface ConversationStatsRepository extends JpaRepository<ConversationS
     @Query("SELECT cs.skillId, COUNT(DISTINCT cs.conversationId), COUNT(DISTINCT cs.userId), COALESCE(SUM(cs.ragHighCount),0), COALESCE(SUM(cs.ragRefCount),0), COALESCE(SUM(cs.ragNoneCount),0), MAX(cs.createdAt) FROM ConversationStats cs WHERE cs.skillId IN :skillIds AND cs.createdAt BETWEEN :start AND :end GROUP BY cs.skillId")
     List<Object[]> batchStatsOverview(@Param("skillIds") List<UUID> skillIds, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    /**
+     * 批量互动统计（排除 is_test）。
+     * SkillStatsScheduler 使用此方法，确保管理员测试对话不污染用户侧统计。
+     */
+    @Query("SELECT cs.skillId, COUNT(DISTINCT cs.conversationId), COUNT(DISTINCT cs.userId), COALESCE(SUM(cs.ragHighCount),0), COALESCE(SUM(cs.ragRefCount),0), COALESCE(SUM(cs.ragNoneCount),0), MAX(cs.createdAt) FROM ConversationStats cs WHERE cs.skillId IN :skillIds AND cs.isTest = false AND cs.createdAt BETWEEN :start AND :end GROUP BY cs.skillId")
+    List<Object[]> batchStatsOverviewExcludeTest(@Param("skillIds") List<UUID> skillIds, @Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
 }

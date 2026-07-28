@@ -5,7 +5,7 @@ import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
-import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -158,9 +158,27 @@ export default function MobileChatShell({
                         : <React.Fragment key={i}>{part}</React.Fragment>
                     )}
                   </p>
+{info.stats && info.stats.conversationCount > 0 && (
+  <div className="mt-2 flex items-center gap-3">
+    <StatBadge icon="💬" value={info.stats.conversationCount} label="次" size="sm" />
+    {info.stats.satisfactionRate > 0 && (
+      <><span className="text-[#d4d8e0] text-xs">·</span>
+      <StatBadge icon="👍" value={info.stats.satisfactionRate} label="%" size="sm" /></>
+    )}
+    {info.stats.userCount > 0 && (
+      <><span className="text-[#d4d8e0] text-xs">·</span>
+      <StatBadge icon="👤" value={info.stats.userCount} label="人" size="sm" /></>
+    )}
+  </div>
+)}
                 </div>
               </div>
-              <TrustBadge />
+              <TrustBadge
+                grainCount={(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
+                  ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : undefined}
+                sceneCount={(info.sceneTags?.length || 0) > 0 ? info.sceneTags!.length : undefined}
+                satisfactionRate={info.stats?.satisfactionRate}
+              />
             </div>
 
             {/* ② 引导语气泡 — Practice 专属 */}
@@ -238,16 +256,32 @@ export default function MobileChatShell({
                         <span className="inline-block mt-1.5 text-[13px] text-[#64748B] bg-[#f1f5f9] rounded-full px-2.5 py-0.5">
                           {TALK_NAME_CARD.roleTag}
                         </span>
-                        <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
-                          {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
-                            i < arr.length - 1
-                              ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
-                              : <React.Fragment key={i}>{part}</React.Fragment>
-                          )}
+                        <p className="mt-2.5 text-[15px] text-foreground/85 leading-relaxed">
+                          已采集 {(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
+                            ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : '...'} 条实战经验
+                          {(info.sceneTags?.length || 0) > 0 && <>，覆盖 {info.sceneTags!.length} 个业务场景</>}
                         </p>
+{info.stats && info.stats.conversationCount > 0 && (
+  <div className="mt-2 flex items-center gap-3">
+    <StatBadge icon="💬" value={info.stats.conversationCount} label="次" size="sm" />
+    {info.stats.satisfactionRate > 0 && (
+      <><span className="text-[#d4d8e0] text-xs">·</span>
+      <StatBadge icon="👍" value={info.stats.satisfactionRate} label="%" size="sm" /></>
+    )}
+    {info.stats.userCount > 0 && (
+      <><span className="text-[#d4d8e0] text-xs">·</span>
+      <StatBadge icon="👤" value={info.stats.userCount} label="人" size="sm" /></>
+    )}
+  </div>
+)}
                       </div>
                     </div>
-                    <TrustBadge />
+                    <TrustBadge
+                      grainCount={(info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) > 0
+                        ? (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0) : undefined}
+                      sceneCount={(info.sceneTags?.length || 0) > 0 ? info.sceneTags!.length : undefined}
+                      satisfactionRate={info.stats?.satisfactionRate}
+                    />
                   </div>
                 )}
 

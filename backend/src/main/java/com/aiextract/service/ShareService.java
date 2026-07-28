@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -199,6 +200,12 @@ public class ShareService {
 
         recordEvent("share_visit", skill.getId(), viewerUserIdOrNull, Map.of("shareCode", shareCode));
 
+        // ── 互动统计（直接读 skill 表缓存字段） ──
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+        stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+        stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+
         return ShareInfoResponse.builder()
                 .skillId(skill.getId().toString())
                 .shareCode(shareCode)
@@ -211,6 +218,7 @@ public class ShareService {
                 .remaining(remaining)
                 .viewerStatus(viewerStatus)
                 .openingMessage(skill.getOpeningMessage())
+                .stats(stats)
                 .build();
     }
 

@@ -1,6 +1,7 @@
 'use client';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { getUser } from '@/lib/storage';
+import { PortraitCard, StatBadge } from '@aiextract/shared-ui';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -67,17 +68,37 @@ export default function SkillsGalleryPage() {
               onClick={() => router.push(`/skill/${s.id}?spaceId=${s.spaceId || ''}&name=${encodeURIComponent(s.ownerName || '')}&title=${encodeURIComponent(s.ownerTitle || '')}`)}
               className="rounded-2xl bg-surface-2 p-6 text-left shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
               <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-navy to-primary text-white text-xl font-bold">
-                  {(s.ownerName || '?')[0]}
+                <div style={{ width: 72 }}>
+                  <PortraitCard src={s.avatarUrl} alt={s.ownerName} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground truncate">{s.ownerName}</h3>
                   <p className="text-xs text-muted-foreground-2">{s.ownerTitle || '资深销冠'}</p>
+                  {s.stats && s.stats.conversationCount > 0 && (
+                    <div className="mt-2 flex items-center justify-center gap-2 rounded-lg px-2 py-1"
+                      style={{ background: '#f8faff' }}>
+                      <StatBadge icon="💬" value={s.stats.conversationCount} label="次" size="sm" />
+                      {s.stats.satisfactionRate > 0 && (
+                        <><span className="text-[#d4d8e0] text-xs">·</span>
+                        <StatBadge icon="👍" value={s.stats.satisfactionRate} label="%" size="sm" /></>
+                      )}
+                      {s.stats.userCount > 0 && (
+                        <><span className="text-[#d4d8e0] text-xs">·</span>
+                        <StatBadge icon="👤" value={s.stats.userCount} label="人" size="sm" /></>
+                      )}
+                    </div>
+                  )}
+                  {s.tags && s.tags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap justify-center gap-1">
+                      {s.tags.slice(0, 3).map(tag => (
+                        <span key={tag} className="rounded-full bg-[#eef2ff] px-2 py-0.5 text-[10px] text-[#475569]">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-1 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success-bg px-2 py-0.5 text-xs text-success">
-                      ● 在线
-                    </span>
-                    <span className="text-xs text-muted-foreground-2">{s.grainCount || 0} 条锦囊</span>
+                    <span className="text-xs text-muted-foreground-2">{s.grainCount || 0} 条经验</span>
                   </div>
                 </div>
               </div>

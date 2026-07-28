@@ -88,24 +88,41 @@ export function ChatEntry({
                 }}>
                   {TALK_NAME_CARD.roleTag}
                 </span>
-                <p style={{
-                  fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7,
-                  margin: 0, whiteSpace: 'pre-wrap',
-                }}>
-                  {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part: string, i: number, arr: string[]) =>
-                    i < arr.length - 1
-                      ? <React.Fragment key={i}>{part}<span style={{ color: '#DC2626', fontWeight: 600 }}>{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
-                      : <React.Fragment key={i}>{part}</React.Fragment>
-                  )}
+                <p style={{ fontSize: 14, color: 'var(--fg-mid)', lineHeight: 1.7, margin: 0 }}>
+                  已采集 {skill.grainCount > 0 ? skill.grainCount : '...'} 条实战经验
+                  {skill.sceneTags && skill.sceneTags.length > 0 && <>，覆盖 {skill.sceneTags.length} 个业务场景</>}
                 </p>
                 {skill.ownerTitle && (
                   <p style={{ fontSize: 13, color: 'var(--fg-dim)', margin: '8px 0 0' }}>
                     {skill.ownerTitle}{skill.department ? ` · ${skill.department}` : ''}
                   </p>
                 )}
+                {skill.stats && skill.stats.conversationCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
+                      💬 {skill.stats.conversationCount.toLocaleString()} 次对话
+                    </span>
+                    {skill.stats.satisfactionRate > 0 && (
+                      <><span style={{ color: 'var(--fg-dim)' }}>·</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
+                        👍 {skill.stats.satisfactionRate}% 满意
+                      </span></>
+                    )}
+                    {skill.stats.userCount > 0 && (
+                      <><span style={{ color: 'var(--fg-dim)' }}>·</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-high)' }}>
+                        👤 {skill.stats.userCount} 人
+                      </span></>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
-            <TrustBadge />
+            <TrustBadge
+              grainCount={skill.grainCount > 0 ? skill.grainCount : undefined}
+              sceneCount={skill.sceneTags && skill.sceneTags.length > 0 ? skill.sceneTags.length : undefined}
+              satisfactionRate={skill.stats?.satisfactionRate}
+            />
           </div>
 
           {/* ② 引导语气泡 — Talk 专属 */}

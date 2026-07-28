@@ -39,6 +39,12 @@ export interface ShareInfo {
   guestLimit: number;
   remaining?: number | null;
   viewerStatus?: string | null;
+  /** 聚合互动统计（来自 skill 表缓存，可能全为0） */
+  stats?: {
+    conversationCount: number;
+    userCount: number;
+    satisfactionRate: number;
+  };
 }
 
 /** 后端 GuestSessionResponse 的前端映射 */

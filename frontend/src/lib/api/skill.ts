@@ -25,10 +25,23 @@ export interface PracticeStartData {
 }
 export interface PracticeSceneData { label: string; title: string; setting: string; customerLine: string; grainCount?: number; }
 
+/** Skill 互动统计 */
+export interface SkillStats {
+  conversationCount: number;
+  userCount: number;
+  satisfactionRate: number;
+  lastActive?: string;
+}
+
 /** Skill 列表项 */
 export interface SkillInfo {
   id: string; spaceId: string; ownerName: string; ownerTitle: string;
   status: string; modelName?: string; grainCount?: number;
+  avatarUrl?: string;
+  tags?: string[];
+  openingMessage?: string;
+  domain?: string;
+  stats?: SkillStats;
 }
 
 /** 获取分身列表（分页，可选状态过滤 + userId 过滤"我的分身"） */

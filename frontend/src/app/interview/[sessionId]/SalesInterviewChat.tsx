@@ -81,9 +81,9 @@ export function SalesInterviewChat() {
       setEnding(false);
       try {
         const s = await getSession(sessionId);
-        dispatch({ type: 'MARK_COMPLETED', reportId: data.data?.reportId || null, grainCount: s.grainCount });
+        dispatch({ type: 'MARK_COMPLETED', reportId: data.data?.sessionId || null, grainCount: s.grainCount });
       } catch {
-        dispatch({ type: 'MARK_COMPLETED', reportId: data.data?.reportId || null });
+        dispatch({ type: 'MARK_COMPLETED', reportId: data.data?.sessionId || null });
       }
     } catch {
       showToast('网络错误，请重试');
@@ -244,7 +244,7 @@ export function SalesInterviewChat() {
           {/* 右侧操作 */}
           <div className="flex items-center gap-2">
             {state.session?.reportId && (
-              <button type="button" onClick={() => router.push(`/report/${state.session!.reportId}/done`)}
+              <button type="button" onClick={() => router.push(isH5 ? `/h5/report/${sessionId}` : `/report/${state.session!.reportId}/done`)}
                 className="flex items-center gap-2 rounded-[14px] border border-[#ffd0d6] bg-white text-[#e5384c] px-4 h-[42px] font-bold text-sm hover:bg-[#fef2f2] transition-colors"
                 style={{ boxShadow: '0 4px 12px rgba(255,77,95,0.05)' }}>
                 ▣ <span className="max-sm:hidden">萃取报告</span>
@@ -417,7 +417,7 @@ export function SalesInterviewChat() {
                       <p className="mt-3 text-sm text-muted-foreground text-center">已生成 {grainCount} 条经验颗粒，AI 正在分析你的访谈，预计 2-3 分钟生成萃取报告。</p>
                       <div className="mt-6 flex justify-center gap-3">
                         {state.completionReportId && (
-                          <button onClick={() => router.push(isH5 ? `/h5/report/${sessionId}` : `/report/${state.completionReportId}/done`)}
+                          <button onClick={() => router.push(isH5 ? `/h5/report/${sessionId}` : `/report/session/${sessionId}`)}
                             className="rounded-lg bg-foreground px-6 py-2.5 text-sm text-white hover:bg-primary transition-colors hover:scale-[1.02] hover:shadow-lg">📄 查看萃取报告</button>
                         )}
                       </div>
@@ -432,7 +432,7 @@ export function SalesInterviewChat() {
                         <button onClick={handleSupplement}
                           className="rounded-lg bg-[#2147ff] px-6 py-2.5 text-sm text-white hover:scale-[1.02] hover:shadow-lg transition-all">💬 继续补充</button>
                         {state.completionReportId && (
-                          <button onClick={() => router.push(isH5 ? `/h5/report/${sessionId}` : `/report/${state.completionReportId}/done`)}
+                          <button onClick={() => router.push(isH5 ? `/h5/report/${sessionId}` : `/report/session/${sessionId}`)}
                             className="rounded-lg border border-border px-6 py-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors">📄 查看报告（等待中）</button>
                         )}
                       </div>

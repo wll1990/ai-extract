@@ -315,6 +315,12 @@ public class SkillService {
             item.put("openingMessage", skill.getOpeningMessage());
             item.put("domain", skill.getDomain());
             item.put("grainCount", grainCountMap.getOrDefault(skill.getSpaceId(), 0L).intValue());
+            // stats — 直接从 Skill 字段读，无需额外查询
+            Map<String, Object> stats = new LinkedHashMap<>();
+            stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+            stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+            stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+            item.put("stats", stats);
             result.add(item);
         }
         Map<String, Object> response = new LinkedHashMap<>();
@@ -981,6 +987,17 @@ public class SkillService {
         detail.put("domain", skill.getDomain());
         detail.put("talkConfig", skill.getTalkConfig() != null ? skill.getTalkConfig() : "{}");
         detail.put("status", skill.getStatus());
+
+        // ── 互动统计（SkillStatsScheduler 定时聚合，直接读列） ──
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+        stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+        stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+        if (skill.getLastActiveAt() != null) {
+            stats.put("lastActive", skill.getLastActiveAt().toString());
+        }
+        detail.put("stats", stats);
+
         return detail;
     }
 

@@ -113,6 +113,12 @@ public class PublicController {
             item.put("grainCount", grainCountMap.getOrDefault(skill.getSpaceId(), 0L).intValue());
             item.put("openingMessage", skill.getOpeningMessage());
             item.put("domain", skill.getDomain());
+            // 互动统计 — 从 Skill 实体缓存字段直接读
+            Map<String, Object> stats = new LinkedHashMap<>();
+            stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+            stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+            stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+            item.put("stats", stats);
             result.add(item);
         }
 

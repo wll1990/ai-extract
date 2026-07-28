@@ -2,19 +2,42 @@
 
 import React from 'react';
 
-/* ── 信任条数据 ── */
-const TRAITS = [
-  { icon: '♡', title: '真实案例', desc: '销冠真实对话与文档提炼' },
-  { icon: '✦', title: '溯源可查', desc: '每句回答有据可依' },
-  { icon: '▤', title: '即学即用', desc: '30秒拿到可执行话术' },
-];
-
 const ICON_COLORS = ['#ff4d5f', '#2147ff', '#8b5cf6'];
 
+interface TrustBadgeProps {
+  /** 活跃颗粒总数 — 有值时第一列显示 "♡ XX 条真实经验" */
+  grainCount?: number;
+  /** 场景覆盖数 — 有值时第二列显示 "✦ XX 个业务场景" */
+  sceneCount?: number;
+  /** 满意度百分比 0-100 — 有值时第二列追加满意度 */
+  satisfactionRate?: number;
+  /** 最近活跃描述 — 有值时第三列显示 "▤ {lastActive}" */
+  lastActive?: string;
+}
+
 /**
- * TrustBadge — 品牌信任条，三列横排（左图标+右文字），flex-nowrap 绝不折行。
+ * TrustBadge — 品牌信任条，三列横排。
+ * 有数据时展示真实数字，无数据时回退到静态文案（向后兼容）。
  */
-export function TrustBadge() {
+export function TrustBadge({ grainCount, sceneCount, satisfactionRate, lastActive }: TrustBadgeProps = {}) {
+  const col1Title = grainCount != null && grainCount > 0 ? '真实经验' : '真实案例';
+  const col1Desc = grainCount != null && grainCount > 0
+    ? `${grainCount} 条销冠实战经验` : '销冠真实对话与文档提炼';
+
+  const col2Title = sceneCount != null && sceneCount > 0 ? '场景覆盖' : '溯源可查';
+  const col2Desc = sceneCount != null && sceneCount > 0
+    ? `${sceneCount} 个业务场景${satisfactionRate != null && satisfactionRate > 0 ? ` · 👍${satisfactionRate}% 满意` : ''}`
+    : '每句回答有据可依';
+
+  const col3Title = lastActive ? '最近活跃' : '即学即用';
+  const col3Desc = lastActive || '30秒拿到可执行话术';
+
+  const traits = [
+    { icon: '♡' as const, title: col1Title, desc: col1Desc },
+    { icon: '✦' as const, title: col2Title, desc: col2Desc },
+    { icon: '▤' as const, title: col3Title, desc: col3Desc },
+  ];
+
   return (
     <div
       style={{
@@ -33,7 +56,7 @@ export function TrustBadge() {
           width: '100%',
         }}
       >
-        {TRAITS.map((t, i) => (
+        {traits.map((t, i) => (
           <div
             key={i}
             style={{

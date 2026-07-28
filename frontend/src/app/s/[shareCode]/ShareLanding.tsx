@@ -76,14 +76,32 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
           </div>
           <div className="mt-3.5 text-[22px] font-semibold tracking-wide text-white">{name}</div>
           {info.ownerTitle && <div className="mt-1 text-[13px] text-white/85">{info.ownerTitle}</div>}
+          {info.stats && info.stats.conversationCount > 0 && (
+            <div className="mt-3 flex items-center justify-center gap-3 text-white/80 text-[12px]">
+              <span>💬 {info.stats.conversationCount.toLocaleString()} 次对话</span>
+              {info.stats.satisfactionRate > 0 && (
+                <><span className="text-white/30">·</span><span>👍 {info.stats.satisfactionRate}% 满意</span></>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* 上叠白卡：简介 + 擅长 chips */}
       <div className="relative z-10 -mt-11 mx-4 rounded-2xl border border-white/60 bg-card p-5 pb-4 text-center shadow-float backdrop-blur">
         <div className="text-body leading-relaxed text-foreground">
-          把{name}的实战打法，浓缩成你随时可问的 AI 分身
+          {info.stats?.userCount && info.stats.userCount > 0 ? (
+            <>已帮助 <span className="font-semibold text-[#2563eb]">{info.stats.userCount}</span> 位销售同行解决实际问题</>
+          ) : (
+            <>把{name}的实战打法，浓缩成你随时可问的 AI 分身</>
+          )}
         </div>
+        {(info.sceneTags?.length || 0) > 0 && (
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            {info.stats?.satisfactionRate ? <>{info.stats.satisfactionRate}% 满意 · </> : ''}
+            {info.sceneTags!.length} 个场景
+          </div>
+        )}
         {(info.tags?.length || 0) > 0 && (
           <div className="mt-3 flex flex-wrap justify-center gap-2">
             {info.tags!.slice(0, 6).map(tag => (
@@ -104,8 +122,8 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
                 <path d="M12 2l3.5 7L22 9l-5.5 7.5L18 22l-6-4.5L6 22l1.5-5.5L2 9l6.5 0L12 2z" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-foreground">实战打法</span>
-            <span className="text-[9px] text-muted-foreground leading-tight">销冠真实案例提炼</span>
+            <span className="text-[11px] font-semibold text-foreground">{info.stats?.conversationCount ? `${info.stats.conversationCount} 次` : '实战打法'}</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">{info.stats?.conversationCount ? '真实对话交流' : '销冠真实案例提炼'}</span>
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex h-7 w-7 items-center justify-center rounded-full"
@@ -117,8 +135,8 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
                 <path d="M13.5 16.5L16 19" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-foreground">溯源可查</span>
-            <span className="text-[9px] text-muted-foreground leading-tight">每句话有据可依</span>
+            <span className="text-[11px] font-semibold text-foreground">{info.stats?.satisfactionRate ? `${info.stats.satisfactionRate}% 满意` : '溯源可查'}</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">{info.stats?.satisfactionRate ? '回答被认可' : '每句话有据可依'}</span>
           </div>
           <div className="flex-1 flex flex-col items-center gap-0.5 px-1">
             <div className="flex h-7 w-7 items-center justify-center rounded-full"
@@ -127,8 +145,8 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
                 <path d="M13 2L3 14h7l-2 8 10-12h-7z" />
               </svg>
             </div>
-            <span className="text-[11px] font-semibold text-foreground">即问即用</span>
-            <span className="text-[9px] text-muted-foreground leading-tight">30秒拿到可执行话术</span>
+            <span className="text-[11px] font-semibold text-foreground">{(info.sceneTags?.length || 0) > 0 ? `${info.sceneTags!.length} 个场景` : '即问即用'}</span>
+            <span className="text-[9px] text-muted-foreground leading-tight">{(info.sceneTags?.length || 0) > 0 ? '经验全面覆盖' : '30秒拿到可执行话术'}</span>
           </div>
         </div>
       </div>
@@ -154,6 +172,9 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
               </span>
               <span className="mt-0.5 block text-[13px] text-foreground leading-snug">{card.cta}</span>
               <span className="mt-0.5 block text-[11px] text-muted-foreground">{card.value}</span>
+              {card.mode === 'qa' && info.stats && info.stats.conversationCount > 0 && <span className="mt-0.5 block text-[10px] text-muted-foreground">{info.stats.conversationCount} 次对话</span>}
+              {card.mode === 'talk' && info.stats && info.stats.userCount > 0 && <span className="mt-0.5 block text-[10px] text-muted-foreground">{info.stats.userCount} 人用过</span>}
+              {card.mode === 'practice' && (info.sceneTags?.length || 0) > 0 && <span className="mt-0.5 block text-[10px] text-muted-foreground">{info.sceneTags!.length} 个场景</span>}
             </span>
             <svg className="h-4 w-4 flex-none text-muted-foreground-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 6l6 6-6 6" /></svg>
           </button>

@@ -22,6 +22,12 @@ export interface PracticeMessage {
   fullAnswer?: string;
   isLastRetry?: boolean;
   retryCount?: number;
+  /** RAG 匹配度（来自 SSE source event，运行时转为 number） */
+  avgSimilarity?: string;
+  /** 溯源颗粒 ID 列表（逗号分隔） */
+  grainIds?: string;
+  /** 溯源颗粒数量 */
+  grainCount?: number;
 }
 
 export interface PracticeEval {

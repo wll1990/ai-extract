@@ -59,6 +59,8 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
      * @return 结果列表
      */
     List<Skill> findByStatus(String status);
+    /** 按状态列表批量查询 — SkillStatsScheduler 用 */
+    List<Skill> findByStatusIn(List<String> statuses);
     /**
      * 查询（Display,Name）。
      * @param displayName displayName

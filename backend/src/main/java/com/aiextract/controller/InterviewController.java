@@ -142,9 +142,9 @@ public class InterviewController {
     @PostMapping("/{sessionId}/force-complete")
     public ApiResponse<Map<String, Object>> forceComplete(@PathVariable String sessionId) {
         UUID userId = jwtUtil.getUserIdFromToken(getToken());
-        String reportId = interviewService.forceCompleteSession(sessionId, userId);
+        String resultId = interviewService.forceCompleteSession(sessionId, userId);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
-        result.put("reportId", reportId);
+        result.put("sessionId", resultId);
         return ApiResponse.success(result);
     }
 

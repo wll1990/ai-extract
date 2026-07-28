@@ -130,9 +130,16 @@ export function ExpertRow({ skill, index }: ExpertRowProps) {
             {skill.ownerTitle}{tags.length > 0 ? ` · ${tags[0]}` : ''}
           </div>
         )}
-        <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>
-          {skill.grainCount} 条经验 · {skill.domain || tags.join('/')}
-        </div>
+        {skill.stats && skill.stats.conversationCount > 0 ? (
+          <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>
+            💬 {skill.stats.conversationCount} 次对话
+            {skill.stats.satisfactionRate > 0 && <> · 👍 {skill.stats.satisfactionRate}%</>}
+          </div>
+        ) : (
+          <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 4 }}>
+            {skill.grainCount} 条经验 · {skill.domain || tags.join('/')}
+          </div>
+        )}
       </div>
 
       {/* Animated question bubble */}

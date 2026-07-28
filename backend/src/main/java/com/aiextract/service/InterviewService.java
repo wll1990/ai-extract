@@ -411,12 +411,12 @@ public class InterviewService {
         if (PHASE_CLOSING.equals(phase) || nextPhase == null) {
             return reactor.core.publisher.Flux.create(sink -> {
                 try {
-                    UUID reportId = self.checkAndCompleteSession(session);
+                    self.checkAndCompleteSession(session);
                     sink.next(ChatChunk.event("phase_summary", Map.of(
                             "phase", phase,
                             "message", "所有阶段已完成，报告生成中..."
                     )));
-                    sink.next(ChatChunk.meta(reportId != null ? reportId.toString() : ""));
+                    sink.next(ChatChunk.meta(session.getId().toString()));
                     sink.next(ChatChunk.done());
                     sink.complete();
                 } catch (Exception e) {
@@ -441,7 +441,8 @@ public class InterviewService {
      * 强制完成会话。
      *
      * <p>管理员或用户手动结束访谈，触发完成逻辑：
-     * 标记所有采集 → 调用萃取管道 → 返回报告 ID。
+     * 标记所有采集 → 调用萃取管道 → 返回 sessionId。
+     * 前端使用 sessionId 访问 /reports/by-session/{sessionId} 查询报告就绪状态。
      * 无 @Transactional — DB 状态更新和萃取管道各自独立事务，
      * 萃取管道不在事务内执行（遵循"事务内禁止 AI 调用"原则）。
      */
@@ -458,11 +459,11 @@ public class InterviewService {
             }
             log.info("访谈已完成，重触发萃取管道, sessionId={}", sessionId);
             interviewTranscriptExtractor.extractFromInterview(session.getId());
-            return null;
+            return sessionId;
         }
 
-        UUID reportId = self.checkAndCompleteSession(session);
-        return reportId != null ? reportId.toString() : null;
+        self.checkAndCompleteSession(session);
+        return sessionId;
     }
 
     /**
@@ -734,12 +735,13 @@ public class InterviewService {
      *   </li>
      * </ol>
      *
-     * @return 会话 ID（后续可关联报告）
+     * <p>不返回 reportId —— 报告由异步管道生成，此时尚不存在。
+     * 调用方应使用 sessionId 配合 /reports/by-session/{sessionId} 端点查询报告。</p>
      */
     @Transactional(rollbackFor = Exception.class)
-    UUID checkAndCompleteSession(InterviewSession session) {
+    void checkAndCompleteSession(InterviewSession session) {
         if (!STATUS_IN_PROGRESS.equals(session.getStatus()) && !STATUS_PAUSED.equals(session.getStatus())) {
-            return null;
+            return;
         }
 
         // 保留 markCollectForPhase 逐阶段积累的真实采集状态，不强制覆盖
@@ -758,7 +760,6 @@ public class InterviewService {
 
         log.info("访谈已完成, sessionId: {} grainCount={} enough={}", session.getId(),
             grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active"), grainEnough);
-        return session.getId();
     }
 
     // ==================== "继续补充" — 颗粒不足时重新打开已完成的会话 ====================
@@ -1143,8 +1144,10 @@ public class InterviewService {
                 .templatePreview(templatePreview)
                 .collectStatus(collectStatus)
                 .lastActiveAt(session.getLastActiveAt() != null ? session.getLastActiveAt().toString() : null)
-                .reportId(reportRepository.findBySessionId(session.getId())
-                    .map(r -> r.getId().toString()).orElse(null))
+                // report.session_id 未填充，按 spaceId 查找（一个 space 一个 Report）
+                .reportId(reportRepository.findBySpaceIdOrderByCreatedAtDesc(session.getSpaceId(),
+                        org.springframework.data.domain.PageRequest.of(0, 1))
+                    .stream().findFirst().map(r -> r.getId().toString()).orElse(null))
                 .interviewType(session.getInterviewType())
                 .build();
     }

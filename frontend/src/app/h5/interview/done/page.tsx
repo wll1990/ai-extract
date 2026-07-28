@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function DoneContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const reportId = searchParams.get('reportId');
+  const sessionId = searchParams.get('sessionId');
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
@@ -30,9 +30,9 @@ function DoneContent() {
       </p>
 
       <div className="flex flex-col gap-3 w-full max-w-xs mb-8">
-        {reportId && (
+        {sessionId && (
           <button
-            onClick={() => router.push(`/h5/report/${reportId}`)}
+            onClick={() => router.push(`/h5/report/${sessionId}`)}
             className="w-full py-3 rounded-full bg-[#2147ff] text-white text-sm font-medium hover:translate-y-[-1px] transition-transform"
           >
             查看萃取报告

@@ -14,7 +14,7 @@ import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import SceneTagBar from '@/components/skill/SceneTagBar';
 import { getOrCreateSkillShare, toggleSkillShare, createInternalShare } from '@/lib/api/skill';
-import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, StatBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
 
@@ -53,6 +53,10 @@ export default function SkillChatPage() {
   const [openingMessage, setOpeningMessage] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [detailFetched, setDetailFetched] = useState(false);
+  const [skillStats, setSkillStats] = useState<{ conversationCount: number; userCount: number; satisfactionRate: number } | null>(null);
+  const [grainCount, setGrainCount] = useState(0);
+  const [sceneCount, setSceneCount] = useState(0);
+  const [skillTags, setSkillTags] = useState<string[]>([]);
   const [traceGrainIds, setTraceGrainIds] = useState('');
 
   useEffect(() => {
@@ -62,6 +66,10 @@ export default function SkillChatPage() {
       .then(d => {
         if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage);
         setAvatarUrl(d?.data?.avatarUrl || null);
+        if (d?.data?.stats) setSkillStats(d.data.stats);
+        if (d?.data?.grainCount) setGrainCount(d.data.grainCount);
+        if (d?.data?.sceneTags) setSceneCount(d.data.sceneTags.length);
+        if (d?.data?.tags) setSkillTags(d.data.tags);
       })
       .catch(() => {})
       .finally(() => setDetailFetched(true));
@@ -156,16 +164,26 @@ export default function SkillChatPage() {
                       {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{ownerName}</span><span className="text-base ml-0.5">✨</span>
                     </h3>
                     <span className="inline-block mt-2 text-[14px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">{TALK_NAME_CARD.roleTag}</span>
-                    <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
-                      {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
-                        i < arr.length - 1
-                          ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
-                          : <React.Fragment key={i}>{part}</React.Fragment>
-                      )}
+                    <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed">
+                      已采集 {grainCount > 0 ? grainCount : '...'} 条实战经验
+                      {sceneCount > 0 && <>，覆盖 {sceneCount} 个业务场景</>}
                     </p>
                   </div>
                 </div>
-                <TrustBadge />
+                {skillTags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {skillTags.slice(0, 4).map(tag => (
+                      <span key={tag} className="inline-block rounded-full bg-[#eef2ff] px-2.5 py-0.5 text-[11px] text-[#475569]">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <TrustBadge
+                  grainCount={grainCount > 0 ? grainCount : undefined}
+                  sceneCount={sceneCount > 0 ? sceneCount : undefined}
+                  satisfactionRate={skillStats?.satisfactionRate}
+                />
               </div>
 
               {/* ② 引导语气泡 — Practice 专属 */}
@@ -222,20 +240,48 @@ export default function SkillChatPage() {
                             <span className="inline-block mt-2 text-[14px] text-[#64748B] bg-[#f1f5f9] rounded-full px-3 py-1">
                               {TALK_NAME_CARD.roleTag}
                             </span>
-                            {/* 第三行：价值主张，关键词红色 */}
-                            <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed whitespace-pre-wrap">
-                              {TALK_NAME_CARD.valueProp.split(TALK_NAME_CARD.valuePropHighlight).map((part, i, arr) =>
-                                i < arr.length - 1
-                                  ? <React.Fragment key={i}>{part}<span className="text-[#DC2626] font-medium">{TALK_NAME_CARD.valuePropHighlight}</span></React.Fragment>
-                                  : <React.Fragment key={i}>{part}</React.Fragment>
-                              )}
-                            </p>
                             {ownerTitle && (
                               <p className="text-[14px] text-muted-foreground mt-2.5 font-medium">{ownerTitle}</p>
                             )}
+                            {skillStats && skillStats.conversationCount > 0 && (
+                              <div className="mt-2 flex items-center gap-4">
+                                <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
+                                  💬 {skillStats.conversationCount.toLocaleString()}<span className="text-[11px] font-normal text-[#64748b]">次对话</span>
+                                </span>
+                                {skillStats.satisfactionRate > 0 && (
+                                  <><span className="text-[#d4d8e0]">·</span>
+                                  <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
+                                    👍 {skillStats.satisfactionRate}<span className="text-[11px] font-normal text-[#64748b]">% 满意</span>
+                                  </span></>
+                                )}
+                                {skillStats.userCount > 0 && (
+                                  <><span className="text-[#d4d8e0]">·</span>
+                                  <span className="inline-flex items-baseline gap-1 text-[15px] font-semibold text-[#1e293b]">
+                                    👤 {skillStats.userCount.toLocaleString()}<span className="text-[11px] font-normal text-[#64748b]">人用过</span>
+                                  </span></>
+                                )}
+                              </div>
+                            )}
+                            {skillTags.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {skillTags.slice(0, 4).map(tag => (
+                                  <span key={tag} className="inline-block rounded-full bg-[#eef2ff] px-2.5 py-0.5 text-[11px] text-[#475569]">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            <p className="mt-3 text-[16px] text-foreground/85 leading-relaxed">
+                              已采集 {grainCount > 0 ? grainCount : '...'} 条实战经验
+                              {sceneCount > 0 && <>，覆盖 {sceneCount} 个业务场景</>}
+                            </p>
                           </div>
                         </div>
-                        <TrustBadge />
+                        <TrustBadge
+                          grainCount={grainCount > 0 ? grainCount : undefined}
+                          sceneCount={sceneCount > 0 ? sceneCount : undefined}
+                          satisfactionRate={skillStats?.satisfactionRate}
+                        />
                       </div>
                     )}
 

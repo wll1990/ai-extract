@@ -57,4 +57,7 @@ public class ShareInfoResponse {
 
     /** 分身开场白 — 聊天页入场态展示 */
     private String openingMessage;
+
+    /** 聚合互动统计（来自 skill 表缓存字段，无数据时各值为0） */
+    private Map<String, Object> stats;
 }

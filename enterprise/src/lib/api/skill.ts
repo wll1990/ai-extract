@@ -27,6 +27,11 @@ export interface PublicSkillInfo {
   grainCount: number;
   openingMessage?: string;
   domain?: string;
+  stats?: {
+    conversationCount: number;
+    userCount: number;
+    satisfactionRate: number;
+  };
 }
 
 export function fetchPublicSkills(search?: string, topic?: string): Promise<PublicSkillInfo[]> {
@@ -50,6 +55,11 @@ export interface SkillDetail {
   openingMessage?: string;
   domain?: string;
   status: string;
+  stats?: {
+    conversationCount: number;
+    userCount: number;
+    satisfactionRate: number;
+  };
 }
 
 export function fetchSkillDetail(skillId: string): Promise<SkillDetail> {
