@@ -22,6 +22,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>数据口径：使用 batchStatsOverviewExcludeTest 排除 is_test=true 的管理员测试数据。</p>
  *
  * <p>TODO: 当分身数量超过10000时，改为分页批量处理（每批500），避免一次性加载过多实体到内存。</p>
+ * <p>TODO: 当前为全量定时扫描（每5分钟扫全部 conversation_stats + feedback_log），
+ * 长期应改为异步增量统计——在 ChatStreamService/PracticeDemoService 的 doFinally 回调中
+ * 直接更新 skill.conversation_count/user_count/satisfaction_rate/last_active_at，
+ * 消除周期性全表扫描，变成 O(1) 的逐次写入。</p>
  *
  * @author AI Extract Team
  * @since 2026-07-28
