@@ -9,7 +9,7 @@ export interface SkillOverview {
 export interface SceneTopItem { scene: string; count: number; }
 export interface RagDistribution { high: number; ref: number; none: number; total: number; highPct: number; refPct: number; nonePct: number; }
 export interface GrainRankItem { id: string; description: string; sceneTag?: string; helpful: number; unhelpful: number; qualityScore?: number; }
-export interface KnowledgeGapItem { id: string; query: string; sceneTag?: string; count: number; lastSeen?: string; status: string; }
+export interface KnowledgeGapItem { id: string; query: string; sceneTag?: string; count: number; lastSeen?: string; status: string; note?: string; }
 export interface SkillHealth { skillId: string; name: string; ownerTitle?: string; department?: string; conversations: number; users: number; satisfactionRate: number; hitRate: number; openGaps: number; grainCount: number; lastActive?: string; alerts: string[]; }
 export interface GlobalOverview { totalConversations: number; activeUsers: number; satisfactionRate: number; hitRate: number; totalGrains: number; totalOpenGaps: number; totalSkills: number; skills: SkillHealth[]; }
 
@@ -91,5 +91,21 @@ export function rejectCandidateGrain(id: string, note?: string): Promise<{ id: s
   return apiClient(`/admin/insights/candidate-grains/${id}/reject`, {
     method: 'POST',
     body: JSON.stringify(note ? { note } : {}),
+  });
+}
+
+/** 处理洞察 — 标记为已处理或忽略 */
+export function resolveDiscovery(id: string, status: 'resolved' | 'ignored'): Promise<{ id: string; status: string }> {
+  return apiClient(`/admin/insights/discoveries/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
+}
+
+/** 更新知识缺口状态 — 标记为已解决或忽略 */
+export function updateKnowledgeGap(id: string, status: 'resolved' | 'ignored', note?: string): Promise<void> {
+  return apiClient(`/admin/insights/knowledge-gaps/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(note ? { status, note } : { status }),
   });
 }

@@ -82,6 +82,8 @@ public class InterviewService {
     private final SkillRepository skillRepository;
     private final InterviewTranscriptExtractor interviewTranscriptExtractor;
     private final ExpertInterviewProcessor expertInterviewProcessor;
+    private final ContextWindowGuard contextWindowGuard;
+    private final com.aiextract.repository.PhaseSummaryRepository phaseSummaryRepository;
 
     /** 自注入代理，用于解决同类内方法调用的事务代理问题 */
     @Autowired
@@ -349,9 +351,13 @@ public class InterviewService {
     private reactor.core.publisher.Flux<ChatChunk> callChatStream(
             InterviewSession session, String systemPrompt, String userMsg,
             List<Map<String, String>> historyMsgs) {
+        // P1-12: token 预检，超限自动裁剪最早消息
+        List<Map<String, String>> trimmedHistory = contextWindowGuard.trimIfNeeded(historyMsgs,
+                systemPrompt != null ? systemPrompt.length() : 0);
+
         List<Map<String, String>> messages = new ArrayList<>();
         messages.add(Map.of("role", "system", "content", systemPrompt));
-        messages.addAll(historyMsgs);
+        messages.addAll(trimmedHistory);
         messages.add(Map.of("role", "user", "content", userMsg));
         Map<String, Object> ctx = buildSessionContext(session);
         return chatStreamAdapter.chatStream(messages, ctx).map(ChatChunk::fromEventMap);
@@ -426,6 +432,9 @@ public class InterviewService {
                 }
             });
         }
+
+        // P1-11: 异步生成阶段摘要，不阻塞阶段切换
+        self.generatePhaseSummary(session.getId(), phase);
 
         // 推进阶段 → 触发新阶段的 AI 引导（传 entity 而非 ID，避免重新加载丢失 collectStatus）
         self.markPhaseAndSaveTransition(session, nextPhase);
@@ -857,16 +866,31 @@ public class InterviewService {
     /**
      * 加载会话的历史消息，构建 LLM 对话列表。
      *
-     * <p>消息按创建时间升序排列，每条包含 role 和 content。
+     * <p>P1-11: 已完成阶段用 AI 摘要替代全量历史，当前阶段保留全部消息。
+     * PhaseSummary 按 sessionId 查，不区分访谈类型（sales/expert 通用）。
      */
     List<Map<String, String>> buildMessagesList(InterviewSession session) {
+        String currentPhase = session.getCurrentPhase();
+        List<Map<String, String>> messages = new ArrayList<>();
+
+        // 1. 已完成阶段的摘要（替代全量历史，减少 token）
+        List<com.aiextract.model.PhaseSummary> summaries = phaseSummaryRepository
+                .findBySessionIdOrderByCreatedAtAsc(session.getId());
+        for (com.aiextract.model.PhaseSummary s : summaries) {
+            if (!s.getPhase().equals(currentPhase)) {
+                messages.add(Map.of("role", "system", "content",
+                    "[阶段回顾] " + s.getPhaseLabel() + "：" + s.getSummary()));
+            }
+        }
+
+        // 2. 当前阶段：保留全部消息
         List<InterviewMessage> historyMsgs = messageRepository
                 .findBySessionIdOrderByCreatedAtAsc(session.getId());
-
-        List<Map<String, String>> messages = new ArrayList<>();
         for (InterviewMessage msg : historyMsgs) {
-            messages.add(Map.of("role", msg.getRole(), "content",
-                    msg.getContent() != null ? msg.getContent() : ""));
+            if (currentPhase == null || currentPhase.equals(msg.getPhase())) {
+                messages.add(Map.of("role", msg.getRole(), "content",
+                        msg.getContent() != null ? msg.getContent() : ""));
+            }
         }
         return messages;
     }
@@ -1012,6 +1036,53 @@ public class InterviewService {
         return "欢迎回来！让我们继续深入挖掘你的经验。"
                 + "上次我们聊了一些内容，这次可以更聚焦——"
                 + "请分享一个你印象最深的案例，越具体越好。";
+    }
+
+    // ==================== P1-11: 阶段摘要 ====================
+
+    /**
+     * 异步生成阶段摘要，不阻塞阶段切换。
+     * 摘要用于后续阶段替代全量历史消息，减少 token 消耗。
+     */
+    @org.springframework.scheduling.annotation.Async("embeddingExecutor")
+    public void generatePhaseSummary(UUID sessionId, String completedPhase) {
+        try {
+            InterviewSession session = sessionRepository.findById(sessionId).orElse(null);
+            if (session == null) return;
+
+            List<InterviewMessage> phaseMsgs = messageRepository
+                    .findBySessionIdOrderByCreatedAtAsc(sessionId).stream()
+                    .filter(m -> completedPhase.equals(m.getPhase()))
+                    .toList();
+            if (phaseMsgs.isEmpty()) return;
+
+            String conversation = phaseMsgs.stream()
+                    .map(m -> (m.getRole() != null ? m.getRole() : "unknown") + "：" +
+                            (m.getContent() != null ? m.getContent() : ""))
+                    .collect(java.util.stream.Collectors.joining("\n"));
+
+            String domain = session.getDomain() != null ? session.getDomain() : "sales.b2b_enterprise";
+            String summary = chatStreamAdapter.chat(
+                    promptLoader.format("interview_phase_summary.md", java.util.Map.of(
+                            "phase", completedPhase,
+                            "conversation", conversation
+                    ), domain));
+
+            if (summary != null && !summary.isBlank()) {
+                phaseSummaryRepository.save(com.aiextract.model.PhaseSummary.builder()
+                        .id(UUID.randomUUID())
+                        .sessionId(sessionId)
+                        .phase(completedPhase)
+                        .phaseLabel(phaseLabel(completedPhase))
+                        .summary(summary.trim())
+                        .createdAt(java.time.LocalDateTime.now())
+                        .build());
+                log.info("阶段摘要已生成 sessionId={} phase={} len={}",
+                        sessionId, completedPhase, summary.length());
+            }
+        } catch (Exception e) {
+            log.warn("阶段摘要生成失败 sessionId={} phase={}: {}", sessionId, completedPhase, e.getMessage());
+        }
     }
 
     // ==================== 内部方法 — 工具 ====================

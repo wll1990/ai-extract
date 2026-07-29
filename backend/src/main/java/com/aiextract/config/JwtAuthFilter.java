@@ -17,15 +17,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * JWT认证过滤器
  *
  * <p>在每个请求到达Controller之前，从Authorization请求头中提取JWT Token，
- * 验证有效性并设置Spring Security上下文。</p>
+ * 验证有效性并设置Spring Security上下文。权限码通过 {@link RolePermissions} 映射表
+ * 从 JWT 中的 role 转换为 authority 集合。</p>
  *
  * @author AI Extract Team
  * @since 2026-06-29
@@ -41,18 +43,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final JwtUtil jwtUtil;
     private final PartnerJwtFilter partnerJwtFilter;
 
-    /**
-     * 过滤器执行逻辑
-     *
-     * <p>从请求头提取Token，验证并设置认证信息到SecurityContext。
-     * 如果Token无效或不存在，不阻塞请求（交由SecurityConfig处理）。</p>
-     *
-     * @param request     HTTP请求
-     * @param response    HTTP响应
-     * @param filterChain 过滤器链
-     * @throws ServletException Servlet异常
-     * @throws IOException      IO异常
-     */
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -66,7 +56,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         if (partnerToken != null && !partnerToken.isBlank()) {
             try {
                 UUID userId = partnerJwtFilter.authenticate(partnerToken);
-                setAuthentication(userId, "c_partner", partnerToken, request);
+                setAuthentication(userId, "c_partner", partnerToken, null, request);
                 filterChain.doFilter(request, response);
                 return;
             } catch (Exception e) {
@@ -76,6 +66,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             } finally {
                 TraceContext.clear();
                 TokenContext.clear();
+                CompanyScopeService.clearCache();
             }
         }
 
@@ -85,6 +76,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             TraceContext.clear();
             TokenContext.clear();
+                CompanyScopeService.clearCache();
             return;
         }
 
@@ -92,12 +84,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (jwtUtil.validateToken(token)) {
                 UUID userId = jwtUtil.getUserIdFromToken(token);
                 String role = jwtUtil.getRoleFromToken(token);
+                UUID companyId = jwtUtil.getCompanyIdFromToken(token);
 
-                setAuthentication(userId, role, token, request);
+                setAuthentication(userId, role, token, companyId, request);
                 request.setAttribute("token", token);
                 log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
             } else {
-                // Token 存在但无效（过期/伪造），清除客户端 cookie
                 clearTokenCookie(response);
             }
         } catch (Exception e) {
@@ -108,16 +100,23 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
         TraceContext.clear();
         TokenContext.clear();
+                CompanyScopeService.clearCache();
     }
 
-    private void setAuthentication(UUID userId, String role, String credentials, HttpServletRequest request) {
-        List<SimpleGrantedAuthority> authorities = Collections.singletonList(
-            new SimpleGrantedAuthority("ROLE_" + role.toUpperCase()));
+    private void setAuthentication(UUID userId, String role, String credentials,
+                                   UUID companyId, HttpServletRequest request) {
+        Set<String> permissions = RolePermissions.getPermissions(role);
+        List<SimpleGrantedAuthority> authorities = new ArrayList<>(permissions.size() + 1);
+        // 角色名本身也作为 authority（C 端 hasAuthority("c_guest") 等规则依赖此项）
+        authorities.add(new SimpleGrantedAuthority(role));
+        for (String perm : permissions) {
+            authorities.add(new SimpleGrantedAuthority(perm));
+        }
         UsernamePasswordAuthenticationToken authentication =
             new UsernamePasswordAuthenticationToken(userId, credentials, authorities);
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
-        TokenContext.set(userId);
+        TokenContext.set(userId, companyId);
     }
 
     /** 清除客户端过期 token cookie */

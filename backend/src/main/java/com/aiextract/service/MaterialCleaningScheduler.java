@@ -212,6 +212,9 @@ public class MaterialCleaningScheduler {
                     .qualityScore(c.qualityScore()).difficultyLevel(c.difficultyLevel())
                     .verificationNotes(c.verificationNotes()).status("active")
                     .helpfulCount(0).unhelpfulCount(0)
+                    .weight(c.qualityScore() != null
+                        ? Math.max(0.1, Math.min(2.0, c.qualityScore() / 5.0 * 2.0))
+                        : null) // P0-4: weight 根据 qualityScore 初始化
                     .createdAt(LocalDateTime.now())
                     .build();
             grainRepository.save(grain);
@@ -233,6 +236,8 @@ public class MaterialCleaningScheduler {
         if (!candidates.isEmpty()) {
             self.saveGrains(materialId, candidates);
             embedGrains(materialId, candidates);
+            // P2-2: 嵌入后语义去重检查（委托 Service 执行数据操作）
+            cleaningService.deduplicateByEmbedding(materialId);
         }
 
         self.markMaterialExtracted(materialId);

@@ -3,10 +3,11 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listSkills, type SkillInfo } from '@/lib/api/skill';
-import { getTopGrains, getKnowledgeGaps, type GrainRankItem, type KnowledgeGapItem } from '@/lib/api/admin-insights';
+import { getTopGrains, getKnowledgeGaps, updateKnowledgeGap, type GrainRankItem, type KnowledgeGapItem } from '@/lib/api/admin-insights';
 import { GrainRankTable } from '@/components/admin/GrainRankTable';
 import { KnowledgeGapPanel } from '@/components/admin/KnowledgeGapPanel';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { API_BASE, authHeaders } from '@/lib/api/client';
 
 type Tab = 'grains' | 'gaps' | 'feedback';
 
@@ -44,12 +45,21 @@ export default function AdminTuningPage() {
         {skills.map(s => (
           <button key={s.id}
             onClick={() => setSelected(s)}
-            className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+            className={`flex items-center gap-2.5 rounded-full px-4 py-2 text-sm transition-all ${
               selected?.id === s.id
-                ? 'bg-primary text-white'
-                : 'bg-surface-2 border border-border text-muted-foreground hover:border-primary'
+                ? 'bg-primary text-white shadow-md shadow-primary/20'
+                : 'bg-surface-2 border border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
             }`}>
-            {s.ownerName}
+            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+              selected?.id === s.id
+                ? 'bg-white/20 text-white'
+                : 'bg-gradient-to-br from-blue-500 to-purple-500 text-white'
+            }`}>
+              {(s.ownerName || '?')[0]}
+            </div>
+            <div className="text-left">
+              <div className="font-medium leading-tight">{s.ownerName}</div>
+            </div>
           </button>
         ))}
         {skills.length === 0 && <p className="text-sm text-muted-foreground">暂无已发布分身</p>}
@@ -107,9 +117,9 @@ function GrainsTab({ skillId, router }: { skillId: string; router: ReturnType<ty
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <GrainRankTable grains={best} type="best"
-        onGrainClick={id => router.push(`/admin/grains/${id}/edit`)} />
+        onGrainClick={id => router.push(`/admin/grains/${id}`)} />
       <GrainRankTable grains={worst} type="worst"
-        onGrainClick={id => router.push(`/admin/grains/${id}/edit`)} />
+        onGrainClick={id => router.push(`/admin/grains/${id}`)} />
     </div>
   );
 }
@@ -125,22 +135,78 @@ function GapsTab({ skillId, router, spaceId }: { skillId: string; router: Return
       .finally(() => setLoading(false));
   }, [skillId]);
 
+  const handleResolveGap = async (gapId: string) => {
+    try {
+      await updateKnowledgeGap(gapId, 'resolved');
+      setGaps(prev => prev.filter(g => g.id !== gapId));
+    } catch (err) { console.error('处理缺口失败', gapId, err); }
+  };
+  const handleIgnoreGap = async (gapId: string) => {
+    try {
+      await updateKnowledgeGap(gapId, 'ignored');
+      setGaps(prev => prev.filter(g => g.id !== gapId));
+    } catch (err) { console.error('忽略缺口失败', gapId, err); }
+  };
+
   if (loading) return <LoadingSpinner />;
 
   return (
     <KnowledgeGapPanel gaps={gaps}
-      onGapClick={() => router.push(`/admin/grains/new?skillId=${skillId}&spaceId=${spaceId}`)} />
+      onGapClick={() => router.push(`/admin/grains/new?skillId=${skillId}&spaceId=${spaceId}`)}
+      onResolve={handleResolveGap}
+      onIgnore={handleIgnoreGap} />
   );
 }
 
 function FeedbackTab({ skillId, router }: { skillId: string; router: ReturnType<typeof useRouter> }) {
+  const [items, setItems] = useState<Array<{ id: string; rating: string; query?: string; grainId?: string; grainTitle?: string; createdAt: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/admin/insights/${skillId}/feedback-logs?page=0&size=5`, {
+      headers: authHeaders(),
+    }).then(res => res.json())
+      .then(json => setItems(json.data?.content || []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [skillId]);
+
+  if (loading) return <LoadingSpinner />;
+
   return (
-    <div className="text-center py-8">
-      <p className="text-muted-foreground text-sm mb-3">查看该分身的用户反馈</p>
-      <button onClick={() => router.push(`/admin/insights/${skillId}/feedback`)}
-        className="text-sm bg-primary text-white rounded-lg px-4 py-2">
-        进入反馈审查 →
-      </button>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-foreground">📋 最近反馈</h3>
+        <button onClick={() => router.push(`/admin/insights/${skillId}/feedback`)}
+          className="text-xs text-primary hover:underline font-medium">
+          查看全部 →
+        </button>
+      </div>
+      {items.length === 0 ? (
+        <div className="rounded-[12px] bg-surface-2 border border-border p-8 text-center">
+          <p className="text-sm text-muted-foreground">暂无反馈记录</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {items.map(f => (
+            <div key={f.id} className="flex items-center gap-3 rounded-[12px] bg-surface-2 border border-border p-3 text-sm hover:shadow-sm transition-shadow">
+              <span className={`flex-shrink-0 text-sm ${f.rating === 'down' ? 'text-red-500' : 'text-green-600'}`}>
+                {f.rating === 'down' ? '👎' : '👍'}
+              </span>
+              <span className="flex-1 truncate text-muted-foreground text-[13px]">{f.query || '(无文本)'}</span>
+              {f.grainId && (
+                <button onClick={() => router.push(`/admin/grains/${f.grainId}`)}
+                  className="text-xs text-primary hover:underline flex-shrink-0 font-medium">
+                  {f.grainTitle || '查看颗粒'}
+                </button>
+              )}
+              <span className="text-xs text-muted-foreground flex-shrink-0">
+                {f.createdAt?.substring(0, 10)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

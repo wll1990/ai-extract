@@ -250,13 +250,30 @@ public class PracticeDemoService {
     }
 
     /**
-     * 生成推荐问题。根据场景标签，用配置的话术模板生成问题列表。
+     * 生成推荐问题（模板版）。根据单个场景标签生成 3 条固定句式问题。
      */
     public List<String> generateRecommendedQuestions(String sceneTag) {
         return List.of(
                 "在「" + sceneTag + "」方面你是怎么应对的",
                 "能分享一个「" + sceneTag + "」的真实案例吗",
                 "遇到「" + sceneTag + "」最关键的步骤是什么");
+    }
+
+    /**
+     * 基于分身活跃颗粒的模板推荐问题（cache-miss 兜底）。
+     *
+     * <p>遍历 skill 的所有活跃场景标签，每个生成 3 条模板问题并合并去重。
+     * 优先使用 {@link SkillService#generateRecommendedQuestions(UUID)} 预生成的缓存。</p>
+     */
+    public List<String> generateRecommendedQuestionsForSkill(UUID skillId) {
+        Skill skill = skillRepository.findById(skillId).orElse(null);
+        if (skill == null) return List.of();
+        Set<String> all = new LinkedHashSet<>();
+        grainRepository.findBySpaceId(skill.getSpaceId()).stream()
+            .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
+            .map(g -> g.getSceneTag()).distinct()
+            .forEach(tag -> all.addAll(generateRecommendedQuestions(tag)));
+        return new ArrayList<>(all);
     }
 
     /**

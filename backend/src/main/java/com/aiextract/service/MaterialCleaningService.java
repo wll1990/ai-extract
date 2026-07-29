@@ -86,6 +86,7 @@ public class MaterialCleaningService {
     private final PromptLoader promptLoader;
     private final SkillMaterialRepository materialRepository;
     private final ExperienceGrainRepository grainRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbc;
     private final SkillRepository skillRepository;
     private final SpaceRepository spaceRepository;
     private final com.aiextract.config.DomainConfigLoader domainConfigLoader;
@@ -805,6 +806,19 @@ public class MaterialCleaningService {
                 }
 
                 var first = group.get(0);
+                // P0-5: 合并颗粒的 qualityScore = 成员平均分
+                double avgScore = group.stream()
+                        .filter(g -> g.qualityScore() != null)
+                        .mapToDouble(GrainCandidate::qualityScore)
+                        .average().orElse(0);
+                String avgDifficulty = group.stream()
+                        .map(GrainCandidate::difficultyLevel)
+                        .filter(d -> d != null)
+                        .findFirst().orElse(null);
+                String mergedNotes = group.stream()
+                        .map(GrainCandidate::verificationNotes)
+                        .filter(n -> n != null)
+                        .findFirst().orElse(null);
                 merged.add(new GrainCandidate(
                         entry.getKey(),
                         new ExtractedInsight(
@@ -815,7 +829,9 @@ public class MaterialCleaningService {
                                 (String) map.get(KEY_APPLICABLE_CONDITION),
                                 conf),
                         materialId,
-                        null, null, null)); // 合并后内容已变，旧评分失效
+                        avgScore > 0 ? avgScore : null,
+                        avgDifficulty,
+                        mergedNotes));
                 mergeSavings += group.size() - 1;
             } catch (Exception e) {
                 log.warn("合并失败(tag={}): {}", entry.getKey(), e.getMessage());
@@ -1045,7 +1061,13 @@ public class MaterialCleaningService {
         // 淘汰记录收集器：管道内只收集，尾部短事务一次落库（记录失败不阻断萃取）
         List<ExtractionDropLog> drops = new ArrayList<>();
 
-        List<TextChunk> chunks = semanticChunk(normalized);
+        // P2-9: 区分对话/文档类型，对话类按回合分块
+        boolean isDialogue = isDialogueText(normalized, material.getMaterialType(), detectedType);
+        List<TextChunk> chunks = isDialogue
+            ? dialogueChunk(normalized)
+            : semanticChunk(normalized);
+        log.info("分块策略: {} materialId={} chunks={}",
+                isDialogue ? "dialogue" : "semantic", materialId, chunks.size());
         List<TextChunk> uniqueChunks = deduplicate(chunks, spaceId, materialId, drops);
         List<ExtractedInsight> insights = extractInsights(uniqueChunks, materialId, context, domain);
         List<GrainCandidate> candidates = classifyScenesBatch(insights, spaceId, materialId, domain);
@@ -1133,6 +1155,76 @@ public class MaterialCleaningService {
                 .orElseThrow(() -> new RuntimeException("Skill not found: " + skillId));
     }
 
+    // ---- P2-9: 对话检测 + 回合分块 ----
+
+    /**
+     * 检测文本是否为对话格式 — 三重判断。
+     */
+    private boolean isDialogueText(String text, String materialType, String detectedType) {
+        if ("interview".equals(materialType)) return true;
+        if ("chat_log".equals(detectedType) || "voice_transcript".equals(detectedType)) return true;
+        int totalLines = 0, speakerLines = 0;
+        java.util.regex.Pattern speakerPtn = java.util.regex.Pattern.compile("^.{1,10}[：:].{2,}");
+        for (String line : text.split("\n")) {
+            if (line.isBlank()) continue;
+            totalLines++;
+            if (speakerPtn.matcher(line).find()) speakerLines++;
+        }
+        return totalLines > 10 && (double) speakerLines / totalLines > 0.4;
+    }
+
+    /**
+     * 对话素材按"回合"分块 — 保持客户发言→销售回应→结果的完整因果链。
+     */
+    private List<TextChunk> dialogueChunk(String text) {
+        List<String> turns = splitBySpeaker(text);
+        List<TextChunk> chunks = new ArrayList<>();
+        StringBuilder buffer = new StringBuilder();
+        int idx = 0;
+
+        for (String turn : turns) {
+            boolean isClient = isClientTurn(turn);
+            if (buffer.length() > 0 && buffer.length() + turn.length() > CHUNK_MAX) {
+                chunks.add(new TextChunk(idx++, buffer.toString().trim()));
+                buffer = new StringBuilder();
+            }
+            buffer.append(turn).append("\n");
+            if (buffer.length() >= CHUNK_TARGET) {
+                chunks.add(new TextChunk(idx++, buffer.toString().trim()));
+                buffer = new StringBuilder();
+            }
+        }
+        if (buffer.length() > 0) {
+            chunks.add(new TextChunk(idx, buffer.toString().trim()));
+        }
+        return chunks;
+    }
+
+    private List<String> splitBySpeaker(String text) {
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile(
+            "^.{1,10}[：:].*$", java.util.regex.Pattern.MULTILINE);
+        java.util.regex.Matcher m = p.matcher(text);
+        List<String> turns = new ArrayList<>();
+        int lastEnd = 0;
+        while (m.find()) {
+            if (m.start() > lastEnd) {
+                String between = text.substring(lastEnd, m.start()).trim();
+                if (!between.isEmpty()) turns.add(between);
+            }
+            turns.add(m.group().trim());
+            lastEnd = m.end();
+        }
+        if (lastEnd < text.length()) {
+            String tail = text.substring(lastEnd).trim();
+            if (!tail.isEmpty()) turns.add(tail);
+        }
+        return turns;
+    }
+
+    private boolean isClientTurn(String turn) {
+        return turn.matches("^.{0,5}(客户|甲|Q|用户|买方|对方)[：:].*");
+    }
+
     // ---- 智能分块（基于句子边界，保证语义完整）----
     private static final int CHUNK_TARGET = 800;
     private static final int CHUNK_MAX = 1500;
@@ -1180,6 +1272,17 @@ public class MaterialCleaningService {
 
         if (buffer.length() > 0) {
             chunks.add(new TextChunk(idx, buffer.toString().trim()));
+        }
+
+        // P2-8: 重叠窗口 — 每个 chunk 开头加前一个 chunk 尾部 50 字
+        for (int i = chunks.size() - 1; i >= 1; i--) {
+            String prevText = chunks.get(i - 1).text();
+            if (prevText.length() > 50) {
+                String overlap = prevText.substring(prevText.length() - 50);
+                TextChunk orig = chunks.get(i);
+                chunks.set(i, new TextChunk(orig.index(),
+                    "[上文] " + overlap + "\n---\n" + orig.text()));
+            }
         }
 
         return chunks;
@@ -1274,6 +1377,17 @@ public class MaterialCleaningService {
         String contextPrefix = context.toPromptPrefix();
         List<ExtractedInsight> all = java.util.Collections.synchronizedList(new ArrayList<>());
 
+        // P2-6: 选最长 chunk 作为首个（信息密度最高），情境上下文更有效
+        int maxLen = 0;
+        int bestIdx = 0;
+        for (int i = 0; i < chunks.size(); i++) {
+            if (chunks.get(i).text().length() > maxLen) {
+                maxLen = chunks.get(i).text().length();
+                bestIdx = i;
+            }
+        }
+        final int fullPromptIdx = bestIdx;
+
         // 并行调 AI（每 5 个 chunk 一批，控制并发避免限流）
         int batchSize = 5;
         for (int start = 0; start < chunks.size(); start += batchSize) {
@@ -1285,7 +1399,7 @@ public class MaterialCleaningService {
                 TextChunk chunk = chunks.get(i);
                 futures.add(java.util.concurrent.CompletableFuture.runAsync(() -> {
                     try {
-                        String prompt = (idx == 0)
+                        String prompt = (idx == fullPromptIdx)
                                 ? promptLoader.format("material_extract_full.md", Map.of(
                                         "context_prefix", contextPrefix, "material_content", chunk.text()), domain)
                                 : promptLoader.format("material_extract_short.md", Map.of(
@@ -1334,11 +1448,15 @@ public class MaterialCleaningService {
                 .map(g -> g.getSceneTag())
                 .collect(Collectors.toSet());
 
-        // 构建批量 prompt：把所有场景描述编号后一次发送
+        // P2-7: 构建批量 prompt — 含 sceneDescription + expertThought 前50字，提升标签准确度
         StringBuilder scenesBlock = new StringBuilder();
         for (int i = 0; i < insights.size(); i++) {
-            scenesBlock.append(String.format("[%d] %s\n", i,
-                    insights.get(i).sceneDescription() != null ? insights.get(i).sceneDescription() : "无描述"));
+            String desc = insights.get(i).sceneDescription() != null
+                ? insights.get(i).sceneDescription() : "无描述";
+            String thought = insights.get(i).expertThought() != null
+                ? insights.get(i).expertThought().substring(0,
+                    Math.min(50, insights.get(i).expertThought().length())) : "";
+            scenesBlock.append(String.format("[%d] 场景:%s | 思路:%s\n", i, desc, thought));
         }
 
         String existingTagsStr = existingTags.isEmpty() ? "无" : String.join(",", existingTags);
@@ -1578,6 +1696,53 @@ public class MaterialCleaningService {
         } catch (Exception e) {
             log.warn("叙事重放失败: {}", e.getMessage());
             return null;
+        }
+    }
+
+    // ==================== P2-2: 语义去重 ====================
+
+    /**
+     * 嵌入后语义去重 — 新嵌入颗粒与同空间存量做 pgvector ANN 比对，
+     * cosine > 0.95 的标记为 deprecated。
+     * 由 MaterialCleaningScheduler.processMaterial() 在 embedGrains 后调用。
+     */
+    public void deduplicateByEmbedding(UUID materialId) {
+        try {
+            java.util.List<ExperienceGrain> fresh = grainRepository.findBySourceMaterialId(materialId).stream()
+                .filter(g -> "active".equals(g.getStatus()))
+                .toList();
+            if (fresh.isEmpty()) return;
+
+            UUID spaceId = fresh.get(0).getSpaceId();
+            if (spaceId == null) return;
+
+            int deprecated = 0;
+            for (ExperienceGrain g : fresh) {
+                java.util.List<ExperienceGrain> neighbors = jdbc.query("""
+                    SELECT g2.*, 1.0 - (g2.embedding <=> g1.embedding) AS similarity
+                    FROM experience_grain g1, experience_grain g2
+                    WHERE g1.id = ? AND g2.space_id = ? AND g2.status = 'active'
+                      AND g2.id != g1.id AND g2.embedding IS NOT NULL
+                    ORDER BY g2.embedding <=> g1.embedding
+                    LIMIT 1
+                    """,
+                    (rs, rn) -> {
+                        double sim = rs.getDouble("similarity");
+                        if (sim > 0.95) return g;
+                        return null;
+                    },
+                    g.getId(), spaceId);
+                if (!neighbors.isEmpty() && neighbors.get(0) != null) {
+                    g.setStatus("deprecated");
+                    grainRepository.save(g);
+                    deprecated++;
+                }
+            }
+            if (deprecated > 0) {
+                log.info("语义去重: materialId={} deprecated={}/{}", materialId, deprecated, fresh.size());
+            }
+        } catch (Exception e) {
+            log.warn("语义去重检查失败 materialId={}: {}", materialId, e.getMessage());
         }
     }
 }

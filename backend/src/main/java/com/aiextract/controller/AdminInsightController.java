@@ -2,6 +2,8 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.CompanyScopeService;
+import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
@@ -37,6 +39,9 @@ public class AdminInsightController {
     private final com.aiextract.repository.AutoInsightRepository autoInsightRepository;
     private final com.aiextract.repository.CandidateGrainRepository candidateGrainRepository;
     private final com.aiextract.service.DashScopeEmbeddingService embeddingService;
+    private final CompanyScopeService companyScopeService;
+    private final com.aiextract.repository.AnswerCorrectionRepository correctionRepository;
+    private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
 
     /**
      * 分身使用概览 — 对话量 / 用户数 / 满意率。
@@ -44,6 +49,7 @@ public class AdminInsightController {
     @GetMapping("/{skillId}/overview")
     public ApiResponse<Map<String, Object>> getOverview(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         skillRepository.findById(id).orElseThrow(() ->
             new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
 
@@ -76,6 +82,7 @@ public class AdminInsightController {
     @GetMapping("/{skillId}/scene-top")
     public ApiResponse<List<Map<String, Object>>> getSceneTop(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         List<Object[]> rows = grainRetrieveLogRepository.countBySkillIdGroupBySceneTag(id);
         List<Map<String, Object>> result = rows.stream().limit(5).map(row -> {
             Map<String, Object> m = new LinkedHashMap<>();
@@ -92,6 +99,7 @@ public class AdminInsightController {
     @GetMapping("/{skillId}/rag-distribution")
     public ApiResponse<Map<String, Object>> getRagDistribution(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         List<Object[]> rows = conversationStatsRepository.ragDistribution(id);
         long high = 0, ref = 0, none = 0;
         if (!rows.isEmpty() && rows.get(0)[0] != null) {
@@ -120,6 +128,7 @@ public class AdminInsightController {
     public ApiResponse<List<Map<String, Object>>> getGrainsTop(
             @PathVariable String skillId, @RequestParam(defaultValue = "best") String sort) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         var skill = skillRepository.findById(id).orElseThrow(() ->
             new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
         List<com.aiextract.model.ExperienceGrain> grains = "best".equals(sort)
@@ -148,6 +157,7 @@ public class AdminInsightController {
     @GetMapping("/{skillId}/knowledge-gaps")
     public ApiResponse<List<Map<String, Object>>> getKnowledgeGaps(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         List<com.aiextract.model.KnowledgeGap> gaps = knowledgeGapRepository
             .findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(id, "open");
         List<Map<String, Object>> result = gaps.stream().map(g -> {
@@ -158,6 +168,7 @@ public class AdminInsightController {
             m.put("count", g.getAttemptedQueryCount());
             m.put("lastSeen", g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : null);
             m.put("status", g.getStatus());
+            m.put("note", g.getNote());
             return m;
         }).collect(Collectors.toList());
         return ApiResponse.success(result);
@@ -174,6 +185,7 @@ public class AdminInsightController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String rating) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         org.springframework.data.domain.Pageable pageable =
             org.springframework.data.domain.PageRequest.of(page, size);
         org.springframework.data.domain.Page<com.aiextract.model.FeedbackLog> logs;
@@ -210,6 +222,7 @@ public class AdminInsightController {
         com.aiextract.model.KnowledgeGap gap = knowledgeGapRepository
             .findById(UUID.fromString(gapId))
             .orElseThrow(() -> new BusinessException(404, "缺口不存在"));
+        companyScopeService.assertSkillOwnership(gap.getSkillId());
         String newStatus = body.getOrDefault("status", "resolved");
         gap.setStatus(newStatus);
         if (body.containsKey(KEY_NOTE)) { gap.setNote(body.get(KEY_NOTE)); }
@@ -226,6 +239,7 @@ public class AdminInsightController {
     @GetMapping("/{skillId}/random-sample")
     public ApiResponse<List<Map<String, Object>>> getRandomSample(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         // 从最近 200 条中随机取 20 条
         var pageable = org.springframework.data.domain.PageRequest.of(0, 200);
         var stats = conversationStatsRepository.findBySkillIdAndIsTestFalse(id, pageable);
@@ -254,7 +268,8 @@ public class AdminInsightController {
      */
     @GetMapping("/overview")
     public ApiResponse<Map<String, Object>> getGlobalOverview() {
-        return ApiResponse.success(adminInsightService.getGlobalOverview());
+        UUID companyId = TokenContext.getCompanyId();
+        return ApiResponse.success(adminInsightService.getGlobalOverview(companyId));
     }
 
     // ============================================================
@@ -276,6 +291,7 @@ public class AdminInsightController {
 
         if (skillId != null && !skillId.isEmpty()) {
             UUID sid = UUID.fromString(skillId);
+            companyScopeService.assertSkillOwnership(sid);
             if (severity != null && !severity.isEmpty()) {
                 insights = autoInsightRepository.findBySkillIdAndSeverityAndStatusOrderByCreatedAtDesc(
                     sid, severity, status, pageable);
@@ -284,11 +300,30 @@ public class AdminInsightController {
                     sid, status, pageable);
             }
         } else {
-            if (severity != null && !severity.isEmpty()) {
-                insights = autoInsightRepository.findBySeverityAndStatusOrderByCreatedAtDesc(
-                    severity, status, pageable);
+            UUID companyId = TokenContext.getCompanyId();
+            List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
+            if (companySkillIds != null) {
+                // company_admin — 只返回本企业分身的洞察
+                if (companySkillIds.isEmpty()) {
+                    return ApiResponse.success(List.of());
+                }
+                if (severity != null && !severity.isEmpty()) {
+                    insights = autoInsightRepository.findBySeverityAndStatusOrderByCreatedAtDesc(
+                        severity, status, pageable).stream()
+                        .filter(i -> i.getSkillId() != null && companySkillIds.contains(i.getSkillId()))
+                        .collect(Collectors.toList());
+                } else {
+                    insights = autoInsightRepository.findByStatusOrderByCreatedAtDesc(status, pageable).stream()
+                        .filter(i -> i.getSkillId() != null && companySkillIds.contains(i.getSkillId()))
+                        .collect(Collectors.toList());
+                }
             } else {
-                insights = autoInsightRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+                if (severity != null && !severity.isEmpty()) {
+                    insights = autoInsightRepository.findBySeverityAndStatusOrderByCreatedAtDesc(
+                        severity, status, pageable);
+                } else {
+                    insights = autoInsightRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+                }
             }
         }
 
@@ -304,6 +339,9 @@ public class AdminInsightController {
         UUID insightId = UUID.fromString(id);
         var insight = autoInsightRepository.findById(insightId)
             .orElseThrow(() -> new BusinessException(404, "洞察不存在"));
+        if (insight.getSkillId() != null) {
+            companyScopeService.assertSkillOwnership(insight.getSkillId());
+        }
 
         Map<String, Object> result = toInsightMap(insight);
 
@@ -331,6 +369,9 @@ public class AdminInsightController {
         UUID grainId = UUID.fromString(id);
         var candidate = candidateGrainRepository.findById(grainId)
             .orElseThrow(() -> new BusinessException(404, "候选颗粒不存在"));
+        if (candidate.getSkillId() != null) {
+            companyScopeService.assertSkillOwnership(candidate.getSkillId());
+        }
 
         if (!CandidateGrain.STATUS_PENDING_REVIEW.equals(candidate.getStatus())) {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
@@ -397,6 +438,9 @@ public class AdminInsightController {
         UUID grainId = UUID.fromString(id);
         var candidate = candidateGrainRepository.findById(grainId)
             .orElseThrow(() -> new BusinessException(404, "候选颗粒不存在"));
+        if (candidate.getSkillId() != null) {
+            companyScopeService.assertSkillOwnership(candidate.getSkillId());
+        }
 
         if (!CandidateGrain.STATUS_PENDING_REVIEW.equals(candidate.getStatus())) {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
@@ -413,6 +457,33 @@ public class AdminInsightController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", candidate.getId().toString());
         result.put("status", candidate.getStatus());
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 处理洞察 —— 标记为 resolved 或 ignored。
+     * 管理员确认或忽略自动发现的异常后，更新洞察状态。
+     */
+    @PutMapping("/discoveries/{id}")
+    public ApiResponse<Map<String, Object>> resolveDiscovery(
+            @PathVariable String id, @RequestBody Map<String, String> body) {
+        UUID insightId = UUID.fromString(id);
+        var insight = autoInsightRepository.findById(insightId)
+            .orElseThrow(() -> new BusinessException(404, "洞察不存在"));
+        if (insight.getSkillId() != null) {
+            companyScopeService.assertSkillOwnership(insight.getSkillId());
+        }
+        String newStatus = body.getOrDefault("status", "resolved");
+        if (!List.of("resolved", "ignored").contains(newStatus)) {
+            throw new BusinessException(400, "状态只能为 resolved 或 ignored");
+        }
+        insight.setStatus(newStatus);
+        insight.setResolvedAt(LocalDateTime.now());
+        autoInsightRepository.save(insight);
+        log.info("洞察已处理 insightId={} status={}", insightId, newStatus);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("id", insight.getId().toString());
+        result.put("status", insight.getStatus());
         return ApiResponse.success(result);
     }
 
@@ -462,6 +533,69 @@ public class AdminInsightController {
         }
         sb.append("]");
         return sb.toString();
+    }
+
+    // ==================== P1-7: 回答矫正 ====================
+
+    /**
+     * Admin 提交回答矫正 — 记录偏差回答 + 关联颗粒权重衰减。
+     */
+    @PostMapping("/corrections")
+    public ApiResponse<Map<String, Object>> submitCorrection(@RequestBody Map<String, Object> body) {
+        UUID skillId = UUID.fromString((String) body.get("skillId"));
+        String originalQuery = (String) body.get("originalQuery");
+        String badResponse = (String) body.get("badResponse");
+        String correctedResponse = (String) body.get("correctedResponse");
+        String correctedBy = (String) body.getOrDefault("correctedBy", "admin");
+        @SuppressWarnings("unchecked")
+        java.util.List<String> grainIdList = (java.util.List<String>) body.get("grainIds");
+
+        // 1. 保存矫正记录
+        var correction = com.aiextract.model.AnswerCorrection.builder()
+                .id(UUID.randomUUID())
+                .skillId(skillId)
+                .conversationId(body.get("conversationId") != null
+                    ? UUID.fromString((String) body.get("conversationId")) : null)
+                .messageId(body.get("messageId") != null
+                    ? UUID.fromString((String) body.get("messageId")) : null)
+                .originalQuery(originalQuery)
+                .badResponse(badResponse)
+                .correctedResponse(correctedResponse)
+                .correctedBy(correctedBy)
+                .grainIds(grainIdList != null ? grainIdList.toString() : null)
+                .createdAt(java.time.LocalDateTime.now())
+                .build();
+        correctionRepository.save(correction);
+
+        // 2. 关联颗粒 weight × 0.7 衰减
+        int decayed = 0;
+        if (grainIdList != null) {
+            for (String gid : grainIdList) {
+                grainRepository.findById(UUID.fromString(gid)).ifPresent(g -> {
+                    double oldW = g.getWeight() != null ? g.getWeight() : 1.0;
+                    g.setWeight(Math.max(0.1, oldW * 0.7));
+                    grainRepository.save(g);
+                });
+                decayed++;
+            }
+        }
+
+        // 3. 写审计日志
+        try {
+            auditLogRepository.save(com.aiextract.model.AdminAuditLog.builder()
+                .id(UUID.randomUUID())
+                .action("correct_answer")
+                .detail(String.format("skillId=%s by=%s query=%s grains=%d", skillId, correctedBy,
+                    originalQuery != null ? originalQuery.substring(0, Math.min(50,
+                        originalQuery.length())) : "", decayed))
+                .createdAt(java.time.LocalDateTime.now())
+                .build());
+        } catch (Exception e) {
+            log.warn("审计日志写入失败", e);
+        }
+
+        log.info("回答矫正完成 skillId={} decayed={} grains", skillId, decayed);
+        return ApiResponse.success(Map.of("corrected", true, "decayedGrains", decayed));
     }
 
 }

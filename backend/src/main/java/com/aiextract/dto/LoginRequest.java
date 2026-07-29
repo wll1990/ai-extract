@@ -20,9 +20,14 @@ import lombok.Setter;
 public class LoginRequest {
 
     /**
-     * 企业ID
+     * 企业注册码（优先使用，如 ABC12345）
      */
-    @NotBlank(message = "企业ID不能为空")
+    @JsonProperty("companyCode")
+    private String companyCode;
+
+    /**
+     * 企业ID（降级使用，当 companyCode 为空时生效）
+     */
     @JsonProperty("companyId")
     private String companyId;
 

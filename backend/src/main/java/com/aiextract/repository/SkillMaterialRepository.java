@@ -42,6 +42,21 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      * @return 结果列表
      */
     List<SkillMaterial> findByStatusIn(List<String> statuses);
+
+    /** 批量：指定状态 + 指定分身列表 */
+    List<SkillMaterial> findByStatusInAndSkillIdIn(List<String> statuses, List<UUID> skillIds);
+
+    /** 批量：指定分身列表 */
+    List<SkillMaterial> findBySkillIdIn(List<UUID> skillIds);
+
+    /** 批量计数：指定分身列表 */
+    @Query("SELECT COUNT(sm) FROM SkillMaterial sm WHERE sm.skillId IN :skillIds")
+    long countBySkillIdIn(@Param("skillIds") List<UUID> skillIds);
+
+    /** 素材管道漏斗 — 按 status 分组计数 */
+    @Query("SELECT sm.status, COUNT(sm) FROM SkillMaterial sm WHERE sm.skillId IN :skillIds GROUP BY sm.status")
+    List<Object[]> pipelineFunnel(@Param("skillIds") List<UUID> skillIds);
+
     /**
      * 查询（Pending,Parse,Tasks）。
      * @param timeout timeout

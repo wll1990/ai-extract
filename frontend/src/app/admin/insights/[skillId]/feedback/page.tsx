@@ -29,6 +29,8 @@ export default function FeedbackReviewPage() {
   const [items, setItems] = useState<FeedbackItem[]>([]);
   const [filter, setFilter] = useState<'all' | 'up' | 'down'>('all');
   const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,7 +40,11 @@ export default function FeedbackReviewPage() {
     fetch(`${API_BASE}/admin/insights/${skillId}/feedback-logs?page=${page}&size=20${ratingParam}`, {
       headers: authHeaders(),
     }).then(res => res.json())
-      .then(json => setItems(json.data?.content || json.data || []))
+      .then(json => {
+        setItems(json.data?.content || json.data || []);
+        setTotalPages(json.data?.totalPages || 0);
+        setTotalElements(json.data?.totalElements || 0);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [skillId, filter, page]);
@@ -64,42 +70,57 @@ export default function FeedbackReviewPage() {
       <h2 className="mb-6 text-xl font-bold text-foreground">📋 反馈审查</h2>
 
       {items.length === 0 ? (
-        <div className="rounded-xl bg-surface-2 p-8 text-center">
-          <p className="text-muted-foreground">暂无反馈记录</p>
+        <div className="rounded-[12px] bg-surface-2 p-8 text-center">
+          <p className="text-muted-foreground mb-4">暂无反馈记录</p>
+          <button onClick={() => router.push(`/admin/insights/${skillId}`)}
+            className="text-sm text-primary hover:underline font-medium">
+            ← 返回分身详情
+          </button>
         </div>
       ) : (
         <div className="space-y-3">
           {items.map(f => (
-            <div key={f.id} className="rounded-xl bg-surface-2 p-4 shadow-sm">
+            <div key={f.id} className="rounded-[12px] bg-surface-2 p-3 shadow-sm hover:shadow-sm transition-shadow">
               {/* 头部 */}
-              <div className="flex items-center gap-2 mb-2">
-                <span className={`text-sm font-medium ${f.rating === 'down' ? 'text-red-500' : 'text-green-600'}`}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className={`text-[13px] font-medium flex-shrink-0 ${f.rating === 'down' ? 'text-red-500' : 'text-green-600'}`}>
                   {f.rating === 'down' ? '👎 没用' : '👍 有用'}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {f.createdAt ? f.createdAt.substring(0, 16) : ''}{f.sceneTag ? ` · 场景: ${f.sceneTag}` : ''}
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {f.createdAt ? f.createdAt.substring(0, 16) : ''}{f.sceneTag ? ` · ${f.sceneTag}` : ''}
                 </span>
+                {f.ragScore != null && (
+                  <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-auto">
+                    RAG: {Math.round(f.ragScore * 100)}%
+                  </span>
+                )}
               </div>
-              {/* 用户问题 */}
-              {f.query && <p className="text-sm mt-1"><span className="text-muted-foreground">Q: </span>{f.query}</p>}
-              {/* AI 回答（截取） */}
-              {f.aiResponse && <p className="text-sm mt-1 text-muted-foreground line-clamp-3">A: {f.aiResponse}</p>}
-              {/* 关联信息 */}
-              <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                {f.grainId && <span>🔗 颗粒: {f.grainTitle || f.grainId.substring(0, 8)}</span>}
-                {f.ragScore != null && <span>RAG 匹配: {Math.round(f.ragScore * 100)}%</span>}
+              {/* 用户问题 + AI回答 紧凑两行 */}
+              <div className="grid grid-cols-1 gap-1 text-[13px]">
+                {f.query && <p className="truncate"><span className="text-muted-foreground">Q: </span><span className="text-foreground">{f.query}</span></p>}
+                {f.aiResponse && <p className="truncate text-muted-foreground"><span className="text-foreground/50">A: </span>{f.aiResponse}</p>}
               </div>
+              {/* 颗粒链接 */}
+              {f.grainId && (
+                <button onClick={() => router.push(`/admin/grains/${f.grainId}`)}
+                  className="text-[12px] text-primary hover:underline cursor-pointer mt-1.5 font-medium">
+                  🔗 {f.grainTitle || f.sceneTag || '查看颗粒详情'}
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
       {/* 分页 */}
-      <div className="flex justify-center gap-2 mt-6">
+      <div className="flex items-center justify-center gap-3 mt-6">
         <button disabled={page === 0} onClick={() => setPage(p => p - 1)}
           className="text-sm rounded-lg px-4 py-2 border disabled:opacity-30">上一页</button>
-        <button onClick={() => setPage(p => p + 1)}
-          className="text-sm rounded-lg px-4 py-2 border">下一页</button>
+        <span className="text-xs text-muted-foreground">
+          第 {page + 1}/{totalPages || 1} 页 · 共 {totalElements} 条
+        </span>
+        <button disabled={page + 1 >= totalPages} onClick={() => setPage(p => p + 1)}
+          className="text-sm rounded-lg px-4 py-2 border disabled:opacity-30">下一页</button>
       </div>
     </div>
   );

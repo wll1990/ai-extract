@@ -56,6 +56,42 @@ public class Company {
     @Column(name = "brand_color", length = 7)
     private String brandColor;
 
+    // ═══════════════════════════════════════════════════════════
+    // 企业合作管理字段（V32）
+    // ═══════════════════════════════════════════════════════════
+
+    /** 联系人 */
+    @Column(name = "contact_name", length = 100)
+    private String contactName;
+
+    /** 联系电话 */
+    @Column(name = "contact_phone", length = 30)
+    private String contactPhone;
+
+    /** 联系邮箱 */
+    @Column(name = "contact_email", length = 200)
+    private String contactEmail;
+
+    /** 企业地址 */
+    @Column(length = 500)
+    private String address;
+
+    /** 所属行业 */
+    @Column(length = 100)
+    private String industry;
+
+    /** 企业规模 */
+    @Column(length = 50)
+    private String scale;
+
+    /** 备注 */
+    @Column(columnDefinition = "TEXT")
+    private String notes;
+
+    /** 状态：active=合作中, archived=已归档 */
+    @Column(length = 20)
+    private String status;
+
     /**
      * 创建时间
      */

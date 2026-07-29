@@ -117,7 +117,7 @@ export default function PracticeChatSection({ skillId, initialSceneTag, setChatM
           />
         </div>
       </SkillChatView>
-      <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
+      <TraceabilityDrawer grainIds={traceGrainIds} avgSimilarity={0} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
 
       {practice.showEndConfirm && (
         <EndConfirmModal

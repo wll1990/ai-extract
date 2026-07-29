@@ -110,8 +110,12 @@ public class ConversationPersistenceService {
 
     /**
      * 从领域配置解析己方角色标签（如"销冠" / "专家"）。
+     * skill 为 null 时回退默认值（组织分身/企业调度场景）。
      */
     public String resolveRoleLabel(Skill skill) {
+        if (skill == null) {
+            return "专家";
+        }
         String domainId = domainConfigLoader.resolveDomain(skill);
         if (domainId == null) {
             return "专家";
@@ -123,8 +127,12 @@ public class ConversationPersistenceService {
 
     /**
      * 从领域配置解析对练中的对方角色标签（如"客户" / "对方"）。
+     * skill 为 null 时回退默认值（组织分身/企业调度场景）。
      */
     public String resolveCounterpartyLabel(Skill skill) {
+        if (skill == null) {
+            return "对方";
+        }
         String domainId = domainConfigLoader.resolveDomain(skill);
         if (domainId == null) {
             return "对方";

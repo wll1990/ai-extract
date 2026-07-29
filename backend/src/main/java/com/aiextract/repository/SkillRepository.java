@@ -47,6 +47,9 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
      * @return 分页结果
      */
     Page<Skill> findBySpaceIdInAndStatusOrderByCreatedAtDesc(List<UUID> spaceIds, String status, Pageable pageable);
+
+    /** 按状态 + 空间列表查询（非分页） */
+    List<Skill> findByStatusAndSpaceIdIn(String status, List<UUID> spaceIds);
     /**
      * 查询（Status,Created,At）。
      * @param status status
@@ -59,6 +62,8 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
      * @return 结果列表
      */
     List<Skill> findByStatus(String status);
+    /** 按ID列表和状态查询 — 企业数据范围过滤 */
+    List<Skill> findByIdInAndStatus(List<UUID> ids, String status);
     /** 按状态列表批量查询 — SkillStatsScheduler 用 */
     List<Skill> findByStatusIn(List<String> statuses);
     /**

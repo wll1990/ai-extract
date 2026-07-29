@@ -1,12 +1,11 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.ImChannelRequest;
 import com.aiextract.dto.ImChannelResponse;
 import com.aiextract.service.ImGatewayService;
 import com.aiextract.service.QueryGate;
-import com.aiextract.util.JwtUtil;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,20 +38,7 @@ import java.util.UUID;
 public class ImController {
 
     private final ImGatewayService imGatewayService;
-    private final JwtUtil jwtUtil;
     private final QueryGate queryGate;
-
-    private String getToken() {
-        return (String) org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication().getCredentials();
-    }
-
-    /**
-     * 从JWT Token中提取企业ID
-     */
-    private UUID extractCompanyId() {
-        return jwtUtil.getCompanyIdFromToken(getToken());
-    }
 
     /**
      * 接收IM平台消息回调（无需JWT鉴权）
@@ -80,7 +66,7 @@ public class ImController {
      */
     @GetMapping("/channels")
     public ApiResponse<List<ImChannelResponse>> getChannels() {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         List<ImChannelResponse> channels = imGatewayService.getChannels(companyId);
         return ApiResponse.success(channels);
     }
@@ -95,7 +81,7 @@ public class ImController {
     @PostMapping("/channels")
     public ApiResponse<ImChannelResponse> createChannel(
             @Valid @RequestBody ImChannelRequest request) {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         ImChannelResponse response = imGatewayService.createChannel(companyId, request);
         return ApiResponse.success(response);
     }

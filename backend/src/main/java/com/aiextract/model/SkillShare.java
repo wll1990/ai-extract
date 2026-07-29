@@ -32,8 +32,11 @@ import java.util.UUID;
 @AllArgsConstructor
 public class SkillShare {
 
-    /** 对外分享渠道 */
+    /** 对外分享渠道 — 经典 H5 落地页 */
     public static final String CHANNEL_PUBLIC = "public";
+
+    /** 对外分享渠道 — 名片式落地页 */
+    public static final String CHANNEL_CARD = "card";
 
     /** 对内分享渠道 */
     public static final String CHANNEL_INTERNAL = "internal";
@@ -45,13 +48,21 @@ public class SkillShare {
     private UUID id;
 
     /**
-     * 所属AI分身ID
+     * 所属AI分身ID（个体分身分享使用，与 orgSkillId 互斥）
      */
-    @Column(name = "skill_id", nullable = false)
+    @Column(name = "skill_id")
     private UUID skillId;
 
     /**
-     * 分身所属企业ID（建码时经 skill→space→user 解析冗余，归因用）。
+     * 所属组织分身ID（组织分身分享使用，与 skillId 互斥）
+     * @since 2026-07-28 V32 迁移
+     */
+    @Column(name = "org_skill_id")
+    private UUID orgSkillId;
+
+    /**
+     * 分身所属企业ID（建码时解析冗余，归因用）。
+     * 个体分身：经 skill→space→user 解析；组织分身：直接读 organization_skill.company_id。
      * C 端分身分享时为 null。
      */
     @Column(name = "company_id")

@@ -11,7 +11,7 @@ export function SceneBarChart({ data }: Props) {
   if (!data || data.length === 0) return <EmptyPlaceholder label="暂无场景数据" />;
 
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm">
       <h3 className="mb-3 text-sm font-semibold">📊 场景提问 TOP5</h3>
       <div style={{ height: 220 }}>
         <ResponsiveBar
@@ -42,7 +42,7 @@ export function SceneBarChart({ data }: Props) {
 
 function EmptyPlaceholder({ label }: { label: string }) {
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[220px]">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[220px]">
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   );

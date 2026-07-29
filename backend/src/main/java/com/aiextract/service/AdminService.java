@@ -11,14 +11,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-/**
- * @author AI Extract Team
- */
 @RequiredArgsConstructor
 public class AdminService {
 
@@ -28,33 +27,68 @@ public class AdminService {
     private final SkillRepository skillRepository;
     private final SkillMaterialRepository materialRepository;
     private final UserRepository userRepository;
+    private final AdminInsightService insightService;
+    private final ConversationStatsRepository convStatsRepository;
+    private final CompanyRepository companyRepository;
 
-    public Map<String, Object> getDashboard() {
+    /** 企业范围 — 一次 DB 计算，getDashboard 和 getDashboardV2 共享 */
+    private record CompanyScope(List<UUID> spaceIds, List<UUID> skillIds) {
+        boolean isScoped() { return spaceIds != null; }
+        boolean hasSkills() { return skillIds != null && !skillIds.isEmpty(); }
+    }
+
+    private CompanyScope resolveCompanyScope(UUID companyId) {
+        if (companyId == null) return new CompanyScope(null, null);
+        List<UUID> spaceIds = userRepository.findByCompanyId(companyId).stream()
+                .flatMap(u -> spaceRepository.findByUserId(u.getId()).stream())
+                .map(Space::getId).toList();
+        List<UUID> skillIds = spaceIds.isEmpty()
+                ? List.of()
+                : skillRepository.findBySpaceIdIn(spaceIds).stream().map(Skill::getId).toList();
+        return new CompanyScope(spaceIds, skillIds);
+    }
+
+    /**
+     * 工作台数据总览。companyId 非 null 时按企业隔离统计。
+     */
+    public Map<String, Object> getDashboard(UUID companyId) {
+        CompanyScope scope = resolveCompanyScope(companyId);
         Map<String, Object> data = new LinkedHashMap<>();
 
-        // 汇总统计
-        data.put("stats", Map.of(
-                "spaceCount", spaceRepository.count(),
-                "reportCount", reportRepository.count(),
-                "grainCount", grainRepository.count(),
-                "materialCount", materialRepository.count()));
-
-        // 待审核 — 批量查 space，避免 N+1
-        List<Skill> reviewingSkills = skillRepository.findByStatus("reviewing");
-        Map<UUID, Space> spaceMap = Collections.emptyMap();
-        if (!reviewingSkills.isEmpty()) {
-            List<UUID> spaceIds = reviewingSkills.stream().map(Skill::getSpaceId).distinct().toList();
-            spaceMap = spaceRepository.findAllById(spaceIds).stream()
-                    .collect(Collectors.toMap(Space::getId, s -> s, (a, b) -> a));
+        // 汇总统计 — DB 层聚合
+        if (scope.isScoped() && !scope.spaceIds.isEmpty()) {
+            long grainTotal = grainRepository.countBySpaceIdIn(scope.spaceIds).stream()
+                    .mapToLong(row -> (Long) row[1]).sum();
+            long reportTotal = reportRepository.countBySpaceIdIn(scope.spaceIds).stream()
+                    .mapToLong(row -> (Long) row[1]).sum();
+            long materialTotal = scope.hasSkills() ? materialRepository.countBySkillIdIn(scope.skillIds) : 0;
+            data.put("stats", Map.of(
+                    "spaceCount", scope.spaceIds.size(),
+                    "reportCount", reportTotal,
+                    "grainCount", grainTotal,
+                    "materialCount", materialTotal));
+        } else {
+            data.put("stats", Map.of(
+                    "spaceCount", spaceRepository.count(),
+                    "reportCount", reportRepository.count(),
+                    "grainCount", grainRepository.count(),
+                    "materialCount", materialRepository.count()));
         }
+
+        // 待审核
+        List<Skill> reviewingSkills = scope.isScoped()
+                ? skillRepository.findByStatusAndSpaceIdIn("reviewing", scope.spaceIds)
+                : skillRepository.findByStatus("reviewing");
+        Map<UUID, Space> spaceMap = reviewingSkills.isEmpty() ? Collections.emptyMap()
+                : spaceRepository.findAllById(reviewingSkills.stream().map(Skill::getSpaceId).distinct().toList()).stream()
+                    .collect(Collectors.toMap(Space::getId, s -> s, (a, b) -> a));
         List<Map<String, Object>> pending = new ArrayList<>();
         for (Skill sk : reviewingSkills) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("type", "skill_review");
             item.put("skillId", sk.getId().toString());
-            String name = sk.getOwnerName() != null ? sk.getOwnerName()
-                    : sk.getDisplayName() != null ? sk.getDisplayName() : "未命名";
-            item.put("name", name);
+            item.put("name", sk.getOwnerName() != null ? sk.getOwnerName()
+                    : sk.getDisplayName() != null ? sk.getDisplayName() : "未命名");
             item.put("status", "待审核");
             Space sp = spaceMap.get(sk.getSpaceId());
             item.put("spaceId", sp != null ? sp.getId().toString() : "");
@@ -62,8 +96,10 @@ public class AdminService {
         }
 
         // 素材处理中
-        List<SkillMaterial> processingMaterials =
-                materialRepository.findByStatusIn(List.of("cleaning", "analyzing"));
+        List<SkillMaterial> processingMaterials = scope.hasSkills()
+                ? materialRepository.findByStatusInAndSkillIdIn(List.of("cleaning", "analyzing"), scope.skillIds)
+                : scope.isScoped() ? List.of()
+                : materialRepository.findByStatusIn(List.of("cleaning", "analyzing"));
         if (!processingMaterials.isEmpty()) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("type", "material_processing");
@@ -73,10 +109,10 @@ public class AdminService {
         }
         data.put("pending", pending);
 
-        // 最近活动 — 批量查 space + user，避免 N+1
-        List<Report> recentReports = reportRepository
-                .findAll(PageRequest.of(0, 5, Sort.by("createdAt").descending()))
-                .getContent();
+        // 最近活动
+        List<Report> recentReports = scope.isScoped()
+                ? reportRepository.findBySpaceIdInOrderByCreatedAtDesc(scope.spaceIds, PageRequest.of(0, 5))
+                : reportRepository.findAll(PageRequest.of(0, 5, Sort.by("createdAt").descending())).getContent();
         Map<UUID, Space> recentSpaceMap = Collections.emptyMap();
         Map<UUID, String> userNameMap = Collections.emptyMap();
         if (!recentReports.isEmpty()) {
@@ -108,18 +144,24 @@ public class AdminService {
         return data;
     }
 
-    /** 场景覆盖 — 之前散落在 AdminController */
-    public Map<String, Object> getSceneCoverage() {
-        List<com.aiextract.model.ExperienceGrain> allGrains = grainRepository.findAll();
+    /** 场景覆盖 — 按企业范围过滤，DB 层过滤替代全表扫描 */
+    public Map<String, Object> getSceneCoverage(UUID companyId) {
+        List<com.aiextract.model.ExperienceGrain> allGrains;
+        if (companyId != null) {
+            List<UUID> spaceIds = userRepository.findByCompanyId(companyId).stream()
+                    .flatMap(u -> spaceRepository.findByUserId(u.getId()).stream())
+                    .map(Space::getId).collect(Collectors.toList());
+            allGrains = spaceIds.isEmpty() ? List.of() : grainRepository.findAllBySpaceIdIn(spaceIds);
+        } else {
+            allGrains = grainRepository.findAll();
+        }
         Map<String, List<com.aiextract.model.ExperienceGrain>> grouped = allGrains.stream()
                 .filter(g -> g.getSceneTag() != null)
                 .collect(Collectors.groupingBy(com.aiextract.model.ExperienceGrain::getSceneTag));
 
-        // 框架标签 + 实际数据标签
         Set<String> allTags = new LinkedHashSet<>(com.aiextract.common.StatusConstants.SCENE_TAGS);
         allTags.addAll(grouped.keySet());
 
-        // 批量查报告评分，避免 N+1
         Set<UUID> allReportIds = allGrains.stream()
                 .map(com.aiextract.model.ExperienceGrain::getReportId).filter(Objects::nonNull)
                 .collect(Collectors.toSet());
@@ -151,5 +193,104 @@ public class AdminService {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("scenes", scenes);
         return result;
+    }
+
+    /** 工作台 v2 — 运营指挥中心。共享 CompanyScope 避免重复查询。 */
+    public Map<String, Object> getDashboardV2(UUID companyId) {
+        CompanyScope scope = resolveCompanyScope(companyId);
+        Map<String, Object> data = new LinkedHashMap<>();
+
+        // 1. 基础统计（复用 getDashboard，scope 已缓存不再重复计算）
+        Map<String, Object> base = getDashboard(companyId);
+        data.put("stats", base.get("stats"));
+        data.put("pending", base.get("pending"));
+        data.put("recent", base.get("recent"));
+
+        // 2. 分身健康度
+        Map<String, Object> overview = insightService.getGlobalOverview(companyId);
+        data.put("skills", overview.getOrDefault("skills", List.of()));
+        data.put("satisfactionRate", overview.getOrDefault("satisfactionRate", 0));
+        data.put("hitRate", overview.getOrDefault("hitRate", 0));
+        data.put("totalConversations", overview.getOrDefault("totalConversations", 0));
+
+        // 3. 今日活动 + 趋势 + 管道漏斗 + 团队活跃（共用 scope.skillIds）
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        List<UUID> skillIdsForQuery = scope.isScoped()
+                ? (scope.hasSkills() ? scope.skillIds : List.of())
+                : skillRepository.findByStatus("published").stream().map(Skill::getId).toList();
+
+        // 7 天趋势
+        LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
+        List<Map<String, Object>> trend = new ArrayList<>();
+        List<Object[]> trendRows = skillIdsForQuery.isEmpty()
+                ? List.of()
+                : convStatsRepository.dailyTrend(skillIdsForQuery, weekStart);
+        for (Object[] tr : trendRows) {
+            trend.add(Map.of("date", tr[0].toString().substring(0, 10), "count", (Long) tr[1]));
+        }
+        data.put("trend", trend);
+
+        // 企业排行（仅 super_admin，companyId == null）
+        if (companyId == null) {
+            List<Map<String, Object>> enterprises = new ArrayList<>();
+            var companyUserRows = userRepository.findAll().stream()
+                    .filter(u -> u.getCompanyId() != null)
+                    .collect(Collectors.groupingBy(
+                            com.aiextract.model.User::getCompanyId, Collectors.counting()))
+                    .entrySet().stream()
+                    .sorted(Map.Entry.<UUID, Long>comparingByValue().reversed())
+                    .limit(10).toList();
+            Map<UUID, String> companyNames = new HashMap<>();
+            companyRepository.findAllById(companyUserRows.stream().map(Map.Entry::getKey).toList())
+                    .forEach(c -> companyNames.put(c.getId(), c.getName()));
+            for (var entry : companyUserRows) {
+                Map<String, Object> e = new LinkedHashMap<>();
+                e.put("companyId", entry.getKey().toString());
+                e.put("companyName", companyNames.getOrDefault(entry.getKey(), "未知"));
+                e.put("userCount", entry.getValue());
+                enterprises.add(e);
+            }
+            data.put("enterprises", enterprises);
+            data.put("enterpriseCount", enterprises.size());
+        }
+        if (!skillIdsForQuery.isEmpty()) {
+            List<Object[]> todayRows = convStatsRepository.todayActivity(skillIdsForQuery, todayStart);
+            if (!todayRows.isEmpty() && todayRows.get(0) != null) {
+                Object[] row = todayRows.get(0);
+                data.put("today", Map.of(
+                        "conversations", row[0] != null ? (Long) row[0] : 0,
+                        "users", row[1] != null ? (Long) row[1] : 0));
+            } else {
+                data.put("today", Map.of("conversations", 0, "users", 0));
+            }
+
+            List<Object[]> funnelRows = materialRepository.pipelineFunnel(skillIdsForQuery);
+            Map<String, Long> pipeline = new LinkedHashMap<>();
+            for (Object[] fr : funnelRows) pipeline.put((String) fr[0], (Long) fr[1]);
+            data.put("pipeline", pipeline);
+
+            List<Object[]> userRows = convStatsRepository.userActivity(skillIdsForQuery, weekStart);
+            List<Map<String, Object>> activeUsers = new ArrayList<>();
+            if (!userRows.isEmpty()) {
+                List<UUID> userIds = userRows.stream().map(r -> (UUID) r[0]).distinct().toList();
+                Map<UUID, String> nameMap = new HashMap<>();
+                userRepository.findAllById(userIds).forEach(u -> nameMap.put(u.getId(), u.getName()));
+                for (Object[] ur : userRows) {
+                    Map<String, Object> u = new LinkedHashMap<>();
+                    UUID uid = (UUID) ur[0];
+                    u.put("userId", uid.toString());
+                    u.put("name", nameMap.getOrDefault(uid, "未知"));
+                    u.put("conversations", (Long) ur[1]);
+                    activeUsers.add(u);
+                }
+            }
+            data.put("activeUsers", activeUsers);
+        } else {
+            data.put("today", Map.of("conversations", 0, "users", 0));
+            data.put("pipeline", Map.of());
+            data.put("activeUsers", List.of());
+        }
+
+        return data;
     }
 }

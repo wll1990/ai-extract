@@ -42,6 +42,18 @@ export interface SkillInfo {
   openingMessage?: string;
   domain?: string;
   stats?: SkillStats;
+  /** 分身类型：individual=个人, organization=组织 */
+  type?: 'individual' | 'organization';
+  /** 对外展示名称（组织分身使用） */
+  displayName?: string;
+  /** 组织分身的成员数 */
+  memberCount?: number;
+  /** 组织分身成员列表 */
+  members?: Array<{
+    id: string; displayName: string; ownerName: string;
+    ownerTitle: string; avatarUrl?: string; department?: string;
+    domain?: string; conversationCount?: number;
+  }>;
 }
 
 /** 获取分身列表（分页，可选状态过滤 + userId 过滤"我的分身"） */

@@ -3,18 +3,22 @@ package com.aiextract.controller;
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.SseAdapter;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.*;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Skill;
+import com.aiextract.model.SkillShare;
 import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.service.ChatStreamService;
 import com.aiextract.service.ConversationService;
 import com.aiextract.service.GrainRecommendationService;
+import com.aiextract.service.OrganizationSkillService;
 import com.aiextract.service.PracticeDemoService;
 import com.aiextract.service.QueryGate;
 import com.aiextract.service.SkillService;
+import com.aiextract.util.JsonUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -52,6 +56,7 @@ public class SkillController {
     private final ExperienceGrainRepository grainRepository;
     private final PracticeDemoService practiceDemoService;
     private final QueryGate queryGate;
+    private final OrganizationSkillService orgSkillService;
 
     /**
      * 从 HttpServletRequest 提取客户端 IP。
@@ -160,7 +165,7 @@ public class SkillController {
 
     @PostMapping(value = "/enterprise/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter enterpriseChat(@Valid @RequestBody SkillChatRequest request) {
-        UUID companyId = jwtUtil.getCompanyIdFromToken(getToken());
+        UUID companyId = TokenContext.getCompanyId();
         return SseAdapter.fromFlux(chatStreamService.enterpriseChat(request, companyId));
     }
 
@@ -191,7 +196,7 @@ public class SkillController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) UUID userId) {
-        UUID companyId = jwtUtil.getCompanyIdFromToken(getToken());
+        UUID companyId = TokenContext.getCompanyId();
         String role = extractRole();
         return ApiResponse.success(skillService.listAllSkills(page, size, status, userId, companyId, role));
     }
@@ -202,7 +207,18 @@ public class SkillController {
      */
     @GetMapping("/{skillId}/detail")
     public ApiResponse<Map<String, Object>> getSkillDetail(@PathVariable String skillId) {
-        return ApiResponse.success(skillService.getSkillDetail(skillId));
+        try {
+            return ApiResponse.success(skillService.getSkillDetail(skillId));
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == 404) {
+                try {
+                    return ApiResponse.success(orgSkillService.getDetail(UUID.fromString(skillId)));
+                } catch (IllegalArgumentException iae) {
+                    throw e; // 非法 UUID → 维持原始 404
+                }
+            }
+            throw e;
+        }
     }
 
     /**
@@ -254,8 +270,10 @@ public class SkillController {
      * 分身分享：生成或获取已有分享（分身所有者/管理员可用）
      */
     @PostMapping("/{skillId}/share")
-    public ApiResponse<Map<String, Object>> getOrCreateShare(@PathVariable UUID skillId) {
-        var share = shareService.getOrCreateShare(skillId, extractUserId());
+    public ApiResponse<Map<String, Object>> getOrCreateShare(@PathVariable UUID skillId,
+            @RequestBody(required = false) Map<String, String> body) {
+        String channel = body != null ? body.getOrDefault("channel", SkillShare.CHANNEL_PUBLIC) : SkillShare.CHANNEL_PUBLIC;
+        var share = shareService.getOrCreateShare(skillId, extractUserId(), channel);
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("skillId", share.getSkillId().toString());
         m.put("shareCode", share.getShareCode());
@@ -307,14 +325,17 @@ public class SkillController {
             return ApiResponse.success(practiceDemoService.generateRecommendedQuestions(sceneTag));
         }
         Skill skill = skillRepository.findById(skillId).orElse(null);
-        Set<String> all = new LinkedHashSet<>();
         if (skill != null) {
-            grainRepository.findBySpaceId(skill.getSpaceId()).stream()
-                    .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
-                    .map(g -> g.getSceneTag()).distinct()
-                    .forEach(tag -> all.addAll(practiceDemoService.generateRecommendedQuestions(tag)));
+            // 优先读缓存（发布时 @Async 预生成的 JSONB 数组）
+            List<String> cached = JsonUtil.parseStringList(skill.getRecommendedQuestions());
+            if (!cached.isEmpty()) {
+                return ApiResponse.success(cached);
+            }
+            // 缓存缺失 → 回退 Service 层模板生成
+            return ApiResponse.success(practiceDemoService.generateRecommendedQuestionsForSkill(skillId));
         }
-        return ApiResponse.success(new ArrayList<>(all));
+        // 组织分身 fallback — 聚合所有成员的场景标签
+        return ApiResponse.success(orgSkillService.getRecommendedQuestionsFallback(skillId));
     }
 
     /**
@@ -327,7 +348,18 @@ public class SkillController {
      */
     @GetMapping("/{skillId}/scene-tags")
     public ApiResponse<List<Map<String, Object>>> getSceneTags(@PathVariable String skillId) {
-        return ApiResponse.success(skillService.getSceneTags(skillId));
+        try {
+            return ApiResponse.success(skillService.getSceneTags(skillId));
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == 404) {
+                try {
+                    return ApiResponse.success(orgSkillService.getSceneTags(skillId));
+                } catch (Exception ignored) {
+                    throw e;
+                }
+            }
+            throw e;
+        }
     }
 
     /**
@@ -340,7 +372,18 @@ public class SkillController {
      */
     @GetMapping("/{skillId}/practice-scenes")
     public ApiResponse<List<Map<String, Object>>> getPracticeScenes(@PathVariable String skillId) {
-        return ApiResponse.success(skillService.getPracticeScenes(skillId));
+        try {
+            return ApiResponse.success(skillService.getPracticeScenes(skillId));
+        } catch (BusinessException e) {
+            if (e.getErrorCode() == 404) {
+                try {
+                    return ApiResponse.success(orgSkillService.getPracticeScenes(skillId));
+                } catch (Exception ignored) {
+                    throw e;
+                }
+            }
+            throw e;
+        }
     }
 
     /**
@@ -412,4 +455,5 @@ public class SkillController {
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         return ApiResponse.success(skillService.uploadAvatar(skillId, file));
     }
+
 }

@@ -1,6 +1,7 @@
 package com.aiextract.repository;
 
 import com.aiextract.model.GrainRetrieveLog;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -31,5 +32,7 @@ public interface GrainRetrieveLogRepository extends JpaRepository<GrainRetrieveL
     @Query(value = "DELETE FROM grain_retrieve_log WHERE created_at < NOW() - INTERVAL '30 days'", nativeQuery = true)
     int deleteOlderThan30Days();
 
+    /** 按颗粒 ID 查询检索历史，按时间降序 */
+    List<GrainRetrieveLog> findByGrainIdOrderByCreatedAtDesc(UUID grainId, Pageable pageable);
 
 }

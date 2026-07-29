@@ -5,7 +5,7 @@ import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
-import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { TrustBadge, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -47,6 +47,10 @@ export default function MobileChatShell({
   practiceSceneTag, practiceKey, onPickScene, abortRef, authToken, onPracticeLimit, practiceHint,
   isLimitReached, onRegisterPrompt,
 }: Props) {
+  const isOrg = info.skillType === 'organization';
+  const orgMembers = info.members || [];
+  const previewMembers = orgMembers.slice(0, 4);
+  const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'];
   const name = info.ownerName || '销冠';
   const initial = name.charAt(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -68,6 +72,7 @@ export default function MobileChatShell({
   const visibleScenes = scenesExpanded ? sceneTags : sceneTags.slice(0, INITIAL_SCENE_COUNT);
 
   const [traceGrainIds, setTraceGrainIds] = useState('');
+  const [traceAvgSim, setTraceAvgSim] = useState<number>(0);
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
   useEffect(() => {
@@ -89,13 +94,39 @@ export default function MobileChatShell({
             className="flex h-[34px] w-[34px] items-center justify-center rounded-md text-foreground active:bg-surface">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>
           </button>
-          <div className="relative">
-            <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={30} />
-            <span className="absolute -bottom-px -right-px h-[9px] w-[9px] rounded-full border-2 border-white bg-success" />
-          </div>
+          {isOrg ? (
+            <div className="flex items-center gap-0.5">
+              {previewMembers.length > 0 ? previewMembers.map((m, i) => (
+                m.avatarUrl ? (
+                  <img key={m.id} src={m.avatarUrl} alt={m.ownerName}
+                    className="h-[30px] w-[30px] rounded-full border-2 border-white object-cover"
+                    style={{ marginLeft: i > 0 ? -6 : 0, zIndex: 4 - i }} />
+                ) : (
+                  <div key={m.id} className="h-[30px] w-[30px] rounded-full border-2 border-white flex items-center justify-center text-white text-xs font-bold"
+                    style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], marginLeft: i > 0 ? -6 : 0, zIndex: 4 - i }}>
+                    {(m.ownerName || '?')[0]}
+                  </div>
+                )
+              )) : (
+                <span className="text-xl">🏢</span>
+              )}
+              {orgMembers.length > 4 && (
+                <div className="h-[30px] w-[30px] rounded-full border-2 border-white bg-white/20 flex items-center justify-center text-muted-foreground text-[10px] font-medium" style={{ marginLeft: -6 }}>
+                  +{orgMembers.length - 4}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="relative">
+              <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={30} />
+              <span className="absolute -bottom-px -right-px h-[9px] w-[9px] rounded-full border-2 border-white bg-success" />
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold leading-tight text-foreground">{name}</div>
-            <div className="truncate text-[11px] text-muted-foreground">{info.ownerTitle || 'AI 分身'}</div>
+            <div className="truncate text-[11px] text-muted-foreground">
+              {isOrg ? `${orgMembers.length} 位成员` : (info.ownerTitle || 'AI 分身')}
+            </div>
           </div>
           {remainingLabel && (
             <span className={`flex-none rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -143,9 +174,33 @@ export default function MobileChatShell({
                 boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
               }}>
               <div className="flex items-center gap-4">
-                <div className="w-[170px] shrink-0">
-                  <PortraitCard src={info.avatarUrl || undefined} alt={name} />
-                </div>
+                {isOrg ? (
+                  <div className="w-[170px] shrink-0 flex flex-wrap justify-center gap-1">
+                    {previewMembers.length > 0 ? previewMembers.map((m, i) => (
+                      m.avatarUrl ? (
+                        <img key={m.id} src={m.avatarUrl} alt={m.ownerName}
+                          className="h-[50px] w-[50px] rounded-full border-2 border-white object-cover shadow-sm"
+                          style={{ marginLeft: i > 0 ? -10 : 0 }} />
+                      ) : (
+                        <div key={m.id} className="h-[50px] w-[50px] rounded-full border-2 border-white flex items-center justify-center text-white text-lg font-bold shadow-sm"
+                          style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], marginLeft: i > 0 ? -10 : 0 }}>
+                          {(m.ownerName || '?')[0]}
+                        </div>
+                      )
+                    )) : (
+                      <span className="text-4xl">🏢</span>
+                    )}
+                    {orgMembers.length > 4 && (
+                      <div className="h-[50px] w-[50px] rounded-full border-2 border-white bg-white/20 flex items-center justify-center text-muted-foreground text-xs font-medium" style={{ marginLeft: -10 }}>
+                        +{orgMembers.length - 4}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="w-[170px] shrink-0">
+                    <PortraitCard src={info.avatarUrl || undefined} alt={name} />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <h3 className="text-[20px] font-bold text-foreground leading-tight">
                     {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
@@ -244,9 +299,33 @@ export default function MobileChatShell({
                     }}>
                     {/* 头部：左头像 + 右文案 */}
                     <div className="flex items-center gap-4">
-                      <div className="w-[170px] shrink-0">
-                        <PortraitCard src={info.avatarUrl || undefined} alt={name} />
-                      </div>
+                      {isOrg ? (
+                        <div className="w-[170px] shrink-0 flex flex-wrap justify-center gap-1">
+                          {previewMembers.length > 0 ? previewMembers.map((m, i) => (
+                            m.avatarUrl ? (
+                              <img key={m.id} src={m.avatarUrl} alt={m.ownerName}
+                                className="h-[50px] w-[50px] rounded-full border-2 border-white object-cover shadow-sm"
+                                style={{ marginLeft: i > 0 ? -10 : 0 }} />
+                            ) : (
+                              <div key={m.id} className="h-[50px] w-[50px] rounded-full border-2 border-white flex items-center justify-center text-white text-lg font-bold shadow-sm"
+                                style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], marginLeft: i > 0 ? -10 : 0 }}>
+                                {(m.ownerName || '?')[0]}
+                              </div>
+                            )
+                          )) : (
+                            <span className="text-4xl">🏢</span>
+                          )}
+                          {orgMembers.length > 4 && (
+                            <div className="h-[50px] w-[50px] rounded-full border-2 border-white bg-white/20 flex items-center justify-center text-muted-foreground text-xs font-medium" style={{ marginLeft: -10 }}>
+                              +{orgMembers.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-[170px] shrink-0">
+                          <PortraitCard src={info.avatarUrl || undefined} alt={name} />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <h3 className="text-[20px] font-bold text-foreground leading-tight">
                           {TALK_NAME_CARD.greeting}<span className="text-[#2563EB]">{name}</span><span className="text-[14px] ml-0.5">✨</span>
@@ -398,7 +477,7 @@ export default function MobileChatShell({
                             </span>
                           )}
                           {m.grainIds && m.grainCount && (
-                            <button onClick={() => setTraceGrainIds(m.grainIds!)}
+                            <button onClick={() => { setTraceGrainIds(m.grainIds!); setTraceAvgSim(Number(m.avgSimilarity) || 0); }}
                               className="text-[11px] text-muted-foreground hover:text-[#2147ff] transition-colors">
                               溯源 · {m.grainCount} 条 →
                             </button>
@@ -497,7 +576,7 @@ export default function MobileChatShell({
           </div>
         </>
       )}
-      <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
+      <TraceabilityDrawer grainIds={traceGrainIds} avgSimilarity={traceAvgSim} open={!!traceGrainIds} onClose={() => { setTraceGrainIds(''); setTraceAvgSim(0); }} />
     </div>
   );
 }

@@ -24,7 +24,7 @@ echo "=== 启动后端 (prod) :8080 ==="
 nohup java -Xms256m -Xmx512m -jar "$JAR" > "$DIR/logs/backend.log" 2>&1 &
 echo $! > "$DIR/.backend.pid"
 sleep 15
-curl -s -o /dev/null -w "  后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyId":"c0000000-0000-0000-0000-000000000001"}'
+curl -s -o /dev/null -w "  后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyCode":"DEFAULT01"}'
 
 echo "=== 打包前端管理后台 ==="
 cd "$DIR/frontend" && npm run build 2>&1 | tail -1
@@ -33,12 +33,12 @@ echo "=== 启动前端管理后台 (prod) :3000 ==="
 nohup npx next start -p 3000 "$DIR/frontend" > "$DIR/logs/frontend.log" 2>&1 &
 echo $! > "$DIR/.frontend.pid"
 
-echo "=== 打包企业端 ==="
-cd "$DIR/enterprise" && npm run build 2>&1 | tail -1
+echo "=== 打包平台端 ==="
+cd "$DIR/platform" && npm run build 2>&1 | tail -1
 
-echo "=== 启动企业端 (prod) :3001 ==="
-nohup npx next start -p 3001 "$DIR/enterprise" > "$DIR/logs/enterprise.log" 2>&1 &
-echo $! > "$DIR/.enterprise.pid"
+echo "=== 启动平台端 (prod) :3001 ==="
+nohup npx next start -p 3001 "$DIR/platform" > "$DIR/logs/platform.log" 2>&1 &
+echo $! > "$DIR/.platform.pid"
 
 sleep 3 && echo "  管理后台: http://localhost:3000"
 echo "  企业端: http://localhost:3001"
@@ -46,6 +46,6 @@ echo "  企业端: http://localhost:3001"
 echo "=== 完成 ==="
 echo "后端日志: $DIR/logs/backend.log"
 echo "管理后台日志: $DIR/logs/frontend.log"
-echo "企业端日志: $DIR/logs/enterprise.log"
+echo "平台端日志: $DIR/logs/platform.log"
 echo "文件解析日志: $DIR/logs/file-parser.log"
-echo "停止服务: kill \$(cat $DIR/.backend.pid) \$(cat $DIR/.frontend.pid) \$(cat $DIR/.enterprise.pid) \$(cat $DIR/.file-parser.pid)"
+echo "停止服务: kill \$(cat $DIR/.backend.pid) \$(cat $DIR/.frontend.pid) \$(cat $DIR/.platform.pid) \$(cat $DIR/.file-parser.pid)"

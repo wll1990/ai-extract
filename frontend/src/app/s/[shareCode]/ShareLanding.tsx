@@ -53,15 +53,43 @@ const MODE_CARDS = [
  */
 export default function ShareLanding({ info, starting, onStart, onLogin }: Props) {
   const name = info.ownerName || '销冠';
+  const isOrg = info.skillType === 'organization';
+  const isCard = info.shareChannel === 'card';
+  const orgMembers = info.members || [];
+  // Show up to 4 member avatars for org skills
+  const previewMembers = orgMembers.slice(0, 4);
+  const AVATAR_COLORS = ['#6366f1', '#8b5cf6', '#a855f7', '#d946ef'];
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-bg">
       {/* 渐变 hero */}
-      <div className="relative bg-[linear-gradient(135deg,#06b6d4_0%,#3b82f6_100%)] pb-16 pt-12">
+      <div className={`relative pb-16 pt-12 ${isCard ? 'bg-[linear-gradient(135deg,#f59e0b_0%,#ef4444_100%)]' : isOrg ? 'bg-[linear-gradient(135deg,#6366f1_0%,#a855f7_100%)]' : 'bg-[linear-gradient(135deg,#06b6d4_0%,#3b82f6_100%)]'}`}>
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_60%_at_80%_0%,rgba(255,255,255,0.22),transparent_60%)]" />
         <div className="relative px-6 text-center">
           <div className="relative mx-auto h-[88px] w-[88px]">
-            {info.avatarUrl ? (
+            {isOrg ? (
+              <div className="flex items-center justify-center gap-0.5">
+                {previewMembers.length > 0 ? previewMembers.map((m, i) => (
+                  m.avatarUrl ? (
+                    <img key={m.id} src={m.avatarUrl} alt={m.ownerName}
+                      className="h-12 w-12 rounded-full border-2 border-white object-cover"
+                      style={{ marginLeft: i > 0 ? -8 : 0, zIndex: 4 - i }} />
+                  ) : (
+                    <div key={m.id} className="h-12 w-12 rounded-full border-2 border-white flex items-center justify-center text-white text-sm font-bold"
+                      style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length], marginLeft: i > 0 ? -8 : 0, zIndex: 4 - i }}>
+                      {(m.ownerName || '?')[0]}
+                    </div>
+                  )
+                )) : (
+                  <span className="text-5xl">🏢</span>
+                )}
+                {orgMembers.length > 4 && (
+                  <div className="h-12 w-12 rounded-full border-2 border-white bg-white/20 flex items-center justify-center text-white text-xs font-medium" style={{ marginLeft: -8 }}>
+                    +{orgMembers.length - 4}
+                  </div>
+                )}
+              </div>
+            ) : info.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={info.avatarUrl} alt={name}
                 className="h-[88px] w-[88px] rounded-full border-[3px] border-white/95 object-cover shadow-float" />

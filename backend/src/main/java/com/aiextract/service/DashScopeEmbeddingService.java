@@ -186,14 +186,15 @@ public class DashScopeEmbeddingService {
             "UPDATE experience_grain SET embedding = ?::vector WHERE id = ?::uuid", batchArgs);
     }
 
-    /** 颗粒文本拼接（用于 embedding 回填） */
+    /** 颗粒文本拼接（用于 embedding） — P0-3: 加入 applicableCondition */
     public String grainToText(ExperienceGrain g) {
         return String.join(" ",
             g.getSceneTag() != null ? g.getSceneTag() : "",
             g.getSceneDescription() != null ? g.getSceneDescription() : "",
             g.getExpertThought() != null ? g.getExpertThought() : "",
             g.getStandardScript() != null ? g.getStandardScript() : "",
-            g.getCommonMistakes() != null ? g.getCommonMistakes() : ""
+            g.getCommonMistakes() != null ? g.getCommonMistakes() : "",
+            g.getApplicableCondition() != null ? g.getApplicableCondition() : ""
         );
     }
 }

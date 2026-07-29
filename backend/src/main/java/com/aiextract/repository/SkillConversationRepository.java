@@ -36,4 +36,9 @@ public interface SkillConversationRepository extends JpaRepository<SkillConversa
     List<SkillConversation> findBySkillIdAndUserIdAndModeOrderByUpdatedAtDesc(
         UUID skillId, UUID userId, String mode);
 
+    /**
+     * 按技能 ID 列表分页查询，按更新时间降序（企业数据范围过滤）。
+     */
+    Page<SkillConversation> findBySkillIdInOrderByUpdatedAtDesc(List<UUID> skillIds, Pageable pageable);
+
 }

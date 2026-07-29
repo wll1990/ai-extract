@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>溯源抽屉 V2 设计预览</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; }
+  .container { display: flex; gap: 24px; padding: 24px; max-width: 960px; margin: 0 auto; }
+  .col { flex: 1; }
+  .col-title { font-size: 14px; font-weight: 600; color: #64748b; margin-bottom: 12px; text-align: center; }
+
+  /* ====== 当前版 ====== */
+  .old-drawer { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow: hidden; }
+
+  .old-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid #e5e7eb; }
+  .old-header span { font-size: 14px; font-weight: 600; color: #1e293b; }
+
+  .old-body { padding: 12px 16px; }
+  .old-card { background: #f8fafc; border-radius: 10px; padding: 14px; margin-bottom: 10px; border: 1px solid #e5e7eb; }
+
+  .old-card-title { display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .old-card-title span { font-size: 12px; font-weight: 600; color: #1e293b; }
+  .old-card-title .star { font-size: 10px; color: #94a3b8; }
+
+  .old-section { font-size: 11px; color: #64748b; line-height: 1.6; margin-bottom: 6px; }
+  .old-section strong { color: #334155; }
+
+  .old-quote { border-left: 2px solid #f59e0b; padding-left: 8px; margin-bottom: 6px; font-size: 11px; color: #64748b; font-style: italic; position: relative; }
+  .old-quote .copy-btn { position: absolute; right: 0; top: 0; background: none; border: none; cursor: pointer; font-size: 13px; color: #94a3b8; }
+
+  .old-source { font-size: 9px; color: #94a3b8; margin-top: 6px; }
+
+  /* ====== 新版 ====== */
+  .new-drawer { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.1); overflow: hidden; }
+
+  .new-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #f1f5f9; background: #fafbfc; }
+  .new-header .title { font-size: 14px; font-weight: 700; color: #0f172a; }
+  .new-header .count { font-size: 11px; color: #6366f1; background: #eef2ff; padding: 2px 8px; border-radius: 10px; font-weight: 500; }
+
+  .new-body { padding: 16px; }
+  .new-card { border-radius: 14px; overflow: hidden; margin-bottom: 14px; border: 1px solid #e2e8f0; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+
+  /* Card Header */
+  .new-card-hd { padding: 14px 16px; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 1px solid #f1f5f9; }
+  .new-card-hd .scene-info { flex: 1; min-width: 0; }
+  .new-card-hd .scene-tag { font-size: 14px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+  .new-card-hd .scene-badges { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .new-badge { font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+  .new-badge.quality { background: #fef3c7; color: #92400e; }
+  .new-badge.match { background: #dbeafe; color: #1e40af; }
+  .new-badge.level { background: #f3e8ff; color: #6b21a8; }
+
+  /* Section */
+  .new-section { padding: 12px 16px; border-bottom: 1px solid #f8fafc; }
+  .new-section:last-of-type { border-bottom: none; }
+  .new-section-label { font-size: 11px; font-weight: 600; color: #6366f1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+  .new-section-label .dot { width: 6px; height: 6px; border-radius: 50%; background: #6366f1; }
+  .new-section-content { font-size: 13px; color: #334155; line-height: 1.7; }
+
+  /* Quote */
+  .new-quote-wrap { background: #fffbeb; border-radius: 8px; padding: 12px 14px; position: relative; }
+  .new-quote-wrap .quote-mark { position: absolute; left: 10px; top: 6px; font-size: 18px; color: #f59e0b; font-family: Georgia, serif; line-height: 1; }
+  .new-quote-wrap .quote-text { font-size: 13px; color: #78350f; line-height: 1.7; padding-left: 14px; font-style: italic; }
+  .new-quote-wrap .copy-row { display: flex; justify-content: flex-end; margin-top: 8px; }
+  .new-copy-btn { font-size: 11px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 3px 10px; cursor: pointer; color: #92400e; font-weight: 500; }
+  .new-copy-btn:hover { background: #fde68a; }
+
+  /* Mistakes */
+  .new-mistakes-wrap { background: #fef2f2; border-radius: 8px; padding: 12px 14px; }
+  .new-mistakes-wrap .mistakes-text { font-size: 12px; color: #991b1b; line-height: 1.6; }
+
+  /* Source footer */
+  .new-card-ft { padding: 10px 16px; background: #f8fafc; border-top: 1px solid #f1f5f9; display: flex; align-items: center; gap: 8px; }
+  .new-card-ft .src-icon { font-size: 12px; }
+  .new-card-ft .src-text { font-size: 10px; color: #64748b; }
+  .new-card-ft .src-report { font-size: 10px; color: #94a3b8; }
+  .new-card-ft .src-link { margin-left: auto; font-size: 10px; color: #6366f1; text-decoration: none; font-weight: 500; }
+</style>
+</head>
+<body>
+<div style="background:#fff;border-bottom:1px solid #e2e8f0;padding:16px 24px;margin-bottom:24px">
+  <h1 style="font-size:18px;font-weight:700;color:#0f172a">溯源抽屉 TraceabilityDrawer V2</h1>
+  <p style="font-size:12px;color:#64748b;margin-top:4px">左：当前版 &nbsp;|&nbsp; 右：新版 · 蓝色标签 = 新增/改动的元素 &nbsp;|&nbsp; 紫色虚线 = 卡片边界</p>
+</div>
+
+<div class="container">
+  <!-- ==================== 当前版 ==================== -->
+  <div class="col">
+    <div class="col-title">📦 当前版 — 线性堆砌 · 无层次</div>
+    <div class="old-drawer">
+      <div class="old-header">
+        <span>📋 溯源 · 2 条销冠锦囊</span>
+        <button style="background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8">✕</button>
+      </div>
+      <div class="old-body">
+
+        <div class="old-card">
+          <div class="old-card-title">
+            <span>🎯 价格谈判 · 初次拜访</span>
+            <span class="star">⭐ 4.2/5</span>
+          </div>
+          <div class="old-section">
+            <strong>销冠思路：</strong>先判断客户是主动询价还是被动比价。主动询价的客户已有决策压力，不需要急于报价，先确认采购流程和决策人。
+          </div>
+          <div class="old-quote">
+            &ldquo;张总，在给您报价之前，我想先了解一下咱们的采购流程是怎样的？另外这次选型是您一个人决策还是要跟其他部门碰？&rdquo;
+            <button class="copy-btn">📋</button>
+          </div>
+          <div class="old-section">
+            ⚠️ 常见误区：不要在客户第一句询价时就报价，先确认是否有预算和决策权
+          </div>
+          <div class="old-source">📄 张经理访谈记录 · 萃取报告 #12</div>
+        </div>
+
+        <div class="old-card">
+          <div class="old-card-title">
+            <span>🎯 异议处理 · 竞品对比</span>
+            <span class="star">⭐ 3.8/5</span>
+          </div>
+          <div class="old-section">
+            <strong>销冠思路：</strong>当客户提到竞品时不要贬低竞品，先承认竞品某些方面确实不错，再自然地切换到我们能做什么而他们做不到。
+          </div>
+          <div class="old-quote">
+            &ldquo;XX产品在交付速度上确实有优势。但您刚才提到现有客户的续约率问题——这个其实是他们的标准化方案难以覆盖的，我们有专门的大客户定制流程...&rdquo;
+            <button class="copy-btn">📋</button>
+          </div>
+          <div class="old-section">
+            ⚠️ 常见误区：一听到竞品就急着列功能对比表，转移话题到关系或服务上
+          </div>
+          <div class="old-source">📄 李总监周会记录 · 萃取报告 #18</div>
+        </div>
+
+      </div>
+    </div>
+    <div style="font-size:11px;color:#ef4444;margin-top:8px;text-align:center">
+      问题：线性堆砌 · 无层次 · 话术与其他文字同级 · 来源信息被忽略
+    </div>
+  </div>
+
+  <!-- ==================== 新版 ==================== -->
+  <div class="col">
+    <div class="col-title" style="color:#6366f1">✨ 新版 V2 — 主次分明 · 卡片分区</div>
+    <div class="new-drawer">
+      <div class="new-header">
+        <span class="title">📋 溯源</span>
+        <span class="count">2 条经验</span>
+        <button style="background:none;border:none;cursor:pointer;font-size:16px;color:#94a3b8">✕</button>
+      </div>
+      <div class="new-body">
+
+        <!-- Card 1 -->
+        <div class="new-card" style="border-left: 3px solid #6366f1;">
+          <div class="new-card-hd">
+            <div class="scene-info">
+              <div class="scene-tag">价格谈判 · 初次拜访</div>
+              <div class="scene-badges">
+                <span class="new-badge quality">⭐ 4.2/5 质量</span>
+                <span class="new-badge match">📊 85% 匹配</span>
+                <span class="new-badge level" style="background:#dcfce7;color:#166534">🏅 精准匹配</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label"><span class="dot"></span> 销冠怎么想</div>
+            <div class="new-section-content">先判断客户是主动询价还是被动比价。主动询价的客户已有决策压力，不需要急于报价，先确认采购流程和决策人。</div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label"><span class="dot"></span> 可以这样说</div>
+            <div class="new-quote-wrap">
+              <span class="quote-mark">"</span>
+              <div class="quote-text">张总，在给您报价之前，我想先了解一下咱们的采购流程是怎样的？另外这次选型是您一个人决策还是要跟其他部门碰？</div>
+              <div class="copy-row"><button class="new-copy-btn">📋 复制话术</button></div>
+            </div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label" style="color:#ef4444"><span class="dot" style="background:#ef4444"></span> 新手容易踩的坑</div>
+            <div class="new-mistakes-wrap">
+              <div class="mistakes-text">不要在客户第一句询价时就报价，先确认是否有预算和决策权</div>
+            </div>
+          </div>
+
+          <div class="new-card-ft">
+            <span class="src-icon">📄</span>
+            <span class="src-text">张经理访谈记录</span>
+            <span class="src-report">· 萃取报告 #12</span>
+            <a href="#" class="src-link">查看报告 →</a>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="new-card" style="border-left: 3px solid #8b5cf6;">
+          <div class="new-card-hd">
+            <div class="scene-info">
+              <div class="scene-tag">异议处理 · 竞品对比</div>
+              <div class="scene-badges">
+                <span class="new-badge quality">⭐ 3.8/5 质量</span>
+                <span class="new-badge match">📊 62% 匹配</span>
+                <span class="new-badge level" style="background:#dbeafe;color:#1e40af">📎 关联匹配</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label"><span class="dot"></span> 销冠怎么想</div>
+            <div class="new-section-content">当客户提到竞品时不要贬低竞品，先承认竞品某些方面确实不错，再自然地切换到我们能做什么而他们做不到。</div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label"><span class="dot"></span> 可以这样说</div>
+            <div class="new-quote-wrap">
+              <span class="quote-mark">"</span>
+              <div class="quote-text">XX产品在交付速度上确实有优势。但您刚才提到现有客户的续约率问题——这个其实是他们的标准化方案难以覆盖的，我们有专门的大客户定制流程...</div>
+              <div class="copy-row"><button class="new-copy-btn">📋 复制话术</button></div>
+            </div>
+          </div>
+
+          <div class="new-section">
+            <div class="new-section-label" style="color:#ef4444"><span class="dot" style="background:#ef4444"></span> 新手容易踩的坑</div>
+            <div class="new-mistakes-wrap">
+              <div class="mistakes-text">一听到竞品就急着列功能对比表，应该先共情再转移话题到关系或服务上</div>
+            </div>
+          </div>
+
+          <div class="new-card-ft">
+            <span class="src-icon">📄</span>
+            <span class="src-text">李总监周会记录</span>
+            <span class="src-report">· 萃取报告 #18</span>
+            <a href="#" class="src-link">查看报告 →</a>
+          </div>
+        </div>
+
+      </div>
+    </div>
+    <div style="font-size:11px;color:#16a34a;margin-top:8px;text-align:center">
+      ✅ 卡片左色条 · Header 区(badge三连) · 三个独立section · 话术醒目引用块 · 来源底栏可点击
+    </div>
+  </div>
+</div>
+</body>
+</html>

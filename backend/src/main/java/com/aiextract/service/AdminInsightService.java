@@ -1,5 +1,6 @@
 package com.aiextract.service;
 
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.model.Skill;
 import com.aiextract.repository.*;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +28,7 @@ public class AdminInsightService {
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
     private final Executor taskExecutor;
+    private final CompanyScopeService companyScopeService;
 
     public AdminInsightService(
             ConversationStatsRepository conversationStatsRepository,
@@ -34,13 +36,15 @@ public class AdminInsightService {
             KnowledgeGapRepository knowledgeGapRepository,
             ExperienceGrainRepository grainRepository,
             SkillRepository skillRepository,
-            @Qualifier("embeddingExecutor") Executor taskExecutor) {
+            @Qualifier("embeddingExecutor") Executor taskExecutor,
+            CompanyScopeService companyScopeService) {
         this.conversationStatsRepository = conversationStatsRepository;
         this.feedbackLogRepository = feedbackLogRepository;
         this.knowledgeGapRepository = knowledgeGapRepository;
         this.grainRepository = grainRepository;
         this.skillRepository = skillRepository;
         this.taskExecutor = taskExecutor;
+        this.companyScopeService = companyScopeService;
     }
 
     /** 单分身概览（同步，复用现有查询） */
@@ -86,12 +90,20 @@ public class AdminInsightService {
      * </ol>
      * 4 个查询抛入 CompletableFuture 并行执行，全部完成后纯内存组装。
      */
-    public Map<String, Object> getGlobalOverview() {
+    public Map<String, Object> getGlobalOverview(UUID companyId) {
         LocalDateTime weekAgo = LocalDateTime.now().minusDays(7);
         LocalDateTime now = LocalDateTime.now();
 
-        // ① 已发布分身列表（1 次 SQL）
-        List<Skill> skills = skillRepository.findByStatus("published");
+        // ① 已发布分身列表（1 次 SQL），按企业过滤
+        List<Skill> skills;
+        List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
+        if (companySkillIds != null) {
+            // company_admin — 只取本企业已发布分身
+            skills = companySkillIds.isEmpty() ? List.of() : skillRepository.findByIdInAndStatus(companySkillIds, "published");
+        } else {
+            // super_admin — 全平台
+            skills = skillRepository.findByStatus("published");
+        }
         List<UUID> skillIds = skills.stream().map(Skill::getId).toList();
         List<UUID> spaceIds = skills.stream().map(Skill::getSpaceId).toList();
 
@@ -217,6 +229,13 @@ public class AdminInsightService {
             skillRows.add(row);
         }
 
+        // ⑤ 按对话量降序取 Top 50，避免前端渲染数百张卡片
+        skillRows.sort((a, b) -> Long.compare(
+            (Long) b.getOrDefault("conversations", 0L),
+            (Long) a.getOrDefault("conversations", 0L)));
+        List<Map<String, Object>> topSkillRows = skillRows.size() > 50
+            ? skillRows.subList(0, 50) : skillRows;
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalConversations", totalConversations);
         result.put("activeUsers", totalUsers);
@@ -225,7 +244,7 @@ public class AdminInsightService {
         result.put("totalGrains", totalGrains);
         result.put("totalOpenGaps", totalGaps);
         result.put("totalSkills", skills.size());
-        result.put("skills", skillRows);
+        result.put("skills", topSkillRows);
 
         return result;
     }

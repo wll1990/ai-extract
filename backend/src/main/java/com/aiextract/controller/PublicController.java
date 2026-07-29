@@ -10,6 +10,7 @@ import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.repository.CompanyRepository;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.InterviewInviteCodeRepository;
+import com.aiextract.repository.OrganizationSkillRepository;
 import com.aiextract.repository.SkillConversationRepository;
 import com.aiextract.repository.SkillRepository;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +46,7 @@ public class PublicController {
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final InterviewInviteCodeRepository inviteCodeRepository;
     private final CompanyRepository companyRepository;
+    private final OrganizationSkillRepository orgSkillRepository;
 
     /**
      * 落地页数据背书 — 平台实时统计数据。
@@ -118,6 +120,30 @@ public class PublicController {
             stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
             stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
             stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+            item.put("stats", stats);
+            result.add(item);
+        }
+
+        // 追加已发布的组织分身
+        List<com.aiextract.model.OrganizationSkill> orgSkills =
+                orgSkillRepository.findByStatus("published");
+        for (com.aiextract.model.OrganizationSkill org : orgSkills) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("id", org.getId().toString());
+            item.put("type", "organization");
+            item.put("displayName", org.getName());
+            item.put("ownerName", org.getName());
+            item.put("ownerTitle", org.getDescription() != null ? org.getDescription() : "");
+            item.put("avatarUrl", org.getAvatarUrl());
+            item.put("department", "");
+            item.put("tags", List.of());
+            item.put("grainCount", 0);
+            item.put("openingMessage", org.getOpeningMessage());
+            item.put("domain", org.getDomain());
+            Map<String, Object> stats = new LinkedHashMap<>();
+            stats.put("conversationCount", org.getConversationCount() != null ? org.getConversationCount() : 0);
+            stats.put("userCount", org.getUserCount() != null ? org.getUserCount() : 0);
+            stats.put("satisfactionRate", org.getSatisfactionRate() != null ? org.getSatisfactionRate() : 0);
             item.put("stats", stats);
             result.add(item);
         }

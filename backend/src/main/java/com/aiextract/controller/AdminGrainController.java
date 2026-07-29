@@ -2,6 +2,7 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.repository.ExperienceGrainRepository;
@@ -26,14 +27,18 @@ public class AdminGrainController {
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
     private final AdminGrainService adminGrainService;
+    private final CompanyScopeService companyScopeService;
     private final com.aiextract.repository.SkillMaterialRepository skillMaterialRepository;
     private final com.aiextract.repository.ReportRepository reportRepository;
+    private final com.aiextract.repository.GrainRetrieveLogRepository grainRetrieveLogRepository;
+    private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
 
     /** 颗粒列表 — 按分身空间查询 */
     @GetMapping
     public ApiResponse<List<Map<String, Object>>> listGrains(
             @RequestParam UUID skillId,
             @RequestParam(defaultValue = "helpful") String sort) {
+        companyScopeService.assertSkillOwnership(skillId);
         var skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
 
@@ -54,6 +59,7 @@ public class AdminGrainController {
     /** 颗粒详情 */
     @GetMapping("/{grainId}")
     public ApiResponse<Map<String, Object>> getGrain(@PathVariable UUID grainId) {
+        companyScopeService.assertGrainOwnership(grainId);
         ExperienceGrain g = grainRepository.findById(grainId)
             .orElseThrow(() -> new BusinessException(404, "颗粒不存在"));
         return ApiResponse.success(toMap(g));
@@ -63,6 +69,7 @@ public class AdminGrainController {
     @PutMapping("/{grainId}")
     public ApiResponse<Map<String, Object>> updateGrain(
             @PathVariable UUID grainId, @RequestBody Map<String, String> body) {
+        companyScopeService.assertGrainOwnership(grainId);
         ExperienceGrain g = adminGrainService.updateGrain(grainId, body);
         return ApiResponse.success(toMap(g));
     }
@@ -70,6 +77,8 @@ public class AdminGrainController {
     /** 新增颗粒 — 委托 Service 处理 */
     @PostMapping
     public ApiResponse<Map<String, Object>> createGrain(@RequestBody Map<String, Object> body) {
+        UUID skillId = UUID.fromString((String) body.get("skillId"));
+        companyScopeService.assertSkillOwnership(skillId);
         ExperienceGrain g = adminGrainService.createGrain(body);
         return ApiResponse.success(toMap(g));
     }
@@ -77,6 +86,7 @@ public class AdminGrainController {
     /** 废弃颗粒 */
     @PostMapping("/{grainId}/deprecate")
     public ApiResponse<Void> deprecateGrain(@PathVariable UUID grainId) {
+        companyScopeService.assertGrainOwnership(grainId);
         adminGrainService.deprecateGrain(grainId);
         return ApiResponse.success(null);
     }
@@ -110,10 +120,12 @@ public class AdminGrainController {
             .map(UUID::fromString).toList();
         List<Map<String, Object>> result = new ArrayList<>();
         for (UUID gid : ids) {
+            companyScopeService.assertGrainOwnership(gid);
             var grain = grainRepository.findById(gid).orElse(null);
             if (grain == null) continue;
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("grainId", gid.toString());
+            item.put("spaceId", grain.getSpaceId().toString());
             item.put("sceneDescription", grain.getSceneDescription());
             item.put("expertThought", grain.getExpertThought());
             item.put("standardScript", grain.getStandardScript());
@@ -137,6 +149,68 @@ public class AdminGrainController {
             }
             result.add(item);
         }
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 颗粒诊断 —— 返回颗粒详情 + 检索历史 + 反馈上下文。
+     * 管理员从排行榜点击颗粒后，一眼看清该颗粒的使用质量。
+     */
+    @GetMapping("/{grainId}/diagnostics")
+    public ApiResponse<Map<String, Object>> getGrainDiagnostics(@PathVariable String grainId) {
+        UUID id = UUID.fromString(grainId);
+        ExperienceGrain grain = grainRepository.findById(id)
+            .orElseThrow(() -> new BusinessException(404, "颗粒不存在"));
+        companyScopeService.assertGrainOwnership(id);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        result.put("id", grain.getId().toString());
+        result.put("spaceId", grain.getSpaceId().toString());
+        result.put("sceneTag", grain.getSceneTag());
+        result.put("sceneDescription", grain.getSceneDescription());
+        result.put("expertThought", grain.getExpertThought());
+        result.put("standardScript", grain.getStandardScript());
+        result.put("commonMistakes", grain.getCommonMistakes());
+        result.put("applicableCondition", grain.getApplicableCondition());
+        result.put("weight", grain.getWeight());
+        result.put("status", grain.getStatus());
+        result.put("helpfulCount", grain.getHelpfulCount());
+        result.put("unhelpfulCount", grain.getUnhelpfulCount());
+        result.put("qualityScore", grain.getQualityScore());
+        result.put("createdAt", grain.getCreatedAt() != null ? grain.getCreatedAt().toString() : null);
+
+        var retrievals = grainRetrieveLogRepository
+            .findByGrainIdOrderByCreatedAtDesc(id, org.springframework.data.domain.PageRequest.of(0, 20));
+        List<Map<String, Object>> retrievalList = retrievals.stream().map(r -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", r.getId().toString());
+            m.put("conversationId", r.getConversationId().toString());
+            m.put("originalQuery", r.getOriginalQuery());
+            m.put("rewrittenQuery", r.getRewrittenQuery());
+            m.put("similarity", r.getSimilarity());
+            m.put("tier", r.getTier());
+            m.put("position", r.getPosition());
+            m.put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : null);
+            return m;
+        }).collect(Collectors.toList());
+        result.put("retrievals", retrievalList);
+
+        var feedbacks = feedbackLogRepository
+            .findByGrainIdOrderByCreatedAtDesc(id, org.springframework.data.domain.PageRequest.of(0, 10));
+        List<Map<String, Object>> feedbackList = feedbacks.stream().map(f -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", f.getId().toString());
+            m.put("conversationId", f.getConversationId() != null ? f.getConversationId().toString() : null);
+            m.put("rating", f.getRating());
+            m.put("query", f.getQuery());
+            m.put("aiResponse", f.getAiResponse());
+            m.put("ragScore", f.getRagScore());
+            m.put("createdAt", f.getCreatedAt() != null ? f.getCreatedAt().toString() : null);
+            return m;
+        }).collect(Collectors.toList());
+        result.put("feedbacks", feedbackList);
+
         return ApiResponse.success(result);
     }
 }

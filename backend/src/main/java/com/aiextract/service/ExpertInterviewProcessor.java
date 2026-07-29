@@ -37,6 +37,9 @@ public class ExpertInterviewProcessor {
     private final InterviewSessionRepository sessionRepository;
     private final InterviewMessageRepository messageRepository;
     private final ExpertSkillRepository expertSkillRepository;
+    private final MaterialNoiseCleaner noiseCleaner;
+    private final BusinessNoiseFilter businessFilter;
+    private final TextNormalizer normalizer;
 
     /**
      * 从元访谈创建 ExpertSkill 并送入分析管道。
@@ -69,6 +72,13 @@ public class ExpertInterviewProcessor {
                         m.getContent()))
                 .collect(Collectors.joining("\n\n"));
 
+        // P2-10: 元访谈转录走规则清洗（Layer 1-3），对齐文件素材的清洗标准
+        String cleaned = noiseCleaner.cleanFormatNoise(transcript, "dialogue");
+        cleaned = businessFilter.filterBusinessNoise(cleaned,
+            session.getDomain() != null ? session.getDomain() : "sales.b2b_enterprise");
+        cleaned = normalizer.normalize(cleaned);
+        log.info("元访谈转录清洗 sessionId={}: {}字→{}字", sessionId, transcript.length(), cleaned.length());
+
         String domain = session.getDomain();
         if (domain == null || domain.isBlank()) {
             log.error("元访谈 session.domain 为空, sessionId={}", sessionId);
@@ -85,8 +95,8 @@ public class ExpertInterviewProcessor {
                 // 区别于文件上传的 "document"
                 .sourceSessionId(sessionId)
                 // 可追溯到具体会话
-                .sourceContent(transcript)
-                // 转录文本，scheduler 会读取
+                .sourceContent(cleaned)
+                // P2-10: 清洗后的转录文本，scheduler 会读取
                 .domain(domain)
                 // 继承访谈的领域
                 .status("pending")

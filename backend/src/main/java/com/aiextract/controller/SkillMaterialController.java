@@ -1,12 +1,14 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillMaterial;
+import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillMaterialRepository;
 import com.aiextract.repository.SkillRepository;
@@ -20,6 +22,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 @Slf4j
@@ -47,6 +52,9 @@ public class SkillMaterialController {
     private final com.aiextract.repository.UserRepository userRepository;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final ObjectMapper objectMapper;
+
+    @org.springframework.beans.factory.annotation.Value("${storage.local.path}")
+    private String storageBasePath;
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
@@ -108,7 +116,7 @@ public class SkillMaterialController {
     /** 分身列表（供上传时下拉选择，仅当前企业） */
     @GetMapping("/admin/skills/picker")
     public ApiResponse<List<Map<String, Object>>> picker() {
-        UUID companyId = jwtUtil.getCompanyIdFromToken(getToken());
+        UUID companyId = TokenContext.getCompanyId();
         // 查该企业所有空间
         List<UUID> companyUserIds = userRepository.findByCompanyId(companyId).stream()
                 .map(com.aiextract.model.User::getId).toList();
@@ -252,17 +260,13 @@ public class SkillMaterialController {
      * 属主校验：skill → space → space.isOwnedBy(currentUserId)。
      */
     @PostMapping("/skills/{skillId}/materials/upload")
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
     public ApiResponse<Map<String, Object>> uploadMaterial(
             @PathVariable UUID skillId,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "materialType", required = false) String materialType) {
+        validateSkillOwnership(skillId);
         UUID userId = jwtUtil.getUserIdFromToken(getToken());
-        Skill skill = skillRepository.findById(skillId)
-            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
-        com.aiextract.model.Space space = spaceRepository.findById(skill.getSpaceId())
-            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
-        if (!space.isOwnedBy(userId)) {
-            throw new BusinessException(403, "无权操作");
-        }
 
         // 文件格式校验
         String originalName = file.getOriginalFilename();
@@ -280,17 +284,35 @@ public class SkillMaterialController {
             throw new BusinessException(400, "文件不能超过 20MB");
         }
 
+        // 保存文件到磁盘
+        String month = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+        String savedName = UUID.randomUUID() + "_" + originalName;
+        File dir = new File(storageBasePath + "/skills/" + skillId + "/" + month);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        File dest = new File(dir, savedName);
+        try {
+            file.transferTo(dest);
+        } catch (Exception e) {
+            log.error("C端素材文件保存失败 skillId={} fileName={}", skillId, originalName, e);
+            throw new BusinessException(500, "文件保存失败，请重试");
+        }
+
         // 创建素材记录
         SkillMaterial material = SkillMaterial.builder()
             .id(UUID.randomUUID())
             .skillId(skillId)
+            .uploadedBy(userId)
             .fileName(originalName)
+            .fileUrl(dest.getAbsolutePath())
             .fileType(detectFileType(lower))
+            .materialType(materialType)
             .fileSize(file.getSize())
             .status("uploaded")
             .retryCount(0)
-            .createdAt(java.time.LocalDateTime.now())
-            .updatedAt(java.time.LocalDateTime.now())
+            .createdAt(LocalDateTime.now())
+            .updatedAt(LocalDateTime.now())
             .build();
         material = materialRepository.save(material);
 
@@ -301,6 +323,62 @@ public class SkillMaterialController {
         result.put("fileName", material.getFileName());
         result.put("status", material.getStatus());
         return ApiResponse.success(result);
+    }
+
+    /**
+     * C端素材列表（分页）— 含属主校验。
+     * 走 /skills/** 权限域（SKILL_USE），C端用户可访问。
+     */
+    @GetMapping("/skills/{skillId}/materials")
+    public ApiResponse<Page<SkillMaterial>> listMaterialsForOwner(
+            @PathVariable UUID skillId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        validateSkillOwnership(skillId);
+        return ApiResponse.success(
+            materialRepository.findBySkillIdOrderByCreatedAtDesc(skillId, PageRequest.of(page - 1, size)));
+    }
+
+    /**
+     * C端素材详情 — 含属主校验。
+     */
+    @GetMapping("/skills/{skillId}/materials/{materialId}")
+    public ApiResponse<Map<String, Object>> getMaterialDetailForOwner(
+            @PathVariable UUID skillId, @PathVariable UUID materialId) {
+        validateSkillOwnership(skillId);
+        return getMaterialDetail(skillId, materialId);
+    }
+
+    /**
+     * C端删除素材 — 含属主校验。
+     */
+    @DeleteMapping("/skills/{skillId}/materials/{materialId}")
+    public ApiResponse<Void> deleteMaterialForOwner(
+            @PathVariable UUID skillId, @PathVariable UUID materialId) {
+        validateSkillOwnership(skillId);
+        SkillMaterial m = materialRepository.findById(materialId)
+            .orElseThrow(() -> new BusinessException(404, "素材不存在"));
+        if (!m.getSkillId().equals(skillId)) {
+            throw new BusinessException(403, "素材不属于该分身");
+        }
+        materialRepository.delete(m);
+        return ApiResponse.success();
+    }
+
+    /**
+     * 属主校验公共方法 — skill → space → space.isOwnedBy(currentUserId)。
+     * 校验通过返回 Skill，失败抛 403/404。
+     */
+    private Skill validateSkillOwnership(UUID skillId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        Skill skill = skillRepository.findById(skillId)
+            .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        Space space = spaceRepository.findById(skill.getSpaceId())
+            .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权操作");
+        }
+        return skill;
     }
 
     private String detectFileType(String lowerName) {

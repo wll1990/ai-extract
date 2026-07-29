@@ -50,6 +50,41 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
     List<Object[]> countGrainsByScene(@Param("spaceId") UUID spaceId);
 
     /**
+     * 批量：多空间每场景颗粒计数 — 一次 IN 查询替代 N 次单空间查询。
+     *
+     * @param spaceIds 空间 ID 列表
+     * @return [sceneTag, count] 数组列表
+     */
+    @Query("SELECT g.sceneTag, COUNT(g) FROM ExperienceGrain g " +
+           "WHERE g.spaceId IN :spaceIds AND g.status = 'active' AND g.sceneTag IS NOT NULL " +
+           "GROUP BY g.sceneTag")
+    List<Object[]> countGrainsBySceneInSpaceIds(@Param("spaceIds") List<UUID> spaceIds);
+
+    /**
+     * 批量：多空间每场景最佳颗粒 — PostgreSQL DISTINCT ON，一次查询替代 N 次。
+     *
+     * @param spaceIds 空间 ID 列表
+     * @return [sceneTag, sceneDescription] 数组列表
+     */
+    @Query(value = "SELECT DISTINCT ON (scene_tag) scene_tag, " +
+            "COALESCE(scene_description, '') as scene_description " +
+            "FROM experience_grain " +
+            "WHERE space_id IN (:spaceIds) AND status = 'active' AND scene_tag IS NOT NULL " +
+            "ORDER BY scene_tag, quality_score DESC NULLS LAST",
+            nativeQuery = true)
+    List<Object[]> findBestGrainsPerSceneInSpaceIds(@Param("spaceIds") List<UUID> spaceIds);
+
+    /**
+     * 批量：多空间去重 (spaceId, sceneTag) 对 — 供电 `getPracticeScenes` 聚合覆盖成员数。
+     *
+     * @param spaceIds 空间 ID 列表
+     * @return [spaceId, sceneTag] 数组列表
+     */
+    @Query("SELECT DISTINCT g.spaceId, g.sceneTag FROM ExperienceGrain g " +
+           "WHERE g.spaceId IN :spaceIds AND g.status = 'active' AND g.sceneTag IS NOT NULL AND g.sceneTag <> ''")
+    List<Object[]> findDistinctSceneTagsBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
+
+    /**
      * 按报告ID查询所有经验颗粒
      *
      * @param reportId 报告ID
@@ -105,10 +140,13 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      */
     @Query("SELECT eg.spaceId, COUNT(eg) FROM ExperienceGrain eg WHERE eg.spaceId IN :spaceIds GROUP BY eg.spaceId")
     List<Object[]> countBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
-    /** 按空间列表分页查询 */
+    /** 按空间列表分页查询（仅有 embedding 的活跃颗粒） */
     @Query("SELECT g FROM ExperienceGrain g WHERE g.spaceId IN :spaceIds AND g.status = 'active' AND g.embedding IS NOT NULL")
     List<ExperienceGrain> findBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds,
             org.springframework.data.domain.Pageable pageable);
+
+    /** 按空间列表查询所有颗粒（无分页，无 embedding 过滤） */
+    List<ExperienceGrain> findAllBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
     /**
      * increment（Helpful）。
      * @param id id

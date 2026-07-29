@@ -11,6 +11,7 @@ import com.aiextract.common.TraceContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.AppUser;
 import com.aiextract.model.ExperienceGrain;
+import com.aiextract.model.OrganizationSkill;
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillProfile;
@@ -21,6 +22,7 @@ import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SkillProfileRepository;
 import com.aiextract.repository.SkillEvaluationRepository;
 import com.aiextract.repository.SkillRepository;
+import com.aiextract.util.JsonUtil;
 import com.aiextract.repository.SpaceRepository;
 import com.aiextract.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -67,6 +69,7 @@ public class SkillService {
     private final PracticeDemoService practiceDemoService;
     private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
     private final SkillEvaluationRepository skillEvaluationRepository;
+    private final OrganizationSkillService orgSkillService;
     @org.springframework.beans.factory.annotation.Value("${storage.local.path:}")
     private String storageBasePath;
 
@@ -230,6 +233,8 @@ public class SkillService {
                 org.springframework.data.domain.PageRequest.of(page - 1, size);
         org.springframework.data.domain.Page<Skill> skillPage;
 
+        // 数据范围标识：super_admin 看全部企业的 skill，其他角色按 companyId 隔离
+        // 此项不是权限检查，不替换为 hasPermission
         boolean isSuperAdmin = "super_admin".equalsIgnoreCase(role);
         boolean isCEnd = "c_user".equalsIgnoreCase(role);
 
@@ -311,7 +316,7 @@ public class SkillService {
             item.put("ownerTitle", skill.getOwnerTitle() != null ? skill.getOwnerTitle()
                     : (sp != null && sp.getDescription() != null ? sp.getDescription() : ""));
             item.put("avatarUrl", skill.getAvatarUrl());
-            item.put("tags", parseJsonList(skill.getTags()));
+            item.put("tags", JsonUtil.parseStringList(skill.getTags()));
             item.put("openingMessage", skill.getOpeningMessage());
             item.put("domain", skill.getDomain());
             item.put("grainCount", grainCountMap.getOrDefault(skill.getSpaceId(), 0L).intValue());
@@ -323,14 +328,33 @@ public class SkillService {
             if (skill.getLastActiveAt() != null) {
                 stats.put("lastActive", skill.getLastActiveAt().toString());
             }
+            item.put("type", "individual");
+            item.put("orgType", skill.getOrgType() != null ? skill.getOrgType() : "individual");
             item.put("stats", stats);
             result.add(item);
         }
+
+        // 追加组织分身（仅 B 端按 companyId 过滤的场景）
+        if (companyId != null && (status == null || "published".equals(status))) {
+            List<OrganizationSkill> orgSkills = "published".equals(status)
+                    ? orgSkillService.listByCompany(companyId, "published")
+                    : orgSkillService.listByCompany(companyId, null);
+            for (OrganizationSkill org : orgSkills) {
+                result.add(orgSkillService.toApiMap(org));
+            }
+        }
+
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("content", result);
         response.put("page", page); response.put("size", size);
-        response.put("total", skillPage.getTotalElements());
+        int orgCount = result.size() - allSkills.size();
+        response.put("total", skillPage.getTotalElements() + Math.max(0, orgCount));
         response.put("totalPages", skillPage.getTotalPages());
+        // upgradeNudge: ≥3 个个人分身 + 0 个组织分身 → 提示升级
+        if (companyId != null && result.size() >= 3
+                && result.stream().noneMatch(r -> "organization".equals(r.get("type")))) {
+            response.put("upgradeNudge", true);
+        }
         return response;
     }
 
@@ -582,6 +606,19 @@ public class SkillService {
         return grouped;
     }
 
+    /** 收集 space 中 top N 活跃场景标签（按颗粒数降序），空时返回 fallback */
+    private List<String> collectTopSceneTags(UUID spaceId, int limit, String fallback) {
+        List<String> tags = grainRepository.findBySpaceId(spaceId).stream()
+            .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
+            .collect(Collectors.groupingBy(ExperienceGrain::getSceneTag, Collectors.counting()))
+            .entrySet().stream()
+            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+            .limit(limit)
+            .map(Map.Entry::getKey)
+            .toList();
+        return tags.isEmpty() ? List.of(fallback) : tags;
+    }
+
     /**
      * 构建对话消息列表（含历史上下文）
      */
@@ -814,26 +851,18 @@ public class SkillService {
             Skill skill = skillRepository.findById(skillId).orElse(null);
             if (skill == null) return;
 
-            // 已手动填写则跳过，不覆盖
-            if (skill.getOpeningMessage() != null && !skill.getOpeningMessage().isBlank()) {
-                log.info("开场白已手动填写，跳过自动生成 skillId={}", skillId);
+            // introProfile 已存在则跳过（发布时 @Async 幂等 + 手动编辑后不覆盖）
+            if (skill.getIntroProfile() != null && !skill.getIntroProfile().isBlank()
+                    && !"{}".equals(skill.getIntroProfile())) {
+                log.info("introProfile 已存在，跳过自动生成 skillId={}", skillId);
                 return;
             }
 
             // 收集 top 3 场景标签
-            List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
-            String scenes = grains.stream()
-                .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
-                .collect(Collectors.groupingBy(ExperienceGrain::getSceneTag, Collectors.counting()))
-                .entrySet().stream()
-                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
-                .limit(3)
-                .map(Map.Entry::getKey)
-                .collect(Collectors.joining("、"));
-            if (scenes.isEmpty()) scenes = "通用销售";
+            String scenes = String.join("、", collectTopSceneTags(skill.getSpaceId(), 3, "通用销售"));
 
             // 解析 tags JSONB
-            List<String> tagList = parseJsonList(skill.getTags());
+            List<String> tagList = JsonUtil.parseStringList(skill.getTags());
             String tags = tagList.isEmpty() ? (skill.getDomain() != null ? skill.getDomain() : "销售") : String.join("、", tagList);
 
             // 领域名称
@@ -856,21 +885,145 @@ public class SkillService {
             String generated = chatStreamAdapter.chat(prompt);
 
             if (generated != null && !generated.isBlank()) {
-                // 清理：去引号/换行，截断
-                generated = generated.trim()
-                    .replaceAll("^[\"'“”‘’]", "")
-                    .replaceAll("[\"'“”‘’]$", "")
-                    .replaceAll("\\n", "");
-                if (generated.length() > 100) {
-                    generated = generated.substring(0, 100);
+                // 解析 3 段式 JSON：{headline, body, closing}
+                // Prompt 模板要求 AI 输出纯 JSON，但仍需处理可能的 markdown 代码块包裹
+                String jsonStr = generated.trim()
+                    .replaceAll("^```(?:json)?\\s*", "")
+                    .replaceAll("\\s*```$", "");
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> introMap = objectMapper.readValue(jsonStr, Map.class);
+                    String headline = introMap.get("headline");
+                    String body = introMap.get("body");
+                    String closing = introMap.get("closing");
+
+                    if (headline != null || body != null || closing != null) {
+                        // 确保三个字段都存在（null 时补空串）
+                        if (headline == null) headline = "";
+                        if (body == null) body = "";
+                        if (closing == null) closing = "";
+                        Map<String, String> cleaned = new LinkedHashMap<>();
+                        cleaned.put("headline", headline.trim());
+                        cleaned.put("body", body.trim());
+                        cleaned.put("closing", closing.trim());
+                        skill.setIntroProfile(objectMapper.writeValueAsString(cleaned));
+                    }
+                    // 向后兼容：openingMessage 存 headline，旧版 API/前端可继续用
+                    if (headline != null && !headline.isBlank()) {
+                        skill.setOpeningMessage(headline.trim());
+                    } else {
+                        // headline 为空时取 body 前 50 字兜底
+                        String fallback = body != null && !body.isBlank()
+                            ? body.trim().substring(0, Math.min(50, body.trim().length()))
+                            : generated.trim().substring(0, Math.min(100, generated.trim().length()));
+                        skill.setOpeningMessage(fallback);
+                    }
+                    skillRepository.save(skill);
+                    log.info("开场白已生成 skillId={} introProfile={} chars", skillId,
+                        skill.getIntroProfile() != null ? skill.getIntroProfile().length() : 0);
+                } catch (Exception parseEx) {
+                    // JSON 解析失败 → 降级为纯文本，仅存 openingMessage
+                    log.warn("开场白JSON解析失败，降级为纯文本 skillId={} raw={}", skillId,
+                        generated.substring(0, Math.min(80, generated.length())));
+                    String cleaned = generated.trim()
+                        .replaceAll("^[\"'\"\"'']", "")
+                        .replaceAll("[\"'\"\"'']$", "")
+                        .replaceAll("\\n", " ");
+                    if (cleaned.length() > 100) cleaned = cleaned.substring(0, 100);
+                    skill.setOpeningMessage(cleaned);
+                    skillRepository.save(skill);
                 }
-                skill.setOpeningMessage(generated);
-                skillRepository.save(skill);
-                log.info("开场白已生成 skillId={} chars={}", skillId, generated.length());
             }
         } catch (Exception e) {
             log.error("开场白生成失败 skillId={}", skillId, e);
             // 静默失败，不阻塞发布流程
+        }
+    }
+
+    /**
+     * 异步预生成推荐问题 — 发布时触发，基于 top 6 场景的真实颗粒描述调用 LLM
+     * 生成 6-8 条自然语言问题，存到 skill.recommended_questions (JSONB)。
+     *
+     * <p>API 优先读此缓存，null 时回退模板。存量分身由 SkillStatsScheduler 一次性补齐。</p>
+     */
+    @Async("embeddingExecutor")
+    public void generateRecommendedQuestions(UUID skillId) {
+        try {
+            Skill skill = skillRepository.findById(skillId).orElse(null);
+            if (skill == null) return;
+
+            // 已生成则跳过（幂等）
+            if (skill.getRecommendedQuestions() != null && !skill.getRecommendedQuestions().isBlank()
+                    && !"[]".equals(skill.getRecommendedQuestions())) {
+                log.info("推荐问题已生成，跳过 skillId={}", skillId);
+                return;
+            }
+
+            // 收集 top 6 场景 + 每场景取一条颗粒描述作为 LLM 样本
+            List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
+            Map<String, String> sceneSamples = new LinkedHashMap<>();
+            for (ExperienceGrain g : grains) {
+                if (g.getSceneTag() == null || !"active".equals(g.getStatus())) continue;
+                if (sceneSamples.containsKey(g.getSceneTag())) continue;
+                String sample = g.getSceneDescription();
+                if (sample == null || sample.isBlank()) sample = g.getSceneTag();
+                sceneSamples.put(g.getSceneTag(), sample);
+                if (sceneSamples.size() >= 6) break;
+            }
+            if (sceneSamples.isEmpty()) {
+                log.info("无活跃场景，跳过推荐问题生成 skillId={}", skillId);
+                return;
+            }
+
+            List<String> scenes = new ArrayList<>(sceneSamples.keySet());
+            StringBuilder grainSamples = new StringBuilder();
+            for (Map.Entry<String, String> e : sceneSamples.entrySet()) {
+                grainSamples.append("- 场景：").append(e.getKey()).append("\n");
+                grainSamples.append("  描述：").append(e.getValue()).append("\n");
+            }
+
+            // 解析 tags JSONB
+            List<String> tagList = JsonUtil.parseStringList(skill.getTags());
+            String tags = tagList.isEmpty()
+                ? (skill.getDomain() != null ? skill.getDomain() : "销售")
+                : String.join("、", tagList);
+
+            String domainId = domainConfigLoader.resolveDomain(skill);
+            DomainConfig dc = domainId != null ? domainConfigLoader.load(domainId) : null;
+            String ownerTitle = skill.getOwnerTitle() != null ? skill.getOwnerTitle()
+                : (dc != null && dc.getDomain() != null ? dc.getDomain().getRoleLabel() : "销冠");
+
+            // 构建 prompt
+            Map<String, String> vars = new LinkedHashMap<>();
+            vars.put("owner_name", Objects.requireNonNullElse(skill.getOwnerName(), "销冠"));
+            vars.put("owner_title", ownerTitle);
+            vars.put("tags", tags);
+            vars.put("scenes", String.join("、", scenes));
+            vars.put("grain_samples", grainSamples.toString());
+
+            String prompt = promptLoader.format("skill_recommended_questions.md", vars);
+            String generated = chatStreamAdapter.chat(prompt);
+
+            if (generated != null && !generated.isBlank()) {
+                String jsonStr = generated.trim()
+                    .replaceAll("^```(?:json)?\\s*", "")
+                    .replaceAll("\\s*```$", "");
+                @SuppressWarnings("unchecked")
+                List<String> questions = objectMapper.readValue(jsonStr, List.class);
+                if (questions != null && !questions.isEmpty()) {
+                    // 限制 6-8 条
+                    List<String> trimmed = questions.stream()
+                        .filter(q -> q != null && !q.isBlank())
+                        .limit(8)
+                        .collect(Collectors.toList());
+                    skill.setRecommendedQuestions(objectMapper.writeValueAsString(trimmed));
+                    skillRepository.save(skill);
+                    log.info("推荐问题已生成 skillId={} count={}", skillId, trimmed.size());
+                }
+            }
+        } catch (Exception e) {
+            log.error("推荐问题生成失败 skillId={}", skillId, e);
+            // 静默失败，API 降级走模板兜底
         }
     }
 
@@ -983,13 +1136,15 @@ public class SkillService {
                 : (space != null && space.getDescription() != null ? space.getDescription() : ""));
         detail.put("avatarUrl", skill.getAvatarUrl());
         detail.put("department", skill.getDepartment());
-        detail.put("tags", parseJsonList(skill.getTags()));
+        detail.put("tags", JsonUtil.parseStringList(skill.getTags()));
         detail.put("sceneTags", sceneTags);
         detail.put("grainCount", grains.stream().filter(g -> "active".equals(g.getStatus())).count());
         detail.put("openingMessage", skill.getOpeningMessage());
         detail.put("domain", skill.getDomain());
         detail.put("talkConfig", skill.getTalkConfig() != null ? skill.getTalkConfig() : "{}");
         detail.put("status", skill.getStatus());
+        detail.put("introProfile", JsonUtil.parseStringMap(skill.getIntroProfile()));
+        detail.put("recommendedQuestions", JsonUtil.parseStringList(skill.getRecommendedQuestions()));
 
         // ── 互动统计（SkillStatsScheduler 定时聚合，直接读列） ──
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -1002,24 +1157,6 @@ public class SkillService {
         detail.put("stats", stats);
 
         return detail;
-    }
-
-    /**
-     * 将 JSONB 数组字符串转为 Java List（用于 API 返回）。
-     */
-    private static final String EMPTY_JSON_ARRAY = "[]";
-
-    @SuppressWarnings("unchecked")
-    private List<String> parseJsonList(String json) {
-        if (json == null || json.isBlank() || EMPTY_JSON_ARRAY.equals(json)) {
-            return List.of();
-        }
-        try {
-            return objectMapper.readValue(json, List.class);
-        } catch (Exception e) {
-            log.warn("JSONB parse failed", e);
-            return List.of();
-        }
     }
 
     /**

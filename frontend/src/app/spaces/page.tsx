@@ -4,14 +4,15 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { getSpaces, type SpaceInfo } from '@/lib/api/spaces';
-import { useRoleGuard } from '@/lib/hooks/useRoleGuard';
+import { usePermissionGuard } from '@/lib/hooks/usePermissionGuard';
+import { Permission } from '@/lib/permissions';
 
 /**
- * 空间总览页 — 销冠知识大盘（仅管理员可访问）
+ * 空间总览页 — 销冠知识大盘（有个人空间权限的用户可访问）
  */
 export default function SpacesOverviewPage() {
   const router = useRouter();
-  const { allowed, checked } = useRoleGuard(['super_admin', 'company_admin']);
+  const { allowed, checked } = usePermissionGuard([Permission.SPACE_OWN]);
 
   const [spaces, setSpaces] = useState<SpaceInfo[]>([]);
   const [loading, setLoading] = useState(true);

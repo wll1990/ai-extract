@@ -53,6 +53,21 @@ public class AuthController {
     public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request,
                                                HttpServletResponse httpResponse,
                                                HttpServletRequest httpRequest) {
+        // 安全校验：仅已认证的 super_admin 可注册 super_admin 角色
+        if ("super_admin".equals(request.getRole())) {
+            String token = getTokenFromSecurityContext(httpRequest);
+            if (token == null) {
+                return ApiResponse.error(403, "不允许自注册为超级管理员");
+            }
+            try {
+                String requesterRole = jwtUtil.getRoleFromToken(token);
+                if (!"super_admin".equals(requesterRole)) {
+                    return ApiResponse.error(403, "无权限创建超级管理员");
+                }
+            } catch (Exception e) {
+                return ApiResponse.error(403, "Token 无效");
+            }
+        }
         LoginResponse response = authService.register(request);
         // 仅自注册时设置 Cookie：管理员创建其他用户时已有自己的有效 token，不覆盖
         if (!hasValidToken(httpRequest)) {
@@ -116,11 +131,16 @@ public class AuthController {
             throw new BusinessException(400, "注册码已达使用上限");
         }
 
-        // 创建用户
+        // 创建用户 — 使用注册码的 defaultRole
+        String role = body.get("role") != null ? (String) body.get("role")
+            : (c.getDefaultRole() != null ? c.getDefaultRole() : "employee");
+        if (!com.aiextract.config.RolePermissions.REGISTRABLE_ROLES.contains(role)) {
+            role = "employee";
+        }
         RegisterRequest request = RegisterRequest.builder()
             .companyId(c.getCompanyId().toString())
             .account(account).password(password).name(name)
-            .role("employee").build();
+            .role(role).build();
         LoginResponse response = authService.register(request);
 
         // 消费注册码

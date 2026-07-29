@@ -60,4 +60,19 @@ public class ShareInfoResponse {
 
     /** 聚合互动统计（来自 skill 表缓存字段，无数据时各值为0） */
     private Map<String, Object> stats;
+
+    /** 分身类型："individual" | "organization"。前端按此分支渲染 */
+    private String skillType;
+
+    /** 组织分身成员数（仅 organization 类型有值） */
+    private Integer memberCount;
+
+    /** 组织分身成员列表（仅 organization 类型有值） */
+    private List<Map<String, Object>> members;
+
+    /** 3 段式专业介绍 JSON：{"headline":"...","body":"...","closing":"..."}。名片页优先读此字段 */
+    private Map<String, String> introProfile;
+
+    /** 分享渠道："public"（经典 H5）| "card"（名片式 H5），前端按此分支渲染 */
+    private String shareChannel;
 }

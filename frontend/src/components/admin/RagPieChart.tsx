@@ -24,9 +24,9 @@ export function RagPieChart({ high, refCount, none, highPct, refPct, nonePct }: 
   if (data.length === 0) return <EmptyPlaceholder label="暂无 RAG 数据" />;
 
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm">
       <h3 className="mb-3 text-sm font-semibold">🎯 RAG 匹配分布</h3>
-      <div style={{ height: 220 }}>
+      <div className="relative" style={{ height: 220 }}>
         <ResponsivePie
           data={data}
           margin={{ top: 5, right: 80, bottom: 5, left: 5 }}
@@ -59,6 +59,11 @@ export function RagPieChart({ high, refCount, none, highPct, refPct, nonePct }: 
             },
           ]}
         />
+        {/* Donut 中心数字 */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <p className="text-[28px] font-extrabold text-[#22C55E] tabular-nums leading-none">{highPct}%</p>
+          <p className="text-[11px] text-[#64748B] mt-0.5">高匹配</p>
+        </div>
       </div>
     </div>
   );
@@ -66,7 +71,7 @@ export function RagPieChart({ high, refCount, none, highPct, refPct, nonePct }: 
 
 function EmptyPlaceholder({ label }: { label: string }) {
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[220px]">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[220px]">
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   );

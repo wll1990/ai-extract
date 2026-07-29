@@ -59,5 +59,7 @@ public interface FeedbackLogRepository extends JpaRepository<FeedbackLog, UUID> 
     @Query("SELECT fl.skillId, COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), COUNT(fl) FROM FeedbackLog fl WHERE fl.skillId IN :skillIds GROUP BY fl.skillId")
     List<Object[]> batchSatisfactionStats(@Param("skillIds") List<UUID> skillIds);
 
+    /** 按颗粒 ID 查询反馈记录，按时间降序 */
+    List<FeedbackLog> findByGrainIdOrderByCreatedAtDesc(UUID grainId, Pageable pageable);
 
 }

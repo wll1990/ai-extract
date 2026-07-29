@@ -170,6 +170,16 @@ app:
     auto-evaluate-turns: 12       # 自动评估前需完成的对话轮数
     auto-demo-rounds: 10          # ProductDemoModal 自动演示轮数
 
+  # ---- RAG 检索配置 ----
+  rag:
+    query-rewrite:
+      enabled: true               # 多轮对话指代消解
+    min-similarity: 0.25          # 颗粒最低相似度阈值，低于此值不进 LLM（触发边界规则）
+    top-k: 5                      # 单次检索最大返回颗粒数
+    context-max-tokens: 8192      # LLM 上下文窗口大小（token 预检用）
+    hybrid-search:
+      enabled: false              # Hybrid Search (Dense + BM25 → RRF)，生产就绪后开启
+
   # ---- 聊天流超时（秒） ----
   chat:
     timeout-seconds: 180           # Flux SSE 流超时，AI 慢响应时防止误杀

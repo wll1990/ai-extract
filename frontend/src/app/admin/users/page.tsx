@@ -122,9 +122,13 @@ export default function AdminUsersPage() {
                   <td className="px-4 py-3 text-muted-foreground">{u.account}</td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      u.role === 'super_admin' ? 'bg-primary-light text-primary' : 'bg-success-bg text-success'
+                      u.role === 'super_admin' ? 'bg-primary-light text-primary'
+                        : u.role === 'company_admin' ? 'bg-blue-100 text-blue-700'
+                        : 'bg-success-bg text-success'
                     }`}>
-                      {u.role === 'super_admin' ? '管理员' : '员工'}
+                      {u.role === 'super_admin' ? '超级管理员'
+                        : u.role === 'company_admin' ? '企业管理员'
+                        : '员工'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted-foreground-2">

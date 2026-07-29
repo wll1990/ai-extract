@@ -89,7 +89,8 @@ public class SpaceController {
                         com.aiextract.model.User::getId,
                         com.aiextract.model.User::getRole, (a, b) -> a));
 
-        // 过滤掉超级管理员的空间，空间总览只展示销冠（employee）空间
+        // 展示规则：空间总览只展示有个人空间的用户（排除管理员空间）
+        // 注：此处用角色判断而非权限码，因为是数据展示范围，非权限校验
         List<Space> visibleSpaces = spaces.stream()
                 .filter(s -> !"super_admin".equals(userRoles.getOrDefault(s.getUserId(), "employee")))
                 .toList();

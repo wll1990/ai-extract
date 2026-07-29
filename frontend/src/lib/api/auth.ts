@@ -6,7 +6,8 @@
 import { apiClient } from './client';
 
 export interface LoginParams {
-  companyId: string;
+  companyCode?: string;
+  companyId?: string;
   account: string;
   password: string;
 }
@@ -16,12 +17,14 @@ export interface LoginResult {
   user: {
     id: string; name: string; role: string;
     avatarUrl: string | null; companyId: string; companyName: string;
+    permissions: string[];
   };
 }
 
 export interface UserInfo {
   id: string; name: string; role: string;
   avatarUrl: string | null; companyId: string; companyName: string;
+  permissions: string[];
 }
 
 export interface RegisterParams {

@@ -51,7 +51,8 @@ public class ConversationService {
             return;
         }
         boolean isSuperAdmin = userRepository.findById(userId)
-                .map(u -> "super_admin".equals(u.getRole())).orElse(false);
+                .map(u -> com.aiextract.config.RolePermissions.hasPermission(
+                    u.getRole(), com.aiextract.config.Permission.CONVERSATION_VIEW)).orElse(false);
         if (!isSuperAdmin) {
             log.warn("会话越权访问被拦截 convId={} owner={} requester={}", conversationId, conv.getUserId(), userId);
             throw new BusinessException(403, "无权访问该会话");

@@ -70,12 +70,14 @@ export default function SkillChatPage() {
   const [sceneCount, setSceneCount] = useState(0);
   const [skillTags, setSkillTags] = useState<string[]>([]);
   const [traceGrainIds, setTraceGrainIds] = useState('');
+  const [isOrgSkill, setIsOrgSkill] = useState(false);
 
   useEffect(() => {
     if (!skillId) return;
     fetch(`${API_BASE}/skills/${skillId}/detail`, { credentials: 'include' })
       .then(r => r.json())
       .then(d => {
+        if (d?.data?.type === 'organization') setIsOrgSkill(true);
         if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage);
         setAvatarUrl(d?.data?.avatarUrl || null);
         if (d?.data?.stats) setSkillStats(d.data.stats);
@@ -528,7 +530,7 @@ export default function SkillChatPage() {
         </div>
 
         {traceGrainIds && (
-          <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds}
+          <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} orgSkillId={isOrgSkill ? skillId : undefined}
             onClose={() => setTraceGrainIds('')} />
         )}
 

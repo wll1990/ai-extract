@@ -64,4 +64,8 @@ public class CompanyRegisterCode {
     /** 过期时间 */
     @Column(name = "expires_at")
     private LocalDateTime expiresAt;
+
+    /** 此注册码创建的用户的默认角色（employee / company_admin） */
+    @Column(name = "default_role", length = 20)
+    private String defaultRole;
 }

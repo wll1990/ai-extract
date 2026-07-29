@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.SkillShare;
 import com.aiextract.service.ShareService;
@@ -34,6 +35,7 @@ public class AdminShareController {
 
     private final ShareService shareService;
     private final JwtUtil jwtUtil;
+    private final CompanyScopeService companyScopeService;
 
     private UUID extractUserId() {
         String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
@@ -45,6 +47,7 @@ public class AdminShareController {
      */
     @PostMapping
     public ApiResponse<Map<String, Object>> getOrCreate(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         return ApiResponse.success(toMap(shareService.getOrCreateShare(skillId, extractUserId())));
     }
 
@@ -53,6 +56,7 @@ public class AdminShareController {
      */
     @GetMapping
     public ApiResponse<Map<String, Object>> get(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         SkillShare share = shareService.findShare(skillId)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
         return ApiResponse.success(toMap(share));
@@ -64,6 +68,7 @@ public class AdminShareController {
     @PutMapping
     public ApiResponse<Map<String, Object>> toggle(
             @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
         return ApiResponse.success(toMap(shareService.toggleShare(skillId, enabled)));
     }
@@ -74,6 +79,7 @@ public class AdminShareController {
     @PutMapping("/code")
     public ApiResponse<Map<String, Object>> updateCode(
             @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String customCode = (String) body.get("shareCode");
         if (customCode == null || customCode.isBlank()) {
             throw new BusinessException(400, "shareCode 不能为空");

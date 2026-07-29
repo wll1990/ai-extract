@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>名片页 V2 — Skill Card Page</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f1f5f9; display: flex; justify-content: center; }
+.page { width: 100%; max-width: 520px; min-height: 100vh; background: #fff; position: relative; }
+
+/* Top bar */
+.topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #f1f5f9; position: sticky; top: 0; background: rgba(255,255,255,.95); backdrop-filter: blur(8px); z-index: 10; }
+.topbar .back { font-size: 13px; color: #64748b; text-decoration: none; transition: color .15s; }
+.topbar .back:hover { color: #334155; }
+.topbar .share-btn { font-size: 12px; background: #fff; color: #334155; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 14px; cursor: pointer; font-weight: 500; transition: all .15s; display: flex; align-items: center; gap: 4px; }
+.topbar .share-btn:hover { border-color: #6366f1; color: #6366f1; }
+
+/* Hero */
+.hero { text-align: center; padding: 36px 20px 20px; }
+.hero .portrait-wrap { position: relative; width: 104px; height: 104px; margin: 0 auto 14px; }
+.hero .portrait-img { width: 104px; height: 104px; border-radius: 50%; object-fit: cover; border: 3px solid #fff; box-shadow: 0 4px 20px rgba(99,102,241,.15); display: block; }
+.hero .portrait-placeholder { width: 104px; height: 104px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #a855f7); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 40px; font-weight: 700; box-shadow: 0 4px 20px rgba(99,102,241,.25); }
+.hero .online-dot { position: absolute; bottom: 8px; right: 8px; width: 14px; height: 14px; border-radius: 50%; background: #22c55e; border: 3px solid #fff; }
+.hero .online-pulse { position: absolute; bottom: 8px; right: 8px; width: 14px; height: 14px; border-radius: 50%; background: #22c55e; animation: pulse-ring 2s ease-out infinite; }
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: .5; }
+  50% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.hero h1 { font-size: 24px; font-weight: 700; color: #0f172a; letter-spacing: -.5px; }
+.hero .title { font-size: 13px; color: #64748b; margin-top: 4px; margin-bottom: 14px; }
+.hero .badges { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.hero .badge { font-size: 11px; padding: 5px 12px; border-radius: 20px; font-weight: 500; }
+.badge-grain { background: #eef2ff; color: #4f46e5; }
+.badge-scene { background: #fef3c7; color: #92400e; }
+.badge-stat { background: #f0fdf4; color: #166534; }
+
+/* Stats row */
+.stats-row { display: flex; justify-content: center; gap: 28px; padding: 0 20px 20px; }
+.stat-item { text-align: center; }
+.stat-item .val { font-size: 20px; font-weight: 700; color: #0f172a; letter-spacing: -.3px; }
+.stat-item .lbl { font-size: 11px; color: #94a3b8; margin-top: 3px; }
+
+/* Intro — premium 3-section */
+.intro { margin: 0 20px 24px; padding: 20px 18px; background: linear-gradient(135deg, #fafbff 0%, #f5f3ff 100%); border-radius: 16px; border: 1px solid #e8e4ff; }
+.intro .headline { font-size: 16px; font-weight: 700; color: #1e1b4b; line-height: 1.4; margin-bottom: 8px; }
+.intro .divider { width: 32px; height: 3px; background: linear-gradient(90deg, #6366f1, #a855f7); border-radius: 2px; margin-bottom: 10px; }
+.intro .body { font-size: 13px; color: #475569; line-height: 1.75; margin-bottom: 10px; }
+.intro .closing { font-size: 12px; color: #6366f1; font-weight: 500; font-style: italic; }
+
+/* Section header */
+.section-hd { margin: 0 20px 8px; }
+.section-hd .section-label { font-size: 15px; font-weight: 700; color: #0f172a; }
+.section-hd .section-sub { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+/* Questions grid */
+.questions { margin: 0 20px 24px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.questions .q-card { padding: 14px; border-radius: 12px; background: #f1f5f9; color: #0f172a; cursor: pointer; transition: all .2s; font-size: 13px; line-height: 1.5; font-weight: 500; border: 1px solid #e2e8f0; }
+.questions .q-card:hover { background: #e2e8f0; border-color: #cbd5e1; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.06); }
+.questions .q-card .q-num { position: absolute; top: 10px; right: 12px; font-size: 28px; font-weight: 800; color: rgba(0,0,0,.04); line-height: 1; }
+.questions .q-card .q-text { position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 8px; }
+.questions .q-card .q-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+/* Spacer for fixed input */
+.spacer { height: 100px; }
+
+/* Input bar — fixed bottom */
+.input-bar { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 520px; background: #fff; border-top: 1px solid #f1f5f9; padding: 12px 16px 24px; z-index: 10; }
+.input-wrap { display: flex; align-items: center; gap: 10px; }
+.input-box { flex: 1; display: flex; align-items: center; gap: 8px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; padding: 2px 2px 2px 16px; transition: border-color .2s, box-shadow .2s; }
+.input-box:focus-within { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99,102,241,.08); }
+.input-box input { flex: 1; border: none; background: transparent; outline: none; font-size: 14px; padding: 11px 0; color: #0f172a; min-width: 0; }
+.input-box input::placeholder { color: #94a3b8; transition: opacity .4s; }
+.input-box .clear-btn { width: 26px; height: 26px; border-radius: 50%; background: #e2e8f0; border: none; cursor: pointer; font-size: 12px; color: #94a3b8; display: none; align-items: center; justify-content: center; flex-shrink: 0; }
+.input-box .clear-btn.show { display: flex; }
+.cta-btn { padding: 11px 18px; border-radius: 14px; background: #6366f1; color: #fff; border: none; cursor: pointer; font-size: 14px; font-weight: 600; white-space: nowrap; transition: all .15s; position: relative; overflow: hidden; flex-shrink: 0; }
+.cta-btn:hover { background: #4f46e5; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,.3); }
+.cta-btn:active { transform: scale(.96); }
+.cta-btn .arrow { display: inline-block; transition: transform .2s; }
+.cta-btn:hover .arrow { transform: translateX(3px); }
+/* Pulse animation */
+.cta-btn .pulse { position: absolute; inset: -4px; border-radius: 18px; border: 2px solid rgba(99,102,241,.2); animation: cta-pulse 2s ease-out infinite; }
+@keyframes cta-pulse {
+  0% { transform: scale(1); opacity: .6; }
+  50% { transform: scale(1.04); opacity: 0; }
+  100% { transform: scale(1); opacity: 0; }
+}
+.cta-btn.intro-style { background: #fff; color: #6366f1; border: 1px solid #e2e8f0; }
+.cta-btn.intro-style:hover { background: #eef2ff; border-color: #c7d2fe; }
+
+.input-hint { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 7px; }
+
+/* Share modal */
+.share-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; align-items: center; justify-content: center; }
+.share-overlay.show { display: flex; }
+.share-modal { background: #fff; border-radius: 20px; padding: 28px 24px; width: 90%; max-width: 360px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.15); }
+.share-modal h3 { font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+.share-modal .sub { font-size: 12px; color: #94a3b8; margin-bottom: 16px; }
+.share-modal .link-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #334155; font-family: monospace; word-break: break-all; margin-bottom: 16px; }
+.share-modal .actions { display: flex; gap: 8px; }
+.share-modal .actions button { flex: 1; padding: 10px; border-radius: 10px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; }
+.share-modal .btn-copy { background: #6366f1; color: #fff; }
+.share-modal .btn-copy:hover { background: #4f46e5; }
+.share-modal .btn-close { background: #f1f5f9; color: #64748b; }
+
+/* Mobile responsive */
+@media (max-width: 520px) {
+  .questions { grid-template-columns: 1fr; }
+  .hero h1 { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <!-- Top bar -->
+  <div class="topbar">
+    <a href="#" class="back">← 返回发现</a>
+    <button class="share-btn" id="shareBtn">📤 分享名片</button>
+  </div>
+
+  <!-- Hero -->
+  <div class="hero">
+    <div class="portrait-wrap">
+      <div class="portrait-placeholder">张</div>
+      <div class="online-dot"></div>
+      <div class="online-pulse"></div>
+    </div>
+    <h1>张经理</h1>
+    <p class="title">华东区销售总监 · B2B企业服务</p>
+    <div class="badges">
+      <span class="badge badge-grain">📚 45 条实战经验</span>
+      <span class="badge badge-scene">🎯 12 个业务场景</span>
+      <span class="badge badge-stat">👍 93% 满意率</span>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-item"><div class="val">1,247</div><div class="lbl">次对话</div></div>
+    <div class="stat-item"><div class="val">89</div><div class="lbl">位用户咨询过</div></div>
+    <div class="stat-item"><div class="val">3天前</div><div class="lbl">最近活跃</div></div>
+  </div>
+
+  <!-- Premium 3-section intro -->
+  <div class="intro">
+    <div class="headline">12年B2B销售老兵，从一线到华东区总监</div>
+    <div class="divider"></div>
+    <div class="body">擅长复杂大客户的决策链渗透、价格谈判守底线、新人快速上手。累计签约超 200 家企业客户，单笔最大金额 3,700 万。</div>
+    <div class="closing">我的经验来自真实的成单和丢单——不教理论，只讲实战。</div>
+  </div>
+
+  <!-- Section header -->
+  <div class="section-hd">
+    <div class="section-label">关于 B2B销售 · 大客户经营，可以问我</div>
+    <div class="section-sub">基于 45 条实战经验提炼的热门问题</div>
+  </div>
+
+  <!-- Questions -->
+  <div class="questions">
+    <div class="q-card"><span class="q-num">01</span><div class="q-text"><span class="q-icon">💬</span><span>初次拜访大客户，怎么快速建立信任？</span></div></div>
+    <div class="q-card"><span class="q-num">02</span><div class="q-text"><span class="q-icon">💬</span><span>客户一直压价，怎么守住利润底线？</span></div></div>
+    <div class="q-card"><span class="q-num">03</span><div class="q-text"><span class="q-icon">💬</span><span>竞品比我便宜 20%，怎么应对？</span></div></div>
+    <div class="q-card"><span class="q-num">04</span><div class="q-text"><span class="q-icon">💬</span><span>怎么判断客户是真有预算还是在比价？</span></div></div>
+  </div>
+
+  <div class="spacer"></div>
+
+  <!-- Input bar -->
+  <div class="input-bar">
+    <div class="input-wrap">
+      <div class="input-box">
+        <input type="text" placeholder="怎么判断客户是真的要买还是了解一下？" id="chatInput" />
+        <button class="clear-btn" id="clearBtn">✕</button>
+      </div>
+      <button class="cta-btn" id="ctaBtn">
+        <span class="pulse"></span>
+        开始咨询 <span class="arrow">→</span>
+      </button>
+    </div>
+    <div class="input-hint" id="inputHint">输入问题开始对话 · 或点击上方推荐问题</div>
+  </div>
+</div>
+
+<!-- Share modal -->
+<div class="share-overlay" id="shareOverlay">
+  <div class="share-modal">
+    <h3>📤 分享张经理的 AI 分身</h3>
+    <p class="sub">对方可通过此链接与张经理的 AI 分身免费对话</p>
+    <div class="link-box">https://ai-extract.com/s/Xk7mPq2RwA</div>
+    <div class="actions">
+      <button class="btn-copy" id="copyBtn">📋 复制链接</button>
+      <button class="btn-close" id="closeShare">关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Elements
+const input = document.getElementById('chatInput');
+const ctaBtn = document.getElementById('ctaBtn');
+const clearBtn = document.getElementById('clearBtn');
+const inputHint = document.getElementById('inputHint');
+const shareBtn = document.getElementById('shareBtn');
+const shareOverlay = document.getElementById('shareOverlay');
+const copyBtn = document.getElementById('copyBtn');
+const closeShare = document.getElementById('closeShare');
+
+// Rotating placeholder
+const placeholders = [
+  '怎么判断客户是真的要买还是了解一下？',
+  '大客户价格谈判有什么技巧？',
+  '如何快速摸清客户的决策流程？',
+  '第一次见客户应该聊什么，不该聊什么？',
+  '竞品对比时怎么不贬低对方又能突出自己？',
+  '遇到客户说"我再考虑考虑"，怎么推进？',
+];
+let idx = 0;
+const inputEl = input;
+function rotate() {
+  idx = (idx + 1) % placeholders.length;
+  inputEl.placeholder = placeholders[idx];
+}
+setInterval(rotate, 3000);
+
+// Input events
+input.addEventListener('input', () => {
+  const hasText = input.value.trim().length > 0;
+  clearBtn.classList.toggle('show', hasText);
+  if (hasText) {
+    ctaBtn.classList.add('intro-style');
+    ctaBtn.innerHTML = '发送 <span class="arrow">➤</span>';
+    inputHint.textContent = '按 Enter 发送 · 将进入聊天模式';
+  } else {
+    ctaBtn.classList.remove('intro-style');
+    ctaBtn.innerHTML = '<span class="pulse"></span>开始咨询 <span class="arrow">→</span>';
+    inputHint.textContent = '输入问题开始对话 · 或点击上方推荐问题';
+  }
+});
+
+clearBtn.addEventListener('click', () => {
+  input.value = '';
+  input.dispatchEvent(new Event('input'));
+  input.focus();
+});
+
+// Send / Start chat
+function doAction(text) {
+  if (text) {
+    alert('→ 跳转到 /chat/skillId?q=' + encodeURIComponent(text) + '&mode=talk\n自动发送首条消息，显示开场白后回答');
+  } else {
+    alert('→ 跳转到 /chat/skillId\n进入 ChatEntry 名片页（现有体验）');
+  }
+}
+
+ctaBtn.addEventListener('click', () => {
+  doAction(input.value.trim());
+});
+
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && input.value.trim()) {
+    doAction(input.value.trim());
+  }
+});
+
+// Question cards
+document.querySelectorAll('.q-card').forEach(card => {
+  card.addEventListener('click', () => {
+    const text = card.querySelector('.q-text span:last-child').textContent;
+    doAction(text);
+  });
+});
+
+// Share
+shareBtn.addEventListener('click', () => shareOverlay.classList.add('show'));
+closeShare.addEventListener('click', () => shareOverlay.classList.remove('show'));
+shareOverlay.addEventListener('click', (e) => { if (e.target === shareOverlay) shareOverlay.classList.remove('show'); });
+copyBtn.addEventListener('click', () => {
+  navigator.clipboard.writeText('https://ai-extract.com/s/Xk7mPq2RwA');
+  copyBtn.textContent = '✓ 已复制';
+  setTimeout(() => copyBtn.textContent = '📋 复制链接', 2000);
+});
+</script>
+</body>
+</html>

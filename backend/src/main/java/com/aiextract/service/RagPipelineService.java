@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +51,12 @@ public class RagPipelineService {
 
     @Value("${app.rag.query-rewrite.enabled:true}")
     private boolean ragRewriteEnabled;
+
+    @Value("${app.rag.min-similarity:0.25}")
+    private double minSimilarity;
+
+    @Value("${app.rag.hybrid-search.enabled:false}")
+    private boolean hybridSearchEnabled;
 
     // ============================================================
     // 数据传输 record
@@ -164,13 +171,31 @@ public class RagPipelineService {
     public GrainResult retrieveGrainsWithScores(String query, UUID spaceId, int topK,
                                                  String domain, RagContext ragCtx) {
         long tRag = System.currentTimeMillis();
-        List<GrainRetriever.GrainResult> scored = grainRetriever.retrieveWithScores(query, spaceId, topK);
+        // P1-9: Hybrid Search 开关 — Dense + Sparse → RRF
+        List<GrainRetriever.GrainResult> scored = hybridSearchEnabled
+            ? grainRetriever.retrieveHybrid(query, spaceId, topK)
+            : grainRetriever.retrieveWithScores(query, spaceId, topK);
         long ragMs = System.currentTimeMillis() - tRag;
 
         if (scored.isEmpty()) {
-            log.info("Step2 RAG无结果，记录缺口");
+            log.info("Step2 RAG无结果 hybrid={}，记录缺口", hybridSearchEnabled);
             writeKnowledgeGap(query, spaceId, ragCtx);
             return new GrainResult(List.of(), Map.of(), Map.of());
+        }
+
+        // ── min-similarity 硬拦截：低于阈值的颗粒不进 LLM ──
+        List<GrainRetriever.GrainResult> filtered = scored.stream()
+                .filter(r -> r.similarity() >= minSimilarity)
+                .toList();
+        if (filtered.isEmpty()) {
+            log.info("Step2 RAG全部低于阈值 minSim={} results={}，记录缺口",
+                    minSimilarity, scored.size());
+            writeKnowledgeGap(query, spaceId, ragCtx);
+            return new GrainResult(List.of(), Map.of(), Map.of());
+        }
+        if (filtered.size() < scored.size()) {
+            log.info("Step2 硬拦截过滤 {}→{} 条 (minSim={})",
+                    scored.size(), filtered.size(), minSimilarity);
         }
 
         double highThreshold = 0.50;
@@ -183,14 +208,25 @@ public class RagPipelineService {
             }
         }
 
-        Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
+        // 先建 similarities map（初始分数）
         Map<UUID, Double> similarities = new java.util.LinkedHashMap<>();
-        int pos = 1;
-        for (var r : scored) {
+        List<ExperienceGrain> grains = filtered.stream()
+            .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
+        for (var r : filtered) {
             similarities.put(r.grain().getId(), r.similarity());
-            if (r.similarity() >= highThreshold) {
+        }
+
+        // P1-2: sceneTag boost — 必须在 tier 分层之前，否则分数变了标签没变
+        boostBySceneTagMatch(query, grains, similarities);
+
+        // tier 分层（使用 boost 后的分数）
+        Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
+        int pos = 1;
+        for (var r : filtered) {
+            double sim = similarities.getOrDefault(r.grain().getId(), r.similarity());
+            if (sim >= highThreshold) {
                 tiers.put(r.grain().getId(), "high");
-            } else if (r.similarity() >= refThreshold) {
+            } else if (sim >= refThreshold) {
                 tiers.put(r.grain().getId(), "ref");
             }
             try {
@@ -202,7 +238,7 @@ public class RagPipelineService {
                     .rewrittenQuery(query)
                     .grainId(r.grain().getId())
                     .sceneTag(r.grain().getSceneTag())
-                    .similarity(r.similarity())
+                    .similarity(sim)
                     .tier(tiers.get(r.grain().getId()))
                     .position(pos++)
                     .createdAt(LocalDateTime.now())
@@ -211,13 +247,163 @@ public class RagPipelineService {
                 log.debug("写检索日志失败: {}", e.getMessage());
             }
         }
-        List<ExperienceGrain> grains = scored.stream()
-            .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
+
+        // 所有颗粒均低于参考阈值 → 记录缺口
+        boolean allBelowRef = tiers.isEmpty();
+        if (allBelowRef && !filtered.isEmpty()) {
+            double bestSim = filtered.stream().mapToDouble(r ->
+                similarities.getOrDefault(r.grain().getId(), r.similarity())).max().orElse(0);
+            String matchInfo = String.format("type=all_low_similarity bestSim=%.3f grainCount=%d threshold=%.2f",
+                bestSim, filtered.size(), refThreshold);
+            log.info("Step2 RAG全部低分匹配 bestSim={} threshold={}，记录缺口", bestSim, refThreshold);
+            writeKnowledgeGap(query, spaceId, ragCtx, matchInfo);
+        }
+
         log.info("Step2 RAG检索完成 {}ms topK={} tags={} high={} ref={}",
-            ragMs, scored.size(),
+            ragMs, filtered.size(),
             grains.stream().map(g -> g.getSceneTag()).distinct().limit(5).toList(),
             tiers.values().stream().filter("high"::equals).count(),
             tiers.values().stream().filter("ref"::equals).count());
+        return new GrainResult(grains, tiers, similarities);
+    }
+
+    /**
+     * P1-2: 查询中的关键词匹配到颗粒 sceneTag 时提升相似度。
+     * 使用 2-4 字滑动窗口匹配，零 AI 调用延迟。
+     */
+    private void boostBySceneTagMatch(String query, List<ExperienceGrain> grains,
+                                       Map<UUID, Double> similarities) {
+        if (query == null || query.isBlank() || grains.isEmpty()) return;
+        // 提取 query 中的 2-4 字片段用于匹配
+        java.util.Set<String> tokens = new java.util.HashSet<>();
+        for (int len = 2; len <= 4; len++) {
+            for (int i = 0; i <= query.length() - len; i++) {
+                tokens.add(query.substring(i, i + len));
+            }
+        }
+        int boosted = 0;
+        for (ExperienceGrain g : grains) {
+            String tag = g.getSceneTag();
+            if (tag == null) continue;
+            boolean matched = tokens.stream().anyMatch(tag::contains);
+            if (matched) {
+                double orig = similarities.getOrDefault(g.getId(), 0.0);
+                similarities.put(g.getId(), Math.min(1.0, orig * 1.15));
+                boosted++;
+            }
+        }
+        if (boosted > 0) {
+            log.debug("sceneTag boost: {}/{} grains boosted", boosted, grains.size());
+        }
+    }
+
+    /**
+     * 多空间语义检索 + 分层标记 — 用于 enterprise chat 和综合分身。
+     * 与单 space 版本共享同一套 tier 阈值和检索日志逻辑。
+     *
+     * @param query    改写后查询
+     * @param spaceIds 空间 ID 列表
+     * @param topK     最大返回数
+     * @param domain   领域标识
+     * @param ragCtx   检索上下文（skillId 可为 null，企业调度不关联单个分身）
+     */
+    public GrainResult retrieveGrainsWithScores(String query, List<UUID> spaceIds, int topK,
+                                                 String domain, RagContext ragCtx) {
+        long tRag = System.currentTimeMillis();
+        // P1-9: multi-space hybrid — 每个 space 独立跑 Dense+Sparse→RRF 后合并
+        List<GrainRetriever.GrainResult> scored;
+        if (hybridSearchEnabled) {
+            scored = java.util.Collections.synchronizedList(new ArrayList<>());
+            java.util.List<java.util.concurrent.CompletableFuture<Void>> futs = spaceIds.stream()
+                .map(sid -> java.util.concurrent.CompletableFuture.runAsync(() -> {
+                    java.util.List<GrainRetriever.GrainResult> r =
+                        grainRetriever.retrieveHybrid(query, sid, topK);
+                    scored.addAll(r);
+                }))
+                .toList();
+            java.util.concurrent.CompletableFuture.allOf(
+                futs.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+        } else {
+            scored = grainRetriever.retrieveWithScores(query, spaceIds, topK);
+        }
+        long ragMs = System.currentTimeMillis() - tRag;
+
+        if (scored.isEmpty()) {
+            log.info("多空间RAG无结果 hybrid={} spaceIds={} query={}", hybridSearchEnabled,
+                    spaceIds.size(), query.substring(0, Math.min(50, query.length())));
+            return new GrainResult(List.of(), Map.of(), Map.of());
+        }
+
+        // ── min-similarity 硬拦截（与单 space 版本共享） ──
+        List<GrainRetriever.GrainResult> filtered = scored.stream()
+                .filter(r -> r.similarity() >= minSimilarity)
+                .toList();
+        if (filtered.isEmpty()) {
+            log.info("多空间RAG全部低于阈值 minSim={} results={} spaceIds={}",
+                    minSimilarity, scored.size(), spaceIds.size());
+            return new GrainResult(List.of(), Map.of(), Map.of());
+        }
+
+        // tier 阈值（从 domain config 读取，与单 space 版本共享逻辑）
+        double highThreshold = 0.50;
+        double refThreshold = 0.30;
+        if (domain != null) {
+            try {
+                DomainConfig dc = domainConfigLoader.load(domain);
+                if (dc != null && dc.getPrecheck() != null) {
+                    highThreshold = dc.getPrecheck().getRagHighThreshold();
+                    refThreshold = dc.getPrecheck().getRagRefThreshold();
+                }
+            } catch (Exception e) {
+                log.debug("加载领域配置失败，使用默认阈值 domain={}", domain);
+            }
+        }
+
+        // 先建 similarities map + grains 列表
+        Map<UUID, Double> similarities = new java.util.LinkedHashMap<>();
+        List<ExperienceGrain> grains = filtered.stream()
+                .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
+        for (var r : filtered) {
+            similarities.put(r.grain().getId(), r.similarity());
+        }
+
+        // P1-2: boost 必须在 tier 分层之前
+        boostBySceneTagMatch(query, grains, similarities);
+
+        // tier 分层（使用 boost 后的分数）
+        Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
+        int pos = 1;
+        for (var r : filtered) {
+            double sim = similarities.getOrDefault(r.grain().getId(), r.similarity());
+            if (sim >= highThreshold) {
+                tiers.put(r.grain().getId(), "high");
+            } else if (sim >= refThreshold) {
+                tiers.put(r.grain().getId(), "ref");
+            }
+            try {
+                grainRetrieveLogRepository.save(com.aiextract.model.GrainRetrieveLog.builder()
+                        .id(UUID.randomUUID())
+                        .skillId(ragCtx != null ? ragCtx.skillId() : null)
+                        .conversationId(ragCtx != null ? ragCtx.conversationId() : UUID.randomUUID())
+                        .originalQuery(ragCtx != null ? ragCtx.originalQuery() : null)
+                        .rewrittenQuery(query)
+                        .grainId(r.grain().getId())
+                        .sceneTag(r.grain().getSceneTag())
+                        .similarity(sim)
+                        .tier(tiers.get(r.grain().getId()))
+                        .position(pos++)
+                        .createdAt(LocalDateTime.now())
+                        .build());
+            } catch (Exception e) {
+                log.debug("写检索日志失败: {}", e.getMessage());
+            }
+        }
+
+        log.info("多空间RAG检索完成 {}ms topK={} tags={} high={} ref={}",
+                ragMs, filtered.size(),
+                grains.stream().map(ExperienceGrain::getSceneTag).distinct().limit(5).collect(Collectors.toList()),
+                tiers.values().stream().filter("high"::equals).count(),
+                tiers.values().stream().filter("ref"::equals).count());
         return new GrainResult(grains, tiers, similarities);
     }
 
@@ -235,6 +421,18 @@ public class RagPipelineService {
      * @param ragCtx  检索上下文
      */
     public void writeKnowledgeGap(String query, UUID spaceId, RagContext ragCtx) {
+        writeKnowledgeGap(query, spaceId, ragCtx, null);
+    }
+
+    /**
+     * 写入知识缺口（含匹配质量元数据）。
+     *
+     * @param query     原始查询
+     * @param spaceId   空间 ID
+     * @param ragCtx    检索上下文
+     * @param matchInfo 匹配质量信息，null 表示 RAG 零结果；非 null 表示有结果但全部低分
+     */
+    public void writeKnowledgeGap(String query, UUID spaceId, RagContext ragCtx, String matchInfo) {
         if (query == null || query.trim().length() < 5) {
             return;
         }
@@ -250,11 +448,12 @@ public class RagPipelineService {
                 .sceneTag(sceneTag)
                 .attemptedQueryCount((int) prevCount + 1)
                 .status("open")
+                .note(matchInfo)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build());
-            log.info("知识缺口已记录 skillId={} sceneTag={} count={}",
-                ragCtx != null ? ragCtx.skillId() : null, sceneTag, prevCount + 1);
+            log.info("知识缺口已记录 skillId={} sceneTag={} count={} matchInfo={}",
+                ragCtx != null ? ragCtx.skillId() : null, sceneTag, prevCount + 1, matchInfo);
         } catch (Exception e) {
             log.warn("记录知识缺口失败: {}", e.getMessage());
         }

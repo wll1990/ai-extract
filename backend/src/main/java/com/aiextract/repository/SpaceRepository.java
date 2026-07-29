@@ -26,6 +26,11 @@ public interface SpaceRepository extends JpaRepository<Space, UUID> {
      */
     List<Space> findByUserIdIn(List<UUID> userIds);
 
+    Page<Space> findByUserIdIn(List<UUID> userIds, Pageable pageable);
+
+    /** 按标题模糊搜索 + 用户过滤 */
+    Page<Space> findByTitleContainingIgnoreCaseAndUserIdIn(String keyword, List<UUID> userIds, Pageable pageable);
+
     /** 按标题模糊搜索 */
     Page<Space> findByTitleContainingIgnoreCase(String keyword, Pageable pageable);
 }

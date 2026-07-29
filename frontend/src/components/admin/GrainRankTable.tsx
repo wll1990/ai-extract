@@ -19,7 +19,7 @@ export function GrainRankTable({ grains, type, onGrainClick }: Props) {
   if (!grains || grains.length === 0) return <EmptyPlaceholder label={type === 'best' ? '暂无好评颗粒' : '暂无差评颗粒'} />;
 
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm">
       <h3 className="mb-3 text-sm font-semibold">
         {type === 'best' ? '⭐ 最佳颗粒（👍最多）' : '⚠️ 待优化颗粒（👎最多）'}
       </h3>
@@ -52,7 +52,7 @@ export function GrainRankTable({ grains, type, onGrainClick }: Props) {
 
 function EmptyPlaceholder({ label }: { label: string }) {
   return (
-    <div className="rounded-xl bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[120px]">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm flex items-center justify-center h-[180px]">
       <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   );

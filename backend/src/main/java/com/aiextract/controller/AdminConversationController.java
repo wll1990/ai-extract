@@ -1,6 +1,8 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.CompanyScopeService;
+import com.aiextract.config.TokenContext;
 import com.aiextract.model.SkillConversation;
 import com.aiextract.model.SkillMessage;
 import com.aiextract.repository.SkillConversationRepository;
@@ -25,6 +27,7 @@ public class AdminConversationController {
     private final SkillMessageRepository messageRepository;
     private final com.aiextract.repository.SkillRepository skillRepository;
     private final com.aiextract.repository.UserRepository userRepository;
+    private final CompanyScopeService companyScopeService;
 
     /** 对话历史列表（管理员） */
     @GetMapping("/admin/conversations")
@@ -33,11 +36,22 @@ public class AdminConversationController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
 
+        UUID companyId = TokenContext.getCompanyId();
         Page<SkillConversation> convPage;
         if (skillId != null) {
+            companyScopeService.assertSkillOwnership(skillId);
             convPage = conversationRepository.findBySkillIdOrderByUpdatedAtDesc(skillId, PageRequest.of(page - 1, size));
         } else {
-            convPage = conversationRepository.findAllByOrderByUpdatedAtDesc(PageRequest.of(page - 1, size));
+            List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
+            if (companySkillIds != null && !companySkillIds.isEmpty()) {
+                convPage = conversationRepository.findBySkillIdInOrderByUpdatedAtDesc(companySkillIds, PageRequest.of(page - 1, size));
+            } else if (companySkillIds != null) {
+                // company_admin with no skills — return empty page
+                convPage = Page.empty();
+            } else {
+                // super_admin — see all
+                convPage = conversationRepository.findAllByOrderByUpdatedAtDesc(PageRequest.of(page - 1, size));
+            }
         }
 
         // 批量查 skill 和 user，避免 N+1

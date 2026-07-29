@@ -5,20 +5,22 @@ import { useRouter } from 'next/navigation';
 import { getUser } from '@/lib/storage';
 import { getSpaces } from '@/lib/api/spaces';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Permission } from '@/lib/permissions';
 
 /**
  * "我的空间" — 自动跳转当前登录用户的空间详情页
- * 每个员工注册时自动创建空间，因此总能找到自己的空间
+ * 有个人空间权限则跳转到自己的空间，有管理后台权限则跳转到空间总览
  */
 export default function MySpaceRedirect() {
   const router = useRouter();
-  const user = getUser();
+  const user = getUser() as any;
+  const perms: string[] = user?.permissions || [];
 
   useEffect(() => {
     if (!user) { router.replace('/login'); return; }
 
-    // 管理员 → 空间总览
-    if (user.role === 'super_admin') {
+    // 无个人空间权限 → 空间总览
+    if (!perms.includes(Permission.SPACE_OWN)) {
       router.replace('/spaces');
       return;
     }

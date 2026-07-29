@@ -164,6 +164,33 @@ public class Skill {
     private String domain;
 
     /**
+     * 分身类型：individual=个人分身, organization=组织分身。
+     * individual 分身为默认值，organization 类型的分身仅作 member 被聚合，
+     * 不单独聊天。
+     * @since 2026-07-28 V31 迁移
+     */
+    @Column(name = "org_type", length = 20)
+    private String orgType;
+
+    /**
+     * 名片页 3 段式专业介绍 JSON：{"headline":"...","body":"...","closing":"..."}
+     * 发布时 @Async 生成，与 opening_message 互补（后者保留用于向后兼容）。
+     * @since 2026-07-29 V33 迁移
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "intro_profile", columnDefinition = "JSONB")
+    private String introProfile;
+
+    /**
+     * 预生成的推荐问题 JSONB 数组（6-8 条），发布时 @Async 生成。
+     * API 优先读此缓存，null 时回退模板。
+     * @since 2026-07-29 V33 迁移
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "recommended_questions", columnDefinition = "JSONB")
+    private String recommendedQuestions;
+
+    /**
      * Talk 模式开场配置（JSONB）
      * {"showRecommendedQuestions":false, "greetingMode":"auto", "showSceneTags":false}
      */

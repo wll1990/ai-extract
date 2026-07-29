@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.FeedbackLogRepository;
 import com.aiextract.repository.KnowledgeGapRepository;
@@ -28,6 +29,7 @@ public class AdminNotificationController {
     private final FeedbackLogRepository feedbackLogRepository;
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
+    private final CompanyScopeService companyScopeService;
 
     /**
      * 单个分身的通知详情 —— 含阈值告警。
@@ -35,6 +37,7 @@ public class AdminNotificationController {
     @GetMapping("/skills/{skillId}")
     public ApiResponse<Map<String, Object>> getSkillNotifications(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
+        companyScopeService.assertSkillOwnership(id);
         var skill = skillRepository.findById(id).orElse(null);
         if (skill == null) {
 

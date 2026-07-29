@@ -24,5 +24,7 @@ public interface SkillShareRepository extends JpaRepository<SkillShare, UUID> {
      */
     Optional<SkillShare> findFirstBySkillIdAndChannel(UUID skillId, String channel);
 
+    /** 组织分身分享查询（与 skillId 互斥）。 */
+    Optional<SkillShare> findFirstByOrgSkillIdAndChannel(UUID orgSkillId, String channel);
 
 }

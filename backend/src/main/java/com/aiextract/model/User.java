@@ -51,7 +51,7 @@ public class User {
     private String name;
 
     /**
-     * 角色：super_admin / employee
+     * 角色：super_admin / company_admin / employee
      */
     @Column(name = "role", nullable = false, length = 20)
     private String role;

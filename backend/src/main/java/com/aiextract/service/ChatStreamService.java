@@ -9,14 +9,18 @@ import org.springframework.scheduling.annotation.Async;
 import com.aiextract.dto.SkillChatRequest;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.config.DomainConfig;
+import com.aiextract.config.RolePermissions;
+import com.aiextract.config.Permission;
 import com.aiextract.model.ChatChunk;
 import com.aiextract.model.ExperienceGrain;
+import com.aiextract.model.OrganizationSkill;
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillProfile;
 import com.aiextract.model.Space;
 import com.aiextract.model.User;
 import com.aiextract.repository.ExperienceGrainRepository;
+import com.aiextract.repository.OrganizationSkillRepository;
 import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SkillProfileRepository;
 import com.aiextract.repository.SkillRepository;
@@ -78,12 +82,17 @@ public class ChatStreamService {
     private final GrainRecommendationService grainRec;
     private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
     private final ShareRateLimiter shareRateLimiter;
+    private final OrganizationSkillRepository orgSkillRepository;
+    private final OrganizationSkillService orgSkillService;
 
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
 
     @Value("${app.chat.timeout-seconds:120}")
     private int chatTimeoutSeconds;
+
+    @Value("${app.rag.top-k:5}")
+    private int ragTopK;
 
     // ============================================================
     // 游客拦截
@@ -123,24 +132,43 @@ public class ChatStreamService {
     // ============================================================
 
     /**
-     * 分身问答流式对话 — 核心方法。
+     * 分身问答入口分发 — 先查个体 Skill，再查 OrganizationSkill，都不存在则报错。
+     */
+    public Flux<ChatChunk> chat(UUID skillId, SkillChatRequest request, UUID userId, String role) {
+        Skill skill = skillRepository.findById(skillId).orElse(null);
+        if (skill != null) {
+            return chatIndividual(skill, skillId, request, userId, role);
+        }
+
+        OrganizationSkill orgSkill = orgSkillRepository.findById(skillId).orElse(null);
+        if (orgSkill != null) {
+            return chatOrganization(orgSkill, skillId, request, userId, role);
+        }
+
+        return Flux.just(ChatChunk.error(ErrorMessages.SKILL_NOT_FOUND));
+    }
+
+    /**
+     * 个体分身问答 — 原有 chat() 方法体，逻辑不变。
      *
      * <p>三阶段：Setup（同步校验+RAG+会话）→ Stream（LLM）→ Post-stream（meta+source）。</p>
      */
-    public Flux<ChatChunk> chat(UUID skillId, SkillChatRequest request, UUID userId, String role) {
+    private Flux<ChatChunk> chatIndividual(Skill skill, UUID skillId, SkillChatRequest request, UUID userId, String role) {
+        // ── Phase 0: 参数校验 ──
+        String msg = request.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return Flux.just(ChatChunk.error("消息不能为空"));
+        }
 
         // ── Phase 1: Setup（同步，订阅前执行） ──
-
-        Skill skill = skillRepository.findById(skillId)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
         TraceContext.init(skill.getId());
         long t0 = System.currentTimeMillis();
 
         log.info("═══ 分身问答开始 ═══ skillId={} userId={} msg={}",
-            skillId, userId, request.getMessage().substring(0, Math.min(50, request.getMessage().length())));
+            skillId, userId, msg.substring(0, Math.min(50, msg.length())));
 
         boolean isAdmin = userRepository.findById(userId)
-            .map(u -> "super_admin".equals(u.getRole())).orElse(false);
+            .map(u -> RolePermissions.hasPermission(u.getRole(), Permission.SKILL_MANAGE)).orElse(false);
         boolean isOwner = spaceRepository.findById(skill.getSpaceId())
             .map(s -> userId.equals(s.getUserId())).orElse(false);
         boolean canChat = isAdmin || isOwner
@@ -178,7 +206,7 @@ public class ChatStreamService {
         String domain = domainConfigLoader.resolveDomain(skill);
         String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, skill.getId());
         RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(skill.getId(), convId, request.getMessage());
-        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(ragQuery, skill.getSpaceId(), 5, domain, ragCtx);
+        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(ragQuery, skill.getSpaceId(), ragTopK, domain, ragCtx);
 
         final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
         final UUID persistedReportId = grains.grains().stream()
@@ -186,7 +214,7 @@ public class ChatStreamService {
             .filter(id -> id != null).findFirst().orElse(null);
 
         String systemPrompt = promptAssembly.buildSkillSystemPrompt(
-            skill, grains.grains(), grains.tiers(), mode, request.getChannel());
+            skill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel());
         log.info("③ SystemPrompt构建完成 {}chars", systemPrompt.length());
         List<Map<String, String>> messages = promptAssembly.buildChatMessages(systemPrompt, request.getMessage(),
             convId, request.getHistory());
@@ -262,6 +290,7 @@ public class ChatStreamService {
                     conversationStatsRepository.save(com.aiextract.model.ConversationStats.builder()
                         .id(UUID.randomUUID())
                         .skillId(skill.getId())
+                        .skillType("individual")
                         .conversationId(finalConvId)
                         .userId(userId)
                         .mode(finalMode)
@@ -280,6 +309,136 @@ public class ChatStreamService {
                 }
                 TraceContext.clear();
             });
+    }
+
+    // ============================================================
+    // 组织分身问答
+    // ============================================================
+
+    /**
+     * 组织分身问答 — 多 space RAG + org_skill prompt。
+     * 三阶段对标 {@link #chatIndividual}：Setup → Stream → Post-stream。
+     */
+    private Flux<ChatChunk> chatOrganization(OrganizationSkill orgSkill, UUID orgSkillId,
+            SkillChatRequest request, UUID userId, String role) {
+        TraceContext.init(orgSkillId);
+        long t0 = System.currentTimeMillis();
+
+        log.info("═══ 组织分身问答开始 ═══ orgSkillId={} name={} userId={}",
+                orgSkillId, orgSkill.getName(), userId);
+
+        // 仅 published 可对话
+        if (!"published".equals(orgSkill.getStatus())) {
+            TraceContext.clear();
+            return Flux.just(ChatChunk.error("组织分身未发布"));
+        }
+
+        // 游客拦截
+        Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
+        if (guestBlock != null) {
+            TraceContext.clear();
+            return guestBlock;
+        }
+
+        // 解析成员 spaceId 列表
+        List<UUID> spaceIds = orgSkillService.resolveMemberSpaceIds(orgSkill);
+        if (spaceIds.isEmpty()) {
+            TraceContext.clear();
+            return Flux.just(ChatChunk.error("组织分身尚未关联任何已发布成员分身"));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        String mode = skillService.resolveMode(request.getMode(), request.getMessage());
+        boolean record = true;
+
+        UUID convId = convPersistence.upsertConversation(orgSkillId, userId, request, mode, now, null);
+
+        // RAG — 多 space 语义检索
+        String ragHistory = record ? ragPipelineService.buildRagHistory(convId) : request.getHistory();
+        String domain = orgSkill.getDomain() != null ? orgSkill.getDomain() : "sales";
+        String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, orgSkillId);
+        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(orgSkillId, convId, request.getMessage());
+        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(
+                ragQuery, spaceIds, ragTopK, domain, ragCtx);
+
+        final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
+        final UUID persistedReportId = grains.grains().stream()
+                .map(ExperienceGrain::getReportId)
+                .filter(id -> id != null).findFirst().orElse(null);
+
+        String systemPrompt = promptAssembly.buildOrgSkillSystemPrompt(
+                orgSkill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel());
+        log.info("③ 组织分身SystemPrompt构建完成 {}chars", systemPrompt.length());
+        List<Map<String, String>> messages = promptAssembly.buildChatMessages(systemPrompt, request.getMessage(),
+                convId, request.getHistory());
+        Map<String, Object> context = Map.of("mode", mode, "skillId", orgSkillId.toString(),
+                "conversationId", convId.toString());
+
+        // ── Phase 2 & 3 ──
+        final UUID finalConvId = convId;
+        final String finalMode = mode;
+        final long tAiStart = System.currentTimeMillis();
+        final StringBuilder aiContent = new StringBuilder();
+        final java.util.concurrent.atomic.AtomicBoolean hasStreamError = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        Flux<ChatChunk> aiStream = chatStreamAdapter.chatStream(messages, context)
+                .map(event -> {
+                    ChatChunk chunk = ChatChunk.fromEventMap(event);
+                    if ("content".equals(chunk.getType()) && chunk.getContent() != null) {
+                        aiContent.append(chunk.getContent());
+                    }
+                    return chunk;
+                })
+                .doOnComplete(() -> {
+                    long aiMs = System.currentTimeMillis() - tAiStart;
+                    log.info("④ 组织分身AI流式完成 {}ms contentLen={}", aiMs, aiContent.length());
+                    convPersistence.saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, null,
+                            persistedGrainId, persistedReportId);
+                })
+                .timeout(Duration.ofSeconds(chatTimeoutSeconds))
+                .doOnError(e -> {
+                    hasStreamError.set(true);
+                    log.error("组织分身SSE流超时或异常", e);
+                })
+                .onErrorResume(err -> Flux.just(ChatChunk.error(ErrorMessages.AI_SERVICE_UNAVAILABLE)));
+
+        Flux<ChatChunk> postStream = Flux.defer(() -> {
+            long totalMs = System.currentTimeMillis() - t0;
+            log.info("✅ 组织分身问答完成 total={}ms", totalMs);
+            return Flux.concat(
+                    Flux.just(ChatChunk.meta(finalConvId.toString())),
+                    buildMultiSpaceSourceChunkFlux(spaceIds, grains.grains(), grains.similarities())
+            );
+        });
+
+        return Flux.concat(aiStream, postStream)
+                .doFinally(s -> {
+                    try {
+                        double avgSim = grains.similarities().isEmpty() ? 0
+                                : grains.similarities().values().stream().mapToDouble(Double::doubleValue).average().orElse(0);
+                        String errorType = hasStreamError.get() ? "stream_error" : null;
+                        conversationStatsRepository.save(com.aiextract.model.ConversationStats.builder()
+                                .id(UUID.randomUUID())
+                                .skillId(orgSkillId)
+                                .skillType("organization")
+                                .conversationId(finalConvId)
+                                .userId(userId)
+                                .mode(finalMode)
+                                .ragHighCount((int) grains.tiers().values().stream().filter("high"::equals).count())
+                                .ragRefCount((int) grains.tiers().values().stream().filter("ref"::equals).count())
+                                .ragNoneCount(grains.grains().isEmpty() ? 1 : 0)
+                                .ragAvgSimilarity(avgSim)
+                                .errorType(errorType)
+                                .isTest(Boolean.TRUE.equals(request.getIsTest()))
+                                .llmDurationMs((int) (System.currentTimeMillis() - tAiStart))
+                                .totalDurationMs((int) (System.currentTimeMillis() - t0))
+                                .createdAt(LocalDateTime.now())
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("写入组织分身conversation_stats失败 convId={}: {}", finalConvId, e.getMessage());
+                    }
+                    TraceContext.clear();
+                });
     }
 
     // ============================================================
@@ -370,6 +529,7 @@ public class ChatStreamService {
                     conversationStatsRepository.save(com.aiextract.model.ConversationStats.builder()
                         .id(UUID.randomUUID())
                         .skillId(skill.getId())
+                        .skillType("individual")
                         .conversationId(finalPracticeConvId)
                         .mode("practice")
                         .ragHighCount(request.getSceneTag() != null ? 1 : 0)
@@ -389,53 +549,94 @@ public class ChatStreamService {
     // ============================================================
 
     public Flux<ChatChunk> enterpriseChat(SkillChatRequest request, UUID companyId) {
+        String query = request.getMessage();
+        if (query == null || query.isBlank()) {
+            return Flux.just(ChatChunk.error("消息不能为空"));
+        }
+        long t0 = System.currentTimeMillis();
+        log.info("═══ 企业总调度问答开始 ═══ companyId={} msg={}",
+                companyId, query.substring(0, Math.min(50, query.length())));
+
+        // 收集公司下所有 space
         List<UUID> companySpaceIds = spaceRepository.findByUserIdIn(
-            userRepository.findByCompanyId(companyId).stream().map(User::getId).toList()
+                userRepository.findByCompanyId(companyId).stream().map(User::getId).toList()
         ).stream().map(Space::getId).toList();
 
-        List<ExperienceGrain> allGrains;
         if (companySpaceIds.isEmpty()) {
-            allGrains = List.of();
-        } else {
-            allGrains = grainRepository.findBySpaceIdIn(companySpaceIds,
-                PageRequest.of(0, 500));
+            return Flux.just(ChatChunk.error("企业暂无可用分身"));
         }
 
-        String query = request.getMessage();
-        List<ExperienceGrain> matched = allGrains.stream()
-            .filter(g -> g.getSceneTag() != null || g.getExpertThought() != null)
-            .sorted((a, b) -> {
-                int scoreA = grainRec.relevanceScore(a, query);
-                int scoreB = grainRec.relevanceScore(b, query);
-                return Integer.compare(scoreB, scoreA);
-            })
-            .limit(20).toList();
+        // RAG 管道：查询改写 + 多空间向量检索 + 分层
+        String domain = "sales.b2b_enterprise";
+        String ragQuery = ragPipelineService.rewriteQuery(query, null, domain, null);
+        UUID pseudoConvId = UUID.randomUUID();
+        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(null, pseudoConvId, query);
+        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(
+                ragQuery, companySpaceIds, ragTopK, domain, ragCtx);
 
-        String systemPrompt = promptAssembly.buildEnterpriseSystemPrompt(query, matched, "sales.b2b_enterprise");
+        // 组装 prompt + 流式
+        final long tAiStart = System.currentTimeMillis();
+        final StringBuilder aiContent = new StringBuilder();
+        final java.util.concurrent.atomic.AtomicBoolean hasStreamError = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+        String systemPrompt = promptAssembly.buildEnterpriseSystemPromptV2(
+                ragQuery, grains.grains(), grains.tiers(), grains.similarities(), companySpaceIds, domain);
         List<Map<String, String>> messages = List.of(
-            Map.of("role", "system", "content", systemPrompt),
-            Map.of("role", "user", "content", query)
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", query)
         );
-        return chatStreamAdapter.chatStream(messages, Map.of("mode", "enterprise"))
-            .map(ChatChunk::fromEventMap)
-            .doFinally(s -> {
-                try {
-                    conversationStatsRepository.save(com.aiextract.model.ConversationStats.builder()
-                        .id(UUID.randomUUID())
-                        .conversationId(UUID.randomUUID())
-                        .mode("enterprise")
-                        .ragHighCount(matched.size())
-                        .ragRefCount(0)
-                        .ragNoneCount(0)
-                        .isTest(false)
-                        .createdAt(LocalDateTime.now())
-                        .build());
-                } catch (Exception e) {
-                    log.warn("写入enterprise stats失败: {}", e.getMessage());
-                }
-            })
-            .timeout(Duration.ofSeconds(chatTimeoutSeconds))
-            .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
+
+        Flux<ChatChunk> aiStream = chatStreamAdapter.chatStream(messages, Map.of("mode", "enterprise"))
+                .map(event -> {
+                    ChatChunk chunk = ChatChunk.fromEventMap(event);
+                    if ("content".equals(chunk.getType()) && chunk.getContent() != null) {
+                        aiContent.append(chunk.getContent());
+                    }
+                    return chunk;
+                })
+                .timeout(Duration.ofSeconds(chatTimeoutSeconds))
+                .doOnError(e -> {
+                    hasStreamError.set(true);
+                    log.error("企业调度SSE流异常", e);
+                })
+                .onErrorResume(err -> Flux.just(ChatChunk.error(ErrorMessages.AI_SERVICE_UNAVAILABLE)));
+
+        Flux<ChatChunk> postStream = Flux.defer(() -> {
+            long totalMs = System.currentTimeMillis() - t0;
+            log.info("✅ 企业调度完成 total={}ms grains={}", totalMs, grains.grains().size());
+            return Flux.concat(
+                    Flux.just(ChatChunk.meta(pseudoConvId.toString())),
+                    buildEnterpriseSourceChunkFlux(grains.grains(), grains.similarities())
+            );
+        });
+
+        return Flux.concat(aiStream, postStream)
+                .doFinally(s -> {
+                    try {
+                        double avgSim = grains.similarities().isEmpty() ? 0
+                                : grains.similarities().values().stream().mapToDouble(Double::doubleValue).average().orElse(0);
+                        String errorType = hasStreamError.get() ? "stream_error" : null;
+                        conversationStatsRepository.save(com.aiextract.model.ConversationStats.builder()
+                                .id(UUID.randomUUID())
+                                .skillId(companyId)
+                                .skillType("enterprise")
+                                .conversationId(pseudoConvId)
+                                .userId(UUID.randomUUID())
+                                .mode("enterprise")
+                                .ragHighCount((int) grains.tiers().values().stream().filter("high"::equals).count())
+                                .ragRefCount((int) grains.tiers().values().stream().filter("ref"::equals).count())
+                                .ragNoneCount(grains.grains().isEmpty() ? 1 : 0)
+                                .ragAvgSimilarity(avgSim)
+                                .errorType(errorType)
+                                .isTest(false)
+                                .llmDurationMs((int) (System.currentTimeMillis() - tAiStart))
+                                .totalDurationMs((int) (System.currentTimeMillis() - t0))
+                                .createdAt(LocalDateTime.now())
+                                .build());
+                    } catch (Exception e) {
+                        log.warn("写入enterprise stats失败: {}", e.getMessage());
+                    }
+                });
     }
 
     /**
@@ -526,8 +727,52 @@ public class ChatStreamService {
     // ============================================================
 
     // ============================================================
-    // 溯源
+    // 溯源 — 企业调度 & 组织分身
     // ============================================================
+
+    /**
+     * 多空间溯源 SSE — 企业调度和组织分身共用。
+     * 预加载 space→ownerName 映射，标注来源销冠姓名。
+     */
+    private Flux<ChatChunk> buildMultiSpaceSourceChunkFlux(List<UUID> spaceIds,
+            List<ExperienceGrain> grains, Map<UUID, Double> similarities) {
+        if (grains.isEmpty() || spaceIds.isEmpty()) return Flux.empty();
+
+        Map<UUID, String> ownerNames = new java.util.HashMap<>();
+        try {
+            List<Space> spaces = spaceRepository.findAllById(spaceIds);
+            List<UUID> userIds = spaces.stream().map(Space::getUserId).distinct().collect(Collectors.toList());
+            Map<UUID, String> userNames = userRepository.findAllById(userIds).stream()
+                    .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+            for (Space sp : spaces) {
+                ownerNames.put(sp.getId(), userNames.getOrDefault(sp.getUserId(), "销冠"));
+            }
+        } catch (Exception e) {
+            log.warn("加载多空间溯源销冠名失败: {}", e.getMessage());
+        }
+
+        String grainIds = grains.stream().map(g -> g.getId().toString()).collect(Collectors.joining(","));
+        String grainTags = grains.stream()
+                .map(g -> {
+                    String name = ownerNames.getOrDefault(g.getSpaceId(), "");
+                    String tag = g.getSceneTag() != null ? g.getSceneTag() : "";
+                    return name.isEmpty() ? tag : name + "·" + tag;
+                })
+                .collect(Collectors.joining(","));
+        double avgSim = similarities.values().stream().mapToDouble(Double::doubleValue).average().orElse(0);
+
+        return Flux.just(ChatChunk.source("", "", grainIds, grainTags,
+                Math.min(grains.size(), 5), String.format("%.2f", avgSim),
+                String.format("%.0f", avgSim * 100), ""));
+    }
+
+    /** 企业调度溯源 — 从 grains 推导 spaceIds 后委托多空间方法。 */
+    private Flux<ChatChunk> buildEnterpriseSourceChunkFlux(
+            List<ExperienceGrain> grains, Map<UUID, Double> similarities) {
+        if (grains.isEmpty()) return Flux.empty();
+        List<UUID> spaceIds = grains.stream().map(ExperienceGrain::getSpaceId).distinct().collect(Collectors.toList());
+        return buildMultiSpaceSourceChunkFlux(spaceIds, grains, similarities);
+    }
 
     private Flux<ChatChunk> buildSourceChunkFlux(UUID spaceId, List<ExperienceGrain> grains,
                                                    Map<UUID, Double> similarities) {
@@ -540,20 +785,29 @@ public class ChatStreamService {
                 .map(g -> g.getSceneTag() != null ? g.getSceneTag() : "")
                 .filter(t -> !t.isEmpty()).distinct().collect(Collectors.joining(","));
 
-            List<String> names = new java.util.ArrayList<>();
-            for (ExperienceGrain g : topGrains) {
-                if (g.getSourceMaterialId() != null) {
-                    skillMaterialRepository.findById(g.getSourceMaterialId()).ifPresent(m -> {
-                        if (m.getFileName() != null) names.add(m.getFileName());
-                    });
-                }
-                if (g.getSourceInterviewId() != null) {
-                    interviewSessionRepository.findById(g.getSourceInterviewId()).ifPresent(s -> {
-                        if (s.getTopic() != null) names.add("访谈: " + s.getTopic());
-                    });
-                }
-            }
-            String sourceNames = names.stream().distinct().collect(Collectors.joining(", "));
+            // 批量加载 source material + interview session，消除 N+1
+            List<UUID> materialIds = topGrains.stream()
+                .map(ExperienceGrain::getSourceMaterialId).filter(id -> id != null).distinct().toList();
+            List<UUID> interviewIds = topGrains.stream()
+                .map(ExperienceGrain::getSourceInterviewId).filter(id -> id != null).distinct().toList();
+            Map<UUID, String> materialNames = materialIds.isEmpty() ? Map.of()
+                : skillMaterialRepository.findAllById(materialIds).stream()
+                    .filter(m -> m.getFileName() != null)
+                    .collect(Collectors.toMap(
+                        com.aiextract.model.SkillMaterial::getId,
+                        com.aiextract.model.SkillMaterial::getFileName,
+                        (a, b) -> a));
+            Map<UUID, String> interviewNames = interviewIds.isEmpty() ? Map.of()
+                : interviewSessionRepository.findAllById(interviewIds).stream()
+                    .filter(s -> s.getTopic() != null)
+                    .collect(Collectors.toMap(
+                        com.aiextract.model.InterviewSession::getId,
+                        s -> "访谈: " + s.getTopic(),
+                        (a, b) -> a));
+            java.util.Set<String> nameSet = new java.util.LinkedHashSet<>();
+            materialIds.forEach(id -> { if (materialNames.containsKey(id)) nameSet.add(materialNames.get(id)); });
+            interviewIds.forEach(id -> { if (interviewNames.containsKey(id)) nameSet.add(interviewNames.get(id)); });
+            String sourceNames = String.join(", ", nameSet);
 
             String reportId = null;
             String reportTitle = null;

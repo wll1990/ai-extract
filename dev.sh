@@ -5,7 +5,7 @@ DIR="$(dirname "$0")"
 echo "=== 停止旧服务 ==="
 lsof -ti:8080 | xargs kill -9 2>/dev/null && echo "后端已停止" || echo "后端未运行"
 lsof -ti:3000 | xargs kill -9 2>/dev/null && echo "管理后台已停止" || echo "管理后台未运行"
-lsof -ti:3001 | xargs kill -9 2>/dev/null && echo "企业端已停止" || echo "企业端未运行"
+lsof -ti:3001 | xargs kill -9 2>/dev/null && echo "平台端已停止" || echo "平台端未运行"
 lsof -ti:8000 | xargs kill -9 2>/dev/null && echo "文件解析已停止" || echo "文件解析未运行"
 
 echo "=== 启动文件解析服务 (Python) :8000 ==="
@@ -20,6 +20,6 @@ echo "=== 启动前端管理后台 (dev) :3000 ==="
 cd "$DIR/frontend" && npm run dev &
 sleep 5 && echo "管理后台: http://localhost:3000"
 
-echo "=== 启动企业端 (dev) :3001 ==="
-cd "$DIR/enterprise" && npm run dev -- -p 3001 &
-sleep 5 && echo "企业端: http://localhost:3001"
+echo "=== 启动平台端 (dev) :3001 ==="
+cd "$DIR/platform" && npm run dev -- -p 3001 &
+sleep 5 && echo "平台端: http://localhost:3001"

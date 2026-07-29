@@ -106,4 +106,12 @@ public class ConversationStats {
     /** 记录创建时间 */
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    /**
+     * 管道类型：individual=个人分身, organization=组织分身, enterprise=企业调度。
+     * 用于跨类型统计区分。注意 skill_id 字段在不同类型下的语义不同。
+     * @since 2026-07-28 V31 迁移
+     */
+    @Column(name = "skill_type", length = 10)
+    private String skillType;
 }

@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.TokenContext;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
 import com.aiextract.util.JwtUtil;
@@ -49,15 +50,17 @@ public class AdminController {
                 .getContext().getAuthentication().getCredentials();
     }
 
-    private UUID extractCompanyId() {
-        return jwtUtil.getCompanyIdFromToken(getToken());
-    }
-
     // ==================== /admin/dashboard ====================
 
     @GetMapping("/dashboard")
     public ApiResponse<Map<String, Object>> dashboard() {
-        return ApiResponse.success(adminService.getDashboard());
+        return ApiResponse.success(adminService.getDashboard(TokenContext.getCompanyId()));
+    }
+
+    /** 工作台 v2 — 运营指挥中心，聚合全局数据+分身健康+管道+团队 */
+    @GetMapping("/dashboard/v2")
+    public ApiResponse<Map<String, Object>> dashboardV2() {
+        return ApiResponse.success(adminService.getDashboardV2(TokenContext.getCompanyId()));
     }
 
     // ==================== /admin/spaces ====================
@@ -69,11 +72,20 @@ public class AdminController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String status) {
 
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         PageRequest pr = PageRequest.of(page - 1, size);
-        Page<Space> sp = (keyword != null && !keyword.isEmpty())
-                ? spaceRepository.findByTitleContainingIgnoreCase(keyword, pr)
-                : spaceRepository.findAll(pr);
+
+        // 按企业过滤：先查企业下所有用户，再查这些用户的空间
+        List<UUID> companyUserIds = userRepository.findByCompanyId(companyId).stream()
+                .map(User::getId).toList();
+        Page<Space> sp;
+        if (companyUserIds.isEmpty()) {
+            sp = Page.empty(pr);
+        } else if (keyword != null && !keyword.isEmpty()) {
+            sp = spaceRepository.findByTitleContainingIgnoreCaseAndUserIdIn(keyword, companyUserIds, pr);
+        } else {
+            sp = spaceRepository.findByUserIdIn(companyUserIds, pr);
+        }
 
         List<Space> spaces = sp.getContent();
         if (spaces.isEmpty()) {
@@ -118,14 +130,14 @@ public class AdminController {
 
     @GetMapping("/scene-coverage")
     public ApiResponse<Map<String, Object>> getSceneCoverage() {
-        return ApiResponse.success(adminService.getSceneCoverage());
+        return ApiResponse.success(adminService.getSceneCoverage(TokenContext.getCompanyId()));
     }
 
     // ==================== /admin/config ====================
 
     @GetMapping("/config")
     public ApiResponse<Map<String, Object>> getConfig() {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         Company company = companyRepository.findById(companyId).orElse(null);
         Map<String, Object> config = new LinkedHashMap<>();
         if (company != null) {
@@ -139,7 +151,7 @@ public class AdminController {
     @PutMapping("/config")
     public ApiResponse<Map<String, Object>> updateConfig(
             @RequestBody Map<String, Object> body) {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         Company company = companyRepository.findById(companyId).orElse(null);
         if (company == null) {
             return ApiResponse.error(404, ErrorMessages.COMPANY_NOT_FOUND);
@@ -164,7 +176,7 @@ public class AdminController {
     @PostMapping("/invite")
     public ApiResponse<Map<String, Object>> createInvite(
             @RequestBody Map<String, Object> body) {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         // expireDays 不传或传 0 = 永久有效
         int expireDays = body.containsKey("expireDays") ? ((Number) body.get("expireDays")).intValue() : 0;
         String inviteCode = interviewService.generateInviteCode(companyId, expireDays,
@@ -180,7 +192,7 @@ public class AdminController {
 
     @GetMapping("/users")
     public ApiResponse<List<Map<String, Object>>> listUsers() {
-        UUID companyId = extractCompanyId();
+        UUID companyId = TokenContext.getCompanyId();
         List<User> users = userRepository.findByCompanyId(companyId);
         List<UUID> userIds = users.stream().map(User::getId).toList();
 

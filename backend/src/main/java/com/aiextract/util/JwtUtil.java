@@ -158,7 +158,8 @@ public class JwtUtil {
      */
     public UUID getCompanyIdFromToken(String token) {
         Claims claims = parseToken(token);
-        return UUID.fromString(claims.get("companyId", String.class));
+        String companyIdStr = claims.get("companyId", String.class);
+        return companyIdStr != null ? UUID.fromString(companyIdStr) : null;
     }
 
     /**

@@ -8,7 +8,7 @@ import { login } from '@/lib/api/auth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [companyId, setCompanyId] = useState('c0000000-0000-0000-0000-000000000001');
+  const [companyCode, setCompanyCode] = useState('DEFAULT01');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -19,12 +19,12 @@ export default function LoginPage() {
     if (!account || !password) { setError('请输入账号和密码'); return; }
     setLoading(true); setError('');
     try {
-      const result = await login({ companyId, account, password });
+      const result = await login({ companyCode: companyCode.trim().toUpperCase(), account, password });
       setAuth(result.token, result.user);
       router.push('/');
     } catch (err) { setError(err instanceof Error ? err.message : '网络错误，请检查连接'); }
     finally { setLoading(false); }
-  }, [companyId, account, password, router]);
+  }, [companyCode, account, password, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-6">
@@ -37,8 +37,9 @@ export default function LoginPage() {
           </div>
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-foreground">企业ID</label>
-              <input type="text" value={companyId} onChange={e => setCompanyId(e.target.value)}
+              <label className="mb-1.5 block text-sm font-medium text-foreground">企业注册码</label>
+              <input type="text" value={companyCode} onChange={e => setCompanyCode(e.target.value)}
+                placeholder="管理员提供的注册码"
                 className={`w-full rounded-lg border px-4 py-3 text-sm outline-none transition-colors ${error ? 'border-danger' : 'border-border-strong focus:border-foreground'}`} />
             </div>
             <div>

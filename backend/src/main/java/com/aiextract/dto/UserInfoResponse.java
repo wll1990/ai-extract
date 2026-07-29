@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.List;
+
 /**
  * 用户信息响应DTO
  *
@@ -19,33 +21,24 @@ import lombok.Setter;
 @AllArgsConstructor
 public class UserInfoResponse {
 
-    /**
-     * 用户唯一标识
-     */
+    /** 用户唯一标识 */
     private String id;
 
-    /**
-     * 用户姓名
-     */
+    /** 用户姓名 */
     private String name;
 
-    /**
-     * 角色
-     */
+    /** 角色 */
     private String role;
 
-    /**
-     * 头像URL
-     */
+    /** 头像URL */
     private String avatarUrl;
 
-    /**
-     * 所属企业ID
-     */
+    /** 所属企业ID */
     private String companyId;
 
-    /**
-     * 企业名称
-     */
+    /** 企业名称 */
     private String companyName;
+
+    /** 当前用户拥有的权限码列表（由 RolePermissions 映射表派生） */
+    private List<String> permissions;
 }

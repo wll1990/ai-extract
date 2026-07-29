@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.SseAdapter;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
@@ -35,10 +36,13 @@ public class AdminAuditController {
     private final PracticeDemoService practiceDemoService;
     private final SkillService skillService;
     private final ObjectMapper objectMapper;
+    private final CompanyScopeService companyScopeService;
+    private final com.aiextract.scheduler.SkillStatsScheduler skillStatsScheduler;
 
     /** 审核仪表盘 — 聚合返回分身发布前的所有关键数据 */
     @GetMapping("/admin/skills/{skillId}/audit-dashboard")
     public ApiResponse<Map<String, Object>> getAuditDashboard(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         Map<String, Object> data = new LinkedHashMap<>();
@@ -221,6 +225,7 @@ public class AdminAuditController {
     /** 补充信息录入 */
     @GetMapping("/admin/skills/{skillId}/supplement")
     public ApiResponse<Map<String, Object>> getSupplement(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         SkillProfile profile = profileRepository.findBySkillId(skillId).orElse(null);
@@ -245,6 +250,7 @@ public class AdminAuditController {
 
     @PutMapping("/admin/skills/{skillId}/supplement")
     public ApiResponse<Void> saveSupplement(@PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
 
@@ -278,6 +284,7 @@ public class AdminAuditController {
     /** 报告历史版本列表 */
     @GetMapping("/admin/skills/{skillId}/report-history")
     public ApiResponse<List<Map<String, Object>>> getReportHistory(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         List<com.aiextract.model.ReportHistory> list = historyRepository.findBySkillIdOrderByGeneratedAtDesc(skillId);
         List<Map<String, Object>> result = new ArrayList<>();
         for (var h : list) {
@@ -302,6 +309,7 @@ public class AdminAuditController {
     /** 报告就绪检查 — 前端按钮据此显示状态 */
     @GetMapping("/admin/skills/{skillId}/report-readiness")
     public ApiResponse<Map<String, Object>> getReportReadiness(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         UUID spaceId = skill.getSpaceId();
@@ -322,6 +330,7 @@ public class AdminAuditController {
     public String getExtractionReport(@PathVariable UUID skillId,
             @RequestParam(defaultValue = "false") boolean download,
             jakarta.servlet.http.HttpServletResponse response) {
+        companyScopeService.assertSkillOwnership(skillId);
         String html = extractionReportService.generateHtml(skillId);
         if (download) {
             response.setHeader("Content-Disposition",
@@ -334,6 +343,7 @@ public class AdminAuditController {
     @GetMapping("/admin/skills/{skillId}/report-ppt")
     public void getExtractionReportPpt(@PathVariable UUID skillId,
             jakarta.servlet.http.HttpServletResponse response) {
+        companyScopeService.assertSkillOwnership(skillId);
         try {
             byte[] ppt = extractionReportService.generatePpt(skillId);
             if (ppt == null) {
@@ -351,6 +361,7 @@ public class AdminAuditController {
 
     @PutMapping("/admin/skills/{skillId}/publish")
     public ApiResponse<Map<String, Object>> publish(@PathVariable UUID skillId, @RequestBody Map<String, String> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         String action = body.getOrDefault("action", "publish");
@@ -399,6 +410,8 @@ public class AdminAuditController {
             skillRepository.save(skill);
             // 异步生成开场白（若已手动填写则跳过）
             skillService.generateOpeningMessage(skillId);
+            // 异步预生成推荐问题（基于真实颗粒描述，6-8 条自然语言问题）
+            skillService.generateRecommendedQuestions(skillId);
             // 异步预生成各场景对练客户开场白
             skillService.generatePracticeOpenings(skillId);
         } else if ("unpublish".equals(action)) {
@@ -418,22 +431,39 @@ public class AdminAuditController {
     /** 手动触发 AI 重新生成开场白（已发布分身也可用） */
     @PostMapping("/admin/skills/{skillId}/regenerate-opening")
     public ApiResponse<String> regenerateOpening(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         skillService.generateOpeningMessage(skillId);
         return ApiResponse.success("已触发重新生成，稍后刷新查看");
+    }
+
+    /** 手动触发 AI 重新生成推荐问题（已发布分身也可用） */
+    @PostMapping("/admin/skills/{skillId}/regenerate-recommended-questions")
+    public ApiResponse<String> regenerateRecommendedQuestions(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
+        skillService.generateRecommendedQuestions(skillId);
+        return ApiResponse.success("已触发推荐问题重新生成，稍后刷新查看");
+    }
+
+    /** 触发存量推荐问题批量补齐（一次性任务，最多处理 50 个） */
+    @PostMapping("/admin/skills/backfill-recommended-questions")
+    public ApiResponse<String> backfillRecommendedQuestions() {
+        skillStatsScheduler.backfillRecommendedQuestions();
+        return ApiResponse.success("存量推荐问题补齐已触发，完成后查看日志");
     }
 
     /** 场景对练 SSE 流式 */
     @PostMapping(value = "/admin/skills/{skillId}/practice-scenario", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter practiceScenario(@PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String grainId = (String) body.get("grainId");
         String mode = (String) body.getOrDefault("mode", "with_skill");
         String customerMessage = (String) body.get("customerMessage");
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> history = (List<Map<String, Object>>) body.getOrDefault("history", List.of());
-        String domain = skillRepository.findById(skillId)
-                .map(s -> domainConfigLoader.resolveDomain(s))
-                .orElse("sales.b2b_enterprise");
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, "分身不存在"));
+        String domain = domainConfigLoader.resolveDomain(skill);
         return SseAdapter.fromFlux(practiceDemoService.simulateScenario(skillId, grainId, mode, customerMessage, history, domain));
     }
 
@@ -441,6 +471,7 @@ public class AdminAuditController {
     @GetMapping("/admin/skills/{skillId}/grain-source")
     public ApiResponse<Map<String, Object>> getGrainSource(
             @PathVariable UUID skillId, @RequestParam UUID grainId) {
+        companyScopeService.assertSkillOwnership(skillId);
         ExperienceGrain grain = grainRepository.findById(grainId).orElse(null);
         if (grain == null || grain.getSourceMaterialId() == null)
             return ApiResponse.success(Map.of());
@@ -491,6 +522,7 @@ public class AdminAuditController {
     @PostMapping(value = "/admin/skills/{skillId}/auto-demo", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter autoDemo(@PathVariable UUID skillId,
             @RequestBody(required = false) Map<String, String> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String mode = body != null ? body.getOrDefault("mode", "full") : "full";
         return SseAdapter.fromFlux(practiceDemoService.autoDemo(skillId, mode));
     }
@@ -500,6 +532,7 @@ public class AdminAuditController {
     public ApiResponse<Map<String, Object>> evaluateDemo(
             @PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> messages = (List<Map<String, Object>>) body.get("messages");
         if (messages == null || messages.isEmpty()) {
@@ -524,6 +557,7 @@ public class AdminAuditController {
             return ApiResponse.error(400, "查询内容不能为空");
         }
         try {
+            companyScopeService.assertSkillOwnership(skillId);
             Skill skill = skillRepository.findById(skillId)
                 .orElseThrow(() -> new BusinessException(404, "分身不存在"));
             List<ExperienceGrain> allGrains = grainRepository.findBySpaceId(skill.getSpaceId());
@@ -557,6 +591,7 @@ public class AdminAuditController {
     public ApiResponse<Map<String, Object>> practiceEvaluate(
             @PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String sceneTag = (String) body.getOrDefault("sceneTag", "");
         String customerMessage = (String) body.getOrDefault("customerMessage", "");
         String myResponse = (String) body.getOrDefault("myResponse", "");
@@ -579,6 +614,7 @@ public class AdminAuditController {
     public ApiResponse<Map<String, Object>> practiceScore(
             @PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rounds = (List<Map<String, Object>>) body.getOrDefault("rounds", List.of());
         if (rounds.isEmpty()) {
@@ -597,6 +633,7 @@ public class AdminAuditController {
     public ApiResponse<Map<String, Object>> qaSummary(
             @PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> rounds = (List<Map<String, Object>>) body.getOrDefault("rounds", List.of());
         try {
@@ -611,6 +648,7 @@ public class AdminAuditController {
     @PostMapping("/admin/skills/{skillId}/practice-opening")
     public ApiResponse<String> practiceOpening(
             @PathVariable UUID skillId, @RequestBody Map<String, String> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String sceneTag = body.getOrDefault("sceneTag", "");
         try {
             return ApiResponse.success(practiceDemoService.generateCustomerOpening(skillId, sceneTag));
@@ -625,6 +663,7 @@ public class AdminAuditController {
     public ApiResponse<List<String>> practiceAngles(
             @PathVariable UUID skillId,
             @RequestParam String sceneTag) {
+        companyScopeService.assertSkillOwnership(skillId);
         try {
             List<String> angles = practiceDemoService.getScenePracticeAngles(skillId, sceneTag);
             return ApiResponse.success(angles);
@@ -641,6 +680,7 @@ public class AdminAuditController {
     public ApiResponse<Map<String, String>> uploadAvatar(
             @PathVariable String skillId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        companyScopeService.assertSkillOwnership(UUID.fromString(skillId));
         return ApiResponse.success(skillService.uploadAvatar(skillId, file));
     }
 

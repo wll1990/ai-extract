@@ -1,41 +1,75 @@
 'use client';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { Permission } from '@/lib/permissions';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { getToken, clearAuth } from '@/lib/storage';
+import { clearAuth } from '@/lib/storage';
 import { getCurrentUser } from '@/lib/api/auth';
+
+interface UserInfo {
+  id: string;
+  name: string;
+  role: string;
+  avatarUrl: string | null;
+  companyId: string;
+  companyName: string;
+  permissions: string[];
+}
 
 /** 导航项定义 */
 interface NavItem {
   icon: string;
   label: string;
   path: string;
-  roles: string[];
+  /** 需要的权限码，null 表示不校验（始终显示） */
+  permission: string | null;
 }
 
 const NAV_ITEMS: NavItem[] = [
   // ── 产品功能 ──
-  { icon: '🤖', label: '分身广场', path: '/skills', roles: ['super_admin', 'company_admin', 'employee'] },
-  { icon: '👤', label: '我的空间', path: '/space/me', roles: ['employee'] },
-  { icon: '🏢', label: '空间总览', path: '/spaces', roles: ['super_admin'] },
-  { icon: '💼', label: '销冠访谈', path: '/interview/create', roles: ['super_admin', 'company_admin', 'employee'] },
-  { icon: '📚', label: '经验广场', path: '/explore', roles: ['super_admin', 'company_admin', 'employee'] },
+  { icon: '🤖', label: '分身广场', path: '/skills', permission: Permission.SKILL_USE },
+  { icon: '👤', label: '我的空间', path: '/space/me', permission: Permission.SPACE_OWN },
+  { icon: '🏢', label: '空间总览', path: '/spaces', permission: Permission.SPACE_OWN },
+  { icon: '💼', label: '销冠访谈', path: '/interview/create', permission: Permission.SKILL_USE },
+  { icon: '📚', label: '经验广场', path: '/explore', permission: Permission.SKILL_USE },
+  { icon: '🏠', label: '我的工作台', path: '/workbench', permission: Permission.SKILL_USE },
   // ── 管理后台 ──
-  { icon: '📊', label: '工作台', path: '/admin', roles: ['super_admin'] },
-  { icon: '📈', label: '数据看板', path: '/admin/insights', roles: ['super_admin'] },
-  { icon: '🎯', label: '分身调优', path: '/admin/tuning', roles: ['super_admin'] },
-  { icon: '👥', label: '用户管理', path: '/admin/users', roles: ['super_admin'] },
-  { icon: '🤖', label: '分身管理', path: '/admin/skills', roles: ['super_admin'] },
-  { icon: '📁', label: '素材管理', path: '/admin/materials', roles: ['super_admin'] },
-  { icon: '💎', label: '萃取师经验库', path: '/admin/experts', roles: ['super_admin'] },
-  { icon: '💬', label: '对话历史', path: '/admin/conversations', roles: ['super_admin'] },
-  { icon: '🗺️', label: '场景地图', path: '/admin/coverage', roles: ['super_admin'] },
-  { icon: '⚙️', label: 'IM管理', path: '/admin/im', roles: ['super_admin'] },
-  { icon: '🔗', label: '合作方管理', path: '/admin/partners', roles: ['super_admin'] },
-  { icon: '🪙', label: 'Token 统计', path: '/admin/token-usage', roles: ['super_admin'] },
+  { icon: '📊', label: '工作台', path: '/admin', permission: Permission.DASHBOARD_VIEW },
+  { icon: '📈', label: '数据看板', path: '/admin/insights', permission: Permission.DASHBOARD_VIEW },
+  { icon: '🎯', label: '分身调优', path: '/admin/tuning', permission: Permission.SKILL_TUNING },
+  { icon: '👥', label: '用户管理', path: '/admin/users', permission: Permission.USER_MANAGE },
+  { icon: '🤖', label: '分身管理', path: '/admin/skills', permission: Permission.SKILL_MANAGE },
+  { icon: '📁', label: '素材管理', path: '/admin/materials', permission: Permission.MATERIAL_MANAGE },
+  { icon: '💎', label: '萃取师经验库', path: '/admin/experts', permission: Permission.EXPERT_MANAGE },
+  { icon: '💬', label: '对话历史', path: '/admin/conversations', permission: Permission.CONVERSATION_VIEW },
+  { icon: '🗺️', label: '场景地图', path: '/admin/coverage', permission: Permission.SCENE_COVERAGE },
+  { icon: '💎', label: '颗粒管理', path: '/admin/grains', permission: Permission.GRAIN_MANAGE },
+  { icon: '🏢', label: '组织分身', path: '/admin/organization-skills', permission: Permission.ORG_SKILL_MANAGE },
+  { icon: '🪙', label: 'Token 统计', path: '/admin/token-usage', permission: Permission.TOKEN_VIEW_COMPANY },
+  // ── 平台级（仅 super_admin 拥有对应权限码） ──
+  { icon: '⚙️', label: 'IM管理', path: '/admin/im', permission: Permission.IM_MANAGE },
+  { icon: '🔗', label: '合作方管理', path: '/admin/partners', permission: Permission.PARTNER_MANAGE },
+  { icon: '🏢', label: '企业合作', path: '/admin/companies', permission: Permission.COMPANY_MANAGE },
 ];
+
+/** 判断当前用户是否可以访问管理后台 */
+function canAccessAdmin(permissions: string[]): boolean {
+  return permissions.some(
+    p => p === Permission.DASHBOARD_VIEW
+      || p === Permission.USER_MANAGE
+      || p === Permission.SKILL_MANAGE
+      || p === Permission.TOKEN_VIEW_COMPANY
+  );
+}
+
+/** 根据权限码推导用户的显示角色标签 */
+function roleLabel(permissions: string[]): string {
+  if (permissions.includes(Permission.COMPANY_MANAGE)) return '超级管理员';
+  if (permissions.includes(Permission.USER_MANAGE)) return '企业管理员';
+  return '员工';
+}
 
 /**
  * 应用外壳布局——含侧导航栏和登录检查
@@ -43,21 +77,20 @@ const NAV_ITEMS: NavItem[] = [
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 公开页面无需检查：登录/注册页（修复原先 /register 被 401 弹回 /login 的问题）
-  // 与 C 端分享页（/s/*，独立布局与凭证体系，不走 B 端 /auth/me）
-  const isPublicPage = pathname === '/login' || pathname === '/register' || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
+  const isPublicPage = pathname === '/login' || pathname === '/register'
+    || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
 
   useEffect(() => {
     if (isPublicPage) { setLoading(false); return; }
 
-    // JWT 由 HttpOnly Cookie 自动携带，直接调 /auth/me 验证
     getCurrentUser()
-      .then(user => {
-        setUser(user);
-        if (pathname.startsWith('/admin') && user.role !== 'super_admin') {
+      .then(u => {
+        const userInfo = u as unknown as UserInfo;
+        setUser(userInfo);
+        if (pathname.startsWith('/admin') && !canAccessAdmin(userInfo.permissions || [])) {
           router.replace('/skills');
         }
       })
@@ -74,18 +107,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const role = user?.role || 'employee';
-  const visibleNav = NAV_ITEMS.filter(item => item.roles.includes(role));
+  const permissions: string[] = user?.permissions || [];
 
   /** 判断导航激活：一级路径精确匹配，子路径前缀匹配 */
   const isNavActive = (currentPath: string, navPath: string) => {
     if (currentPath === navPath) return true;
-    // 一级路径（如 /admin、/skills）只精确匹配，避免子页面也高亮父级
     const depth = navPath.split('/').filter(Boolean).length;
     if (depth === 1) return false;
-    // 子路径用前缀匹配（如 /admin/skills 匹配 /admin/skills/[id]/xxx）
     return currentPath.startsWith(navPath + '/');
   };
+
+  const visibleNav = NAV_ITEMS.filter(item =>
+    !item.permission || permissions.includes(item.permission)
+  );
 
   return (
     <div className="flex h-screen bg-surface">
@@ -105,7 +139,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               key={item.path + item.label}
               onClick={() => pathname === item.path ? router.refresh() : router.push(item.path)}
               className={`flex w-full items-center gap-3 rounded-sm px-3 py-2.5 text-body transition-colors ${
-                isNavActive(pathname, item.path) ? 'bg-primary-light text-primary font-medium' : 'text-muted-foreground hover:bg-primary-light'
+                isNavActive(pathname, item.path)
+                  ? 'bg-primary-light text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-primary-light'
               }`}
             >
               <span className="text-lg">{item.icon}</span>
@@ -117,11 +153,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* 主内容区 */}
       <main className="flex-1 flex flex-col overflow-auto">
-        {/* 顶部栏：用户信息 + 退出 */}
         {user && (
           <div className="flex items-center justify-end gap-3 px-6 py-2 border-b border-border bg-surface-2 flex-shrink-0">
             <span className="text-sm text-muted-foreground">
-              {user.name} · {role === 'super_admin' ? '管理员' : '员工'}
+              {user.name} · {roleLabel(permissions)}
             </span>
             <button
               onClick={() => { clearAuth(); router.push('/login'); }}

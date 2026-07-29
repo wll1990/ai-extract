@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getGlobalOverview, getDiscoveries, getDiscoveryDetail, approveCandidateGrain, rejectCandidateGrain, type GlobalOverview, type SkillHealth, type AutoInsight, type CandidateGrain } from '@/lib/api/admin-insights';
+import { getGlobalOverview, getDiscoveries, getDiscoveryDetail, approveCandidateGrain, rejectCandidateGrain, resolveDiscovery, type GlobalOverview, type SkillHealth, type AutoInsight, type CandidateGrain } from '@/lib/api/admin-insights';
 import { KpiHero, type KpiItem } from '@/components/admin/KpiHero';
 import { Card } from '@/components/admin/Card';
 import { SkillCard } from '@/components/admin/SkillCard';
@@ -51,7 +51,7 @@ export default function AdminInsightsPage() {
     {
       label: '活跃用户',
       value: data.activeUsers.toLocaleString(),
-      color: 'white',
+      color: 'slate',
     },
     {
       label: '待处理缺口',
@@ -102,17 +102,30 @@ export default function AdminInsightsPage() {
         <>
           {/* 分身卡片网格 */}
           {data.skills.length === 0 ? (
-            <EmptyState message="暂无已发布分身" />
+            <EmptyState message="暂无已发布分身" actionLabel="去创建分身" actionHref="/admin/skills/new" router={router} />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {data.skills.map(s => (
-                <SkillCard
-                  key={s.skillId}
-                  skill={s}
-                  onClick={() => router.push(`/admin/insights/${s.skillId}`)}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {data.skills.map(s => (
+                  <SkillCard
+                    key={s.skillId}
+                    skill={s}
+                    onClick={() => router.push(`/admin/insights/${s.skillId}`)}
+                  />
+                ))}
+              </div>
+              {data.totalSkills > data.skills.length && (
+                <div className="text-center py-3">
+                  <p className="text-[13px] text-[#94A3B8]">
+                    显示最活跃的 {data.skills.length}/{data.totalSkills} 个分身
+                    <button onClick={() => router.push('/admin/tuning')}
+                      className="text-primary hover:underline ml-2 font-medium">
+                      查看全部 →
+                    </button>
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           {/* 额外指标卡：命中率 + 颗粒总数 */}
@@ -148,7 +161,7 @@ export default function AdminInsightsPage() {
                     {allAlerts.slice(0, 4).map((a, i) => (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
+                        className="inline-flex items-center gap-1 text-[12px] px-3 py-1.5 rounded-full cursor-pointer hover:opacity-80 transition-opacity"
                         style={{ background: '#FEF2F2', color: '#991B1B' }}
                         onClick={() => router.push(`/admin/insights/${a.skill.skillId}`)}
                       >
@@ -242,6 +255,28 @@ function DiscoveryTab() {
     setActionLoading(null);
   };
 
+  const handleResolve = async (insightId: string) => {
+    setActionLoading(insightId);
+    try {
+      await resolveDiscovery(insightId, 'resolved');
+      setInsights(prev => prev.map(i =>
+        i.id === insightId ? { ...i, status: 'resolved' as const } : i
+      ));
+    } catch (err) { console.error('处理洞察失败', insightId, err); }
+    setActionLoading(null);
+  };
+
+  const handleIgnore = async (insightId: string) => {
+    setActionLoading(insightId);
+    try {
+      await resolveDiscovery(insightId, 'ignored');
+      setInsights(prev => prev.map(i =>
+        i.id === insightId ? { ...i, status: 'ignored' as const } : i
+      ));
+    } catch (err) { console.error('忽略洞察失败', insightId, err); }
+    setActionLoading(null);
+  };
+
   if (loading) {
     return <div className="flex h-64 items-center justify-center"><LoadingSpinner /></div>;
   }
@@ -313,6 +348,8 @@ function DiscoveryTab() {
             candidateGrains={candidateGrainsMap[insight.id]}
             onApprove={handleApprove}
             onReject={handleReject}
+            onResolve={handleResolve}
+            onIgnore={handleIgnore}
           />
         ))}
       </div>
@@ -320,10 +357,16 @@ function DiscoveryTab() {
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({ message, actionLabel, actionHref, router }: { message: string; actionLabel?: string; actionHref?: string; router?: ReturnType<typeof useRouter> }) {
   return (
     <div className="rounded-[12px] bg-white border border-[#E8ECF1] p-12 text-center">
-      <p className="text-[14px] text-[#64748B]">{message}</p>
+      <p className="text-[14px] text-[#64748B] mb-4">{message}</p>
+      {actionLabel && actionHref && router && (
+        <button onClick={() => router.push(actionHref)}
+          className="text-sm bg-primary text-white rounded-lg px-5 py-2.5 hover:bg-primary-hover transition-colors font-medium">
+          {actionLabel}
+        </button>
+      )}
     </div>
   );
 }

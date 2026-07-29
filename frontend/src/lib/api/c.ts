@@ -45,6 +45,14 @@ export interface ShareInfo {
     userCount: number;
     satisfactionRate: number;
   };
+  /** 分身类型：individual | organization */
+  skillType?: 'individual' | 'organization';
+  /** 组织分身成员数 */
+  memberCount?: number;
+  /** 组织分身成员列表 */
+  members?: Array<{ id: string; ownerName: string; avatarUrl?: string; ownerTitle?: string }>;
+  /** 分享渠道："public"（经典 H5）| "card"（名片式 H5） */
+  shareChannel?: string;
 }
 
 /** 后端 GuestSessionResponse 的前端映射 */

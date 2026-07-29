@@ -1,5 +1,6 @@
 package com.aiextract.service;
 
+import com.aiextract.config.RolePermissions;
 import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
@@ -7,7 +8,9 @@ import com.aiextract.dto.UserInfoResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Company;
+import com.aiextract.model.CompanyRegisterCode;
 import com.aiextract.model.User;
+import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.repository.CompanyRepository;
 import com.aiextract.repository.UserRepository;
 import com.aiextract.util.JwtUtil;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.UUID;
 
 /**
@@ -37,6 +41,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final CompanyRepository companyRepository;
+    private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
@@ -52,7 +57,25 @@ public class AuthService {
      */
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
-        UUID companyId = UUID.fromString(request.getCompanyId());
+        UUID companyId;
+        if (request.getCompanyCode() != null && !request.getCompanyCode().isBlank()) {
+            // 通过注册码解析企业
+            CompanyRegisterCode c = registerCodeRepository.findByCode(
+                request.getCompanyCode().trim().toUpperCase())
+                .orElseThrow(() -> new BusinessException(400, "注册码无效"));
+            if (Boolean.FALSE.equals(c.getEnabled())) {
+                throw new BusinessException(400, "注册码已失效");
+            }
+            if (c.getExpiresAt() != null && c.getExpiresAt().isBefore(LocalDateTime.now())) {
+                throw new BusinessException(400, "注册码已过期");
+            }
+            companyId = c.getCompanyId();
+        } else if (request.getCompanyId() != null && !request.getCompanyId().isBlank()) {
+            // 降级：直接传 companyId
+            companyId = UUID.fromString(request.getCompanyId());
+        } else {
+            throw new BusinessException(400, "请提供企业注册码");
+        }
 
         // 查询用户
         User user = userRepository.findByCompanyIdAndAccount(companyId, request.getAccount())
@@ -202,6 +225,7 @@ public class AuthService {
                 .avatarUrl(user.getAvatarUrl())
                 .companyId(user.getCompanyId().toString())
                 .companyName(companyName)
+                .permissions(new ArrayList<>(RolePermissions.getPermissions(user.getRole())))
                 .build();
     }
 }
