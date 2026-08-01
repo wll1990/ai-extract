@@ -7,15 +7,19 @@ ROOT="$(dirname "$DIR")"
 
 cd "$ROOT"
 
-echo "========================================="
-echo "  全量部署开始"
-echo "========================================="
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
 
-# 0. 先把启停脚本同步到服务器
-echo ""
-echo "📋 同步启停脚本到服务器..."
+echo -e "${BLUE}=========================================${NC}"
+echo -e "${BLUE}  全量部署开始${NC}"
+echo -e "${BLUE}=========================================${NC}"
+
+# 0. 同步启停脚本
+echo -e "\n${YELLOW}[0/6] 同步启停脚本到服务器...${NC}"
 ssh mindforge "mkdir -p /opt/mindforge/scripts"
-scp scripts/stop-all.sh \
+scp -q scripts/stop-all.sh \
     scripts/start-backend.sh \
     scripts/start-ai-service.sh \
     scripts/start-platform.sh \
@@ -24,36 +28,35 @@ scp scripts/stop-all.sh \
 ssh mindforge "chmod +x /opt/mindforge/scripts/*.sh"
 
 # 1. 停服
-echo ""
-echo "🛑 停止所有服务..."
+echo -e "\n${YELLOW}[1/6] 停止所有服务...${NC}"
 ssh mindforge "bash /opt/mindforge/scripts/stop-all.sh 2>/dev/null || true"
 sleep 2
 
-# 2. 构建+上传
-echo ""
-echo "📦 1/3 后端..."
+# 2-4. 构建+上传
+echo -e "\n${YELLOW}[2/6] 构建+上传后端...${NC}"
 bash scripts/deploy-backend.sh
 
-echo ""
-echo "📦 2/3 平台端..."
+echo -e "\n${YELLOW}[3/6] 构建+上传平台端...${NC}"
 bash scripts/deploy-platform.sh
 
-echo ""
-echo "📦 3/3 管理后台..."
+echo -e "\n${YELLOW}[4/6] 构建+上传管理后台...${NC}"
 bash scripts/deploy-frontend.sh
 
-# 3. 启服
-echo ""
-echo "🚀 启动所有服务..."
+# 5. 同步配置
+echo -e "\n${YELLOW}[5/6] 同步生产配置...${NC}"
+ssh mindforge "mkdir -p /opt/mindforge/config"
+scp -q config/backend.env config/frontend.env config/platform.env mindforge:/opt/mindforge/config/ 2>/dev/null || true
+
+# 6. 启服
+echo -e "\n${YELLOW}[6/6] 启动所有服务...${NC}"
 ssh mindforge "bash /opt/mindforge/scripts/start-backend.sh"
 ssh mindforge "bash /opt/mindforge/scripts/start-ai-service.sh"
 ssh mindforge "bash /opt/mindforge/scripts/start-platform.sh"
 ssh mindforge "bash /opt/mindforge/scripts/start-frontend.sh"
 
-echo ""
-echo "========================================="
-echo "  ✅ 部署完成"
-echo "========================================="
+echo -e "\n${GREEN}=========================================${NC}"
+echo -e "${GREEN}  ✅ 部署完成${NC}"
+echo -e "${GREEN}=========================================${NC}"
 echo ""
 echo "验证:"
 echo "  curl http://47.116.138.205:8080/api/v1/public/stats"
