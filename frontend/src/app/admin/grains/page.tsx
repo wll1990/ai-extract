@@ -2,28 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api/client';
+import { listSkills, type SkillInfo } from '@/lib/api/skill';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-
-interface SkillSummary {
-  id: string;
-  displayName: string;
-  ownerName: string;
-  status: string;
-  grainCount: number;
-  activeGrains: number;
-  deprecatedGrains: number;
-}
 
 export default function AdminGrainsPage() {
   const router = useRouter();
-  const [skills, setSkills] = useState<SkillSummary[]>([]);
+  const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    apiClient<{ content: SkillSummary[] }>('/admin/skills?size=200')
+    listSkills(1, 200)
       .then(data => setSkills(data.content || []))
-      .catch(() => setSkills([]))
+      .catch(() => setError('加载失败，请确认有管理权限'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -37,7 +28,14 @@ export default function AdminGrainsPage() {
           管理所有分身的经验颗粒，支持编辑、废弃、溯源
         </p>
 
-        {skills.length === 0 ? (
+        {error && (
+          <div className="mb-4 rounded-xl bg-danger-bg border border-red-200 px-4 py-3 text-sm text-danger">
+            {error}
+            <button onClick={() => window.location.reload()} className="ml-3 underline">重试</button>
+          </div>
+        )}
+
+        {!error && skills.length === 0 ? (
           <div className="py-20 text-center">
             <span className="text-5xl">📋</span>
             <h2 className="mt-4 text-lg font-semibold text-foreground">暂无颗粒数据</h2>
@@ -65,7 +63,7 @@ export default function AdminGrainsPage() {
                 key={s.id}
                 className="grid grid-cols-5 gap-4 px-5 py-3.5 border-b border-border last:border-0 items-center hover:bg-primary-light transition-colors"
               >
-                <span className="text-sm font-medium text-foreground truncate">{s.displayName}</span>
+                <span className="text-sm font-medium text-foreground truncate">{s.displayName || s.ownerName}</span>
                 <span className="text-sm text-muted-foreground truncate">{s.ownerName}</span>
                 <span>
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -74,14 +72,9 @@ export default function AdminGrainsPage() {
                     {s.status === 'published' ? '已发布' : s.status === 'draft' ? '待审核' : s.status}
                   </span>
                 </span>
-                <span className="text-sm text-foreground">
-                  {s.activeGrains ?? s.grainCount}
-                  {s.deprecatedGrains > 0 && (
-                    <span className="text-muted-foreground ml-1">（{s.deprecatedGrains} 已废弃）</span>
-                  )}
-                </span>
+                <span className="text-sm text-foreground">{s.grainCount ?? 0}</span>
                 <button
-                  onClick={() => router.push(`/admin/audit/${s.id}`)}
+                  onClick={() => router.push(`/admin/insights/${s.id}`)}
                   className="text-sm text-primary font-medium hover:underline text-left"
                 >
                   审核颗粒 →

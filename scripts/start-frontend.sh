@@ -2,7 +2,7 @@
 set -e
 
 cd /opt/mindforge/frontend
-pkill -f "node server.js" 2>/dev/null || true
+pkill -f "PORT=3000 node server.js" 2>/dev/null || true
 sleep 1
 
 # standalone 模式直接用 node server.js，端口通过 PORT 环境变量控制
