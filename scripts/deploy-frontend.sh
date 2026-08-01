@@ -1,7 +1,7 @@
 #!/bin/bash
 # 管理后台（B端）构建打包
 # 用法: bash scripts/deploy-frontend.sh
-# 产物: frontend/.next/
+# 产物: frontend/.next/standalone/ (自包含，服务器无需 npm install)
 set -e
 DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(dirname "$DIR")"
@@ -17,23 +17,21 @@ if [ ! -f config/frontend.env ]; then
 fi
 cp config/frontend.env frontend/.env.production
 
+# 构建（output: standalone 自包含产物）
 cd frontend && npm run build
 
-# 准备服务器用的 package.json（去除 workspace 依赖，服务器端无 monorepo）
-# 临时文件操作，不修改本地 package.json
-PKG_SERVER="package-server.json"
-cp package.json "$PKG_SERVER"
-if grep -q '@aiextract\/shared-ui' "$PKG_SERVER"; then
-    if [ "$(uname)" = "Darwin" ]; then
-        sed -i '' '/@aiextract\/shared-ui/d' "$PKG_SERVER"
-    else
-        sed -i '/@aiextract\/shared-ui/d' "$PKG_SERVER"
-    fi
+if [ ! -f .next/standalone/server.js ]; then
+    echo "❌ standalone 产物缺失，请确认 next.config.js 有 output: 'standalone'"
+    exit 1
 fi
 
 echo ""
-echo "产物: .next/"
+echo "产物: .next/standalone/"
 echo "上传开始"
-scp -r .next "$PKG_SERVER" root@47.116.138.205:/opt/mindforge/frontend/
-rm "$PKG_SERVER"
+
+# standalone 自包含——无需 package.json、无需 npm install
+scp -r .next/standalone/ mindforge:/opt/mindforge/frontend/standalone/
+scp -r public/ mindforge:/opt/mindforge/frontend/standalone/
+
 echo "上传服务器完成✅"
+echo "服务器端启动: cd /opt/mindforge/frontend/standalone && node server.js"
