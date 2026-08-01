@@ -10,14 +10,12 @@ cd "$ROOT"
 
 echo "=== 平台端打包 ==="
 
-# 检查生产环境变量文件
 if [ ! -f config/platform.env ]; then
     echo "❌ config/platform.env 不存在，请先创建"
     exit 1
 fi
 cp config/platform.env platform/.env.production
 
-# 构建（output: standalone 自包含产物）
 cd platform && npm run build
 
 if [ ! -f .next/standalone/server.js ]; then
@@ -29,10 +27,9 @@ echo ""
 echo "产物: .next/standalone/"
 echo "上传开始"
 
-# standalone 自包含（含 public/）—— 服务器无需 npm install
-# 先清旧文件避免残留，再上传
-ssh mindforge "mkdir -p /opt/mindforge/platform && rm -rf /opt/mindforge/platform/.next /opt/mindforge/platform/node_modules"
-scp -r .next/standalone/ mindforge:/opt/mindforge/platform/
+# 清旧 standalone，上传新的
+ssh mindforge "mkdir -p /opt/mindforge/platform/standalone && rm -rf /opt/mindforge/platform/standalone/*"
+scp -r .next/standalone/* mindforge:/opt/mindforge/platform/standalone/
+scp -r public/ mindforge:/opt/mindforge/platform/standalone/
 
 echo "上传服务器完成✅"
-echo "服务器端启动: cd /opt/mindforge/platform && node server.js"

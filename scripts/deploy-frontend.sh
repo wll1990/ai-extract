@@ -10,14 +10,12 @@ cd "$ROOT"
 
 echo "=== 管理后台打包 ==="
 
-# 检查生产环境变量文件
 if [ ! -f config/frontend.env ]; then
     echo "❌ config/frontend.env 不存在，请先创建"
     exit 1
 fi
 cp config/frontend.env frontend/.env.production
 
-# 构建（output: standalone 自包含产物）
 cd frontend && npm run build
 
 if [ ! -f .next/standalone/server.js ]; then
@@ -29,10 +27,9 @@ echo ""
 echo "产物: .next/standalone/"
 echo "上传开始"
 
-# standalone 自包含（含 public/）—— 服务器无需 npm install
-# 先清旧文件避免残留，再上传
-ssh mindforge "mkdir -p /opt/mindforge/frontend && rm -rf /opt/mindforge/frontend/.next /opt/mindforge/frontend/node_modules"
-scp -r .next/standalone/ mindforge:/opt/mindforge/frontend/
+# 清旧 standalone，上传新的
+ssh mindforge "mkdir -p /opt/mindforge/frontend/standalone && rm -rf /opt/mindforge/frontend/standalone/*"
+scp -r .next/standalone/* mindforge:/opt/mindforge/frontend/standalone/
+scp -r public/ mindforge:/opt/mindforge/frontend/standalone/
 
 echo "上传服务器完成✅"
-echo "服务器端启动: cd /opt/mindforge/frontend && node server.js"
