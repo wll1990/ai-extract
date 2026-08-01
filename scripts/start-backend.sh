@@ -7,10 +7,10 @@ source /opt/mindforge/config/backend.env
 set +a
 
 cd /opt/mindforge/backend
-pkill -f "ai-extract-backend" 2>/dev/null || true
+pkill -f "backend.jar" 2>/dev/null || true
 sleep 2
 
-nohup java -Xms256m -Xmx512m -jar *.jar > ../logs/backend.log 2>&1 &
+nohup java -Xms256m -Xmx512m -jar backend.jar > ../logs/backend.log 2>&1 &
 echo $! > ../logs/backend.pid
 
 echo "backend starting (pid $(cat ../logs/backend.pid))..."

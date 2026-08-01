@@ -18,7 +18,7 @@ done
 sleep 2
 
 # 3. pkill 兜底 — 强制杀残留
-pkill -f "ai-extract-backend" 2>/dev/null || true
+pkill -f "backend.jar" 2>/dev/null || true
 pkill -f "PORT=3000 node server.js" 2>/dev/null || true
 pkill -f "PORT=3001 node server.js" 2>/dev/null || true
 pkill -f "uvicorn main:app" 2>/dev/null || true

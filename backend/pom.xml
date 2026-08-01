@@ -77,6 +77,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- WebSocket -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- WebFlux (用于 SSE) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -169,6 +175,7 @@
     </repositories>
 
     <build>
+        <finalName>backend</finalName>
         <plugins>
             <!-- 阿里巴巴 p3c 代码规范检查 — 暂时关闭，p3c-pmd 2.1.1 与 PMD 3.20.0 不兼容
             <plugin>
