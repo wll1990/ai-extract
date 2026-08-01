@@ -29,9 +29,10 @@ echo ""
 echo "产物: .next/standalone/"
 echo "上传开始"
 
-# standalone 自包含——无需 package.json、无需 npm install
-scp -r .next/standalone/ mindforge:/opt/mindforge/frontend/standalone/
-scp -r public/ mindforge:/opt/mindforge/frontend/standalone/
+# standalone 自包含——服务器无需 npm install
+ssh mindforge "mkdir -p /opt/mindforge/frontend"
+scp -r .next/standalone/ mindforge:/opt/mindforge/frontend/
+scp -r public/ mindforge:/opt/mindforge/frontend/
 
 echo "上传服务器完成✅"
-echo "服务器端启动: cd /opt/mindforge/frontend/standalone && node server.js"
+echo "服务器端启动: cd /opt/mindforge/frontend && node server.js"
