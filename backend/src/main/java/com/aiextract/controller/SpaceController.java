@@ -2,6 +2,7 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Space;
 import com.aiextract.repository.SpaceRepository;
@@ -58,13 +59,34 @@ public class SpaceController {
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) UUID userId,
             @RequestParam(required = false, defaultValue = "createdAt") String sort) {
+        // 公司隔离：非 super_admin 只看本公司用户的空间
+        UUID companyId = TokenContext.getCompanyId();
+        List<UUID> companyUserIds = null;
+        if (companyId != null) {
+            companyUserIds = userRepository.findByCompanyId(companyId).stream()
+                .map(com.aiextract.model.User::getId).toList();
+            if (companyUserIds.isEmpty()) {
+                return ApiResponse.success(Map.of("content", List.of(), "page", page, "size", size, "total", 0L, "totalPages", 0));
+            }
+        }
+
         PageRequest pr = PageRequest.of(page - 1, size);
         Page<Space> sp;
+
+        // userId 优先，其次 company 过滤，否则全量
+        List<UUID> filterUserIds;
         if (userId != null) {
-            List<UUID> userIds = List.of(userId);
+            filterUserIds = List.of(userId);
+        } else if (companyUserIds != null) {
+            filterUserIds = companyUserIds;
+        } else {
+            filterUserIds = null;
+        }
+
+        if (filterUserIds != null) {
             sp = (keyword != null && !keyword.isEmpty())
-                ? spaceRepository.findByTitleContainingIgnoreCaseAndUserIdIn(keyword, userIds, pr)
-                : spaceRepository.findByUserIdIn(userIds, pr);
+                ? spaceRepository.findByTitleContainingIgnoreCaseAndUserIdIn(keyword, filterUserIds, pr)
+                : spaceRepository.findByUserIdIn(filterUserIds, pr);
         } else if (keyword != null && !keyword.isEmpty()) {
             sp = spaceRepository.findByTitleContainingIgnoreCase(keyword, pr);
         } else {
@@ -76,47 +98,32 @@ public class SpaceController {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("content", List.of());
             result.put("page", page); result.put("size", size);
-            result.put("total", 0L); result.put("totalPages", 0);
+            result.put("total", sp.getTotalElements()); result.put("totalPages", sp.getTotalPages());  // 用 DB 层分页数据
             return ApiResponse.success(result);
         }
 
-        // 批量查询：一次查所有 reportCount + skillStatus + userName
+        // 批量查询：reportCount + skillStatus + userName
         List<UUID> spaceIds = spaces.stream().map(Space::getId).toList();
-        List<UUID> userIds = spaces.stream().map(Space::getUserId).distinct().toList();
+        List<UUID> spaceUserIds = spaces.stream().map(Space::getUserId).distinct().toList();
 
-        // 批量报告数
         Map<UUID, Long> reportCounts = reportRepository.countBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
-
-        // 批量颗粒数
         Map<UUID, Long> grainCounts = grainRepository.countBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
-
-        // 批量 Skill 状态
         Map<UUID, String> skillStatuses = skillRepository.findBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(
                         com.aiextract.model.Skill::getSpaceId,
                         com.aiextract.model.Skill::getStatus, (a, b) -> a));
 
-        // 批量用户名称和角色
-        List<com.aiextract.model.User> owners = userRepository.findAllById(userIds);
+        // 批量用户名称
+        List<com.aiextract.model.User> owners = userRepository.findAllById(spaceUserIds);
         Map<UUID, String> userNames = owners.stream()
                 .collect(Collectors.toMap(
                         com.aiextract.model.User::getId,
                         com.aiextract.model.User::getName, (a, b) -> a));
-        Map<UUID, String> userRoles = owners.stream()
-                .collect(Collectors.toMap(
-                        com.aiextract.model.User::getId,
-                        com.aiextract.model.User::getRole, (a, b) -> a));
-
-        // 展示规则：空间总览只展示有个人空间的用户（排除管理员空间）
-        // 注：此处用角色判断而非权限码，因为是数据展示范围，非权限校验
-        List<Space> visibleSpaces = spaces.stream()
-                .filter(s -> !"super_admin".equals(userRoles.getOrDefault(s.getUserId(), "employee")))
-                .toList();
 
         List<Map<String, Object>> content = new ArrayList<>();
-        for (Space s : visibleSpaces) {
+        for (Space s : spaces) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", s.getId().toString());
             item.put("ownerName", userNames.getOrDefault(s.getUserId(), "未知用户"));
@@ -131,7 +138,6 @@ public class SpaceController {
             content.add(item);
         }
 
-        // 客户端排序：按报告数降序（有内容的排前面）
         if ("reportCount".equals(sort)) {
             content.sort((a, b) -> Integer.compare(
                     (Integer) b.get("reportCount"), (Integer) a.get("reportCount")));
