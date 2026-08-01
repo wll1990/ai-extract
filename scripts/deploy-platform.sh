@@ -18,8 +18,6 @@ echo ""
 echo "产物: .next/standalone/"
 echo "上传开始"
 
-ssh mindforge "mkdir -p /opt/mindforge/platform && rm -rf /opt/mindforge/platform/.next /opt/mindforge/platform/node_modules /opt/mindforge/platform/server.js /opt/mindforge/platform/package.json"
-cd .next/standalone && scp -r * .[!.]* mindforge:/opt/mindforge/platform/ 2>/dev/null
-cd "$ROOT"
+rsync -av --delete .next/standalone/ mindforge:/opt/mindforge/platform/
 
 echo "上传服务器完成✅"
