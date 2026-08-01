@@ -1,41 +1,53 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { getUser } from '@/lib/storage';
+import { getCurrentUser } from '@/lib/api/auth';
 import { getSpaces } from '@/lib/api/spaces';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Permission } from '@/lib/permissions';
 
 /**
- * "我的空间" — 自动跳转当前登录用户的空间详情页
- * 有个人空间权限则跳转到自己的空间，有管理后台权限则跳转到空间总览
+ * "我的空间" — 只跳转当前登录用户自己的空间
  */
 export default function MySpaceRedirect() {
   const router = useRouter();
-  const user = getUser() as any;
-  const perms: string[] = user?.permissions || [];
+  const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!user) { router.replace('/login'); return; }
-
-    // 无个人空间权限 → 空间总览
-    if (!perms.includes(Permission.SPACE_OWN)) {
-      router.replace('/spaces');
-      return;
-    }
-
-    // 员工 → 跳转到自己的空间详情
-    getSpaces(undefined, undefined, 1, 1)
-      .then(d => {
-        if (d.content?.length > 0) {
-          router.replace(`/space/${d.content[0].id}`);
-        } else {
-          router.replace('/interview/create');
+    getCurrentUser()
+      .then(user => {
+        const perms: string[] = (user as any).permissions || [];
+        if (!perms.includes(Permission.SPACE_OWN)) {
+          router.replace('/spaces');
+          return null;
         }
+        return getSpaces(undefined, undefined, 1, 1, (user as any).id);
       })
-      .catch(() => router.replace('/'));
-  }, [router, user]);
+      .then((d: any) => {
+        if (!d?.content?.length) { setError(true); return; }
+        router.replace(`/space/${d.content[0].id}`);
+      })
+      .catch(() => router.replace('/login'));
+  }, [router]);
+
+  if (error) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="text-center">
+          <span className="text-5xl">🏠</span>
+          <h2 className="mt-4 text-lg font-semibold text-foreground">还没有个人空间</h2>
+          <p className="mt-2 text-sm text-muted-foreground">创建个人空间后即可管理分身和知识库</p>
+          <button
+            onClick={() => router.push('/interview/create')}
+            className="mt-6 inline-block rounded-full bg-primary px-6 py-2.5 text-sm font-medium text-white"
+          >
+            开始创建 →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return <LoadingSpinner />;
 }

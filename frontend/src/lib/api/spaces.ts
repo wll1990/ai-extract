@@ -30,10 +30,11 @@ export interface SpaceListData {
 }
 
 /** 获取空间列表 */
-export function getSpaces(keyword?: string, tag?: string, page = 1, size = 20): Promise<SpaceListData> {
+export function getSpaces(keyword?: string, tag?: string, page = 1, size = 20, userId?: string): Promise<SpaceListData> {
   const p = new URLSearchParams();
   if (keyword) p.set('keyword', keyword);
   if (tag) p.set('tag', tag);
+  if (userId) p.set('userId', userId);
   p.set('page', String(page));
   p.set('size', String(size));
   return apiClient<SpaceListData>(`/spaces?${p}`);

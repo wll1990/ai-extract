@@ -1,16 +1,18 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.ErrorMessages;
+import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Space;
 import com.aiextract.repository.SpaceRepository;
+import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import com.aiextract.common.ErrorMessages;
-import com.aiextract.exception.BusinessException;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -37,7 +39,16 @@ public class SpaceController {
     private final com.aiextract.repository.ToolRepository toolRepository;
     private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final com.aiextract.service.SpaceService spaceService;
+    private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+
+    private String getToken() {
+        return (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
+    }
+
+    private UUID getCurrentUserId() {
+        return jwtUtil.getUserIdFromToken(getToken());
+    }
 
     @GetMapping
     public ApiResponse<Map<String, Object>> getSpaces(
@@ -45,11 +56,20 @@ public class SpaceController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String tag,
+            @RequestParam(required = false) UUID userId,
             @RequestParam(required = false, defaultValue = "createdAt") String sort) {
         PageRequest pr = PageRequest.of(page - 1, size);
-        Page<Space> sp = (keyword != null && !keyword.isEmpty())
-                ? spaceRepository.findByTitleContainingIgnoreCase(keyword, pr)
-                : spaceRepository.findAll(pr);
+        Page<Space> sp;
+        if (userId != null) {
+            List<UUID> userIds = List.of(userId);
+            sp = (keyword != null && !keyword.isEmpty())
+                ? spaceRepository.findByTitleContainingIgnoreCaseAndUserIdIn(keyword, userIds, pr)
+                : spaceRepository.findByUserIdIn(userIds, pr);
+        } else if (keyword != null && !keyword.isEmpty()) {
+            sp = spaceRepository.findByTitleContainingIgnoreCase(keyword, pr);
+        } else {
+            sp = spaceRepository.findAll(pr);
+        }
 
         List<Space> spaces = sp.getContent();
         if (spaces.isEmpty()) {
