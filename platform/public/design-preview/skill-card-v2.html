@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skill Card v2 — Design Preview</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ═══════════════════════════════════════════════
+     Theme 1: 深空黑 (Deep Space Black) — 默认
+     ═══════════════════════════════════════════════ */
+  :root {
+    --bg-body: #09090b;
+    --bg-topbar: rgba(9,9,11,0.8);
+    --bg-card: rgba(255,255,255,0.03);
+    --bg-card-hover: rgba(255,255,255,0.06);
+    --bg-cta: rgba(24,24,27,0.92);
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-medium: rgba(255,255,255,0.10);
+    --text-primary: #fafafa;
+    --text-secondary: #a1a1aa;
+    --text-tertiary: #71717a;
+    --accent: #f59e0b;
+    --accent-glow: rgba(245,158,11,0.15);
+    --accent-soft: rgba(245,158,11,0.08);
+    --accent-border: rgba(245,158,11,0.25);
+    --accent-border-hover: rgba(245,158,11,0.4);
+    --green: #34d399;
+    --purple: #a78bfa;
+    --quote-color: #d4d4d8;
+    --noise-opacity: 0.025;
+    --key-light-from: rgba(245,158,11,0.06);
+    --shadow-cta: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.05);
+  }
+
+  /* ═══════════════════════════════════════════════
+     Theme 2: 暖沙色 (Warm Sand) — platform 同款
+     ═══════════════════════════════════════════════ */
+  .theme-warm-sand {
+    --bg-body: #f8f5fb;
+    --bg-topbar: rgba(248,245,251,0.85);
+    --bg-card: #ffffff;
+    --bg-card-hover: #fdfaf7;
+    --bg-cta: rgba(255,255,255,0.92);
+    --border-subtle: rgba(0,0,0,0.06);
+    --border-medium: rgba(0,0,0,0.10);
+    --text-primary: #2b180a;
+    --text-secondary: #665a51;
+    --text-tertiary: #94877c;
+    --accent: #ff5c00;
+    --accent-glow: rgba(255,92,0,0.10);
+    --accent-soft: rgba(255,92,0,0.06);
+    --accent-border: rgba(255,92,0,0.2);
+    --accent-border-hover: rgba(255,92,0,0.4);
+    --green: #16a34a;
+    --purple: #7e22ce;
+    --quote-color: #665a51;
+    --noise-opacity: 0;
+    --key-light-from: rgba(255,92,0,0.04);
+    --shadow-cta: 0 4px 24px rgba(0,0,0,0.08), 0 0 0 1px rgba(255,92,0,0.05);
+  }
+
+  /* ═══════════════════════════════════════════════
+     Theme 3: 极光紫 (Aurora Violet)
+     ═══════════════════════════════════════════════ */
+  .theme-aurora {
+    --bg-body: #0a0a1a;
+    --bg-topbar: rgba(10,10,26,0.85);
+    --bg-card: rgba(255,255,255,0.04);
+    --bg-card-hover: rgba(255,255,255,0.07);
+    --bg-cta: rgba(16,16,38,0.92);
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-medium: rgba(255,255,255,0.10);
+    --text-primary: #f0ebff;
+    --text-secondary: #a8a0c8;
+    --text-tertiary: #6b6390;
+    --accent: #a78bfa;
+    --accent-glow: rgba(167,139,250,0.15);
+    --accent-soft: rgba(167,139,250,0.08);
+    --accent-border: rgba(167,139,250,0.25);
+    --accent-border-hover: rgba(167,139,250,0.45);
+    --green: #6ee7b7;
+    --purple: #c084fc;
+    --quote-color: #c4b5fd;
+    --noise-opacity: 0.02;
+    --key-light-from: rgba(167,139,250,0.06);
+    --shadow-cta: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(167,139,250,0.08);
+  }
+
+  /* ═══════════════════════════════════════════════
+     Theme 4: 瓷白 (Porcelain White) — Superhuman Snow 风
+     ═══════════════════════════════════════════════ */
+  .theme-porcelain {
+    --bg-body: #fafafa;
+    --bg-topbar: rgba(250,250,250,0.88);
+    --bg-card: #ffffff;
+    --bg-card-hover: #f5f5f5;
+    --bg-cta: rgba(255,255,255,0.94);
+    --border-subtle: rgba(0,0,0,0.06);
+    --border-medium: rgba(0,0,0,0.10);
+    --text-primary: #18181b;
+    --text-secondary: #52525b;
+    --text-tertiary: #a1a1aa;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.10);
+    --accent-soft: rgba(99,102,241,0.06);
+    --accent-border: rgba(99,102,241,0.20);
+    --accent-border-hover: rgba(99,102,241,0.40);
+    --green: #22c55e;
+    --purple: #8b5cf6;
+    --quote-color: #52525b;
+    --noise-opacity: 0;
+    --key-light-from: rgba(99,102,241,0.03);
+    --shadow-cta: 0 2px 16px rgba(0,0,0,0.06), 0 0 0 1px rgba(0,0,0,0.04);
+  }
+
+  /* ═══════════════════════════════════════════════
+     Theme 5: 墨绿金 (Forest & Gold) — 高端商务
+     ═══════════════════════════════════════════════ */
+  .theme-forest {
+    --bg-body: #0a0f0a;
+    --bg-topbar: rgba(10,15,10,0.85);
+    --bg-card: rgba(255,255,255,0.03);
+    --bg-card-hover: rgba(255,255,255,0.06);
+    --bg-cta: rgba(18,26,18,0.92);
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-medium: rgba(255,255,255,0.10);
+    --text-primary: #f0f5f0;
+    --text-secondary: #a0b0a0;
+    --text-tertiary: #6b7a6b;
+    --accent: #c9a227;
+    --accent-glow: rgba(201,162,39,0.15);
+    --accent-soft: rgba(201,162,39,0.08);
+    --accent-border: rgba(201,162,39,0.25);
+    --accent-border-hover: rgba(201,162,39,0.4);
+    --green: #4ade80;
+    --purple: #a78bfa;
+    --quote-color: #c0d0c0;
+    --noise-opacity: 0.02;
+    --key-light-from: rgba(201,162,39,0.05);
+    --shadow-cta: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(201,162,39,0.06);
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-body);
+    color: var(--text-primary);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    transition: background 0.4s ease, color 0.4s ease;
+  }
+
+  /* ═══ 噪点纹理 — 消除深色背景色带 ═══ */
+  body::before {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    background-repeat: repeat; background-size: 256px 256px;
+    opacity: var(--noise-opacity);
+    transition: opacity 0.4s ease;
+  }
+
+  /* ═══ 全局光源 ═══ */
+  body::after {
+    content: '';
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(ellipse 80% 60% at 50% -20%, var(--key-light-from) 0%, transparent 70%);
+    transition: background 0.4s ease;
+  }
+
+  .page {
+    position: relative; z-index: 1;
+    max-width: 960px; margin: 0 auto; padding: 0 20px 120px;
+  }
+
+  /* ═══ Top Bar ═══ */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0;
+    background: var(--bg-topbar); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border-subtle);
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+  .topbar-back {
+    background: none; border: none; cursor: pointer;
+    font-size: 13px; color: var(--text-secondary); font-family: inherit;
+    transition: color 0.2s;
+  }
+  .topbar-back:hover { color: var(--text-primary); }
+  .topbar-actions { display: flex; align-items: center; gap: 10px; }
+  .topbar-avatar {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, #a78bfa, #f59e0b);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+  }
+  .topbar-btn {
+    font-size: 12px; padding: 6px 14px; border-radius: var(--radius-sm);
+    background: var(--bg-card); color: var(--text-secondary);
+    border: 1px solid var(--border-medium); cursor: pointer;
+    font-family: inherit; font-weight: 500; transition: all 0.2s;
+  }
+  .topbar-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+
+  /* ═══ Hero Section ═══ */
+  .hero {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 48px 0 36px; text-align: center;
+  }
+  .hero-avatar-wrap {
+    position: relative; display: inline-block; margin-bottom: 20px;
+  }
+  /* 在线光环 */
+  .hero-avatar-ring {
+    position: absolute; inset: -6px; border-radius: 28px;
+    border: 2px solid transparent;
+    background: linear-gradient(135deg, var(--accent), #fbbf24, var(--accent)) border-box;
+    -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor; mask-composite: exclude;
+    animation: ringPulse 3s ease-in-out infinite;
+  }
+  @keyframes ringPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+  /* 头像底光 */
+  .hero-avatar-glow {
+    position: absolute; inset: -16px; border-radius: 28px;
+    background: radial-gradient(circle, var(--accent-glow) 0%, transparent 60%);
+    animation: glowBreathe 3s ease-in-out infinite;
+  }
+  @keyframes glowBreathe {
+    0%, 100% { opacity: 0.5; transform: scale(0.95); }
+    50% { opacity: 0.9; transform: scale(1.05); }
+  }
+  .hero-avatar {
+    width: 96px; height: 96px; border-radius: 24px; position: relative; z-index: 1;
+    background: linear-gradient(135deg, #6366f1, #a78bfa);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 40px; font-weight: 800;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .hero-avatar img {
+    width: 96px; height: 96px; border-radius: 24px; object-fit: cover;
+  }
+  .hero-name {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.6px;
+    margin-bottom: 4px;
+  }
+  .hero-tagline {
+    font-size: 15px; color: var(--accent); font-weight: 500;
+    font-style: italic; margin-bottom: 8px;
+    max-width: 360px; line-height: 1.5;
+  }
+  .hero-meta {
+    font-size: 13px; color: var(--text-tertiary);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: center;
+  }
+  .hero-meta-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--text-tertiary); }
+
+  /* 状态指示点 */
+  .online-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); margin-right: 4px;
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  /* ═══ Bento Grid ═══ */
+  .bento {
+    display: grid; grid-template-columns: 1fr;
+    gap: 12px; margin-bottom: 40px;
+  }
+  @media (min-width: 700px) {
+    .bento {
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto auto;
+    }
+    .bento-stats  { grid-column: 1; grid-row: 1; }
+    .bento-intro  { grid-column: 2; grid-row: 1 / 3; }
+    .bento-scenes { grid-column: 1; grid-row: 2; }
+    .bento-ask    { grid-column: 1 / 3; grid-row: 3; }
+  }
+
+  /* ═══ Card Base ═══ */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg); padding: 22px;
+    transition: all 0.3s ease;
+  }
+  .card:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-medium);
+    transform: translateY(-1px);
+  }
+  .card-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 14px;
+  }
+
+  /* ═══ Stats Card ═══ */
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+  }
+  .stat-item { text-align: center; padding: 8px 4px; }
+  .stat-value {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.5px; line-height: 1;
+  }
+  .stat-value.accent { color: var(--accent); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-value.green  { color: var(--green); }
+  .stat-label-text {
+    font-size: 11px; color: var(--text-tertiary); margin-top: 4px;
+  }
+  .stat-sub {
+    font-size: 10px; color: var(--text-tertiary); margin-top: 2px;
+    font-style: italic;
+  }
+
+  /* ═══ Intro Card ═══ */
+  .intro-card .card-label { margin-bottom: 10px; }
+  .intro-headline {
+    font-size: 17px; font-weight: 700; margin-bottom: 10px;
+    line-height: 1.4;
+  }
+  .intro-divider {
+    width: 32px; height: 2px; border-radius: 1px;
+    background: linear-gradient(90deg, var(--accent), transparent);
+    margin-bottom: 14px;
+    transition: background 0.4s ease;
+  }
+  .intro-body {
+    font-size: 13.5px; color: var(--text-secondary); line-height: 1.85;
+  }
+  .intro-body blockquote {
+    border-left: 2px solid var(--accent-border); padding-left: 14px;
+    margin: 12px 0; color: var(--quote-color); font-style: italic;
+  }
+  .intro-closing {
+    margin-top: 14px; font-size: 13px; color: var(--accent);
+    font-weight: 500; display: flex; align-items: center; gap: 6px;
+  }
+  .intro-closing::before {
+    content: '💬'; font-size: 14px;
+  }
+
+  /* ═══ Scene Tags Card ═══ */
+  .scene-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .scene-chip {
+    padding: 6px 14px; border-radius: var(--radius-full);
+    font-size: 12px; font-weight: 500;
+    border: 1px solid var(--border-medium);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    transition: all 0.2s; cursor: default;
+  }
+  .scene-chip:hover {
+    border-color: var(--accent-border);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .scene-chip .count {
+    color: var(--text-tertiary); font-size: 11px; margin-left: 4px;
+  }
+
+  /* ═══ Ask Card (推荐问题 - 聊天气泡风) ═══ */
+  .ask-header {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+  }
+  .ask-header-label {
+    font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  }
+  .ask-header-sub {
+    font-size: 11px; color: var(--text-tertiary);
+  }
+  .chat-bubbles { display: flex; flex-direction: column; gap: 8px; }
+  .chat-bubble {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px; border-radius: 14px;
+    background: var(--bg-card); border: 1px solid var(--border-subtle);
+    cursor: pointer; font-size: 13px; color: var(--text-secondary);
+    transition: all 0.25s; font-family: inherit; width: 100%; text-align: left;
+    border-top-left-radius: 4px; /* 聊天气泡尖角暗示 */
+  }
+  .chat-bubble:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent-border);
+    color: var(--text-primary);
+    transform: translateX(4px);
+  }
+  .chat-bubble-icon {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+
+  /* ═══ CTA Bar ═══ */
+  .cta-wrap {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 600px; z-index: 50; padding: 0 20px 24px;
+  }
+  .cta-inner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-cta); backdrop-filter: blur(24px);
+    border: 1px solid var(--border-medium); border-radius: 18px;
+    padding: 4px 4px 4px 18px;
+    box-shadow: var(--shadow-cta);
+    transition: border-color 0.3s, background 0.4s ease, box-shadow 0.4s ease;
+  }
+  .cta-inner:focus-within {
+    border-color: var(--accent-border-hover);
+  }
+  .cta-input {
+    flex: 1; border: none; background: transparent; outline: none;
+    font-size: 14px; padding: 12px 0; color: var(--text-primary);
+    font-family: inherit; min-width: 0;
+  }
+  .cta-input::placeholder { color: var(--text-tertiary); }
+  .cta-send {
+    padding: 11px 20px; border-radius: 14px; border: none; cursor: pointer;
+    font-size: 14px; font-weight: 600; font-family: inherit;
+    background: var(--accent); color: #fff; white-space: nowrap; flex-shrink: 0;
+    box-shadow: 0 4px 16px rgba(245,158,11,0.25);
+    transition: all 0.2s;
+  }
+  .cta-send:hover {
+    transform: translateY(-1px);
+    filter: brightness(1.1);
+  }
+  .cta-hint {
+    font-size: 11px; color: var(--text-tertiary); text-align: center;
+    margin-top: 8px;
+    transition: color 0.4s ease;
+  }
+  .cta-hint span { color: var(--accent); transition: color 0.4s ease; }
+
+  /* ═══ Animations ═══ */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .anim-hero  { animation: fadeUp 0.5s ease-out both; }
+  .anim-stats { animation: fadeUp 0.5s ease-out both; animation-delay: 0.1s; }
+  .anim-intro { animation: fadeUp 0.5s ease-out both; animation-delay: 0.15s; }
+  .anim-scenes{ animation: fadeUp 0.5s ease-out both; animation-delay: 0.2s; }
+  .anim-ask   { animation: fadeUp 0.5s ease-out both; animation-delay: 0.25s; }
+  .anim-cta   { animation: fadeUp 0.5s ease-out both; animation-delay: 0.3s; }
+
+  /* ═══ 控制面板 ═══ */
+  .ctl-panel {
+    position: fixed; top: 80px; right: 16px; z-index: 100;
+    display: flex; flex-direction: column; gap: 6px;
+    background: var(--bg-cta); backdrop-filter: blur(16px);
+    border: 1px solid var(--border-medium); border-radius: 14px;
+    padding: 10px; min-width: 150px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    transition: background 0.4s ease, border-color 0.4s ease;
+  }
+  .ctl-section-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--text-tertiary);
+    padding: 4px 8px 2px;
+    transition: color 0.4s ease;
+  }
+  .ctl-btn {
+    padding: 7px 10px; border-radius: 8px; border: none; cursor: pointer;
+    font-size: 11px; font-weight: 600; font-family: inherit;
+    background: transparent; color: var(--text-secondary);
+    transition: all 0.2s; text-align: left; width: 100%;
+    display: flex; align-items: center; gap: 6px;
+}
+
+  .ctl-btn:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+  .ctl-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .ctl-dot {
+    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+    border: 1.5px solid rgba(255,255,255,0.2);
+  }
+  .ctl-divider {
+    height: 1px; background: var(--border-subtle); margin: 2px 0;
+    transition: background 0.4s ease;
+  }
+
+  /* ═══ 旧版模拟 (v1) ═══ */
+  .v1-mode .hero-avatar-ring,
+  .v1-mode .hero-avatar-glow { display: none; }
+  .v1-mode .hero-avatar { border-radius: 28px; width: 120px; height: 120px; }
+  .v1-mode .hero-tagline { color: var(--text-secondary); font-style: normal; }
+  .v1-mode .online-dot { display: none; }
+  .v1-mode .stat-sub { display: none; }
+  .v1-mode .hero-name { font-size: 26px; }
+</style>
+</head>
+<body class="v2-mode">
+
+<!-- ═══ 控制面板 ═══ -->
+<div class="ctl-panel">
+  <div class="ctl-section-label">🎨 背景色</div>
+  <button class="ctl-btn active" onclick="switchTheme('')" id="t-deep">
+    <span class="ctl-dot" style="background:#09090b;"></span> 深空黑
+  </button>
+  <button class="ctl-btn" onclick="switchTheme('theme-warm-sand')" id="t-warm-sand">
+    <span class="ctl-dot" style="background:#f8f5fb;"></span> 暖沙色
+  </button>
+  <button class="ctl-btn" onclick="switchTheme('theme-aurora')" id="t-aurora">
+    <span class="ctl-dot" style="background:#0a0a1a;"></span> 极光紫
+  </button>
+  <button class="ctl-btn" onclick="switchTheme('theme-porcelain')" id="t-porcelain">
+    <span class="ctl-dot" style="background:#fafafa;"></span> 瓷白
+  </button>
+  <button class="ctl-btn" onclick="switchTheme('theme-forest')" id="t-forest">
+    <span class="ctl-dot" style="background:#0a0f0a;"></span> 墨绿金
+  </button>
+  <div class="ctl-divider"></div>
+  <div class="ctl-section-label">📐 版本</div>
+  <button class="ctl-btn active" onclick="switchVer('v2')" id="btn-v2">🔥 v2 · 新设计</button>
+  <button class="ctl-btn" onclick="switchVer('v1')" id="btn-v1">📋 v1 · 当前版</button>
+</div>
+
+<div class="page">
+
+  <!-- ═══ Top Bar ═══ -->
+  <div class="topbar">
+    <button class="topbar-back">← 返回发现</button>
+    <div class="topbar-actions">
+      <button class="topbar-btn">📤 分享</button>
+      <div class="topbar-avatar">张</div>
+    </div>
+  </div>
+
+  <!-- ═══ Hero ═══ -->
+  <section class="hero anim-hero">
+    <div class="hero-avatar-wrap">
+      <div class="hero-avatar-glow"></div>
+      <div class="hero-avatar-ring"></div>
+      <div class="hero-avatar">张</div>
+    </div>
+    <h1 class="hero-name">张伟</h1>
+    <p class="hero-tagline">"12年只做一件事——帮客户算清楚账"</p>
+    <p class="hero-meta">
+      <span class="online-dot"></span>可对话
+      <span class="hero-meta-dot"></span>
+      高级销售总监
+      <span class="hero-meta-dot"></span>
+      B2B · 企业服务
+    </p>
+  </section>
+
+  <!-- ═══ Bento Grid ═══ -->
+  <div class="bento">
+
+    <!-- Stats Card -->
+    <div class="card bento-stats anim-stats">
+      <div class="card-label">📊 数据看板</div>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <div class="stat-value accent">1,268</div>
+          <div class="stat-label-text">次对话</div>
+          <div class="stat-sub">帮助了 1,268 位销售同行</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value purple">843</div>
+          <div class="stat-label-text">位用户</div>
+          <div class="stat-sub">来自 200+ 家企业</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value green">96%</div>
+          <div class="stat-label-text">满意率</div>
+          <div class="stat-sub">觉得"很有帮助"</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Intro Card -->
+    <div class="card intro-card bento-intro anim-intro">
+      <div class="card-label">📝 关于张伟</div>
+      <div class="intro-headline">从一线销售到管理 300 人团队，我踩过所有坑</div>
+      <div class="intro-divider"></div>
+      <div class="intro-body">
+        <p>12 年 B2B 销售经验，服务过 200+ 企业客户。经历过从 0 到 1 的开拓期，也带过成熟团队的规模化增长。</p>
+        <blockquote>最好的销售不是"把东西卖出去"，是让客户觉得"这东西就是为我准备的"。</blockquote>
+        <p>我的经验涵盖报价策略、合同谈判、大客户关系管理。每一个技巧都是用真金白银的丢单换来的。</p>
+      </div>
+      <div class="intro-closing">想聊聊你怎么跟客户算账吗？试试问我一个问题 👇</div>
+    </div>
+
+    <!-- Scene Tags Card -->
+    <div class="card bento-scenes anim-scenes">
+      <div class="card-label" style="margin-bottom:4px;">🎯 擅长领域</div>
+      <div style="font-size:11px;color:var(--text-tertiary);margin-bottom:12px;">基于 128 条实战经验提炼</div>
+      <div class="scene-chips">
+        <span class="scene-chip">报价策略 <span class="count">32</span></span>
+        <span class="scene-chip">合同谈判 <span class="count">28</span></span>
+        <span class="scene-chip">客户关系 <span class="count">24</span></span>
+        <span class="scene-chip">需求挖掘 <span class="count">18</span></span>
+        <span class="scene-chip">异议处理 <span class="count">16</span></span>
+        <span class="scene-chip">团队管理 <span class="count">10</span></span>
+      </div>
+    </div>
+
+    <!-- Ask Card — 聊天气泡风 -->
+    <div class="card bento-ask anim-ask">
+      <div class="ask-header">
+        <span style="font-size:15px;">💬</span>
+        <span class="ask-header-label">大家都在问</span>
+        <span class="ask-header-sub">· 基于 1,268 次真实对话</span>
+      </div>
+      <div class="chat-bubbles">
+        <button class="chat-bubble">
+          <span class="chat-bubble-icon">🤔</span>
+          客户说"太贵了"，怎么判断是真贵还是借口？
+        </button>
+        <button class="chat-bubble">
+          <span class="chat-bubble-icon">🎯</span>
+          第一次见客户，怎么快速建立信任感？
+        </button>
+        <button class="chat-bubble">
+          <span class="chat-bubble-icon">📈</span>
+          报价时应该先报高价再让，还是一步到位？
+        </button>
+        <button class="chat-bubble">
+          <span class="chat-bubble-icon">🤝</span>
+          客户内部有多个决策人，应该先搞定谁？
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="height:120px"></div>
+</div>
+
+<!-- ═══ CTA ═══ -->
+<div class="cta-wrap anim-cta">
+  <div class="cta-inner">
+    <input class="cta-input" placeholder="试着问他一个问题吧…" />
+    <button class="cta-send">开始对话 →</button>
+  </div>
+  <div class="cta-hint">💡 放心问，不满意不花钱 · 也可以点上面的<span>推荐问题</span></div>
+</div>
+
+<script>
+let currentTheme = '';
+let currentVer = 'v2';
+
+function applyBodyClass() {
+  document.body.className = [currentTheme, currentVer + '-mode'].filter(Boolean).join(' ');
+}
+
+function switchTheme(theme) {
+  currentTheme = theme;
+  applyBodyClass();
+  document.querySelectorAll('[id^="t-"]').forEach(b => b.classList.remove('active'));
+  const activeId = 't-' + (theme || 'deep');
+  const btn = document.getElementById(activeId);
+  if (btn) btn.classList.add('active');
+}
+
+function switchVer(ver) {
+  currentVer = ver;
+  applyBodyClass();
+  document.querySelectorAll('#btn-v1, #btn-v2').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + ver).classList.add('active');
+}
+</script>
+</body>
+</html>

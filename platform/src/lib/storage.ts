@@ -9,6 +9,7 @@
 const KEYS = {
   TOKEN: 'token',
   USER: 'user',
+  SKIN: 'skill-card-skin',
 } as const;
 
 function isBrowser(): boolean { return typeof window !== 'undefined'; }
@@ -29,8 +30,24 @@ export function getToken(): string | null {
 export function getUser(): { name: string; role: string; [key: string]: unknown } | null {
   if (!isBrowser()) return null;
   const raw = localStorage.getItem(KEYS.USER);
-  if (!raw) return null;
-  try { return JSON.parse(raw); } catch { return null; }
+  if (raw) {
+    try { return JSON.parse(raw); } catch { /* fall through */ }
+  }
+  // C 端降级：个人登录存 c_auth
+  const cAuth = localStorage.getItem('c_auth');
+  if (cAuth) {
+    try {
+      const session = JSON.parse(cAuth);
+      if (session?.token || session?.userId) {
+        return {
+          name: session.nickname || session.userId?.substring(0, 8) || '用户',
+          role: session.status || 'registered',
+          avatarUrl: session.avatarUrl || undefined,
+        };
+      }
+    } catch { /* fall through */ }
+  }
+  return null;
 }
 
 export function setAuth(token: string, user: Record<string, unknown>): void {
@@ -44,4 +61,14 @@ export function clearAuth(): void {
   localStorage.removeItem(KEYS.TOKEN);
   localStorage.removeItem(KEYS.USER);
   localStorage.removeItem('c_auth');
+}
+
+export function getSkinPreference(): string | null {
+  if (!isBrowser()) return null;
+  return localStorage.getItem(KEYS.SKIN);
+}
+
+export function setSkinPreference(skin: string): void {
+  if (!isBrowser()) return;
+  localStorage.setItem(KEYS.SKIN, skin);
 }

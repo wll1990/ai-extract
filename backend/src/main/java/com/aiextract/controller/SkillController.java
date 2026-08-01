@@ -1,15 +1,18 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.BaseController;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.SseAdapter;
 import com.aiextract.config.TokenContext;
 import com.aiextract.dto.*;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Skill;
+import com.aiextract.model.SkillMaterial;
 import com.aiextract.model.SkillShare;
 import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
+import com.aiextract.repository.SkillMaterialRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.service.ChatStreamService;
 import com.aiextract.service.ConversationService;
@@ -33,8 +36,11 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -43,17 +49,17 @@ import java.util.UUID;
  * @author AI Extract Team
  */
 @RequiredArgsConstructor
-public class SkillController {
+public class SkillController extends BaseController {
 
     private final SkillService skillService;
     private final ChatStreamService chatStreamService;
     private final ConversationService conversationService;
     private final GrainRecommendationService grainRecommendationService;
     private final ObjectMapper objectMapper;
-    private final com.aiextract.util.JwtUtil jwtUtil;
     private final SkillRepository skillRepository;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final ExperienceGrainRepository grainRepository;
+    private final SkillMaterialRepository skillMaterialRepository;
     private final PracticeDemoService practiceDemoService;
     private final QueryGate queryGate;
     private final OrganizationSkillService orgSkillService;
@@ -72,20 +78,6 @@ public class SkillController {
 
     private final com.aiextract.service.ShareService shareService;
     private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
-
-    private String getToken() {
-        return (String) org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication().getCredentials();
-    }
-
-    private UUID extractUserId() {
-        return jwtUtil.getUserIdFromToken(getToken());
-    }
-
-    /** 从 JWT 解出角色（B 端 super_admin/employee，C 端 c_guest/c_user），供 Service 层做游客拦截 */
-    private String extractRole() {
-        return jwtUtil.getRoleFromToken(getToken());
-    }
 
     @PostMapping(value = "/{skillId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@PathVariable String skillId,
@@ -202,23 +194,25 @@ public class SkillController {
     }
 
     /**
+     * 我的分身列表 — 严格只看当前用户自己的分身（零角色分支）。
+     * 平台端"我的分身"页面调用。
+     */
+    @GetMapping("/my")
+    public ApiResponse<Map<String, Object>> listMySkills(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(required = false) String status) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        return ApiResponse.success(skillService.listMySkills(page, size, status, userId));
+    }
+
+    /**
      * 分身详情 — System B 聊天页入口。
      * 返回头像、姓名、职级、开场白、场景标签、颗粒数等完整信息。
      */
     @GetMapping("/{skillId}/detail")
     public ApiResponse<Map<String, Object>> getSkillDetail(@PathVariable String skillId) {
-        try {
-            return ApiResponse.success(skillService.getSkillDetail(skillId));
-        } catch (BusinessException e) {
-            if (e.getErrorCode() == 404) {
-                try {
-                    return ApiResponse.success(orgSkillService.getDetail(UUID.fromString(skillId)));
-                } catch (IllegalArgumentException iae) {
-                    throw e; // 非法 UUID → 维持原始 404
-                }
-            }
-            throw e;
-        }
+        return ApiResponse.success(skillService.getSkillDetail(skillId));
     }
 
     /**
@@ -247,8 +241,9 @@ public class SkillController {
         }
         skillService.updateSkillStatus(skillId, newStatus);
 
-        // C端发布时写审计日志
+        // C端发布时自动创建对外分享 + 审计日志
         if ("c_user".equalsIgnoreCase(extractRole()) && "published".equals(newStatus)) {
+            shareService.initDefaultShares(UUID.fromString(skillId), extractUserId(), true);
             try {
                 auditLogRepository.save(com.aiextract.model.AdminAuditLog.builder()
                     .id(UUID.randomUUID())
@@ -274,13 +269,7 @@ public class SkillController {
             @RequestBody(required = false) Map<String, String> body) {
         String channel = body != null ? body.getOrDefault("channel", SkillShare.CHANNEL_PUBLIC) : SkillShare.CHANNEL_PUBLIC;
         var share = shareService.getOrCreateShare(skillId, extractUserId(), channel);
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("skillId", share.getSkillId().toString());
-        m.put("shareCode", share.getShareCode());
-        m.put("channel", share.getChannel());
-        m.put("enabled", share.getEnabled());
-        m.put("createdAt", share.getCreatedAt() != null ? share.getCreatedAt().toString() : null);
-        return ApiResponse.success(m);
+        return ApiResponse.success(toShareMap(share));
     }
 
     /**
@@ -291,13 +280,7 @@ public class SkillController {
             @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
         var share = shareService.toggleShare(skillId, enabled);
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("skillId", share.getSkillId().toString());
-        m.put("shareCode", share.getShareCode());
-        m.put("channel", share.getChannel());
-        m.put("enabled", share.getEnabled());
-        m.put("createdAt", share.getCreatedAt() != null ? share.getCreatedAt().toString() : null);
-        return ApiResponse.success(m);
+        return ApiResponse.success(toShareMap(share));
     }
 
     /**
@@ -307,13 +290,7 @@ public class SkillController {
     public ApiResponse<Map<String, Object>> getShare(@PathVariable UUID skillId) {
         var share = shareService.findShare(skillId)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("skillId", share.getSkillId().toString());
-        m.put("shareCode", share.getShareCode());
-        m.put("channel", share.getChannel());
-        m.put("enabled", share.getEnabled());
-        m.put("createdAt", share.getCreatedAt() != null ? share.getCreatedAt().toString() : null);
-        return ApiResponse.success(m);
+        return ApiResponse.success(toShareMap(share));
     }
 
     /** 推荐问题 — 基于活跃颗粒的模板化生成 */
@@ -325,17 +302,20 @@ public class SkillController {
             return ApiResponse.success(practiceDemoService.generateRecommendedQuestions(sceneTag));
         }
         Skill skill = skillRepository.findById(skillId).orElse(null);
-        if (skill != null) {
-            // 优先读缓存（发布时 @Async 预生成的 JSONB 数组）
-            List<String> cached = JsonUtil.parseStringList(skill.getRecommendedQuestions());
-            if (!cached.isEmpty()) {
-                return ApiResponse.success(cached);
-            }
-            // 缓存缺失 → 回退 Service 层模板生成
-            return ApiResponse.success(practiceDemoService.generateRecommendedQuestionsForSkill(skillId));
+        if (skill == null) {
+            return ApiResponse.success(List.of());
         }
-        // 组织分身 fallback — 聚合所有成员的场景标签
-        return ApiResponse.success(orgSkillService.getRecommendedQuestionsFallback(skillId));
+        // 组织分身 → 委托 OrganizationSkillService 聚合成员场景标签
+        if ("organization".equals(skill.getType())) {
+            return ApiResponse.success(orgSkillService.getRecommendedQuestionsFallback(skillId));
+        }
+        // 优先读缓存（发布时 @Async 预生成的 JSONB 数组）
+        List<String> cached = JsonUtil.parseStringList(skill.getRecommendedQuestions());
+        if (!cached.isEmpty()) {
+            return ApiResponse.success(cached);
+        }
+        // 缓存缺失 → 回退 Service 层模板生成
+        return ApiResponse.success(practiceDemoService.generateRecommendedQuestionsForSkill(skillId));
     }
 
     /**
@@ -348,18 +328,7 @@ public class SkillController {
      */
     @GetMapping("/{skillId}/scene-tags")
     public ApiResponse<List<Map<String, Object>>> getSceneTags(@PathVariable String skillId) {
-        try {
-            return ApiResponse.success(skillService.getSceneTags(skillId));
-        } catch (BusinessException e) {
-            if (e.getErrorCode() == 404) {
-                try {
-                    return ApiResponse.success(orgSkillService.getSceneTags(skillId));
-                } catch (Exception ignored) {
-                    throw e;
-                }
-            }
-            throw e;
-        }
+        return ApiResponse.success(skillService.getSceneTags(skillId));
     }
 
     /**
@@ -372,18 +341,7 @@ public class SkillController {
      */
     @GetMapping("/{skillId}/practice-scenes")
     public ApiResponse<List<Map<String, Object>>> getPracticeScenes(@PathVariable String skillId) {
-        try {
-            return ApiResponse.success(skillService.getPracticeScenes(skillId));
-        } catch (BusinessException e) {
-            if (e.getErrorCode() == 404) {
-                try {
-                    return ApiResponse.success(orgSkillService.getPracticeScenes(skillId));
-                } catch (Exception ignored) {
-                    throw e;
-                }
-            }
-            throw e;
-        }
+        return ApiResponse.success(skillService.getPracticeScenes(skillId));
     }
 
     /**
@@ -430,7 +388,19 @@ public class SkillController {
         if (!space.isOwnedBy(userId)) {
             throw new BusinessException(403, "无权访问");
         }
-        List<Map<String, Object>> grains = grainRepository.findBySpaceId(skill.getSpaceId()).stream()
+        List<com.aiextract.model.ExperienceGrain> grainList = grainRepository.findBySpaceId(skill.getSpaceId());
+
+        // 批量预取素材名称，避免 N+1
+        Set<UUID> materialIds = grainList.stream()
+            .map(com.aiextract.model.ExperienceGrain::getSourceMaterialId)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+        Map<UUID, SkillMaterial> materialMap = materialIds.isEmpty()
+            ? Map.of()
+            : skillMaterialRepository.findAllById(materialIds).stream()
+                .collect(Collectors.toMap(SkillMaterial::getId, Function.identity()));
+
+        List<Map<String, Object>> grains = grainList.stream()
             .map(g -> {
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", g.getId().toString());
@@ -441,6 +411,13 @@ public class SkillController {
                 m.put("commonMistakes", g.getCommonMistakes());
                 m.put("status", g.getStatus());
                 m.put("sourceType", g.getSourceType());
+                if (g.getSourceMaterialId() != null) {
+                    m.put("sourceMaterialId", g.getSourceMaterialId().toString());
+                    SkillMaterial mat = materialMap.get(g.getSourceMaterialId());
+                    if (mat != null) {
+                        m.put("sourceMaterialName", mat.getFileName());
+                    }
+                }
                 return m;
             }).toList();
         return ApiResponse.success(grains);

@@ -29,11 +29,13 @@ export default function MaterialsPage() {
   const [guideRead, setGuideRead] = useState(false);
   const [files, setFiles] = useState<SelectedFile[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadDone, setUploadDone] = useState(false);
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   // 记住"必看"已读
   useEffect(() => {
@@ -50,6 +52,9 @@ export default function MaterialsPage() {
     setGuideRead(false);
   };
 
+  // 切换素材类型时重置上传完成状态
+  useEffect(() => { setUploadDone(false); }, [selectedType]);
+
   // 加载技能名
   useEffect(() => {
     if (!skillId) return;
@@ -58,21 +63,26 @@ export default function MaterialsPage() {
       .catch(() => {});
   }, [skillId]);
 
-  // 加载素材列表
+  // 加载素材列表（generation 计数器防止竞态）
+  const genRef = useRef(0);
+
   const fetchMaterials = useCallback(() => {
     if (!skillId) return;
+    const gen = ++genRef.current;
     listSkillMaterials(skillId, 1, 50)
       .then((data) => {
+        if (gen !== genRef.current) return; // 过期请求，丢弃
         setMaterials(data.content || []);
         setLoading(false);
-        // 有非终态素材则轮询
         const hasActive = (data.content || []).some(
           (m) => !['extracted', 'rejected', 'discarded', 'analyzed'].includes(m.status),
         );
         if (hasActive && !pollingRef.current) {
           pollingRef.current = setInterval(() => {
+            const pollGen = ++genRef.current;
             listSkillMaterials(skillId, 1, 50)
               .then((d) => {
+                if (pollGen !== genRef.current) return;
                 setMaterials(d.content || []);
                 const stillActive = (d.content || []).some(
                   (m) => !['extracted', 'rejected', 'discarded', 'analyzed'].includes(m.status),
@@ -86,7 +96,7 @@ export default function MaterialsPage() {
           }, 3000);
         }
       })
-      .catch((err) => { setError(err.message || '加载失败'); setLoading(false); });
+      .catch((err) => { if (gen === genRef.current) { setError(err.message || '加载失败'); setLoading(false); } });
   }, [skillId]);
 
   useEffect(() => {
@@ -128,6 +138,7 @@ export default function MaterialsPage() {
       }
     }
     setUploading(false);
+    setUploadDone(true);
     fetchMaterials();
   };
 
@@ -206,6 +217,28 @@ export default function MaterialsPage() {
                 {uploading ? '上传中...' : '上传全部文件'}
               </button>
             </div>
+          </div>
+        )}
+
+        {/* 上传完成引导 */}
+        {uploadDone && (
+          <div style={{
+            marginTop: 16, padding: '14px 18px', borderRadius: 14,
+            background: '#f0fdf4', border: '1px solid #bbf7d0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <span style={{ fontSize: 13, color: '#166534', fontWeight: 500 }}>
+              ✅ 素材已上传，AI 正在后台萃取经验颗粒
+            </span>
+            <button
+              onClick={() => router.push(`/platform/my/${skillId}/audit`)}
+              style={{
+                padding: '7px 16px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                background: '#166534', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+              }}
+            >
+              去审核页查看 →
+            </button>
           </div>
         )}
 
