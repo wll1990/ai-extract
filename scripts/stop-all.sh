@@ -19,8 +19,8 @@ sleep 2
 
 # 3. pkill 兜底 — 强制杀残留
 pkill -f "backend.jar" 2>/dev/null || true
-pkill -f "PORT=3000 node server.js" 2>/dev/null || true
-pkill -f "PORT=3001 node server.js" 2>/dev/null || true
+kill $(ss -tlnp 2>/dev/null | grep ':3000 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
+kill $(ss -tlnp 2>/dev/null | grep ':3001 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
 pkill -f "uvicorn main:app" 2>/dev/null || true
 
 echo "all services stopped"

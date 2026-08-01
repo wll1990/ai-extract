@@ -2,10 +2,11 @@
 set -e
 
 cd /opt/mindforge/frontend
-pkill -f "PORT=3000 node server.js" 2>/dev/null || true
+# 用端口杀旧进程（进程名是 next-server 不是 node server）
+kill $(ss -tlnp 2>/dev/null | grep ':3000 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
 sleep 1
 
-PORT=3000 nohup node server.js > ../logs/frontend.log 2>&1 &
+HOSTNAME=0.0.0.0 PORT=3000 nohup node server.js > ../logs/frontend.log 2>&1 &
 echo $! > ../logs/frontend.pid
 
 sleep 3

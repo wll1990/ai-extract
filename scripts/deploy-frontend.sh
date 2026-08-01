@@ -16,9 +16,9 @@ cd frontend && npm run build
 echo "产物: .next/standalone/"
 echo "上传开始"
 
-# 1. standalone 服务端包
+# standalone 不含 static/ 和 public/，分三步同步
 rsync -av .next/standalone/ mindforge:/opt/mindforge/frontend/
-# 2. static/ — standalone 不含，需单独同步
 rsync -av .next/static/ mindforge:/opt/mindforge/frontend/.next/static/
+rsync -av public/ mindforge:/opt/mindforge/frontend/public/
 
 echo "上传服务器完成✅"
