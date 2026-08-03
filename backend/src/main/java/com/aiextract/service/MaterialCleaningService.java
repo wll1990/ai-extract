@@ -2,6 +2,7 @@ package com.aiextract.service;
 
 import com.aiextract.config.DomainConfig;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.ExtractionDropLog;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillMaterial;
@@ -74,6 +75,16 @@ public class MaterialCleaningService {
     private static final String KEY_TEXT = "text";
     private static final String KEY_VERDICT = "verdict";
 
+    // 素材处理状态常量
+    static final String STATUS_UPLOADED = "uploaded";
+    static final String STATUS_PARSED = "parsed";
+    static final String STATUS_PARSE_FAILED = "parse_failed";
+    static final String STATUS_CLEANING = "cleaning";
+    static final String STATUS_CLEANING_FAILED = "cleaning_failed";
+    static final String STATUS_ANALYZED = "analyzed";
+    static final String STATUS_EXTRACTED = "extracted";
+    static final String STATUS_REJECTED = "rejected";
+
     // 自注入代理：AI/HTTP 调用在事务外，DB 状态更新走短事务
     @org.springframework.beans.factory.annotation.Autowired
     @org.springframework.context.annotation.Lazy
@@ -107,6 +118,10 @@ public class MaterialCleaningService {
     @org.springframework.beans.factory.annotation.Value("${storage.local.path}")
     private String storageBasePath;
 
+    /** 解析后文本最大字数 — 超过此值拒绝并建议拆分（配置：app.material.upload.max-text-length） */
+    @org.springframework.beans.factory.annotation.Value("${app.material.upload.max-text-length:100000}")
+    private int maxTextLength;
+
     // ==================== 素材上传（Controller → 本层） ====================
 
     /**
@@ -116,6 +131,15 @@ public class MaterialCleaningService {
     public Map<String, Object> uploadMaterialToSpace(MultipartFile file, UUID spaceId,
             UUID skillId, String skillName, UUID userId,
             String domain) {
+        // 未指定分身名称时，用上传文件名（去扩展名）兜底
+        if (skillName == null || skillName.isBlank()) {
+            String original = file.getOriginalFilename();
+            if (original != null && !original.isBlank()) {
+                int dot = original.lastIndexOf('.');
+                skillName = dot > 0 ? original.substring(0, dot) : original;
+            }
+        }
+
         // 已有 skill 时从 skill 获取 domain（覆盖前端传的）
         if (skillId != null) {
             Skill existing = skillRepository.findById(skillId).orElse(null);
@@ -261,7 +285,7 @@ public class MaterialCleaningService {
                 .fileType(file.getContentType())
                 .fileSize(file.getSize())
                 .version(1)
-                .status("uploaded")
+                .status(STATUS_UPLOADED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -288,7 +312,7 @@ public class MaterialCleaningService {
                     acceptanceData.put("rejectCode", acceptance.rejectCode());
                     acceptanceData.put("rejectReason", acceptance.rejectReason());
                     acceptanceData.put("details", acceptance.details());
-                    material.setStatus("rejected");
+                    material.setStatus(STATUS_REJECTED);
                     material.setAnalysisNotes(acceptance.rejectReason());
                     materialRepository.save(material);
                 } else {
@@ -305,7 +329,7 @@ public class MaterialCleaningService {
                         acceptanceData.put("rejectCode", dupCheck.rejectCode());
                         acceptanceData.put("rejectReason", dupCheck.rejectReason());
                         acceptanceData.put("details", dupCheck.details());
-                        material.setStatus("rejected");
+                        material.setStatus(STATUS_REJECTED);
                         material.setAnalysisNotes(dupCheck.rejectReason());
                         materialRepository.save(material);
                     }
@@ -442,7 +466,7 @@ public class MaterialCleaningService {
                 .fileSize((long) text.length())
                 .parsedContent(text)
                 .version(1)
-                .status("uploaded")
+                .status(STATUS_UPLOADED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -463,7 +487,7 @@ public class MaterialCleaningService {
                 acceptanceData.put("rejectCode", acceptance.rejectCode());
                 acceptanceData.put("rejectReason", acceptance.rejectReason());
                 acceptanceData.put("details", acceptance.details());
-                material.setStatus("rejected");
+                material.setStatus(STATUS_REJECTED);
                 material.setAnalysisNotes(acceptance.rejectReason());
                 materialRepository.save(material);
             } else {
@@ -479,7 +503,7 @@ public class MaterialCleaningService {
                     acceptanceData.put("rejectCode", dupCheck.rejectCode());
                     acceptanceData.put("rejectReason", dupCheck.rejectReason());
                     acceptanceData.put("details", dupCheck.details());
-                    material.setStatus("rejected");
+                    material.setStatus(STATUS_REJECTED);
                     material.setAnalysisNotes(dupCheck.rejectReason());
                     materialRepository.save(material);
                 }
@@ -559,6 +583,13 @@ public class MaterialCleaningService {
 
         log.info("开始文件解析, materialId: {}, fileName: {}", materialId, material.getFileName());
 
+        // 已标记需人工补充的素材跳过重新解析
+        if (material.getAnalysisNotes() != null
+                && material.getAnalysisNotes().contains("需人工补充文字内容")) {
+            log.info("素材需人工补充文字，跳过重新解析, materialId: {}", materialId);
+            return null;
+        }
+
         try {
             Map<String, String> body = Map.of(
                     "file_path", material.getFileUrl(),
@@ -576,12 +607,22 @@ public class MaterialCleaningService {
                 boolean needsManual = Boolean.TRUE.equals(response.get(KEY_NEEDS_MANUAL));
 
                 if (needsManual) {
-                    material.setStatus("uploaded");
+                    material.setStatus(STATUS_UPLOADED);
                     material.setAnalysisNotes("图片或音频文件，需人工补充文字内容");
                     // 不设 parsedContent，避免占位文本流入 10 层萃取管线
                 } else {
+                    // 文本字数超限检查 — 超过配置上限则拒绝，建议拆分
+                    if (text.length() > maxTextLength) {
+                        material.setStatus(STATUS_REJECTED);
+                        material.setAnalysisNotes("文本过长(" + text.length() + "字)，超过上限("
+                            + maxTextLength + "字)。建议拆分为多个文件分批上传，处理速度更快、萃取质量更高");
+                        materialRepository.save(material);
+                        log.warn("素材文本过长被拒绝, materialId: {}, 长度: {}", materialId, text.length());
+                        return null;
+                    }
                     material.setParsedContent(text);
                     material.setAnalysisNotes("文件解析完成，长度: " + text.length() + "字");
+                    material.setStatus(STATUS_PARSED);
                 }
                 materialRepository.save(material);
                 log.info("文件解析完成, materialId: {}, 文本长度: {}, needsManual: {}",
@@ -635,7 +676,7 @@ public class MaterialCleaningService {
     // ---- 对抗验证（Layer 5）----
 
     /**
-     * 分批对抗验证（每批最多 10 条，避免 JSON 截断）
+     * 分批对抗验证（每批 5 条，与提取层 batch 保持一致，50 维度评分在 2048 token 内安全）
      */
     private List<GrainCandidate> verifyGrains(List<GrainCandidate> candidates, ContextTags context,
             UUID materialId, UUID spaceId, String domain,
@@ -646,7 +687,7 @@ public class MaterialCleaningService {
         }
 
         List<GrainCandidate> approved = new ArrayList<>();
-        int batchSize = 10;
+        int batchSize = 5;
 
         for (int start = 0; start < candidates.size(); start += batchSize) {
             int end = Math.min(start + batchSize, candidates.size());
@@ -915,6 +956,30 @@ public class MaterialCleaningService {
         return text.length() <= maxLen ? text : text.substring(0, maxLen) + "...";
     }
 
+    /** 统计文本中的技巧信号密度 — 用于选择最适合注入情境上下文的 chunk */
+    private int countTechniqueSignals(String text) {
+        if (text == null) return 0;
+        int count = 0;
+        // 因果关系词
+        for (String kw : new String[]{"因为", "所以", "由于", "导致", "结果", "后来", "后续", "因此"}) {
+            int idx = 0;
+            while ((idx = text.indexOf(kw, idx)) != -1) { count++; idx += kw.length(); }
+        }
+        // 判断/策略动词
+        for (String kw : new String[]{"判断", "发现", "决定", "选择", "放弃", "坚持", "改变", "引导",
+                "策略", "方法", "技巧", "话术", "配合", "借力"}) {
+            int idx = 0;
+            while ((idx = text.indexOf(kw, idx)) != -1) { count++; idx += kw.length(); }
+        }
+        // 客户互动信号
+        for (String kw : new String[]{"客户说", "客户提到", "客户觉得", "客户会", "客户要求",
+                "我觉得", "我的判断", "我判断", "我理解"}) {
+            int idx = 0;
+            while ((idx = text.indexOf(kw, idx)) != -1) { count++; idx += kw.length(); }
+        }
+        return count;
+    }
+
     /**
      * 从长文本中均匀采样头部+中部+尾部，用固定 token 预算覆盖全文关键断面。
      * 替代 substring(0, maxLen)，避免只看开头丢失后段信息。
@@ -983,7 +1048,7 @@ public class MaterialCleaningService {
             return;
 
         }
-        material.setStatus("analyzed");
+        material.setStatus(STATUS_ANALYZED);
         if (analysisNotes != null) {
 
             material.setAnalysisNotes(analysisNotes);
@@ -1019,11 +1084,13 @@ public class MaterialCleaningService {
         try {
             // 访谈素材跳过 Gate 1 准入：转录由平台萃取师引导产生，天然在题；
             // 关键词密度等阈值面向外部上传文件挡垃圾，对口语化访谈叙事不适用
-            if (!"interview".equals(material.getMaterialType())) {
+            boolean isInterview = "interview".equals(material.getMaterialType())
+                    || (material.getFileName() != null && material.getFileName().contains("访谈"));
+            if (!isInterview) {
                 var acceptance = preChecker.checkAcceptance(rawText, domain);
                 if (!acceptance.passed()) {
                     // 短事务标记 rejected，避免 detached 实例 merge 覆盖中间状态字段
-                    self.updateMaterialStatus(materialId, "rejected", acceptance.rejectReason());
+                    self.updateMaterialStatus(materialId, STATUS_REJECTED, acceptance.rejectReason());
                     log.warn("素材准入不通过 materialId={}: {}", materialId, acceptance.rejectReason());
                     return List.of();
                 }
@@ -1043,7 +1110,7 @@ public class MaterialCleaningService {
                 materialId, context.buyingStage(), context.buyerPersona(), context.industrySignals());
 
         // ── Layer 1+2+3: 规则清洗（零AI调用）──
-        self.updateMaterialStatus(materialId, "cleaning", null);
+        self.updateMaterialStatus(materialId, STATUS_CLEANING, null);
 
         String detectedType = MaterialNoiseCleaner.detectMaterialType(rawText, material.getFileName());
         String deNoised = noiseCleaner.cleanFormatNoise(rawText, detectedType);
@@ -1069,7 +1136,8 @@ public class MaterialCleaningService {
         log.info("分块策略: {} materialId={} chunks={}",
                 isDialogue ? "dialogue" : "semantic", materialId, chunks.size());
         List<TextChunk> uniqueChunks = deduplicate(chunks, spaceId, materialId, drops);
-        List<ExtractedInsight> insights = extractInsights(uniqueChunks, materialId, context, domain);
+        ExtractionResult extractionResult = extractInsights(uniqueChunks, materialId, context, domain);
+        List<ExtractedInsight> insights = extractionResult.insights();
         List<GrainCandidate> candidates = classifyScenesBatch(insights, spaceId, materialId, domain);
 
         // ── Layer 6: 对抗验证（分批调用）──
@@ -1110,6 +1178,31 @@ public class MaterialCleaningService {
         metaMap.put("verifiedCount", verified.size());
         metaMap.put("rejectedCount", rejected);
         metaMap.put("mergedCount", verified.size());
+        // 审计数据: chunk 级提取详情
+        metaMap.put("chunkResults", extractionResult.chunkDetails());
+        // 审计数据: 验证详情（通过的颗粒+淘汰记录）
+        List<Map<String, Object>> verifyDetails = new ArrayList<>();
+        for (GrainCandidate c : verified) {
+            Map<String, Object> vd = new LinkedHashMap<>();
+            vd.put("sceneTag", c.sceneTag());
+            vd.put("sceneDescription", truncate(c.insight().sceneDescription(), 120));
+            vd.put("expertThought", truncate(c.insight().expertThought(), 120));
+            vd.put("qualityScore", c.qualityScore());
+            vd.put("difficultyLevel", c.difficultyLevel());
+            vd.put("verdict", "APPROVE");
+            verifyDetails.add(vd);
+        }
+        for (ExtractionDropLog drop : drops) {
+            if ("verification".equals(drop.getStage())) {
+                Map<String, Object> vd = new LinkedHashMap<>();
+                vd.put("stage", drop.getStage());
+                vd.put("contentPreview", drop.getContentPreview());
+                vd.put("detail", drop.getDetail());
+                vd.put("verdict", "REJECT");
+                verifyDetails.add(vd);
+            }
+        }
+        metaMap.put("verifyDetails", verifyDetails);
         metaMap.put("reportVersion", "v" + material.getVersion() + "-"
                 + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmm")));
         if (patterns != null) {
@@ -1196,6 +1289,16 @@ public class MaterialCleaningService {
         }
         if (buffer.length() > 0) {
             chunks.add(new TextChunk(idx, buffer.toString().trim()));
+        }
+        // P3-12: 对话 chunk 加 50 字上文重叠，保持跨 chunk 因果链不断
+        for (int i = chunks.size() - 1; i >= 1; i--) {
+            String prevText = chunks.get(i - 1).text();
+            if (prevText.length() > 50) {
+                String overlap = prevText.substring(prevText.length() - 50);
+                TextChunk orig = chunks.get(i);
+                chunks.set(i, new TextChunk(orig.index(),
+                    "[上文] " + overlap + "\n---\n" + orig.text()));
+            }
         }
         return chunks;
     }
@@ -1371,18 +1474,20 @@ public class MaterialCleaningService {
 
     // ---- AI 关键提取（渐进式 prompt，减少重复指令开销）----
 
-    /** 完整版提取 prompt — 首个 chunk 使用（含情境上下文） */
-    private List<ExtractedInsight> extractInsights(List<TextChunk> chunks, UUID materialId, ContextTags context,
+    /** 完整版提取 prompt — 首个 chunk 使用（含情境上下文）。返回 ExtractionResult 含审计数据。 */
+    private ExtractionResult extractInsights(List<TextChunk> chunks, UUID materialId, ContextTags context,
             String domain) {
         String contextPrefix = context.toPromptPrefix();
         List<ExtractedInsight> all = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<Map<String, Object>> chunkDetails = java.util.Collections.synchronizedList(new ArrayList<>());
 
-        // P2-6: 选最长 chunk 作为首个（信息密度最高），情境上下文更有效
-        int maxLen = 0;
+        // P3-12: 选技巧信号最多的 chunk 注入情境上下文（替代原"最长 chunk"策略）
+        int maxSignals = 0;
         int bestIdx = 0;
         for (int i = 0; i < chunks.size(); i++) {
-            if (chunks.get(i).text().length() > maxLen) {
-                maxLen = chunks.get(i).text().length();
+            int signals = countTechniqueSignals(chunks.get(i).text());
+            if (signals > maxSignals) {
+                maxSignals = signals;
                 bestIdx = i;
             }
         }
@@ -1406,6 +1511,15 @@ public class MaterialCleaningService {
                                         "material_content", chunk.text()), domain);
                         String json = chatStreamAdapter.chat(prompt);
                         List<Map<String, Object>> items = parseJsonArray(json);
+                        // 记录 chunk 级审计数据
+                        Map<String, Object> chunkInfo = new LinkedHashMap<>();
+                        chunkInfo.put("chunkIndex", chunk.index());
+                        chunkInfo.put("charCount", chunk.text().length());
+                        chunkInfo.put("textPreview", truncate(chunk.text(), 150));
+                        chunkInfo.put("promptType", idx == fullPromptIdx ? "full" : "short");
+                        chunkInfo.put("extractedCount", items.size());
+                        chunkInfo.put("rawItems", items);
+                        chunkDetails.add(chunkInfo);
                         for (var item : items) {
                             double conf = ((Number) item.getOrDefault("confidence", 0)).doubleValue();
                             if (conf < 0.7) {
@@ -1423,6 +1537,14 @@ public class MaterialCleaningService {
                         }
                     } catch (Exception e) {
                         log.warn("chunk#{} 提取失败: {}", chunk.index(), e.getMessage());
+                        Map<String, Object> chunkInfo = new LinkedHashMap<>();
+                        chunkInfo.put("chunkIndex", chunk.index());
+                        chunkInfo.put("charCount", chunk.text().length());
+                        chunkInfo.put("textPreview", truncate(chunk.text(), 150));
+                        chunkInfo.put("promptType", idx == fullPromptIdx ? "full" : "short");
+                        chunkInfo.put("extractedCount", 0);
+                        chunkInfo.put("error", e.getMessage());
+                        chunkDetails.add(chunkInfo);
                     }
                 }, cleanExecutor));
             }
@@ -1430,7 +1552,7 @@ public class MaterialCleaningService {
             java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
                     .join();
         }
-        return all;
+        return new ExtractionResult(all, chunkDetails);
     }
 
     // ---- 场景归类（批量版 — 一次 AI 调用打所有标签）----
@@ -1536,6 +1658,10 @@ public class MaterialCleaningService {
     record ExtractedInsight(String sceneDescription, String expertThought, String standardScript,
             String commonMistakes, String applicableCondition, double confidence) {
     }
+
+    /** 提取结果 — 含 chunk 级审计数据 */
+    record ExtractionResult(List<ExtractedInsight> insights,
+            List<Map<String, Object>> chunkDetails) {}
 
     public record GrainCandidate(String sceneTag, ExtractedInsight insight, UUID sourceMaterialId,
             Double qualityScore, String difficultyLevel, String verificationNotes) {

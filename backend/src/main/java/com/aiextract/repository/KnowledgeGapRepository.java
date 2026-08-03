@@ -25,6 +25,7 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
      * @return 结果列表
      */
     List<KnowledgeGap> findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(UUID skillId, String status);
+    org.springframework.data.domain.Page<KnowledgeGap> findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(UUID skillId, String status, org.springframework.data.domain.Pageable pageable);
     /**
      * 统计（Skill,Id,Scene,Tag）。
      * @param skillId skillId

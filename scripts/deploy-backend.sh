@@ -16,4 +16,4 @@ JAR="target/backend.jar"
 echo "产物: $JAR"
 echo "上传开始"
 scp "$JAR" mindforge:/opt/mindforge/backend/
-echo "上传服务器完成✅"
+echo "[backend]上传服务器完成✅"

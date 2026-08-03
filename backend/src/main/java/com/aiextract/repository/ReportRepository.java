@@ -23,6 +23,10 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
 
     Page<Report> findBySpaceIdOrderByCreatedAtDesc(UUID spaceId, Pageable pageable);
 
+    Page<Report> findBySpaceIdOrderByRatingDesc(UUID spaceId, Pageable pageable);
+
+    Page<Report> findBySpaceIdOrderByViewCountDesc(UUID spaceId, Pageable pageable);
+
     List<Report> findBySpaceIdInOrderByCreatedAtDesc(List<UUID> spaceIds, Pageable pageable);
 
     Page<Report> findAllByOrderByCreatedAtDesc(Pageable pageable);
@@ -40,4 +44,15 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
     Page<Report> searchFullText(@Param("keyword") String keyword, Pageable pageable);
 
     Optional<Report> findBySessionId(UUID sessionId);
+
+    Optional<Report> findByShareCode(String shareCode);
+
+    @Query("SELECT DISTINCT r FROM Report r WHERE r.spaceId IN "
+            + "(SELECT g.spaceId FROM ExperienceGrain g WHERE g.sceneTag = :tag AND g.status = 'active') "
+            + "ORDER BY r.createdAt DESC")
+    Page<Report> findBySceneTag(@Param("tag") String tag, Pageable pageable);
+
+    Page<Report> findAllByOrderByRatingDesc(Pageable pageable);
+
+    Page<Report> findAllByOrderByViewCountDesc(Pageable pageable);
 }

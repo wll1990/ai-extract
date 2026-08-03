@@ -2,6 +2,7 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Space;
@@ -40,6 +41,7 @@ public class SpaceController {
     private final com.aiextract.repository.ToolRepository toolRepository;
     private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final com.aiextract.service.SpaceService spaceService;
+    private final CompanyScopeService companyScopeService;
     private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
 
@@ -59,6 +61,14 @@ public class SpaceController {
             @RequestParam(required = false) String tag,
             @RequestParam(required = false) UUID userId,
             @RequestParam(required = false, defaultValue = "createdAt") String sort) {
+        // 权限判定
+        boolean isAdmin = isAdmin();
+        UUID currentUserId = getCurrentUserId();
+        // employee 只能看自己的空间，忽略前端传入的 userId 参数
+        if (!isAdmin) {
+            userId = currentUserId;
+        }
+
         // 公司隔离：非 super_admin 只看本公司用户的空间
         UUID companyId = TokenContext.getCompanyId();
         List<UUID> companyUserIds = null;
@@ -73,7 +83,7 @@ public class SpaceController {
         PageRequest pr = PageRequest.of(page - 1, size);
         Page<Space> sp;
 
-        // userId 优先，其次 company 过滤，否则全量
+        // userId 优先，其次 company 过滤，super_admin 全量
         List<UUID> filterUserIds;
         if (userId != null) {
             filterUserIds = List.of(userId);
@@ -151,15 +161,60 @@ public class SpaceController {
     }
 
     @GetMapping("/{spaceId}")
-    public ApiResponse<Map<String, Object>> getSpace(@PathVariable String spaceId) {
-        return ApiResponse.success(spaceService.getSpaceDetail(spaceId));
+    public ApiResponse<Map<String, Object>> getSpace(@PathVariable String spaceId,
+            @RequestParam(defaultValue = "1") int reportPage,
+            @RequestParam(defaultValue = "20") int reportSize,
+            @RequestParam(defaultValue = "createdAt") String reportSort) {
+        UUID spId = UUID.fromString(spaceId);
+        Space space = spaceRepository.findById(spId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
+        // super_admin: 无限制
+        if (isSuperAdmin()) {
+            return ApiResponse.success(spaceService.getSpaceDetail(spaceId, reportPage, reportSize, reportSort));
+        }
+        // company_admin: 只能看本公司
+        if (isAdmin()) {
+            UUID companyId = TokenContext.getCompanyId();
+            if (companyId != null) {
+                Set<UUID> companySpaceIds = companyScopeService.getSpaceIds(companyId);
+                if (companySpaceIds != null && !companySpaceIds.contains(spId)) {
+                    throw new BusinessException(403, "无权访问其他企业的空间");
+                }
+            }
+            return ApiResponse.success(spaceService.getSpaceDetail(spaceId, reportPage, reportSize, reportSort));
+        }
+        // employee: 只能看自己的
+        if (!getCurrentUserId().equals(space.getUserId())) {
+            throw new BusinessException(403, "无权访问他人的空间");
+        }
+        return ApiResponse.success(spaceService.getSpaceDetail(spaceId, reportPage, reportSize, reportSort));
+    }
+
+    private boolean isSuperAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("super_admin"));
+    }
+
+    private boolean isAdmin() {
+        return SecurityContextHolder.getContext().getAuthentication()
+                .getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("super_admin")
+                        || a.getAuthority().equals("company_admin"));
     }
 
     @PostMapping
     public ApiResponse<Map<String, Object>> createSpace(@RequestBody Map<String, Object> body) {
+        // 仅 super_admin 或本人可创建空间，company_admin 无权
+        if (isAdmin() && !isSuperAdmin()) {
+            throw new BusinessException(403, "管理员无权创建空间，空间由用户上传素材或发起访谈时自动创建");
+        }
         LocalDateTime now = LocalDateTime.now();
+        UUID ownerId = isSuperAdmin()
+                ? UUID.fromString((String) body.getOrDefault("userId", getCurrentUserId().toString()))
+                : getCurrentUserId();
         Space s = Space.builder().id(UUID.randomUUID())
-                .userId(UUID.fromString((String) body.getOrDefault("userId", UUID.randomUUID().toString())))
+                .userId(ownerId)
                 .title((String) body.get("title")).description((String) body.get("description"))
                 .tags(toJson(body.get("tags"))).isPublic((Boolean) body.getOrDefault("isPublic", false))
                 .status("active").createdAt(now).updatedAt(now).build();
@@ -174,6 +229,10 @@ public class SpaceController {
     public ApiResponse<Map<String, Object>> updateSpace(@PathVariable String spaceId, @RequestBody Map<String, Object> body) {
         Space s = spaceRepository.findById(UUID.fromString(spaceId))
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
+        // 仅 super_admin 或本人可修改，company_admin 无权
+        if (!isSuperAdmin() && !getCurrentUserId().equals(s.getUserId())) {
+            throw new BusinessException(403, "无权修改他人的空间");
+        }
         { if (body.containsKey("title")) s.setTitle((String) body.get("title")); }
         { if (body.containsKey("description")) s.setDescription((String) body.get("description")); }
         { if (body.containsKey("tags")) s.setTags(toJson(body.get("tags"))); }
@@ -196,71 +255,4 @@ public class SpaceController {
         catch (Exception e) { log.warn("JSON序列化失败", e); return "[]"; }
     }
 
-    /** 从报告 content_json 中提取一句话信条 */
-    private String extractOneliner(com.aiextract.model.Report report) {
-        try {
-            if (report.getContentJson() == null || report.getContentJson().isEmpty()) return "";
-            com.fasterxml.jackson.databind.ObjectMapper mapper = objectMapper;
-            Map<String, Object> content = mapper.readValue(report.getContentJson(), Map.class);
-            Object chapters = content.get("chapters");
-            if (chapters instanceof List) {
-                for (Object ch : (List<?>) chapters) {
-                    if (ch instanceof Map) {
-                        Map<?, ?> cm = (Map<?, ?>) ch;
-                        // 第四章：专家心法
-                        Object quotes = cm.get("quotes");
-                        if (quotes instanceof List && !((List<?>) quotes).isEmpty()) {
-                            Object first = ((List<?>) quotes).get(0);
-                            return first != null ? first.toString() : "";
-                        }
-                        Object onelinerObj = cm.get("oneliner");
-                        if (onelinerObj != null) {
-
-                            return onelinerObj.toString();
-
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) { log.debug("数据解析失败", e); }
-        return "";
-    }
-
-    /** 从报告 content_json 中统计步骤数 */
-    private int countSteps(com.aiextract.model.Report report) {
-        try {
-            if (report.getContentJson() == null) return 0;
-            com.fasterxml.jackson.databind.ObjectMapper mapper = objectMapper;
-            Map<String, Object> content = mapper.readValue(report.getContentJson(), Map.class);
-            Object chapters = content.get("chapters");
-            if (chapters instanceof List) {
-                for (Object ch : (List<?>) chapters) {
-                    if (ch instanceof Map) {
-                        Map<?, ?> cm = (Map<?, ?>) ch;
-                        Object steps = cm.get("steps");
-                        if (steps instanceof List) {
-
-                            return ((List<?>) steps).size();
-
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) { log.debug("数据解析失败", e); }
-        return 0;
-    }
-
-    /** 查报告的场景标签（从锦囊中提取去重） */
-    private List<String> getSceneTagsForReport(UUID reportId) {
-        try {
-            List<com.aiextract.model.ExperienceGrain> grains = grainRepository.findByReportId(reportId);
-            return grains.stream()
-                    .map(com.aiextract.model.ExperienceGrain::getSceneTag)
-                    .filter(t -> t != null && !t.isEmpty())
-                    .distinct()
-                    .limit(5)
-                    .collect(Collectors.toList());
-        } catch (Exception e) { log.debug("数据解析失败", e); }
-        return List.of();
-    }
 }

@@ -1,8 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiClient, API_BASE } from '@/lib/api/client';
 import { OrgDashboard } from '@/components/admin/OrgDashboard';
+import { Pagination } from '@/components/ui/Pagination';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface OrgSkill {
   id: string;
@@ -30,6 +32,9 @@ export default function AdminOrgSkillsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [allSkills, setAllSkills] = useState<SkillOption[]>([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   // Form
   const [formName, setFormName] = useState('');
@@ -37,13 +42,13 @@ export default function AdminOrgSkillsPage() {
   const [formAvatar, setFormAvatar] = useState('');
   const [formMembers, setFormMembers] = useState<string[]>([]);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
-    apiClient<OrgSkill[]>('/admin/organization-skills')
-      .then(setOrgSkills)
+    apiClient<{ content: OrgSkill[]; total: number; totalPages: number }>(`/admin/organization-skills?page=${page}&size=20`)
+      .then(d => { setOrgSkills(d.content || []); setTotalPages(d.totalPages); setTotalElements(d.total); })
       .catch(e => console.error('加载组织分身失败:', e))
       .finally(() => setLoading(false));
-  };
+  }, [page]);
 
   const loadAllSkills = () => {
     apiClient<{ content: SkillOption[] }>('/skills/list?size=100&status=published')
@@ -51,7 +56,7 @@ export default function AdminOrgSkillsPage() {
       .catch(() => {});
   };
 
-  useEffect(() => { load(); loadAllSkills(); }, []);
+  useEffect(() => { load(); loadAllSkills(); }, [load]);
 
   const resetForm = () => {
     setFormName(''); setFormDesc(''); setFormAvatar(''); setFormMembers([]);
@@ -244,10 +249,10 @@ export default function AdminOrgSkillsPage() {
               <div className="bg-gray-50 rounded-lg p-3 text-sm font-mono text-center mb-4 break-all">
                 {typeof window !== 'undefined' ? `${window.location.origin}/s/${shareCode}` : `/s/${shareCode}`}
               </div>
-              <button onClick={() => {
+              <button onClick={async () => {
                 const url = `${window.location.origin}/s/${shareCode}`;
-                navigator.clipboard.writeText(url);
-                alert('已复制到剪贴板');
+                const ok = await copyToClipboard(url);
+                if (ok) alert('已复制到剪贴板');
               }}
                 className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm w-full mb-2">
                 复制链接
@@ -263,6 +268,8 @@ export default function AdminOrgSkillsPage() {
       {dashboardData && (
         <OrgDashboard data={dashboardData} onClose={() => setDashboardData(null)} />
       )}
+      <Pagination page={page} totalPages={totalPages} totalElements={totalElements}
+        onPageChange={p => setPage(p)} loading={loading} />
     </div>
   );
 }

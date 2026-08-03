@@ -3,16 +3,24 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { listSkillMaterials } from '@/lib/api/materials';
+import { getToken } from '@/lib/storage';
+import { copyToClipboard } from '@/lib/clipboard';
 
 export default function SkillDetailPage({ params }: { params: Promise<{ skillId: string }> }) {
   const { skillId } = use(params);
   const router = useRouter();
   const [tab, setTab] = useState<'grains' | 'materials' | 'share'>('grains');
   const [skill, setSkill] = useState<{ displayName: string; status: string; shareCode?: string } | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
   const [materialCount, setMaterialCount] = useState(0);
 
+  const authHeaders = (): Record<string, string> => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   useEffect(() => {
-    fetch(`/api/v1/skills/${skillId}/detail`, { credentials: 'include' })
+    fetch(`/api/v1/skills/${skillId}/detail`, { headers: authHeaders() })
       .then((r) => r.json())
       .then((d) => { if (d.code === 200) setSkill(d.data); })
       .catch(() => {});
@@ -23,7 +31,7 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
   }, [skillId]);
 
   useEffect(() => {
-    fetch(`/api/v1/skills/${skillId}/share`, { credentials: 'include' })
+    fetch(`/api/v1/skills/${skillId}/share`, { headers: authHeaders() })
       .then((r) => r.json())
       .then((d) => {
         if (d.code === 200 && skill) setSkill({ ...skill, shareCode: d.data.shareCode });
@@ -40,7 +48,10 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
   return (
     <div className="min-h-screen bg-[#f7f9ff] px-5 py-8" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="max-w-2xl mx-auto">
-        <button onClick={() => router.back()} className="text-sm text-[#747f9e] mb-4 block">← 返回</button>
+        <div className="flex items-center justify-between mb-4">
+          <button onClick={() => router.back()} className="text-sm text-[#747f9e]">← 返回</button>
+          <button onClick={() => router.push(`/skill/${skillId}`)} className="text-sm text-[#2147ff] font-medium">👁 预览名片</button>
+        </div>
         <h1 className="text-xl font-bold text-[#10162f] mb-1">{skill?.displayName || '分身'}</h1>
         <p className="text-sm text-[#747f9e] mb-6">{skill?.status === 'published' ? '已发布' : skill?.status}</p>
 
@@ -110,21 +121,28 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
                   <div className="flex items-center gap-2">
                     <input
                       type="text" readOnly
-                      value={`${typeof window !== 'undefined' ? window.location.origin : ''}/s/${skill.shareCode}`}
+                      value={`${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin) : ''}/s/${skill.shareCode}`}
                       className="flex-1 px-3 py-2 rounded-lg border border-[#dfe6ff] bg-gray-50 text-xs text-[#747f9e]"
                     />
                     <button
-                      onClick={() => navigator.clipboard.writeText(`${window.location.origin}/s/${skill.shareCode}`)}
+                      onClick={async () => {
+                        const url = `${process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin}/s/${skill.shareCode}`;
+                        const ok = await copyToClipboard(url);
+                        if (ok) {
+                          setShareCopied(true);
+                          setTimeout(() => setShareCopied(false), 2000);
+                        }
+                      }}
                       className="px-3 py-2 rounded-lg bg-[#eef2ff] text-[#2147ff] text-xs font-medium"
                     >
-                      复制
+                      {shareCopied ? '已复制' : '复制'}
                     </button>
                   </div>
                 </div>
               ) : (
                 <button
                   onClick={async () => {
-                    const r = await fetch(`/api/v1/skills/${skillId}/share`, { method: 'POST', credentials: 'include' });
+                    const r = await fetch(`/api/v1/skills/${skillId}/share`, { method: 'POST', headers: { ...authHeaders(), 'Content-Type': 'application/json' } });
                     const d = await r.json();
                     if (d.code === 200 && skill) setSkill({ ...skill, shareCode: d.data.shareCode });
                   }}

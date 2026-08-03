@@ -3,6 +3,8 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
+import { getUser } from '@/lib/storage';
+import { Permission } from '@/lib/permissions';
 
 export default function MaterialsOverviewPage() {
   const router = useRouter();
@@ -49,10 +51,12 @@ export default function MaterialsOverviewPage() {
                     className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-primary-light">
                     📁 素材列表
                   </button>
-                  <button onClick={() => router.push(`/admin/skills/${s.id}/audit`)}
-                    className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-primary-light">
-                    审核 →
-                  </button>
+                  {((getUser() as any)?.permissions || []).includes(Permission.DASHBOARD_VIEW) && (
+                    <button onClick={() => router.push(`/admin/skills/${s.id}/audit`)}
+                      className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-primary-light">
+                      审核 →
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

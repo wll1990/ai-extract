@@ -1,33 +1,31 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.ErrorMessages;
 import com.aiextract.dto.ReportDetailResponse;
 import com.aiextract.dto.ReportListResponse;
-import com.aiextract.dto.UpdateReportRequest;
+import com.aiextract.exception.BusinessException;
+import com.aiextract.model.Report;
+import com.aiextract.repository.ReportRepository;
 import com.aiextract.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.net.URLEncoder;
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.UUID;
 
 /**
  * 报告控制器
- *
- * <p>提供报告列表查询、详情查看、内容编辑和文件下载四个接口。
- * 下载支持Word和PPT两种格式。</p>
  *
  * @author AI Extract Team
  * @since 2026-06-29
@@ -39,79 +37,137 @@ import java.util.UUID;
 public class ReportController {
 
     private final ReportService reportService;
+    private final ReportRepository reportRepository;
     private final com.aiextract.util.JwtUtil jwtUtil;
+
+    private static final String SHARE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+    private static final int SHARE_CODE_LEN = 8;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication().getCredentials();
     }
 
-    /**
-     * 获取报告列表
-     *
-     * @param spaceId 空间ID（可选）
-     * @param page    页码（默认1）
-     * @param size    每页条数（默认20）
-     * @return 报告分页列表
-     */
+    private UUID getCurrentUserId() {
+        return jwtUtil.getUserIdFromToken(getToken());
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // 列表 & 详情
+    // ════════════════════════════════════════════════════════════════
+
     @GetMapping
     public ApiResponse<Page<ReportListResponse>> getReports(
             @RequestParam(required = false) String spaceId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String tag,
+            @RequestParam(required = false, defaultValue = "createdAt") String sort,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        Page<ReportListResponse> reports = reportService.getReports(spaceId, keyword, page, size);
+            @RequestParam(defaultValue = "12") int size) {
+        Page<ReportListResponse> reports = reportService.getReports(spaceId, keyword, tag, sort, page, size);
         return ApiResponse.success(reports);
     }
 
-    /**
-     * 获取报告详情
-     *
-     * @param reportId 报告ID
-     * @return 报告完整详情
-     */
     @GetMapping("/{reportId}")
     public ApiResponse<ReportDetailResponse> getReport(@PathVariable String reportId) {
         ReportDetailResponse response = reportService.getReport(reportId);
         return ApiResponse.success(response);
     }
 
-    /**
-     * 按访谈 sessionId 获取报告 HTML（含就绪检查）。
-     * 报告未就绪时返回 202 + 颗粒/场景统计；就绪时返回 200 + HTML。
-     */
-    @GetMapping("/by-session/{sessionId}/html")
-    public org.springframework.http.ResponseEntity<?> getReportHtmlBySession(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
-        ReportService.ReportHtmlResult result = reportService.getReportHtmlBySession(UUID.fromString(sessionId), userId);
-        if (!result.ready()) {
-            return org.springframework.http.ResponseEntity.status(org.springframework.http.HttpStatus.ACCEPTED)
-                    .body(Map.of("ready", false, "grains", result.grains(), "scenes", result.scenes(),
-                            "needGrains", result.needGrains(), "needScenes", result.needScenes()));
+    // ════════════════════════════════════════════════════════════════
+    // HTML 查看 & 下载（内网）
+    // ════════════════════════════════════════════════════════════════
+
+    @GetMapping(value = "/{reportId}/html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> getReportHtml(@PathVariable String reportId) {
+        UUID id = UUID.fromString(reportId);
+        Report report = reportRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("<html><body><h1>报告尚未生成</h1><p>请等待萃取完成后刷新页面。</p></body></html>");
         }
-        return org.springframework.http.ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(result.html());
+        try {
+            String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
+            html = injectToolbar(html, reportId, null);
+            return ResponseEntity.ok(html);
+        } catch (Exception e) {
+            log.error("读取报告 HTML 文件失败, reportId: {}, path: {}", reportId, report.getHtmlPath(), e);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("<html><body><h1>报告文件读取失败</h1></body></html>");
+        }
     }
 
-    /**
-     * 编辑报告内容
-     *
-     * <p>更新报告章节内容，可选择是否重新生成Word/PPT。</p>
-     *
-     * @param reportId 报告ID
-     * @param request  编辑请求（chapters + regenerate标志）
-     * @return 更新后的报告详情
-     */
-    @PutMapping("/{reportId}")
-    public ApiResponse<ReportDetailResponse> updateReport(
-            @PathVariable String reportId,
-            @RequestBody UpdateReportRequest request) {
-        ReportDetailResponse response = reportService.updateReport(reportId, request);
-        return ApiResponse.success(response);
+    @GetMapping("/{reportId}/download")
+    public ResponseEntity<byte[]> downloadReportHtml(@PathVariable String reportId) {
+        UUID id = UUID.fromString(reportId);
+        Report report = reportRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "报告文件尚未生成");
+        }
+        try {
+            byte[] content = Files.readAllBytes(Path.of(report.getHtmlPath()));
+            String filename = (report.getTitle() != null ? report.getTitle() : "report") + ".html";
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", encodeContentDisposition(filename))
+                    .contentType(MediaType.TEXT_HTML)
+                    .body(content);
+        } catch (Exception e) {
+            log.error("下载报告文件失败, reportId: {}", reportId, e);
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "文件读取失败");
+        }
     }
 
-    /**
-     * 提交评分
-     */
+    // ════════════════════════════════════════════════════════════════
+    // 分享
+    // ════════════════════════════════════════════════════════════════
+
+    @PostMapping("/{reportId}/share")
+    public ApiResponse<Map<String, Object>> shareReport(@PathVariable String reportId) {
+        UUID id = UUID.fromString(reportId);
+        Report report = reportRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+
+        if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "报告尚未生成，无法分享");
+        }
+
+        // 已有 shareCode → 直接返回
+        if (report.getShareCode() != null && !report.getShareCode().isEmpty()
+                && Boolean.TRUE.equals(report.getShareEnabled())) {
+            return ApiResponse.success(Map.of(
+                    "shareCode", report.getShareCode(),
+                    "shareUrl", "/public/report/" + report.getShareCode()));
+        }
+
+        // 生成 shareCode，唯一索引 → saveAndFlush 即时检测冲突
+        for (int retry = 0; retry < 3; retry++) {
+            String code = generateShareCode();
+            report.setShareCode(code);
+            report.setShareEnabled(true);
+            try {
+                reportRepository.saveAndFlush(report);
+                return ApiResponse.success(Map.of(
+                        "shareCode", code,
+                        "shareUrl", "/public/report/" + code));
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                if (retry == 2) {
+                    log.error("生成分享码冲突(重试耗尽), reportId: {}", reportId, e);
+                    throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "生成分享码失败，请重试");
+                }
+                // 冲突 → 刷新后重试
+                report = reportRepository.findById(id).orElseThrow();
+            }
+        }
+        throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "生成分享码失败");
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // 评分（保留）
+    // ════════════════════════════════════════════════════════════════
+
     @PostMapping("/{reportId}/rate")
     public ApiResponse<Void> rateReport(
             @PathVariable String reportId,
@@ -121,66 +177,100 @@ public class ReportController {
         return ApiResponse.success();
     }
 
-    /**
-     * 同步清单状态
-     */
-    @PostMapping("/{reportId}/checklist")
-    public ApiResponse<Void> syncChecklist(
-            @PathVariable String reportId,
-            @RequestBody Map<String, Object> body) {
-        reportService.syncChecklist(reportId, body);
-        return ApiResponse.success();
+    // ════════════════════════════════════════════════════════════════
+    // 按 sessionId 获取报告 HTML（保留，不动）
+    // ════════════════════════════════════════════════════════════════
+
+    @GetMapping("/by-session/{sessionId}/html")
+    public ResponseEntity<?> getReportHtmlBySession(@PathVariable String sessionId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        ReportService.ReportHtmlResult result = reportService.getReportHtmlBySession(
+                UUID.fromString(sessionId), userId);
+        if (!result.ready()) {
+            return ResponseEntity.status(HttpStatus.ACCEPTED)
+                    .body(Map.of("ready", false, "grains", result.grains(), "scenes", result.scenes(),
+                            "needGrains", result.needGrains(), "needScenes", result.needScenes()));
+        }
+        return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(result.html());
     }
 
-    /**
-     * 下载报告文件（Word或PPT）
-     *
-     * @param reportId 报告ID
-     * @param format   格式：word 或 ppt
-     * @return 文件流
-     */
-    @GetMapping("/{reportId}/download")
-    public ResponseEntity<byte[]> downloadReport(
-            @PathVariable String reportId,
-            @RequestParam(defaultValue = "word") String format) {
-        try {
-            String filePath = reportService.downloadReport(reportId, format);
+    // ════════════════════════════════════════════════════════════════
+    // helper
+    // ════════════════════════════════════════════════════════════════
 
-            // 尝试从文件系统读取真实文件
-            java.io.File file = new java.io.File(filePath);
-            if (file.exists()) {
-                byte[] content = java.nio.file.Files.readAllBytes(file.toPath());
-                String filename = "report." + ("ppt".equalsIgnoreCase(format) ? "pptx" : "docx");
-                MediaType mediaType = "ppt".equalsIgnoreCase(format)
-                        ? MediaType.APPLICATION_OCTET_STREAM
-                        : MediaType.valueOf("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    /** RFC 5987 编码文件名，支持中文等非 ASCII 字符 */
+    static String encodeContentDisposition(String filename) {
+        String encoded = URLEncoder.encode(filename, StandardCharsets.UTF_8)
+                .replace("+", "%20");
+        String ascii = filename.replaceAll("[^\\x20-\\x7E]", "_");
+        return "attachment; filename=\"" + ascii + "\"; filename*=UTF-8''" + encoded;
+    }
 
-                return ResponseEntity.ok()
-                        .header(HttpHeaders.CONTENT_DISPOSITION,
-                                "attachment; filename=\"" + filename + "\"")
-                        .contentType(mediaType)
-                        .contentLength(content.length)
-                        .body(content);
-            }
-
-            // 文件尚未生成，返回报告 JSON 作为降级
-            log.warn("报告文件尚未生成, reportId: {}, format: {}, path: {}", reportId, format, filePath);
-            ReportDetailResponse report = reportService.getReport(reportId);
-            Object raw = report.getContentJson();
-            String fallbackContent = raw != null ? raw.toString() : "{}";
-            byte[] fallback = fallbackContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            return ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment; filename=\"report_" + reportId.substring(0, 8) + ".json\"")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(fallback);
-
-        } catch (Exception e) {
-            log.error("下载报告失败, reportId: {}, format: {}", reportId, format, e);
-            byte[] errorMsg = "{\"error\":\"报告下载失败，请稍后重试\"}".getBytes();
-            return ResponseEntity.internalServerError()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(errorMsg);
+    private String generateShareCode() {
+        StringBuilder sb = new StringBuilder(SHARE_CODE_LEN);
+        for (int i = 0; i < SHARE_CODE_LEN; i++) {
+            sb.append(SHARE_CHARS.charAt(RANDOM.nextInt(SHARE_CHARS.length())));
         }
+        return sb.toString();
+    }
+
+    /** 注入分享+下载浮动工具栏 */
+    static String injectToolbar(String html, String reportId, String shareUrl) {
+        String barCss = """
+            <style>
+            #__report_bar{position:fixed;top:16px;right:16px;z-index:9999;display:flex;gap:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
+            .__rb_btn{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;border:none}
+            .__rb_share{background:#2563eb;color:#fff}
+            .__rb_share:hover{background:#1d4ed8}
+            .__rb_dl{background:#fff;color:#374151;border:1px solid #d1d5db!important;text-decoration:none}
+            .__rb_dl:hover{background:#f9fafb}
+            .__rb_overlay{display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.4);align-items:center;justify-content:center}
+            .__rb_overlay.show{display:flex}
+            .__rb_modal{background:#fff;border-radius:16px;padding:24px;max-width:360px;width:90%%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.15)}
+            .__rb_modal h3{font-size:18px;font-weight:700;color:#111827;margin-bottom:16px}
+            .__rb_qr{display:inline-block;padding:8px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-bottom:12px}
+            .__rb_url{display:flex;gap:8px;margin-bottom:12px}
+            .__rb_url input{flex:1;padding:6px 10px;border:1px solid #d1d5db;border-radius:8px;font-size:12px;color:#374151;outline:none}
+            .__rb_copy{background:#2563eb;color:#fff;border:none;padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;white-space:nowrap}
+            .__rb_close{display:block;width:100%%;padding:8px;border:1px solid #d1d5db;border-radius:8px;background:#fff;color:#6b7280;cursor:pointer;font-size:13px;margin-top:8px}
+            </style>
+            """;
+
+        String bar;
+        if (shareUrl != null) {
+            String fullUrl = shareUrl; // 公开页 shareUrl 已经是完整路径
+            bar = barCss + """
+                <div id="__report_bar">
+                <button class="__rb_btn __rb_share" onclick="document.getElementById('__rb_overlay').classList.add('show')">分享</button>
+                <a class="__rb_btn __rb_dl" href="%s/download">下载报告</a>
+                </div>
+                <div id="__rb_overlay" class="__rb_overlay" onclick="this.classList.remove('show')">
+                <div class="__rb_modal" onclick="event.stopPropagation()">
+                <h3>分享萃取报告</h3>
+                <div class="__rb_qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=%s" width="160" height="160" alt="QR"></div>
+                <div class="__rb_url"><input id="__rb_input" value="%s" readonly><button class="__rb_copy" onclick="navigator.clipboard.writeText(document.getElementById('__rb_input').value);this.textContent='已复制'">复制链接</button></div>
+                <button class="__rb_close" onclick="document.getElementById('__rb_overlay').classList.remove('show')">关闭</button>
+                </div></div>
+                """.formatted(shareUrl, fullUrl, fullUrl);
+        } else {
+            bar = barCss + """
+                <div id="__report_bar">
+                <button class="__rb_btn __rb_share" id="__share_btn" onclick="var b=this;b.textContent='...';b.disabled=true;fetch('/api/v1/reports/%s/share',{method:'POST',credentials:'include'}).then(r=>r.json()).then(d=>{var u=location.origin+d.data.shareUrl;document.getElementById('__rb_input').value=u;document.getElementById('__rb_qr_img').src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='+encodeURIComponent(u);document.getElementById('__rb_overlay').classList.add('show');b.textContent='分享';b.disabled=false}).catch(()=>{alert('分享失败');b.textContent='分享';b.disabled=false})">分享</button>
+                <a class="__rb_btn __rb_dl" href="/api/v1/reports/%s/download">下载报告</a>
+                </div>
+                <div id="__rb_overlay" class="__rb_overlay" onclick="this.classList.remove('show')">
+                <div class="__rb_modal" onclick="event.stopPropagation()">
+                <h3>分享萃取报告</h3>
+                <div class="__rb_qr"><img id="__rb_qr_img" src="" width="160" height="160" alt="QR"></div>
+                <div class="__rb_url"><input id="__rb_input" value="" readonly><button class="__rb_copy" onclick="navigator.clipboard.writeText(document.getElementById('__rb_input').value);this.textContent='已复制'">复制链接</button></div>
+                <button class="__rb_close" onclick="document.getElementById('__rb_overlay').classList.remove('show')">关闭</button>
+                </div></div>
+                """.formatted(reportId, reportId);
+        }
+        int idx = html.lastIndexOf("</body>");
+        if (idx > 0) {
+            return html.substring(0, idx) + bar + html.substring(idx);
+        }
+        return html + bar;
     }
 }

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface Partner {
   id: string; appId: string; appName: string; status: string;
@@ -11,24 +12,43 @@ interface Partner {
 export default function PartnersPage() {
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [showCreate, setShowCreate] = useState(false);
   const [newSK, setNewSK] = useState(''); // 新建成功后展示的 SK
   const [resetTarget, setResetTarget] = useState<Partner | null>(null);
   const [resetSK, setResetSK] = useState('');
+  const [skCopied, setSkCopied] = useState(false);
 
   // 表单
   const [form, setForm] = useState({ appId: '', appName: '', contactName: '', contactEmail: '' });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const load = () => {
-    apiClient<any>('/admin/partners')
-      .then(d => setPartners(d.data || d || []))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+  const copyToClipboard = (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setSkCopied(true); setTimeout(() => setSkCopied(false), 2000);
+      }).catch(() => {});
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); setSkCopied(true); setTimeout(() => setSkCopied(false), 2000); } catch {}
+      document.body.removeChild(ta);
+    }
   };
 
-  useEffect(() => { load(); }, []);
+  const load = useCallback(() => {
+    setLoading(true);
+    apiClient<{ content: Partner[]; total: number; totalPages: number }>(`/admin/partners?page=${page}&size=20`)
+      .then(d => { setPartners(d.content || []); setTotalPages(d.totalPages); setTotalElements(d.total); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [page]);
+
+  useEffect(() => { load(); }, [load]);
 
   const handleCreate = async () => {
     if (!form.appId.trim()) { setError('appId 不能为空'); return; }
@@ -184,9 +204,9 @@ export default function PartnersPage() {
               <div className="bg-surface-2 rounded-lg px-4 py-3 mb-4 font-mono text-sm break-all select-all">
                 {newSK}
               </div>
-              <button onClick={() => { navigator.clipboard.writeText(newSK); }}
-                className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover mb-2">
-                📋 复制 SK
+              <button onClick={() => copyToClipboard(newSK)}
+                className="px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover mb-2 min-w-[100px]">
+                {skCopied ? '✅ 已复制' : '📋 复制 SK'}
               </button>
               <br />
               <button onClick={() => setNewSK('')} className="mt-2 text-sm text-muted-foreground hover:text-foreground">确定</button>
@@ -204,8 +224,8 @@ export default function PartnersPage() {
                   <h2 className="text-lg font-bold mb-2 text-center">新 SK</h2>
                   <p className="text-xs text-muted-foreground mb-4 text-center">旧 SK 24 小时内仍有效，请通知合作方及时更新</p>
                   <div className="bg-surface-2 rounded-lg px-4 py-3 mb-4 font-mono text-sm break-all select-all">{resetSK}</div>
-                  <button onClick={() => { navigator.clipboard.writeText(resetSK); }}
-                    className="w-full px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover mb-2">📋 复制新 SK</button>
+                  <button onClick={() => copyToClipboard(resetSK)}
+                    className="w-full px-4 py-2 text-sm bg-primary text-white rounded-lg hover:bg-primary-hover mb-2">{skCopied ? '✅ 已复制' : '📋 复制新 SK'}</button>
                   <button onClick={() => { setResetTarget(null); setResetSK(''); }}
                     className="w-full text-sm text-muted-foreground hover:text-foreground">确定</button>
                 </>
@@ -227,6 +247,8 @@ export default function PartnersPage() {
             </div>
           </div>
         )}
+        <Pagination page={page} totalPages={totalPages} totalElements={totalElements}
+          onPageChange={p => setPage(p)} loading={loading} />
       </div>
     </div>
   );

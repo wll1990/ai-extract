@@ -4,7 +4,7 @@ import { getUser } from '@/lib/storage';
 import { PortraitCard, StatBadge } from '@aiextract/shared-ui';
 import { OrgSkillCard } from '@/components/skill/OrgSkillCard';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listSkills, type SkillInfo } from '@/lib/api/skill';
 
@@ -27,7 +27,8 @@ export default function SkillsGalleryPage() {
     setPage(p);
     const status = tab === 'published' ? 'published' : undefined;
     const ownerId = tab === 'mine' ? userId : undefined;
-    listSkills(p, 9, status, ownerId)
+    const type = subTab === 'org' ? 'organization' : 'individual';
+    listSkills(p, 9, status, ownerId, type)
       .then(d => {
         setSkills(d.content);
         setTotalPages(d.totalPages);
@@ -36,17 +37,7 @@ export default function SkillsGalleryPage() {
       .catch(e => console.error('加载分身列表失败:', e)).finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(1); }, [tab]);
-
-  // Filter by sub-tab when in published mode
-  const filteredSkills = useMemo(() => {
-    if (tab === 'published') {
-      if (subTab === 'org') return skills.filter(s => s.type === 'organization');
-      return skills.filter(s => s.type !== 'organization');
-    }
-    // "我的分身" tab — only individual skills
-    return skills.filter(s => s.type !== 'organization');
-  }, [skills, tab, subTab]);
+  useEffect(() => { load(1); }, [tab, subTab]);
 
   if (loading) return (
     <div className="flex min-h-screen items-center justify-center bg-surface">
@@ -112,7 +103,7 @@ export default function SkillsGalleryPage() {
           </div>
         )}
 
-        {filteredSkills.length === 0 && (
+        {skills.length === 0 && (
           <div className="rounded-2xl bg-surface-2 p-12 text-center shadow-sm">
             <span className="text-4xl">{subTab === 'org' ? '🏢' : '🤖'}</span>
             <p className="mt-4 text-muted-foreground">
@@ -125,7 +116,7 @@ export default function SkillsGalleryPage() {
         )}
 
         <div className="grid gap-4 md:grid-cols-3">
-          {filteredSkills.map(s => (
+          {skills.map(s => (
             subTab === 'org' ? (
               <button key={s.id}
                 onClick={() => router.push(`/skill/${s.id}?spaceId=&name=${encodeURIComponent(s.displayName || s.ownerName || '')}&title=${encodeURIComponent(s.ownerTitle || '')}`)}

@@ -31,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
   // ── 产品功能 ──
   { icon: '🤖', label: '分身广场', path: '/skills', permission: Permission.SKILL_USE },
   { icon: '👤', label: '我的空间', path: '/space/me', permission: Permission.SPACE_OWN },
-  { icon: '🏢', label: '空间总览', path: '/spaces', permission: Permission.SPACE_OWN },
+  { icon: '🏢', label: '空间总览', path: '/spaces', permission: Permission.USER_MANAGE },
   { icon: '💼', label: '销冠访谈', path: '/interview/create', permission: Permission.SKILL_USE },
   { icon: '📚', label: '经验广场', path: '/explore', permission: Permission.SKILL_USE },
   { icon: '🏠', label: '我的工作台', path: '/workbench', permission: Permission.SKILL_USE },
@@ -61,6 +61,7 @@ function canAccessAdmin(permissions: string[]): boolean {
       || p === Permission.USER_MANAGE
       || p === Permission.SKILL_MANAGE
       || p === Permission.TOKEN_VIEW_COMPANY
+      || p === Permission.MATERIAL_MANAGE
   );
 }
 
@@ -83,20 +84,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const isPublicPage = pathname === '/login' || pathname === '/register'
     || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
 
+  // 从公开页进入需登录页时重新获取用户信息
   useEffect(() => {
-    if (isPublicPage) { setLoading(false); return; }
-
+    if (isPublicPage) { setUser(null); setLoading(false); return; }
+    let cancelled = false;
     getCurrentUser()
-      .then(u => {
-        const userInfo = u as unknown as UserInfo;
-        setUser(userInfo);
-        if (pathname.startsWith('/admin') && !canAccessAdmin(userInfo.permissions || [])) {
-          router.replace('/skills');
-        }
-      })
-      .catch(() => { clearAuth(); router.replace('/login'); })
-      .finally(() => setLoading(false));
-  }, [pathname, isPublicPage, router]);
+      .then(u => { if (!cancelled) setUser(u as unknown as UserInfo); })
+      .catch(() => { if (!cancelled) { clearAuth(); router.replace('/login'); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isPublicPage]);
+
+  // 路由变化时用缓存 user 校验 admin 权限
+  useEffect(() => {
+    if (user && pathname.startsWith('/admin') && !canAccessAdmin(user.permissions || [])) {
+      router.replace('/skills');
+    }
+  }, [pathname, user]);
 
   if (isPublicPage) return <>{children}</>;
   if (loading) {
@@ -112,6 +116,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   /** 判断导航激活：一级路径精确匹配，子路径前缀匹配 */
   const isNavActive = (currentPath: string, navPath: string) => {
     if (currentPath === navPath) return true;
+    // "我的空间" 跳转到 /space/{id} 后仍应高亮
+    if (navPath === '/space/me' && currentPath.startsWith('/space/') && currentPath !== '/spaces' && !currentPath.startsWith('/spaces/')) return true;
     const depth = navPath.split('/').filter(Boolean).length;
     if (depth === 1) return false;
     return currentPath.startsWith(navPath + '/');

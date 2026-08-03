@@ -3,11 +3,11 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PHASE_LABELS } from '@/lib/constants';
 import { API_BASE } from '@/lib/api/client';
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { PhaseProgressBar } from '@/components/chat/PhaseProgressBar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { VoiceInput } from '@/components/voice/VoiceInput';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 import { ResumeModal } from '@/components/modals/ResumeModal';
 import { getSession, pauseSession } from '@/lib/api/interview';
 import { connectSse } from '@/lib/sse';
@@ -37,6 +37,7 @@ export function ExpertInterviewChat() {
   const { state, dispatch } = h;
 
   const interviewType = state.session?.interviewType || 'sales';
+  const [interimVoiceText, setInterimVoiceText] = useState('');
 
   // Mark phase complete
   const markPhaseComplete = useCallback(() => {
@@ -81,7 +82,6 @@ export function ExpertInterviewChat() {
     catch (err) { console.error('暂停失败:', err); }
   }, [sessionId, router]);
 
-  const handleTranscription = useCallback((text: string) => { h.setInputValue(prev => prev + text); }, [h.setInputValue]);
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); h.handleSend(); } }, [h.handleSend]);
 
   // JSX — same structure, state refs via hook
@@ -100,10 +100,15 @@ export function ExpertInterviewChat() {
 
       <div className="sticky top-0 z-30 border-b border-border bg-surface-2 backdrop-blur-sm">
         <div className="flex items-center justify-between px-6">
-          <PhaseProgressBar phases={state.session?.phases || [
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="text-muted-foreground-2 hover:text-foreground transition-colors flex-shrink-0" title="返回">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <PhaseProgressBar phases={state.session?.phases || [
             { name: 'opening', label: '开场定调', status: 'current' as const }, { name: 'storytelling', label: '故事深描', status: 'pending' as const },
             { name: 'modeling', label: '模型提炼', status: 'pending' as const }, { name: 'closing', label: '收网确认', status: 'pending' as const },
           ]} />
+          </div>
           <div className="flex items-center gap-2">
             {!state.isCompleted && <button type="button" onClick={handlePause} disabled={h.isStreaming} className="rounded-lg p-2 text-muted-foreground hover:text-foreground hover:bg-primary-light disabled:opacity-40 transition-colors" title="暂停访谈">⏸</button>}
             {!state.isCompleted && <button type="button" onClick={markPhaseComplete} disabled={h.isStreaming} className={`rounded-lg px-4 py-2 text-sm font-medium transition-all disabled:opacity-40 ${h.suggestAdvance ? 'bg-primary text-white animate-pulse ring-2 ring-amber-400 ring-offset-1' : 'bg-primary/10 text-primary hover:bg-primary/20'}`}>{getPhaseButtonLabel(state.session?.currentPhase || 'opening', interviewType)}</button>}
@@ -181,18 +186,32 @@ export function ExpertInterviewChat() {
       {!state.isCompleted && (
         <div className="sticky bottom-0 border-t border-border bg-surface-2 px-6 py-4">
           <div className="mx-auto flex max-w-[720px] items-end gap-3">
-            <VoiceInput onTranscription={handleTranscription} disabled={h.isStreaming} />
-            <textarea ref={h.inputRef} value={h.inputValue} onChange={(e) => h.setInputValue(e.target.value)} onKeyDown={handleKeyDown}
-              placeholder={state.session?.currentPhase === 'opening' ? '输入你的案例故事...' : state.session?.currentPhase === 'storytelling' ? '继续讲述细节...' : state.session?.currentPhase === 'modeling' ? '总结你的核心步骤...' : '说说适用边界...'}
-              disabled={h.isStreaming} rows={1}
-              className="flex-1 resize-none rounded-xl border border-border bg-surface-2 px-4 py-3 text-sm text-foreground placeholder-muted-foreground-2 outline-none transition-all focus:border-foreground focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"
-              style={{ minHeight: '52px', maxHeight: '120px' }}
-              onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
-            <button type="button" onClick={h.handleSend} disabled={!h.inputValue.trim() || h.isStreaming} className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-foreground text-white transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40">
+            <div className="relative flex-1">
+              <div className="absolute left-2 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+                <VoiceRecorder
+                  onTranscription={(text) => {
+                    setInterimVoiceText('');
+                    h.setInputValue(prev => prev + text);
+                  }}
+                  onInterimText={(text) => setInterimVoiceText(text)}
+                  disabled={h.isStreaming}
+                />
+              </div>
+              <textarea ref={h.inputRef}
+                value={interimVoiceText || h.inputValue}
+                onChange={(e) => { setInterimVoiceText(''); h.setInputValue(e.target.value); }}
+                onKeyDown={handleKeyDown}
+                placeholder={interimVoiceText ? '' : (state.session?.currentPhase === 'opening' ? '输入你的案例故事...' : state.session?.currentPhase === 'storytelling' ? '继续讲述细节...' : state.session?.currentPhase === 'modeling' ? '总结你的核心步骤...' : '说说适用边界...')}
+                disabled={h.isStreaming} rows={1}
+                className="w-full resize-none rounded-xl border border-border bg-surface-2 py-3 text-sm text-foreground placeholder:text-muted-foreground-2 outline-none transition-all focus:border-foreground focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"
+                style={{ minHeight: '52px', maxHeight: '120px', paddingLeft: '44px', paddingRight: '12px' }}
+                onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
+            </div>
+            <button type="button" onClick={h.handleSend} disabled={(!h.inputValue.trim() && !interimVoiceText) || h.isStreaming} className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-foreground text-white transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40">
               {h.isStreaming ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>}
             </button>
           </div>
-          <p className="mt-2 text-center text-xs text-muted-foreground-2">空格键长按录音</p>
+          <p className="mt-2 text-center text-xs text-muted-foreground-2">点击麦克风开始语音输入</p>
         </div>
       )}
 

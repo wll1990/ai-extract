@@ -67,8 +67,6 @@ public class ShareService {
 
     private final SkillShareRepository shareRepository;
     private final SkillRepository skillRepository;
-    private final com.aiextract.repository.OrganizationSkillRepository orgSkillRepository;
-    private final OrganizationSkillService orgSkillService;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
     private final AppUserRepository appUserRepository;
@@ -106,6 +104,12 @@ public class ShareService {
     /** 按渠道生成/获取分享码 */
     @Transactional(rollbackFor = Exception.class)
     public SkillShare getOrCreateShare(UUID skillId, UUID adminUserId, String channel) {
+        return getOrCreateShare(skillId, adminUserId, channel, true);
+    }
+
+    /** 按渠道+初始状态生成/获取分享码 */
+    @Transactional(rollbackFor = Exception.class)
+    public SkillShare getOrCreateShare(UUID skillId, UUID adminUserId, String channel, boolean enabled) {
         Skill skill = skillRepository.findById(skillId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
 
@@ -125,12 +129,12 @@ public class ShareService {
                         .companyId(companyId)
                         .shareCode(code)
                         .channel(channel)
-                        .enabled(true)
+                        .enabled(enabled)
                         .createdBy(adminUserId)
                         .createdAt(now)
                         .updatedAt(now)
                         .build());
-                log.info("分享码已生成 skillId={} shareCode={} channel={}", skillId, code, channel);
+                log.info("分享码已生成 skillId={} shareCode={} channel={} enabled={}", skillId, code, channel, enabled);
                 return share;
             }
         }
@@ -144,8 +148,27 @@ public class ShareService {
         return shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC);
     }
 
+    // ============================================================
+    // 发布时统一初始化默认分享
+    // ============================================================
+
     /**
-     * 共享开关：关闭后分享链接立即 404，企业内部使用不受影响
+     * 个体分身发布时统一初始化默认分享记录。
+     *
+     * <p>C端：public enabled=true（立刻进发现页），无 internal</p>
+     * <p>B端：public enabled=false（管理员手动开启），internal enabled=true 企业内流通</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void initDefaultShares(UUID skillId, UUID createdBy, boolean isCEnd) {
+        getOrCreateShare(skillId, createdBy, SkillShare.CHANNEL_PUBLIC, isCEnd);
+        if (!isCEnd) {
+            getOrCreateShare(skillId, createdBy, SkillShare.CHANNEL_INTERNAL, true);
+        }
+        log.info("默认分享已初始化 skillId={} isCEnd={}", skillId, isCEnd);
+    }
+
+    /**
+     * 共享开关：关闭后分享链接立即 404
      */
     @Transactional(rollbackFor = Exception.class)
     public SkillShare toggleShare(UUID skillId, boolean enabled) {
@@ -176,76 +199,6 @@ public class ShareService {
         return share;
     }
 
-    // ============================================================
-    // 管理端 — 组织分身分享
-    // ============================================================
-
-    @Transactional(rollbackFor = Exception.class)
-    public SkillShare getOrCreateOrgSkillShare(UUID orgSkillId, UUID adminUserId) {
-        return getOrCreateOrgSkillShare(orgSkillId, adminUserId, SkillShare.CHANNEL_PUBLIC);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public SkillShare getOrCreateOrgSkillShare(UUID orgSkillId, UUID adminUserId, String channel) {
-        com.aiextract.model.OrganizationSkill orgSkill = orgSkillRepository.findById(orgSkillId)
-                .orElseThrow(() -> new BusinessException(404, "组织分身不存在"));
-
-        Optional<SkillShare> existing = shareRepository.findFirstByOrgSkillIdAndChannel(orgSkillId, channel);
-        if (existing.isPresent()) {
-            return existing.get();
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        for (int i = 0; i < MAX_SHARE_CODE_RETRIES; i++) {
-            String code = randomShareCode();
-            if (shareRepository.findByShareCode(code).isEmpty()) {
-                SkillShare share = shareRepository.save(SkillShare.builder()
-                        .id(UUID.randomUUID())
-                        .orgSkillId(orgSkillId)
-                        .companyId(orgSkill.getCompanyId())
-                        .shareCode(code)
-                        .channel(channel)
-                        .enabled(true)
-                        .createdBy(adminUserId)
-                        .createdAt(now)
-                        .updatedAt(now)
-                        .build());
-                log.info("组织分身分享码已生成 orgSkillId={} shareCode={}", orgSkillId, code);
-                return share;
-            }
-        }
-        throw new BusinessException(500, "分享码生成失败，请重试");
-    }
-
-    public Optional<SkillShare> findOrgSkillShare(UUID orgSkillId) {
-        return shareRepository.findFirstByOrgSkillIdAndChannel(orgSkillId, SkillShare.CHANNEL_PUBLIC);
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public SkillShare toggleOrgSkillShare(UUID orgSkillId, boolean enabled) {
-        SkillShare share = shareRepository.findFirstByOrgSkillIdAndChannel(orgSkillId, SkillShare.CHANNEL_PUBLIC)
-                .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
-        share.setEnabled(enabled);
-        share.setUpdatedAt(LocalDateTime.now());
-        shareRepository.save(share);
-        log.info("组织分身分享开关变更 orgSkillId={} enabled={}", orgSkillId, enabled);
-        return share;
-    }
-
-    @Transactional(rollbackFor = Exception.class)
-    public SkillShare updateOrgSkillShareCode(UUID orgSkillId, String customCode) {
-        SkillShare share = shareRepository.findFirstByOrgSkillIdAndChannel(orgSkillId, SkillShare.CHANNEL_PUBLIC)
-                .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
-        if (!share.getShareCode().equals(customCode)
-                && shareRepository.findByShareCode(customCode).isPresent()) {
-            throw new BusinessException(400, "该短码已被使用");
-        }
-        share.setShareCode(customCode);
-        share.setUpdatedAt(LocalDateTime.now());
-        shareRepository.save(share);
-        log.info("组织分身分享码已更新 orgSkillId={} newCode={}", orgSkillId, customCode);
-        return share;
-    }
 
     // ============================================================
     // 公开端
@@ -269,22 +222,28 @@ public class ShareService {
             }
         }
 
+        // 统一查 skill 表，按 type 分发（统一表架构）
+        Skill skill = skillRepository.findById(share.getSkillId())
+                .orElseThrow(() -> new BusinessException(404, "分身不存在"));
+        if (!"published".equals(skill.getStatus())) {
+            throw new BusinessException(404, "分身未发布");
+        }
+
+        recordEvent("share_visit", skill.getId(), viewerUserIdOrNull, Map.of("shareCode", shareCode));
+
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+        stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+        stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+
         // ── 组织分身分支 ──
-        if (share.getOrgSkillId() != null) {
-            com.aiextract.model.OrganizationSkill orgSkill = orgSkillRepository.findById(share.getOrgSkillId())
-                    .orElseThrow(() -> new BusinessException(404, "组织分身不存在"));
-            if (!"published".equals(orgSkill.getStatus())) {
-                throw new BusinessException(404, "组织分身未发布");
-            }
-
-            recordEvent("share_visit", orgSkill.getId(), viewerUserIdOrNull, Map.of("shareCode", shareCode));
-
-            Map<String, Object> stats = new HashMap<>();
-            stats.put("conversationCount", orgSkill.getConversationCount() != null ? orgSkill.getConversationCount() : 0);
-            stats.put("userCount", orgSkill.getUserCount() != null ? orgSkill.getUserCount() : 0);
-            stats.put("satisfactionRate", orgSkill.getSatisfactionRate() != null ? orgSkill.getSatisfactionRate() : 0);
-
-            List<Map<String, Object>> members = orgSkillService.resolveMembers(orgSkill).stream()
+        if ("organization".equals(skill.getType())) {
+            // 解析成员（内联，避免循环依赖 OrganizationSkillService）
+            List<UUID> memberIds = JsonUtil.parseList(skill.getMemberSkillIds(), UUID::fromString);
+            List<Skill> activeMembers = memberIds.isEmpty() ? List.of()
+                    : skillRepository.findAllById(memberIds).stream()
+                        .filter(s -> "published".equals(s.getStatus())).toList();
+            List<Map<String, Object>> members = activeMembers.stream()
                     .map(m -> {
                         Map<String, Object> mInfo = new HashMap<>();
                         mInfo.put("id", m.getId().toString());
@@ -296,36 +255,34 @@ public class ShareService {
 
             List<Map<String, Object>> sceneTags;
             try {
-                sceneTags = orgSkillService.getSceneTags(orgSkill.getId().toString());
+                sceneTags = skillService.getSceneTags(skill.getId().toString());
             } catch (Exception e) {
-                log.warn("组织分身场景标签加载失败 orgSkillId={}: {}", orgSkill.getId(), e.getMessage());
+                log.warn("组织分身场景标签加载失败 skillId={}: {}", skill.getId(), e.getMessage());
                 sceneTags = List.of();
             }
 
             return ShareInfoResponse.builder()
-                    .skillId(orgSkill.getId().toString())
+                    .skillId(skill.getId().toString())
                     .shareCode(shareCode)
-                    .ownerName(orgSkill.getName())
-                    .ownerTitle(orgSkill.getDescription())
-                    .avatarUrl(orgSkill.getAvatarUrl())
+                    .ownerName(skill.getDisplayName())
+                    .ownerTitle(skill.getDescription())
+                    .avatarUrl(skill.getAvatarUrl())
                     .tags(List.of())
                     .sceneTags(sceneTags)
                     .guestLimit(guestMessageLimit)
                     .remaining(remaining)
                     .viewerStatus(viewerStatus)
-                    .openingMessage(orgSkill.getOpeningMessage())
-                    .introProfile(JsonUtil.parseStringMap(orgSkill.getIntroProfile()))
+                    .openingMessage(skill.getOpeningMessage())
+                    .introProfile(JsonUtil.parseStringMap(skill.getIntroProfile()))
                     .stats(stats)
                     .skillType("organization")
-                    .memberCount(members.size())
+                    .memberCount(activeMembers.size())
                     .members(members)
                     .shareChannel(share.getChannel())
                     .build();
         }
 
-        // ── 个体分身分支（原逻辑不变） ──
-        Skill skill = requirePublishedSkill(share);
-
+        // ── 个体分身分支 ──
         List<Map<String, Object>> sceneTags;
         try {
             sceneTags = skillService.getSceneTags(skill.getId().toString());
@@ -333,13 +290,6 @@ public class ShareService {
             log.warn("场景标签加载失败 skillId={}: {}", skill.getId(), e.getMessage());
             sceneTags = List.of();
         }
-
-        recordEvent("share_visit", skill.getId(), viewerUserIdOrNull, Map.of("shareCode", shareCode));
-
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
-        stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
-        stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
 
         return ShareInfoResponse.builder()
                 .skillId(skill.getId().toString())
@@ -401,8 +351,7 @@ public class ShareService {
                 .updatedAt(now)
                 .build());
 
-        recordEvent("guest_created",
-                share.getOrgSkillId() != null ? share.getOrgSkillId() : share.getSkillId(),
+        recordEvent("guest_created", share.getSkillId(),
                 guest.getId(), Map.of("shareCode", shareCode));
         log.info("游客已创建 userId={} shareCode={} ip={}", guest.getId(), shareCode, clientIp);
         return buildSession(guest, issueToken(guest));
@@ -418,23 +367,13 @@ public class ShareService {
                 .orElseThrow(() -> new BusinessException(404, "分享链接已失效"));
     }
 
-    private Skill requirePublishedSkill(SkillShare share) {
-        return skillRepository.findById(share.getSkillId())
-                .filter(s -> "published".equals(s.getStatus()) || "active".equals(s.getStatus()))
-                .orElseThrow(() -> new BusinessException(404, "分身未发布"));
-    }
-
-    /** 校验分享对应的目标（个体或组织分身）已发布。 */
+    /** 校验分享对应的目标分身已发布。统一表架构：按 skillId 查即可。 */
     private void requirePublishedTarget(SkillShare share) {
-        if (share.getOrgSkillId() != null) {
-            com.aiextract.model.OrganizationSkill orgSkill = orgSkillRepository.findById(share.getOrgSkillId())
-                    .orElseThrow(() -> new BusinessException(404, "组织分身不存在"));
-            if (!"published".equals(orgSkill.getStatus())) {
-                throw new BusinessException(404, "组织分身未发布");
-            }
-            return;
+        Skill skill = skillRepository.findById(share.getSkillId())
+                .orElseThrow(() -> new BusinessException(404, "分身不存在"));
+        if (!"published".equals(skill.getStatus())) {
+            throw new BusinessException(404, "分身未发布");
         }
-        requirePublishedSkill(share);
     }
 
     /**

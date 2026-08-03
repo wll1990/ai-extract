@@ -331,7 +331,17 @@ public class PromptLoader {
                         var.getValue() != null ? var.getValue() : "");
             }
         }
-        if (result.contains(VAR_PREFIX) && result.contains(VAR_SUFFIX)) {
+        // 检查是否有未替换的已知变量（忽略文本内容中自然出现的 {xxx}）
+        boolean hasUnreplaced = false;
+        if (vars != null) {
+            for (String key : vars.keySet()) {
+                if (result.contains(VAR_PREFIX + key + VAR_SUFFIX)) {
+                    hasUnreplaced = true;
+                    break;
+                }
+            }
+        }
+        if (hasUnreplaced) {
             log.warn("Prompt [{}] 可能包含未替换的占位符", name);
         }
         return result;

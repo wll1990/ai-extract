@@ -84,6 +84,9 @@ public class TokenAwareChatModel implements ChatModel {
         int promptChars = countPromptChars(prompt);
         auditPromptSize(promptChars);
 
+        // 在请求线程上捕获 userId — doOnComplete/doOnError 在 Reactor/SSE 线程执行，此时 TokenContext 已被 Filter finally 清掉
+        UUID userId = TokenContext.get();
+
         AtomicReference<Usage> lastUsage = new AtomicReference<>();
         StringBuilder fullResponse = new StringBuilder();
 
@@ -120,7 +123,7 @@ public class TokenAwareChatModel implements ChatModel {
 
                     log.info("LLM stream() done promptChars={} completionChars={} inputTokens={} outputTokens={} model={}",
                             promptChars, completionChars, inputTokens, outputTokens, modelName);
-                    logUsage(inputTokens, outputTokens, promptChars, completionChars);
+                    logUsage(userId, inputTokens, outputTokens, promptChars, completionChars);
                 })
                 .doOnError(err -> {
                     // 流中断：至少把 prompt 统计落库，completion 按已累积的算
@@ -129,7 +132,7 @@ public class TokenAwareChatModel implements ChatModel {
                     int outputTokens = completionChars / CHARS_PER_TOKEN;
                     log.warn("LLM stream() error promptChars={} completionChars={} err={}",
                             promptChars, completionChars, err.getMessage());
-                    logUsage(inputTokens, outputTokens, promptChars, completionChars);
+                    logUsage(userId, inputTokens, outputTokens, promptChars, completionChars);
                 });
     }
 
@@ -156,13 +159,16 @@ public class TokenAwareChatModel implements ChatModel {
         log.debug("LLM REQ promptChars={} model={}", promptChars, modelName);
     }
 
-    /** 异步入库（失败不影响主流程） */
+    /** 异步入库（同步调用路径） */
     private void logUsage(int inputTokens, int outputTokens, int promptChars, int completionChars) {
         UUID userId = TokenContext.get();
-        if (userId == null) {
-            log.debug("TokenContext 无 userId，跳过 token 统计");
-            return;
-        }
+        // userId 可为 null（scheduler 线程无 TokenContext），TokenUsageService 接受 null
+        tokenUsageService.log(userId, "CHAT", modelName,
+                inputTokens, outputTokens, promptChars, completionChars);
+    }
+
+    /** 异步入库（流式调用路径 — userId 在 stream() 开头捕获，ThreadLocal 不可用） */
+    private void logUsage(UUID userId, int inputTokens, int outputTokens, int promptChars, int completionChars) {
         tokenUsageService.log(userId, "CHAT", modelName,
                 inputTokens, outputTokens, promptChars, completionChars);
     }

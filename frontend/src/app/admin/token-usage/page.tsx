@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getTokenSummary, getTokenDaily, getTokenLogs, type TokenSummary, type DailyTokenRow, type TokenLogItem } from '@/lib/api/admin';
 
 function fmt(n: number): string {
@@ -19,7 +19,6 @@ export default function TokenUsagePage() {
   const [error, setError] = useState('');
   const [logsError, setLogsError] = useState('');
   const [days, setDays] = useState(7);
-  const pageRef = useRef(0);
   const size = 20;
 
   const loadSummary = useCallback(() => {
@@ -32,24 +31,27 @@ export default function TokenUsagePage() {
 
   const loadLogs = useCallback((p: number) => {
     setLogsError('');
-    getTokenLogs(p, size)
+    return getTokenLogs(p, size)
       .then(d => {
         setLogs(d.items || []);
-        setTotalLogs((d as any).total || 0);
+        setTotalLogs(d.total || 0);
       })
       .catch(e => setLogsError(e?.message || '加载明细失败'));
   }, []);
 
   useEffect(() => {
-    Promise.all([loadSummary(), loadDaily(days), loadLogs(0)]).finally(() => setLoading(false));
+    loadSummary();
+    loadDaily(days);
+    loadLogs(0).finally(() => setLoading(false));
   }, [loadSummary, loadDaily, loadLogs, days]);
 
   const goPage = (delta: number) => {
-    const next = pageRef.current + delta;
-    if (next < 0) return;
-    pageRef.current = next;
-    setPage(next);
-    loadLogs(next);
+    setPage(prev => {
+      const next = prev + delta;
+      if (next < 0 || next >= totalPages) return prev;
+      loadLogs(next);
+      return next;
+    });
   };
 
   const totalPages = Math.max(1, Math.ceil(totalLogs / size));
@@ -91,7 +93,7 @@ export default function TokenUsagePage() {
             <h2 className="font-semibold text-foreground">📊 近 {days} 天趋势</h2>
             <div className="flex gap-1">
               {[7, 30].map(d => (
-                <button key={d} onClick={() => { setDays(d); loadDaily(d); }}
+                <button key={d} onClick={() => setDays(d)}
                   className={`text-xs px-3 py-1 rounded-full ${days === d ? 'bg-primary text-white' : 'bg-surface-2 text-muted-foreground'}`}>
                   {d}天
                 </button>
@@ -173,8 +175,8 @@ export default function TokenUsagePage() {
                     <td className="px-5 py-2.5 text-muted-foreground whitespace-nowrap">
                       {l.createdAt ? l.createdAt.substring(11, 19) : '-'}
                     </td>
-                    <td className="px-5 py-2.5 font-mono text-muted-foreground">
-                      {l.userId ? l.userId.substring(0, 8) : '-'}
+                    <td className="px-5 py-2.5 text-muted-foreground">
+                      {l.userName || (l.userId ? l.userId.substring(0, 8) : '-')}
                     </td>
                     <td className="px-5 py-2.5">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${

@@ -7,11 +7,14 @@ import com.aiextract.dto.PracticeStartRequest;
 import com.aiextract.dto.PracticeStartResponse;
 import com.aiextract.dto.SkillChatRequest;
 import com.aiextract.common.ErrorMessages;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import com.aiextract.common.TraceContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.AppUser;
 import com.aiextract.model.ExperienceGrain;
-import com.aiextract.model.OrganizationSkill;
+
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillProfile;
@@ -228,7 +231,7 @@ public class SkillService {
     private final com.aiextract.repository.AppUserRepository appUserRepository;
 
     public Map<String, Object> listAllSkills(int page, int size, String status, UUID userId,
-                                              UUID companyId, String role) {
+                                              UUID companyId, String role, String type) {
         org.springframework.data.domain.Pageable pageable =
                 org.springframework.data.domain.PageRequest.of(page - 1, size);
         org.springframework.data.domain.Page<Skill> skillPage;
@@ -236,7 +239,8 @@ public class SkillService {
         // 数据范围标识：super_admin 看全部企业的 skill，其他角色按 companyId 隔离
         // 此项不是权限检查，不替换为 hasPermission
         boolean isSuperAdmin = "super_admin".equalsIgnoreCase(role);
-        boolean isCEnd = "c_user".equalsIgnoreCase(role);
+
+        boolean hasType = type != null && !type.isEmpty();
 
         if (userId != null) {
             // 显式传了 userId → "我的分身"，所有角色（含 super_admin）都按 userId 过滤
@@ -244,28 +248,26 @@ public class SkillService {
                     .map(Space::getId).toList();
             if (userSpaceIds.isEmpty()) return emptyPage(page, size);
             if (status != null && !status.isEmpty()) {
-                skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
+                skillPage = hasType
+                    ? skillRepository.findBySpaceIdInAndTypeAndStatusOrderByCreatedAtDesc(
+                        userSpaceIds, type, status, pageable)
+                    : skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
                         userSpaceIds, status, pageable);
             } else {
-                skillPage = skillRepository.findBySpaceIdIn(userSpaceIds, pageable);
+                skillPage = hasType
+                    ? skillRepository.findBySpaceIdInAndType(userSpaceIds, type, pageable)
+                    : skillRepository.findBySpaceIdIn(userSpaceIds, pageable);
             }
         } else if (isSuperAdmin) {
             // super_admin 且未指定 userId → 看全量
             if (status != null && !status.isEmpty()) {
-                skillPage = skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+                skillPage = hasType
+                    ? skillRepository.findByTypeAndStatusOrderByCreatedAtDesc(type, status, pageable)
+                    : skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
             } else {
-                skillPage = skillRepository.findAll(pageable);
-            }
-        } else if (isCEnd) {
-            // C端 → 只查自己的 space 下的分身
-            List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
-                .map(Space::getId).toList();
-            if (userSpaceIds.isEmpty()) return emptyPage(page, size);
-            if (status != null && !status.isEmpty()) {
-                skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
-                    userSpaceIds, status, pageable);
-            } else {
-                skillPage = skillRepository.findBySpaceIdIn(userSpaceIds, pageable);
+                skillPage = hasType
+                    ? skillRepository.findByType(type, pageable)
+                    : skillRepository.findAll(pageable);
             }
         } else if (companyId != null) {
             // B端按 company 过滤：本公司所有员工的 space → skill
@@ -277,28 +279,57 @@ public class SkillService {
                 .map(Space::getId).toList();
             if (companySpaceIds.isEmpty()) return emptyPage(page, size);
             if (status != null && !status.isEmpty()) {
-                skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
-                    companySpaceIds, status, pageable);
+                skillPage = hasType
+                    ? skillRepository.findBySpaceIdInAndTypeAndStatusOrderByCreatedAtDesc(
+                        companySpaceIds, type, status, pageable)
+                    : skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(
+                        companySpaceIds, status, pageable);
             } else {
-                skillPage = skillRepository.findBySpaceIdIn(companySpaceIds, pageable);
+                skillPage = hasType
+                    ? skillRepository.findBySpaceIdInAndType(companySpaceIds, type, pageable)
+                    : skillRepository.findBySpaceIdIn(companySpaceIds, pageable);
             }
         } else if (status != null && !status.isEmpty()) {
-            skillPage = skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
+            skillPage = hasType
+                ? skillRepository.findByTypeAndStatusOrderByCreatedAtDesc(type, status, pageable)
+                : skillRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
         } else {
-            skillPage = skillRepository.findAll(pageable);
+            skillPage = hasType
+                ? skillRepository.findByType(type, pageable)
+                : skillRepository.findAll(pageable);
         }
-        List<Skill> allSkills = skillPage.getContent();
+        Map<String, Object> response = buildSkillPageResult(skillPage, page, size);
 
-        // 批量查 space、user、grains，避免 N+1
+        // 追加组织分身（仅 B 端按 companyId 过滤的场景，且未指定 type=individual 时）
+        if (companyId != null && (status == null || "published".equals(status))
+                && !"individual".equals(type)) {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> content = (List<Map<String, Object>>) response.get("content");
+            List<Skill> orgSkills = "published".equals(status)
+                    ? orgSkillService.listByCompany(companyId, "published")
+                    : orgSkillService.listByCompany(companyId, null);
+            for (Skill org : orgSkills) {
+                content.add(orgSkillService.toApiMap(org));
+            }
+            int orgCount = orgSkills.size();
+            response.put("total", skillPage.getTotalElements() + orgCount);
+            if (content.size() >= 3 && content.stream().noneMatch(r -> "organization".equals(r.get("type")))) {
+                response.put("upgradeNudge", true);
+            }
+        }
+        return response;
+    }
+
+    /** 批量查 space/user/grains 并组装分页结果，供 listAllSkills 和 listMySkills 共用 */
+    private Map<String, Object> buildSkillPageResult(Page<Skill> skillPage, int page, int size) {
+        List<Skill> allSkills = skillPage.getContent();
         List<UUID> spaceIds = allSkills.stream().map(Skill::getSpaceId).distinct().toList();
         Map<UUID, Space> spaceMap = spaceRepository.findAllById(spaceIds).stream()
                 .collect(Collectors.toMap(Space::getId, s -> s, (a, b) -> a));
         List<UUID> ownerIds = spaceMap.values().stream().map(Space::getUserId).distinct().toList();
-        // 同时查 B 端 user 和 C 端 app_user
         Map<UUID, String> userNameMap = new HashMap<>();
         userRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getName()));
         appUserRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getNickname()));
-        // 批量查活跃锦囊数
         Map<UUID, Long> grainCountMap = grainRepository.countBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
 
@@ -320,7 +351,6 @@ public class SkillService {
             item.put("openingMessage", skill.getOpeningMessage());
             item.put("domain", skill.getDomain());
             item.put("grainCount", grainCountMap.getOrDefault(skill.getSpaceId(), 0L).intValue());
-            // stats — 直接从 Skill 字段读，无需额外查询
             Map<String, Object> stats = new LinkedHashMap<>();
             stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
             stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
@@ -328,34 +358,32 @@ public class SkillService {
             if (skill.getLastActiveAt() != null) {
                 stats.put("lastActive", skill.getLastActiveAt().toString());
             }
-            item.put("type", "individual");
-            item.put("orgType", skill.getOrgType() != null ? skill.getOrgType() : "individual");
+            item.put("type", skill.getType() != null ? skill.getType() : "individual");
             item.put("stats", stats);
             result.add(item);
-        }
-
-        // 追加组织分身（仅 B 端按 companyId 过滤的场景）
-        if (companyId != null && (status == null || "published".equals(status))) {
-            List<OrganizationSkill> orgSkills = "published".equals(status)
-                    ? orgSkillService.listByCompany(companyId, "published")
-                    : orgSkillService.listByCompany(companyId, null);
-            for (OrganizationSkill org : orgSkills) {
-                result.add(orgSkillService.toApiMap(org));
-            }
         }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("content", result);
         response.put("page", page); response.put("size", size);
-        int orgCount = result.size() - allSkills.size();
-        response.put("total", skillPage.getTotalElements() + Math.max(0, orgCount));
+        response.put("total", skillPage.getTotalElements());
         response.put("totalPages", skillPage.getTotalPages());
-        // upgradeNudge: ≥3 个个人分身 + 0 个组织分身 → 提示升级
-        if (companyId != null && result.size() >= 3
-                && result.stream().noneMatch(r -> "organization".equals(r.get("type")))) {
-            response.put("upgradeNudge", true);
-        }
         return response;
+    }
+
+    public Map<String, Object> listMySkills(int page, int size, String status, UUID userId) {
+        Pageable pageable = PageRequest.of(page - 1, size);
+        List<UUID> spaceIds = spaceRepository.findByUserId(userId).stream()
+                .map(Space::getId).toList();
+        if (spaceIds.isEmpty()) return emptyPage(page, size);
+
+        Page<Skill> skillPage;
+        if (status != null && !status.isEmpty()) {
+            skillPage = skillRepository.findBySpaceIdInAndStatusOrderByCreatedAtDesc(spaceIds, status, pageable);
+        } else {
+            skillPage = skillRepository.findBySpaceIdIn(spaceIds, pageable);
+        }
+        return buildSkillPageResult(skillPage, page, size);
     }
 
     private Map<String, Object> emptyPage(int page, int size) {
@@ -390,6 +418,11 @@ public class SkillService {
         UUID id = UUID.fromString(skillId);
         Skill skill = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
+
+        // 组织分身 → 委托 OrganizationSkillService
+        if ("organization".equals(skill.getType())) {
+            return orgSkillService.getPracticeScenes(skillId);
+        }
 
         // DB 层聚合：最佳颗粒 + 计数，替代 Java 内存 groupGrainsByScene
         UUID spaceId = skill.getSpaceId();
@@ -436,6 +469,11 @@ public class SkillService {
         UUID id = UUID.fromString(skillId);
         Skill skill = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
+
+        // 组织分身 → 委托 OrganizationSkillService
+        if ("organization".equals(skill.getType())) {
+            return orgSkillService.getSceneTags(skillId);
+        }
 
         // DB 层聚合替代 Java 内存 groupGrainsByScene
         List<Object[]> grainCounts = grainRepository.countGrainsByScene(skill.getSpaceId());
@@ -1112,6 +1150,11 @@ public class SkillService {
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
 
+        // 组织分身 → 委托 OrganizationSkillService
+        if ("organization".equals(skill.getType())) {
+            return orgSkillService.getDetail(UUID.fromString(skillId));
+        }
+
         // 场景标签
         List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
         Map<String, List<ExperienceGrain>> grouped = groupGrainsByScene(grains);
@@ -1143,6 +1186,7 @@ public class SkillService {
         detail.put("domain", skill.getDomain());
         detail.put("talkConfig", skill.getTalkConfig() != null ? skill.getTalkConfig() : "{}");
         detail.put("status", skill.getStatus());
+        detail.put("spaceId", skill.getSpaceId() != null ? skill.getSpaceId().toString() : null);
         detail.put("introProfile", JsonUtil.parseStringMap(skill.getIntroProfile()));
         detail.put("recommendedQuestions", JsonUtil.parseStringList(skill.getRecommendedQuestions()));
 

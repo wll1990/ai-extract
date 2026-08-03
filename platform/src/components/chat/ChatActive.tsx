@@ -1,7 +1,9 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { MessageBubble } from './MessageBubble';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
+import { ThinkingCard } from '@aiextract/shared-ui';
 import type { Message, ChatPhase } from '@/hooks/useChat';
 
 interface ChatActiveProps {
@@ -15,15 +17,17 @@ interface ChatActiveProps {
   placeholder?: string;
   mode?: string;
   skillId?: string;
+  children?: React.ReactNode;
 }
 
 export function ChatActive({
   messages, streamText, phase, inputValue,
   onInputChange, onSend, ownerName, placeholder = '输入你的问题...', mode = 'qa',
-  skillId,
+  skillId, children,
 }: ChatActiveProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const isStreaming = phase === 'streaming';
+  const [interimVoiceText, setInterimVoiceText] = useState('');
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,20 +47,11 @@ export function ChatActive({
         flex: 1, overflowY: 'auto', padding: '20px 24px',
       }}>
         <div style={{ maxWidth: 720, margin: '0 auto' }}>
-          {/* 流式生成动画条 — 企业端 */}
-          {isStreaming && (
-            <div style={{ maxWidth: '80%', marginBottom: 12 }}>
-              <div style={{
-                height: 2, width: '100%', overflow: 'hidden',
-                borderRadius: 2, background: 'var(--s3)',
-              }}>
-                <div style={{
-                  height: '100%', width: '50%', borderRadius: 2,
-                  background: 'linear-gradient(90deg, var(--tangerine), #f59e0b, #ef4444)',
-                  animation: 'marquee 1.8s linear infinite',
-                }} />
-              </div>
-            </div>
+          {/* 入口内容（推荐问题等） */}
+          {children}
+          {/* 思考中 — ThinkingCard（自带进度条，首 chunk 到达前显示） */}
+          {isStreaming && !streamText && (
+            <ThinkingCard name={ownerName} text="正在结合经验库，为你整理答案…" />
           )}
           {messages.map((msg, i) => (
             <div key={msg.id} style={{
@@ -108,33 +103,42 @@ export function ChatActive({
         background: 'var(--s1)', padding: '16px 24px',
       }}>
         <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-          <textarea
-            value={inputValue}
-            onChange={(e) => onInputChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={placeholder}
-            disabled={isStreaming}
-            rows={1}
-            style={{
-              flex: 1, resize: 'none', borderRadius: 16,
-              border: '1.5px solid var(--border-subtle)',
-              background: 'var(--surface)', padding: '12px 16px',
-              fontSize: 13, color: 'var(--fg-high)', outline: 'none',
-              fontFamily: 'inherit', lineHeight: 1.5,
-              minHeight: 48, maxHeight: 120,
-              transition: 'border-color 0.2s',
-            }}
-            onFocus={(e) => { e.target.style.borderColor = 'var(--tangerine)'; }}
-            onBlur={(e) => { e.target.style.borderColor = 'var(--border-subtle)'; }}
-            onInput={(e) => {
-              const t = e.target as HTMLTextAreaElement;
-              t.style.height = 'auto';
-              t.style.height = Math.min(t.scrollHeight, 120) + 'px';
-            }}
-          />
+          <div style={{ position: 'relative', flex: 1 }}>
+            <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
+              <VoiceRecorder
+                onTranscription={(text) => { setInterimVoiceText(''); onInputChange(inputValue + text); }}
+                onInterimText={setInterimVoiceText}
+                disabled={isStreaming}
+              />
+            </div>
+            <textarea
+              value={interimVoiceText || inputValue}
+              onChange={(e) => { setInterimVoiceText(''); onInputChange(e.target.value); }}
+              onKeyDown={handleKeyDown}
+              placeholder={interimVoiceText ? '' : placeholder}
+              disabled={isStreaming}
+              rows={1}
+              style={{
+                width: '100%', resize: 'none', borderRadius: 16,
+                border: '1.5px solid var(--border-subtle)',
+                background: 'var(--surface)', padding: '12px 16px',
+                paddingLeft: 44, fontSize: 13, color: 'var(--fg-high)',
+                outline: 'none', fontFamily: 'inherit', lineHeight: 1.5,
+                minHeight: 48, maxHeight: 120,
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={(e) => { e.target.style.borderColor = 'var(--tangerine)'; }}
+              onBlur={(e) => { e.target.style.borderColor = 'var(--border-subtle)'; }}
+              onInput={(e) => {
+                const t = e.target as HTMLTextAreaElement;
+                t.style.height = 'auto';
+                t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+              }}
+            />
+          </div>
           <button
             onClick={onSend}
-            disabled={!inputValue.trim() || isStreaming}
+            disabled={(!inputValue.trim() && !interimVoiceText) || isStreaming}
             style={{
               width: 48, height: 48, borderRadius: 16, flexShrink: 0,
               background: inputValue.trim() && !isStreaming

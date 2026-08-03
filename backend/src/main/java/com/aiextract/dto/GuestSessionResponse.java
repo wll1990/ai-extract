@@ -31,6 +31,9 @@ public class GuestSessionResponse {
     /** 昵称 */
     private String nickname;
 
+    /** 头像 URL */
+    private String avatarUrl;
+
     /** 状态: guest / registered */
     private String status;
 

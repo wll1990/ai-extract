@@ -41,6 +41,12 @@ public class AuthController {
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
 
+    @org.springframework.beans.factory.annotation.Value("${jwt.cookie-secure:false}")
+    private boolean cookieSecure;
+
+    @org.springframework.beans.factory.annotation.Value("${jwt.expiration}")
+    private long jwtExpirationMs;
+
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
                                              HttpServletResponse httpResponse) {
@@ -78,6 +84,17 @@ public class AuthController {
 
     /** 检查请求是否携带有效 token（判断是否为已登录管理员操作） */
     private boolean hasValidToken(HttpServletRequest request) {
+        // 1. Authorization header（API 调用场景）
+        String authHeader = request.getHeader(org.springframework.http.HttpHeaders.AUTHORIZATION);
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            try {
+                jwtUtil.getUserIdFromToken(authHeader.substring(7));
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+        }
+        // 2. HttpOnly Cookie（页面操作场景）
         if (request.getCookies() != null) {
             for (Cookie c : request.getCookies()) {
                 if ("token".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
@@ -156,6 +173,7 @@ public class AuthController {
     public ApiResponse<Void> logout(HttpServletResponse response) {
         Cookie clear = new Cookie("token", "");
         clear.setHttpOnly(true);
+        clear.setSecure(cookieSecure);
         clear.setPath("/");
         clear.setMaxAge(0);
         response.addCookie(clear);
@@ -166,10 +184,9 @@ public class AuthController {
     private void setTokenCookie(HttpServletResponse response, String token) {
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
-        cookie.setSecure(false);
-        // 本地 HTTP，生产应 true
+        cookie.setSecure(cookieSecure);
         cookie.setPath("/");
-        cookie.setMaxAge(86400);
+        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
     }

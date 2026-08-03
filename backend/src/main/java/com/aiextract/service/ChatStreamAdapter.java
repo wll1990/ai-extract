@@ -49,6 +49,12 @@ public class ChatStreamAdapter {
                 content.length() > 300
                     ? content.substring(0, 300).replace("\n", "\\n") + "..."
                     : content.replace("\n", "\\n"));
+            // token 预算预警：5000 字（≈7500 token）警告，8192 token 上限告警
+            if (content.length() > 5000) {
+                log.warn("LLM RSP 接近上限: chars={} (≈{} token), promptPreview={}",
+                    content.length(), (int)(content.length() * 1.5),
+                    prompt.length() > 200 ? prompt.substring(0, 200).replace("\n", "\\n") : prompt);
+            }
         } else {
             log.warn("LLM RSP null time={}ms", elapsed);
         }

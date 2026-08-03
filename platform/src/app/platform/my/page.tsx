@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import EmptyState from '@/components/ui/EmptyState';
+import { getToken } from '@/lib/storage';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface SkillItem {
   id: string;
@@ -21,15 +23,27 @@ export default function PlatformMyPage() {
   const [skills, setSkills] = useState<SkillItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [total, setTotal] = useState(0);
+
+  const authHeaders = useCallback((): Record<string, string> => {
+    const token = getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    return headers;
+  }, []);
 
   const fetchSkills = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch('/api/v1/skills/list?size=50', { credentials: 'include' });
+      const r = await fetch(`/api/v1/skills/my?page=${page}&size=50`, { headers: authHeaders() });
       const d = await r.json();
       if (d.code === 200) {
         setSkills(d.data?.content || []);
+        setTotalPages(d.data?.totalPages || 0);
+        setTotal(d.data?.total || 0);
       } else {
         setError(d.message || '加载失败');
       }
@@ -38,7 +52,7 @@ export default function PlatformMyPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
 
@@ -58,7 +72,10 @@ export default function PlatformMyPage() {
     <div className="min-h-screen bg-[#f7f9ff] px-5 py-8" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-[#10162f]">我的分身</h1>
+          <div className="flex items-center gap-3">
+            <button onClick={() => router.back()} className="text-[#747f9e] hover:text-[#10162f] text-sm">← 返回</button>
+            <h1 className="text-xl font-bold text-[#10162f]">我的分身</h1>
+          </div>
           <div className="flex gap-2">
             {skills.length > 0 && (
               <button
@@ -68,6 +85,28 @@ export default function PlatformMyPage() {
                 + 上传素材
               </button>
             )}
+            <button
+              onClick={async () => {
+                try {
+                  const r = await fetch('/api/v1/interviews/invite', {
+                    method: 'POST', headers: authHeaders(), body: JSON.stringify({}),
+                  });
+                  const d = await r.json();
+                  if (d.code === 200) {
+                    const base = process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
+                    const url = base + '/h5/interview/m/' + encodeURIComponent(d.data.inviteCode);
+                    const ok = await copyToClipboard(url);
+                    if (ok) alert('邀请链接已复制到剪贴板！\n\n' + url);
+                    else alert('复制失败，请手动复制链接：\n' + url);
+                  } else {
+                    alert(d.message || '生成失败');
+                  }
+                } catch { alert('网络错误'); }
+              }}
+              className="px-4 py-2 rounded-full border border-[#cdd7ff] text-[#2147ff] text-sm font-medium hover:bg-[#eef2ff] transition-colors"
+            >
+              🔗 邀请专家
+            </button>
             <button
               onClick={() => router.push('/h5/interview/start')}
               className="px-4 py-2 rounded-full bg-[#2147ff] text-white text-sm font-medium"
@@ -160,6 +199,22 @@ export default function PlatformMyPage() {
               </div>
             ))}
           </section>
+        )}
+
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-3 py-4">
+            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
+              className="text-sm rounded-lg px-4 py-2 border border-[#cdd7ff] disabled:opacity-30 hover:bg-[#eef2ff]">
+              上一页
+            </button>
+            <span className="text-xs text-[#747f9e]">
+              {page}/{totalPages} 页 · {total} 个分身
+            </span>
+            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
+              className="text-sm rounded-lg px-4 py-2 border border-[#cdd7ff] disabled:opacity-30 hover:bg-[#eef2ff]">
+              下一页
+            </button>
+          </div>
         )}
       </div>
     </div>

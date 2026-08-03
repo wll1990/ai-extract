@@ -99,6 +99,20 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理文件上传大小超限
+     */
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Map<String, Object>>> handleMaxUploadSize(
+            org.springframework.web.multipart.MaxUploadSizeExceededException e) {
+        log.warn("文件大小超限: {}", e.getMessage());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("maxSize", "50MB");
+        data.put("suggestion", "文件过大，建议拆分为多个小文件分批上传，处理速度更快、萃取质量更高");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(ApiResponse.error(413, data));
+    }
+
+    /**
      * 处理其他未捕获异常
      */
     @ExceptionHandler(Exception.class)

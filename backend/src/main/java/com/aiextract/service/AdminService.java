@@ -39,9 +39,10 @@ public class AdminService {
 
     private CompanyScope resolveCompanyScope(UUID companyId) {
         if (companyId == null) return new CompanyScope(null, null);
-        List<UUID> spaceIds = userRepository.findByCompanyId(companyId).stream()
-                .flatMap(u -> spaceRepository.findByUserId(u.getId()).stream())
-                .map(Space::getId).toList();
+        List<UUID> userIds = userRepository.findByCompanyId(companyId).stream()
+                .map(com.aiextract.model.User::getId).toList();
+        List<UUID> spaceIds = userIds.isEmpty() ? List.of()
+                : spaceRepository.findByUserIdIn(userIds).stream().map(Space::getId).toList();
         List<UUID> skillIds = spaceIds.isEmpty()
                 ? List.of()
                 : skillRepository.findBySpaceIdIn(spaceIds).stream().map(Skill::getId).toList();
@@ -75,10 +76,11 @@ public class AdminService {
                     "materialCount", materialRepository.count()));
         }
 
-        // 待审核
+        // 待审核 + 生成中
+        List<String> pendingStatuses = List.of("reviewing", "generating");
         List<Skill> reviewingSkills = scope.isScoped()
-                ? skillRepository.findByStatusAndSpaceIdIn("reviewing", scope.spaceIds)
-                : skillRepository.findByStatus("reviewing");
+                ? skillRepository.findByStatusInAndSpaceIdIn(pendingStatuses, scope.spaceIds)
+                : skillRepository.findByStatusIn(pendingStatuses);
         Map<UUID, Space> spaceMap = reviewingSkills.isEmpty() ? Collections.emptyMap()
                 : spaceRepository.findAllById(reviewingSkills.stream().map(Skill::getSpaceId).distinct().toList()).stream()
                     .collect(Collectors.toMap(Space::getId, s -> s, (a, b) -> a));
@@ -89,7 +91,7 @@ public class AdminService {
             item.put("skillId", sk.getId().toString());
             item.put("name", sk.getOwnerName() != null ? sk.getOwnerName()
                     : sk.getDisplayName() != null ? sk.getDisplayName() : "未命名");
-            item.put("status", "待审核");
+            item.put("status", "reviewing".equals(sk.getStatus()) ? "待审核" : "萃取中");
             Space sp = spaceMap.get(sk.getSpaceId());
             item.put("spaceId", sp != null ? sp.getId().toString() : "");
             pending.add(item);
@@ -196,7 +198,7 @@ public class AdminService {
     }
 
     /** 工作台 v2 — 运营指挥中心。共享 CompanyScope 避免重复查询。 */
-    public Map<String, Object> getDashboardV2(UUID companyId) {
+    public Map<String, Object> getDashboardV2(UUID companyId, int days) {
         CompanyScope scope = resolveCompanyScope(companyId);
         Map<String, Object> data = new LinkedHashMap<>();
 
@@ -219,8 +221,9 @@ public class AdminService {
                 ? (scope.hasSkills() ? scope.skillIds : List.of())
                 : skillRepository.findByStatus("published").stream().map(Skill::getId).toList();
 
-        // 7 天趋势
-        LocalDateTime weekStart = LocalDate.now().minusDays(7).atStartOfDay();
+        // N 天趋势（默认 7，可切换为 30）
+        int trendDays = Math.max(1, Math.min(365, days));
+        LocalDateTime weekStart = LocalDate.now().minusDays(trendDays).atStartOfDay();
         List<Map<String, Object>> trend = new ArrayList<>();
         List<Object[]> trendRows = skillIdsForQuery.isEmpty()
                 ? List.of()
@@ -272,10 +275,11 @@ public class AdminService {
             List<Object[]> userRows = convStatsRepository.userActivity(skillIdsForQuery, weekStart);
             List<Map<String, Object>> activeUsers = new ArrayList<>();
             if (!userRows.isEmpty()) {
-                List<UUID> userIds = userRows.stream().map(r -> (UUID) r[0]).distinct().toList();
+                List<UUID> userIds = userRows.stream().map(r -> (UUID) r[0]).filter(Objects::nonNull).distinct().toList();
                 Map<UUID, String> nameMap = new HashMap<>();
                 userRepository.findAllById(userIds).forEach(u -> nameMap.put(u.getId(), u.getName()));
                 for (Object[] ur : userRows) {
+                    if (ur[0] == null) continue;
                     Map<String, Object> u = new LinkedHashMap<>();
                     UUID uid = (UUID) ur[0];
                     u.put("userId", uid.toString());

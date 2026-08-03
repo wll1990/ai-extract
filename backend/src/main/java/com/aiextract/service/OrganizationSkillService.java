@@ -1,10 +1,8 @@
 package com.aiextract.service;
 
 import com.aiextract.exception.BusinessException;
-import com.aiextract.model.OrganizationSkill;
 import com.aiextract.model.Skill;
 import com.aiextract.repository.ExperienceGrainRepository;
-import com.aiextract.repository.OrganizationSkillRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.util.JsonUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,7 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OrganizationSkillService {
 
-    private final OrganizationSkillRepository orgSkillRepository;
     private final SkillRepository skillRepository;
     private final ExperienceGrainRepository grainRepository;
     private final ObjectMapper objectMapper;
@@ -50,13 +47,13 @@ public class OrganizationSkillService {
     // ============================================================
 
     @Transactional(rollbackFor = Exception.class)
-    public OrganizationSkill create(String name, String description,
+    public Skill create(String name, String description,
                                      List<UUID> memberSkillIds,
                                      String avatarUrl, UUID companyId, UUID createdBy) {
-        OrganizationSkill org = OrganizationSkill.builder()
+        Skill org = Skill.builder().type("organization").spaceId(null)
                 .id(UUID.randomUUID())
                 .companyId(companyId)
-                .name(name)
+                .displayName(name)
                 .description(description)
                 .memberSkillIds(toJson(memberSkillIds))
                 .avatarUrl(avatarUrl)
@@ -68,38 +65,63 @@ public class OrganizationSkillService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        OrganizationSkill saved = orgSkillRepository.save(org);
+        Skill saved = skillRepository.save(org);
         log.info("组织分身已创建 id={} name={} memberCount={}", saved.getId(), name, memberSkillIds.size());
         return saved;
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public OrganizationSkill update(UUID id, String name, String description,
+    public Skill update(UUID id, String name, String description,
                                      List<UUID> memberSkillIds, String avatarUrl) {
-        OrganizationSkill org = orgSkillRepository.findById(id)
+        Skill org = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
-        if (name != null) org.setName(name);
+        if (name != null) org.setDisplayName(name);
         if (description != null) org.setDescription(description);
         if (memberSkillIds != null) org.setMemberSkillIds(toJson(memberSkillIds));
         if (avatarUrl != null) org.setAvatarUrl(avatarUrl);
-        OrganizationSkill updated = orgSkillRepository.save(org);
-        log.info("组织分身已更新 id={} name={}", updated.getId(), updated.getName());
+        Skill updated = skillRepository.save(org);
+        log.info("组织分身已更新 id={} name={}", updated.getId(), updated.getDisplayName());
         return updated;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void delete(UUID id) {
-        orgSkillRepository.deleteById(id);
+        skillRepository.deleteById(id);
         log.info("组织分身已删除 id={}", id);
+    }
+
+    /**
+     * 级联清理 — 成员分身废弃/撤发布时，从所有组织分身的 member_skill_ids 中移除该 ID。
+     *
+     * @param memberSkillId 被废弃/撤发布的成员 Skill ID
+     * @return 实际清理的组织分身数量
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int removeMemberFromAllOrgSkills(UUID memberSkillId) {
+        List<Skill> orgSkills = skillRepository.findByTypeAndStatusIn("organization",
+                List.of("published", "draft", "reviewing"));
+        int cleaned = 0;
+        for (Skill org : orgSkills) {
+            List<UUID> ids = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
+            if (ids.remove(memberSkillId)) {
+                org.setMemberSkillIds(toJson(ids));
+                skillRepository.save(org);
+                cleaned++;
+            }
+        }
+        if (cleaned > 0) {
+            log.info("级联清理成员: memberSkillId={} 已从 {} 个组织分身移除", memberSkillId, cleaned);
+        }
+        return cleaned;
     }
 
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(UUID id, String status) {
-        OrganizationSkill org = orgSkillRepository.findById(id)
+        Skill org = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
         org.setStatus(status);
         org.setUpdatedAt(LocalDateTime.now());
-        orgSkillRepository.save(org);
+        skillRepository.save(org);
         log.info("组织分身状态已更新 id={} status={}", id, status);
     }
 
@@ -110,7 +132,7 @@ public class OrganizationSkillService {
     @org.springframework.scheduling.annotation.Async("embeddingExecutor")
     public void generateOrgIntroProfile(UUID orgId) {
         try {
-            OrganizationSkill org = orgSkillRepository.findById(orgId).orElse(null);
+            Skill org = skillRepository.findById(orgId).orElse(null);
             if (org == null) return;
             // 幂等：已生成则跳过
             if (org.getIntroProfile() != null && !org.getIntroProfile().isBlank()
@@ -145,7 +167,7 @@ public class OrganizationSkillService {
                 - 领域：%s
 
                 只输出 JSON，不加 markdown 代码块标记。""",
-                org.getName(),
+                org.getDisplayName(),
                 org.getDescription() != null ? org.getDescription() : "",
                 memberNames,
                 org.getDomain() != null ? org.getDomain() : "sales");
@@ -165,7 +187,7 @@ public class OrganizationSkillService {
                         cleaned.put("closing", introMap.getOrDefault("closing", "").trim());
                         org.setIntroProfile(objectMapper.writeValueAsString(cleaned));
                         org.setOpeningMessage(cleaned.get("headline"));
-                        orgSkillRepository.save(org);
+                        skillRepository.save(org);
                         log.info("组织分身 introProfile 已生成 orgId={}", orgId);
                     }
                 } catch (Exception e) {
@@ -182,16 +204,27 @@ public class OrganizationSkillService {
     // ============================================================
 
     @Transactional(readOnly = true)
-    public List<OrganizationSkill> listByCompany(UUID companyId, String status) {
+    public List<Skill> listByCompany(UUID companyId, String status) {
         if (status != null && !status.isEmpty()) {
-            return orgSkillRepository.findByCompanyIdAndStatus(companyId, status);
+            return skillRepository.findByCompanyIdAndStatus(companyId, status);
         }
-        return orgSkillRepository.findByCompanyId(companyId);
+        return skillRepository.findByCompanyId(companyId);
+    }
+
+    /** 分页版 — Controller 委托查询，不再直接操作 Repository。 */
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<Skill> listByCompanyPaged(UUID companyId, String status,
+            int page, int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(page - 1, size);
+        if (status != null && !status.isEmpty()) {
+            return skillRepository.findByCompanyIdAndStatus(companyId, status, pageable);
+        }
+        return skillRepository.findByCompanyId(companyId, pageable);
     }
 
     @Transactional(readOnly = true)
-    public OrganizationSkill findById(UUID id) {
-        return orgSkillRepository.findById(id)
+    public Skill findById(UUID id) {
+        return skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
     }
 
@@ -203,7 +236,7 @@ public class OrganizationSkillService {
      * 解析成员 Skill 实体 — 仅返回 published 状态的成员。
      */
     @Transactional(readOnly = true)
-    public List<Skill> resolveMembers(OrganizationSkill org) {
+    public List<Skill> resolveMembers(Skill org) {
         List<UUID> ids = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
         if (ids.isEmpty()) return List.of();
         return skillRepository.findAllById(ids).stream()
@@ -215,7 +248,7 @@ public class OrganizationSkillService {
      * 提取成员 spaceId 列表 — 供多空间 RAG 检索使用。
      */
     @Transactional(readOnly = true)
-    public List<UUID> resolveMemberSpaceIds(OrganizationSkill org) {
+    public List<UUID> resolveMemberSpaceIds(Skill org) {
         return resolveMembers(org).stream()
                 .map(Skill::getSpaceId)
                 .distinct()
@@ -229,13 +262,13 @@ public class OrganizationSkillService {
     /**
      * 转为 API Map — 与 SkillService.listAllSkills() 响应格式一致。
      */
-    public Map<String, Object> toApiMap(OrganizationSkill org) {
+    public Map<String, Object> toApiMap(Skill org) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", org.getId().toString());
         item.put("type", "organization");
         item.put("companyId", org.getCompanyId().toString());
-        item.put("displayName", org.getName());
-        item.put("ownerName", org.getName());
+        item.put("displayName", org.getDisplayName());
+        item.put("ownerName", org.getDisplayName());
         item.put("ownerTitle", org.getDescription() != null ? org.getDescription() : "");
         item.put("avatarUrl", org.getAvatarUrl());
         item.put("status", org.getStatus());
@@ -243,7 +276,7 @@ public class OrganizationSkillService {
         item.put("openingMessage", org.getOpeningMessage());
         item.put("introProfile", JsonUtil.parseStringMap(org.getIntroProfile()));
         item.put("tags", List.of());
-        item.put("memberCount", JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString).size());
+        item.put("memberCount", resolveMembers(org).size());
         item.put("grainCount", 0); // 组织分身无自有颗粒，前端用 memberCount 替代展示
 
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -262,7 +295,7 @@ public class OrganizationSkillService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getDetail(UUID id) {
-        OrganizationSkill org = findById(id);
+        Skill org = findById(id);
         Map<String, Object> detail = toApiMap(org);
 
         List<UUID> allMemberIds = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
@@ -320,7 +353,7 @@ public class OrganizationSkillService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getPracticeScenes(String orgSkillId) {
         UUID id = UUID.fromString(orgSkillId);
-        OrganizationSkill org = findById(id);
+        Skill org = findById(id);
         List<UUID> memberSpaceIds = resolveMemberSpaceIds(org);
         if (memberSpaceIds.isEmpty()) return List.of();
 
@@ -392,7 +425,7 @@ public class OrganizationSkillService {
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getSceneTags(String orgSkillId) {
         UUID id = UUID.fromString(orgSkillId);
-        OrganizationSkill org = findById(id);
+        Skill org = findById(id);
         List<UUID> spaceIds = resolveMemberSpaceIds(org);
         return aggregateSceneTags(spaceIds);
     }
@@ -412,7 +445,7 @@ public class OrganizationSkillService {
      */
     public List<String> getRecommendedQuestionsFallback(UUID orgSkillId) {
         try {
-            OrganizationSkill org = findById(orgSkillId);
+            Skill org = findById(orgSkillId);
             List<UUID> spaceIds = resolveMemberSpaceIds(org);
             java.util.Set<String> all = new java.util.LinkedHashSet<>();
             for (UUID sid : spaceIds) {
@@ -432,7 +465,7 @@ public class OrganizationSkillService {
     // ============================================================
 
     /** 构建 spaceId → skillId 映射，用于前端溯源卡片的成员可点击跳转 */
-    public Map<UUID, UUID> resolveSpaceToSkillMap(OrganizationSkill org) {
+    public Map<UUID, UUID> resolveSpaceToSkillMap(Skill org) {
         return resolveMembers(org).stream()
                 .collect(java.util.stream.Collectors.toMap(
                         Skill::getSpaceId, Skill::getId, (a, b) -> a));
@@ -444,14 +477,14 @@ public class OrganizationSkillService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getDashboard(UUID orgId) {
-        OrganizationSkill org = findById(orgId);
+        Skill org = findById(orgId);
         Map<String, Object> d = new LinkedHashMap<>();
-        d.put("name", org.getName());
+        d.put("name", org.getDisplayName());
         d.put("status", org.getStatus());
         d.put("conversationCount", org.getConversationCount() != null ? org.getConversationCount() : 0);
         d.put("userCount", org.getUserCount() != null ? org.getUserCount() : 0);
         d.put("satisfactionRate", org.getSatisfactionRate() != null ? org.getSatisfactionRate() : 0);
-        d.put("memberCount", JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString).size());
+        d.put("memberCount", resolveMembers(org).size());
         d.put("activeMembers", resolveMembers(org).stream().map(m -> {
             Map<String, Object> mInfo = new LinkedHashMap<>();
             mInfo.put("id", m.getId().toString());

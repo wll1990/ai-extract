@@ -50,7 +50,7 @@ public class MaterialCleaningScheduler {
     /** 自注入以支持内部 @Transactional 方法调用 */
     @Lazy @Autowired private MaterialCleaningScheduler self;
 
-    private static final String STATUS_ANALYZED = "analyzed";
+    private static final String STATUS_ANALYZED = MaterialCleaningService.STATUS_ANALYZED;
     private static final String STATUS_GENERATING = "generating";
     private static final String STATUS_REVIEWING = "reviewing";
     private static final int MAX_RETRY_COUNT = 3;
@@ -125,7 +125,7 @@ public class MaterialCleaningScheduler {
             cleaningService.parseFile(materialId);
         } catch (Exception e) {
             log.error("文件解析失败, materialId: {}", materialId, e);
-            self.incrementRetryOrReject(materialId, "解析失败: " + e.getMessage());
+            self.incrementRetryOrReject(materialId, "解析失败: " + e.getMessage(), MaterialCleaningService.STATUS_PARSE_FAILED);
         } finally {
             self.releaseMaterialLock(materialId);
             TraceContext.clear();
@@ -314,7 +314,7 @@ public class MaterialCleaningScheduler {
             processMaterial(materialId);
         } catch (Exception e) {
             log.error("素材清洗失败, materialId: {}", materialId, e);
-            self.incrementRetryOrReject(materialId, "清洗失败: " + e.getMessage());
+            self.incrementRetryOrReject(materialId, "清洗失败: " + e.getMessage(), MaterialCleaningService.STATUS_CLEANING_FAILED);
         } finally {
             releaseSkillLock(skillId);
             self.releaseMaterialLock(materialId);
@@ -324,16 +324,19 @@ public class MaterialCleaningScheduler {
 
     /** ==================== 重试机制 ==================== */
 
-    /** 短事务：递加重试计数，达上限则标记 rejected */
+    /** 短事务：递加重试计数，达上限则标记 rejected，否则设为 retryStatus */
     @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
-    public void incrementRetryOrReject(UUID materialId, String reason) {
+    public void incrementRetryOrReject(UUID materialId, String reason, String retryStatus) {
         materialRepository.findById(materialId).ifPresent(m -> {
             int count = m.getRetryCount() != null ? m.getRetryCount() + 1 : 1;
             m.setRetryCount(count);
             if (count >= MAX_RETRY_COUNT) {
-                m.setStatus("rejected");
+                m.setStatus(MaterialCleaningService.STATUS_REJECTED);
                 m.setAnalysisNotes((m.getAnalysisNotes() != null ? m.getAnalysisNotes() + "; " : "") + "已达最大重试次数(" + MAX_RETRY_COUNT + "): " + reason);
                 log.warn("素材已达最大重试次数, materialId: {}, reason: {}", materialId, reason);
+            } else {
+                m.setStatus(retryStatus);
+                m.setAnalysisNotes(reason);
             }
             materialRepository.save(m);
         });

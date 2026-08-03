@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { apiClient } from '@/lib/api/client';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface GrainTrace {
   grainId: string;
@@ -51,9 +52,12 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose }: T
   }, [open, grainIds]);
 
   const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(prev => ({ ...prev, [id]: true }));
-    setTimeout(() => setCopied(prev => ({ ...prev, [id]: false })), 1500);
+    copyToClipboard(text).then(ok => {
+      if (ok) {
+        setCopied(prev => ({ ...prev, [id]: true }));
+        setTimeout(() => setCopied(prev => ({ ...prev, [id]: false })), 1500);
+      }
+    });
   };
 
   if (!open) return null;

@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.RolePermissions;
 import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.common.ApiResponse;
@@ -12,6 +13,7 @@ import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillMaterialRepository;
 import com.aiextract.repository.SkillRepository;
+import com.aiextract.service.MaterialAuditService;
 import com.aiextract.service.MaterialCleaningService;
 import com.aiextract.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +50,7 @@ public class SkillMaterialController {
     private final SkillRepository skillRepository;
     private final ExperienceGrainRepository grainRepository;
     private final MaterialCleaningService cleaningService;
+    private final MaterialAuditService auditService;
     private final JwtUtil jwtUtil;
     private final com.aiextract.repository.UserRepository userRepository;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
@@ -55,6 +58,12 @@ public class SkillMaterialController {
 
     @org.springframework.beans.factory.annotation.Value("${storage.local.path}")
     private String storageBasePath;
+
+    @org.springframework.beans.factory.annotation.Value("${app.material.upload.max-text-length:100000}")
+    private int maxTextLength;
+
+    @org.springframework.beans.factory.annotation.Value("${app.material.upload.supported-formats:docx,pdf,txt,mp3,wav,m4a}")
+    private String supportedFormats;
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
@@ -74,10 +83,21 @@ public class SkillMaterialController {
             throw new BusinessException(400, "请选择空间或分身");
         }
 
+        // employee 只能上传到自己的 skill
+        if (skillId != null) { assertSkillAccess(skillId); }
+
         UUID userId = jwtUtil.getUserIdFromToken(getToken());
         List<Map<String, Object>> results = new ArrayList<>();
         for (MultipartFile file : files) {
             if (file.isEmpty()) { continue; }
+            // 文件大小检查（单文件 > 50MB）
+            // 文件类型检查
+            String lowerName = file.getOriginalFilename() != null
+                ? file.getOriginalFilename().toLowerCase() : "";
+            if (!lowerName.isEmpty() && !isSupportedFormat(lowerName)) {
+                throw new BusinessException(400, "暂不支持 \"" + getFileExt(lowerName)
+                    + "\" 格式。支持格式：" + String.join(" / ", supportedFormats.split(",")));
+            }
             results.add(cleaningService.uploadMaterialToSpace(file, spaceId, skillId, skillName, userId, domain));
             if (skillId == null && !results.isEmpty()) {
                 skillId = UUID.fromString((String) results.get(0).get(KEY_SKILL_ID));
@@ -96,6 +116,10 @@ public class SkillMaterialController {
         if (text.length() < 10) {
             throw new BusinessException(400, "文本内容至少10个字");
         }
+        if (text.length() > maxTextLength) {
+            throw new BusinessException(413, "文本内容 " + text.length()
+                + " 字，超过 " + maxTextLength + " 字上限。建议拆分为多个片段分批上传，处理速度更快、萃取质量更高");
+        }
 
         UUID spaceId = body.containsKey("spaceId") ? UUID.fromString((String) body.get("spaceId")) : null;
         String skillIdStr = (String) body.get("skillId");
@@ -108,27 +132,57 @@ public class SkillMaterialController {
             throw new BusinessException(400, "请选择空间或分身");
         }
 
+        // employee 只能上传到自己的 skill
+        if (skillId != null) { assertSkillAccess(skillId); }
+
         UUID userId = jwtUtil.getUserIdFromToken(getToken());
         Map<String, Object> result = cleaningService.uploadTextMaterial(text, spaceId, skillId, skillName, userId, domain, title);
         return ApiResponse.success(Map.of("uploaded", 1, "results", List.of(result)));
     }
 
-    /** 分身列表（供上传时下拉选择，仅当前企业） */
+    /** 分身列表（供上传时下拉选择，仅当前企业；员工只看自己的） */
     @GetMapping("/admin/skills/picker")
     public ApiResponse<List<Map<String, Object>>> picker() {
-        UUID companyId = TokenContext.getCompanyId();
-        // 查该企业所有空间
-        List<UUID> companyUserIds = userRepository.findByCompanyId(companyId).stream()
-                .map(com.aiextract.model.User::getId).toList();
-        List<UUID> companySpaceIds = spaceRepository.findByUserIdIn(companyUserIds).stream()
-                .map(com.aiextract.model.Space::getId).toList();
+        UUID currentUserId = jwtUtil.getUserIdFromToken(getToken());
+        String role = jwtUtil.getRoleFromToken(getToken());
+
+        List<UUID> targetSpaceIds;
+        if (RolePermissions.EMPLOYEE.equals(role)) {
+            // 员工只看自己空间下的分身
+            targetSpaceIds = spaceRepository.findByUserId(currentUserId).stream()
+                    .map(com.aiextract.model.Space::getId).toList();
+        } else {
+            // 管理员看本企业；super_admin（companyId=null）看全量
+            UUID companyId = TokenContext.getCompanyId();
+            if (companyId == null) {
+                // super_admin — 查全量 skill，不做 space 过滤
+                List<Map<String, Object>> allList = new ArrayList<>();
+                for (Skill s : skillRepository.findAll(PageRequest.of(0, 200)).getContent()) {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("id", s.getId().toString());
+                    item.put("name", s.getDisplayName() != null ? s.getDisplayName()
+                        : s.getOwnerName() != null ? s.getOwnerName() : "未命名");
+                    item.put("status", s.getStatus());
+                    allList.add(item);
+                }
+                // 过滤掉仅有 interview 素材的 skill
+                filterRealMaterialSkills(allList);
+                return ApiResponse.success(allList);
+            }
+            List<UUID> companyUserIds = userRepository.findByCompanyId(companyId).stream()
+                    .map(com.aiextract.model.User::getId).toList();
+            targetSpaceIds = spaceRepository.findByUserIdIn(companyUserIds).stream()
+                    .map(com.aiextract.model.Space::getId).toList();
+        }
+
         List<Map<String, Object>> list = new ArrayList<>();
         List<Skill> skills;
-        if (companySpaceIds.isEmpty()) {
+        if (targetSpaceIds.isEmpty()) {
             skills = List.of();
         } else {
-            skills = skillRepository.findBySpaceIdIn(companySpaceIds, PageRequest.of(0, 200)).getContent();
+            skills = skillRepository.findBySpaceIdIn(targetSpaceIds, PageRequest.of(0, 200)).getContent();
         }
+
         for (Skill s : skills) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", s.getId().toString());
@@ -139,7 +193,17 @@ public class SkillMaterialController {
             item.put("status", s.getStatus());
             list.add(item);
         }
+        filterRealMaterialSkills(list);
         return ApiResponse.success(list);
+    }
+
+    /** 过滤掉仅有 interview 素材（无用户手动上传）的 skill */
+    private void filterRealMaterialSkills(List<Map<String, Object>> list) {
+        if (list.isEmpty()) return;
+        List<UUID> skillIds = list.stream()
+            .map(m -> UUID.fromString((String) m.get("id"))).toList();
+        Set<UUID> rich = new HashSet<>(materialRepository.findSkillIdsWithRealMaterials(skillIds));
+        list.removeIf(m -> !rich.contains(UUID.fromString((String) m.get("id"))));
     }
 
     /** 分身素材列表（分页） */
@@ -148,14 +212,16 @@ public class SkillMaterialController {
             @PathVariable UUID skillId,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
+        assertSkillAccess(skillId);
         return ApiResponse.success(
-            materialRepository.findBySkillIdOrderByCreatedAtDesc(skillId, PageRequest.of(page - 1, size)));
+            materialRepository.findBySkillIdExcludingType(skillId, "interview", PageRequest.of(page - 1, size)));
     }
 
     /** 素材详情 + 该素材产生的颗粒 */
     @GetMapping("/admin/skills/{skillId}/materials/{materialId}/detail")
     public ApiResponse<Map<String, Object>> getMaterialDetail(
             @PathVariable UUID skillId, @PathVariable UUID materialId) {
+        assertSkillAccess(skillId);
         SkillMaterial m = materialRepository.findById(materialId)
             .orElseThrow(() -> new BusinessException(404, "素材不存在"));
         if (!m.getSkillId().equals(skillId)) { throw new BusinessException(HttpStatus.FORBIDDEN.value(), ErrorMessages.MATERIAL_NOT_BELONG_TO_SKILL); }
@@ -206,6 +272,7 @@ public class SkillMaterialController {
     public ApiResponse<Void> updateMaterialStatus(
             @PathVariable UUID skillId, @PathVariable UUID materialId,
             @RequestBody Map<String, String> body) {
+        assertSkillAccess(skillId);
         SkillMaterial m = materialRepository.findById(materialId)
             .orElseThrow(() -> new BusinessException(404, "素材不存在"));
         if (!m.getSkillId().equals(skillId)) { throw new BusinessException(HttpStatus.FORBIDDEN.value(), ErrorMessages.MATERIAL_NOT_BELONG_TO_SKILL); }
@@ -217,6 +284,7 @@ public class SkillMaterialController {
     @DeleteMapping("/admin/skills/{skillId}/materials/{materialId}")
     public ApiResponse<Void> deleteMaterial(
             @PathVariable UUID skillId, @PathVariable UUID materialId) {
+        assertSkillAccess(skillId);
         SkillMaterial m = materialRepository.findById(materialId)
             .orElseThrow(() -> new BusinessException(404, "素材不存在"));
         if (!m.getSkillId().equals(skillId)) { throw new BusinessException(HttpStatus.FORBIDDEN.value(), ErrorMessages.MATERIAL_NOT_BELONG_TO_SKILL); }
@@ -229,6 +297,7 @@ public class SkillMaterialController {
     public ApiResponse<Void> submitManualText(
             @PathVariable UUID materialId,
             @RequestBody Map<String, String> body) {
+        assertMaterialAccess(materialId);
         SkillMaterial m = materialRepository.findById(materialId)
             .orElseThrow(() -> new BusinessException(404, "素材不存在"));
         String text = body.get(KEY_TEXT);
@@ -245,6 +314,7 @@ public class SkillMaterialController {
     /** 管理员手动重试 — 重置 retry_count，素材回到 uploaded 重新进入管线 */
     @PutMapping("/admin/materials/{materialId}/retry")
     public ApiResponse<Void> retryMaterial(@PathVariable UUID materialId) {
+        assertMaterialAccess(materialId);
         SkillMaterial m = materialRepository.findById(materialId)
             .orElseThrow(() -> new BusinessException(404, "素材不存在"));
         m.setRetryCount(0);
@@ -336,7 +406,7 @@ public class SkillMaterialController {
             @RequestParam(defaultValue = "20") int size) {
         validateSkillOwnership(skillId);
         return ApiResponse.success(
-            materialRepository.findBySkillIdOrderByCreatedAtDesc(skillId, PageRequest.of(page - 1, size)));
+            materialRepository.findBySkillIdExcludingType(skillId, "interview", PageRequest.of(page - 1, size)));
     }
 
     /**
@@ -381,11 +451,48 @@ public class SkillMaterialController {
         return skill;
     }
 
+    /** employee 角色校验 skill 归属，管理员跳过 */
+    /** 素材萃取审计报告 — 逐 chunk 提取详情 + 验证分数 + 最终颗粒 */
+    @GetMapping("/admin/materials/{materialId}/audit-report")
+    public ApiResponse<Map<String, Object>> getAuditReport(@PathVariable UUID materialId) {
+        assertMaterialAccess(materialId);
+        return ApiResponse.success(auditService.buildAuditReport(materialId));
+    }
+
+    private void assertSkillAccess(UUID skillId) {
+        if (RolePermissions.EMPLOYEE.equals(jwtUtil.getRoleFromToken(getToken()))) {
+            validateSkillOwnership(skillId);
+        }
+    }
+
+    /** employee 角色校验 material 归属（通过 material → skill → space 链路），管理员跳过 */
+    private void assertMaterialAccess(UUID materialId) {
+        if (RolePermissions.EMPLOYEE.equals(jwtUtil.getRoleFromToken(getToken()))) {
+            SkillMaterial m = materialRepository.findById(materialId)
+                .orElseThrow(() -> new BusinessException(404, "素材不存在"));
+            validateSkillOwnership(m.getSkillId());
+        }
+    }
+
+    private boolean isSupportedFormat(String lowerName) {
+        for (String fmt : supportedFormats.split(",")) {
+            if (lowerName.endsWith("." + fmt.trim())) return true;
+        }
+        return false;
+    }
+
+    private String getFileExt(String lowerName) {
+        int dot = lowerName.lastIndexOf('.');
+        return dot > 0 ? lowerName.substring(dot) : "未知";
+    }
+
     private String detectFileType(String lowerName) {
         if (lowerName.endsWith(".pdf")) return "pdf";
         if (lowerName.endsWith(".doc") || lowerName.endsWith(".docx")) return "doc";
-        if (lowerName.endsWith(".txt")) return "txt";
-        if (lowerName.endsWith(".mp3") || lowerName.endsWith(".m4a") || lowerName.endsWith(".wav")) return "audio";
+        if (lowerName.endsWith(".txt") || lowerName.endsWith(".md")) return "txt";
+        if (lowerName.endsWith(".mp3") || lowerName.endsWith(".wav")) return "audio";
+        if (lowerName.endsWith(".ppt") || lowerName.endsWith(".pptx")) return "ppt";
+        if (lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx") || lowerName.endsWith(".csv")) return "xls";
         if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png")) return "image";
         return "other";
     }

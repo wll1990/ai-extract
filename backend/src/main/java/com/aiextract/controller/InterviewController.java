@@ -10,6 +10,7 @@ import com.aiextract.service.InterviewService;
 import com.aiextract.util.JwtUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +43,10 @@ public class InterviewController {
 
     private final InterviewService interviewService;
     private final JwtUtil jwtUtil;
+
+    /** 平台端地址（C端对外链接用，nginx 8088→platform） */
+    @Value("${app.platform.url:http://localhost:3001}")
+    private String platformUrl;
 
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
@@ -209,6 +214,26 @@ public class InterviewController {
     public ApiResponse<Map<String, Object>> getActiveSessions() {
         UUID userId = jwtUtil.getUserIdFromToken(getToken());
         Map<String, Object> result = interviewService.getActiveSessions(userId);
+        return ApiResponse.success(result);
+    }
+
+    /** C 端用户发起个人访谈邀请 — 不绑定企业，仅用邀请者昵称 */
+    @PostMapping("/invite")
+    public ApiResponse<Map<String, Object>> createPersonalInvite(@RequestBody Map<String, String> body) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        String role = jwtUtil.getRoleFromToken(getToken());
+        if (!"c_user".equals(role) && !"c_partner".equals(role)) {
+            return ApiResponse.error(403, "仅 C 端用户可发起个人邀请");
+        }
+        String userName = body.getOrDefault("invitedBy", "");
+        if (userName.isBlank()) {
+            // fallback: 从 token 取昵称
+            userName = "用户" + userId.toString().substring(0, 6);
+        }
+        String code = interviewService.generatePersonalInviteCode(userName.trim(), userId);
+        Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("inviteCode", code);
+        result.put("inviteUrl", platformUrl + "/h5/interview/m/" + code);
         return ApiResponse.success(result);
     }
 

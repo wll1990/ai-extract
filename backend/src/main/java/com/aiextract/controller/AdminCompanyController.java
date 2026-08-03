@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.PageResponse;
 import com.aiextract.model.Company;
 import com.aiextract.model.CompanyRegisterCode;
 import com.aiextract.repository.CompanyRegisterCodeRepository;
@@ -37,12 +38,15 @@ public class AdminCompanyController {
     // 企业 CRUD
     // ═══════════════════════════════════════════════════════════
 
-    /** 企业列表 */
+    /** 企业列表（分页） */
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> list() {
-        List<Company> all = companyRepository.findAll();
+    public ApiResponse<Map<String, Object>> list(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(page - 1, size);
+        var companyPage = companyRepository.findAll(pageable);
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Company c : all) {
+        for (Company c : companyPage.getContent()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", c.getId().toString());
             m.put("name", c.getName());
@@ -59,7 +63,7 @@ public class AdminCompanyController {
             m.put("createdAt", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
             result.add(m);
         }
-        return ApiResponse.success(result);
+        return ApiResponse.success(PageResponse.of(result, companyPage, page, size));
     }
 
     /** 新建企业 */

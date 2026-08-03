@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getToken } from '@/lib/storage';
+import { copyToClipboard } from '@/lib/clipboard';
 
 /** 颗粒分级阈值，与 application.yml app.interview.* 保持一致 */
 const GRAIN_ENOUGH = 10;
@@ -112,11 +113,11 @@ export default function H5ReportPage() {
   }, [sessionId, loading, checkReport]);
 
   const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText('platform.mindforce.com');
+    const ok = await copyToClipboard('platform.mindforce.com');
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    }
   }, []);
 
   const lastCheckLabel = lastCheck

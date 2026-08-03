@@ -210,21 +210,6 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
                 setMode('talk');
               }}
             />
-          ) : isEntry && enterprise ? (
-            <div style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', flex: 1, padding: '0 20px', maxWidth: 600, margin: '0 auto',
-            }}>
-              <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8, textAlign: 'center' }}>
-                🏢 企业智慧总调度
-              </h1>
-              <p style={{ fontSize: 14, color: 'var(--fg-mid)', marginBottom: 24, textAlign: 'center' }}>
-                向全公司的销冠经验库提问，AI 自动匹配最相关的经验回答
-              </p>
-            </div>
-          ) : isEntry ? (
-            <ChatEntry skill={skill} onQuestionClick={handleQuestionClick} onSceneTagClick={handleSceneTagClick} activeSceneTag={activeSceneTag}
-              showQuestions={showQuestions} showSceneTags={showSceneTags} mode={mode} />
           ) : (
             <ChatActive
               messages={chat.messages}
@@ -237,7 +222,19 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
               placeholder={mode === 'talk' ? '聊聊你的想法...' : '请教专家任何问题...'}
               mode={mode}
               skillId={skill.id}
-            />
+            >
+              {/* 首次进入显示推荐问题入口 */}
+              {isEntry && !enterprise && (
+                <ChatEntry skill={skill} onQuestionClick={handleQuestionClick} onSceneTagClick={handleSceneTagClick} activeSceneTag={activeSceneTag}
+                  showQuestions={showQuestions} showSceneTags={showSceneTags} mode={mode} />
+              )}
+              {isEntry && enterprise && (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>🏢 企业智慧总调度</h1>
+                  <p style={{ fontSize: 14, color: 'var(--fg-mid)' }}>向全公司的销冠经验库提问，AI 自动匹配最相关的经验回答</p>
+                </div>
+              )}
+            </ChatActive>
           )}
         </div>
 

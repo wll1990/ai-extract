@@ -48,8 +48,11 @@ public class ReportListResponse {
     /** 场景标签（从该报告的 grains 中提取） */
     private java.util.List<String> sceneTags;
 
-    /** 文件同步状态 */
-    private String fileStatus;
+    /** 分享码 */
+    private String shareCode;
+
+    /** 是否有 HTML 文件 */
+    private Boolean hasHtml;
 
     /** 创建时间 */
     private String createdAt;

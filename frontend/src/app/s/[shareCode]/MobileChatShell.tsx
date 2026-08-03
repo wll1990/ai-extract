@@ -1,3 +1,15 @@
+/**
+ * [B 端原始文件]
+ * 本文件已被复制到平台端 platform/src/ 对应路径。
+ *
+ * 维护约定：
+ * - 如果两端需要相同改动 → 通知平台端同步，或抽到 @aiextract/shared-ui 共享库
+ * - 如果只有 B 端需要 → 独立改动，不影响平台端
+ *
+ * 平台端副本: platform/src/ 对应路径
+ */
+
+
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -5,7 +17,8 @@ import type { ShareInfo } from '@/lib/api/c';
 import type { useQaChat } from '@/app/skill/[skillId]/hooks/useQaChat';
 import PracticeChatSection from '@/app/skill/[skillId]/PracticeChatSection';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
-import { TrustBadge, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
+import { TrustBadge, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD, ThinkingCard } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -75,6 +88,7 @@ export default function MobileChatShell({
   const [traceAvgSim, setTraceAvgSim] = useState<number>(0);
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
+  const [interimVoiceText, setInterimVoiceText] = useState('');
   useEffect(() => {
     if (mode === 'talk' && info?.skillId) {
       fetchRecommendedQuestions(info.skillId)
@@ -279,13 +293,6 @@ export default function MobileChatShell({
       ) : (
         <>
           {/* qa/talk 消息区 */}
-          {qa.isStreaming && (
-            <div className="px-4">
-              <div className="h-0.5 w-full max-w-[85%] overflow-hidden rounded-full bg-gray-100">
-                <div className="h-full w-1/2 animate-[marquee_1.8s_linear_infinite] rounded-full bg-gradient-to-r from-indigo-400 via-purple-500 to-pink-400" />
-              </div>
-            </div>
-          )}
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
             {/* 首次打开且无消息 — 四层入口 */}
             {qa.messages.length === 0 && !qa.qaStreamText && (
@@ -509,16 +516,7 @@ export default function MobileChatShell({
 
             {/* 思考中 — ThinkingCard */}
             {qa.isStreaming && !qa.qaStreamText && (
-              <div className="flex gap-2">
-                <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
-                <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-white px-5 py-3 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2147ff]" style={{ animationDelay: '0ms' }} />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2147ff]" style={{ animationDelay: '150ms' }} />
-                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#2147ff]" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              </div>
+              <ThinkingCard name={info.ownerName} text="正在结合经验库，为你整理答案…" />
             )}
 
             <div ref={bottomRef} />
@@ -559,14 +557,24 @@ export default function MobileChatShell({
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <input
-                  value={qa.inputValue}
-                  onChange={e => qa.setInputValue(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-                  placeholder="输入消息…"
-                  disabled={qa.isStreaming}
-                  className="h-[44px] flex-1 rounded-full border border-[#dfe6ff] bg-[#f7f9ff] px-5 text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
-                />
+                <div className="relative flex-1">
+                  <div className="absolute left-3 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+                    <VoiceRecorder
+                      onTranscription={(text) => { setInterimVoiceText(''); qa.setInputValue(prev => prev + text); }}
+                      onInterimText={setInterimVoiceText}
+                      disabled={qa.isStreaming}
+                    />
+                  </div>
+                  <input
+                    value={interimVoiceText || qa.inputValue}
+                    onChange={e => { setInterimVoiceText(''); qa.setInputValue(e.target.value); }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+                    placeholder={interimVoiceText ? '' : '输入消息…'}
+                    disabled={qa.isStreaming}
+                    className="h-[44px] w-full rounded-full border border-[#dfe6ff] bg-[#f7f9ff] text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
+                    style={{ paddingLeft: '44px', paddingRight: '20px' }}
+                  />
+                </div>
                 <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
                   className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
                   <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>

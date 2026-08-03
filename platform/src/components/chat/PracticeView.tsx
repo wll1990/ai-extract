@@ -6,6 +6,7 @@ import {
   evaluatePracticeRound, type RoundEval,
 } from '@/lib/api/skill';
 import { TrustBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 import { TraceabilityDrawer } from './TraceabilityDrawer';
 
 interface PracticeMessage {
@@ -45,6 +46,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const [evaluation, setEvaluation] = useState('');
   const [streamText, setStreamText] = useState('');
   const [inputValue, setInputValue] = useState('');
+  const [interimVoiceText, setInterimVoiceText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [practiceId, setPracticeId] = useState('');
   const [practiceConvId, setPracticeConvId] = useState<string | undefined>();
@@ -707,23 +709,32 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
           background: 'var(--s1)',
         }}>
           <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', gap: 10 }}>
-            <textarea
-              ref={textareaRef}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleRespond(); } }}
-              placeholder="回应客户..."
-              disabled={isStreaming}
-              rows={1}
-              style={{
-                flex: 1, resize: 'none', borderRadius: 16,
-                border: '1.5px solid var(--border-subtle)', background: 'var(--surface)',
-                padding: '10px 14px', fontSize: 13, outline: 'none',
-                fontFamily: 'inherit', minHeight: 44,
-              }}
-            />
+            <div style={{ position: 'relative', flex: 1 }}>
+              <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
+                <VoiceRecorder
+                  onTranscription={(text) => { setInterimVoiceText(''); setInputValue(prev => prev + text); }}
+                  onInterimText={setInterimVoiceText}
+                  disabled={isStreaming}
+                />
+              </div>
+              <textarea
+                ref={textareaRef}
+                value={interimVoiceText || inputValue}
+                onChange={(e) => { setInterimVoiceText(''); setInputValue(e.target.value); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleRespond(); } }}
+                placeholder={interimVoiceText ? '' : '回应客户...'}
+                disabled={isStreaming}
+                rows={1}
+                style={{
+                  width: '100%', resize: 'none', borderRadius: 16,
+                  border: '1.5px solid var(--border-subtle)', background: 'var(--surface)',
+                  padding: '10px 14px', paddingLeft: 44, fontSize: 13, outline: 'none',
+                  fontFamily: 'inherit', minHeight: 44,
+                }}
+              />
+            </div>
             <button onClick={handleRespond}
-              disabled={!inputValue.trim() || isStreaming}
+              disabled={(!inputValue.trim() && !interimVoiceText) || isStreaming}
               style={{
                 width: 44, height: 44, borderRadius: 14, flexShrink: 0,
                 background: 'var(--tangerine)', color: '#fff', border: 'none',

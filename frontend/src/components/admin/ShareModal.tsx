@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import QRCode from 'qrcode';
 import { adminGetOrCreateShare, adminToggleShare, adminUpdateShareCode, adminCreateInternalShare, type SkillShareInfo } from '@/lib/api/admin';
+import { copyToClipboard } from '@/lib/clipboard';
 
 interface Props {
   skillId: string;
@@ -101,11 +102,11 @@ export default function ShareModal({
   }, [onClose]);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl);
+    const ok = await copyToClipboard(shareUrl);
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       setError('复制失败，请手动选择链接复制');
     }
   };

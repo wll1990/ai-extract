@@ -8,6 +8,7 @@ import com.aiextract.model.*;
 import com.aiextract.repository.*;
 import com.aiextract.service.PracticeDemoService;
 import com.aiextract.service.ExtractionReportService;
+import com.aiextract.service.ShareService;
 import com.aiextract.service.SkillService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,10 @@ public class AdminAuditController {
     private final SkillService skillService;
     private final ObjectMapper objectMapper;
     private final CompanyScopeService companyScopeService;
+    private final ShareService shareService;
+    private final com.aiextract.service.OrganizationSkillService orgSkillService;
     private final com.aiextract.scheduler.SkillStatsScheduler skillStatsScheduler;
+    private final com.aiextract.repository.ReportRepository reportRepository;
 
     /** 审核仪表盘 — 聚合返回分身发布前的所有关键数据 */
     @GetMapping("/admin/skills/{skillId}/audit-dashboard")
@@ -331,32 +335,34 @@ public class AdminAuditController {
             @RequestParam(defaultValue = "false") boolean download,
             jakarta.servlet.http.HttpServletResponse response) {
         companyScopeService.assertSkillOwnership(skillId);
-        String html = extractionReportService.generateHtml(skillId);
+        // 优先读已生成的 HTML 文件，不再每次调 AI
+        String html = null;
+        var skill = skillRepository.findById(skillId).orElse(null);
+        if (skill != null && skill.getSpaceId() != null) {
+            var reports = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
+                    skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 1));
+            if (reports.hasContent()) {
+                var report = reports.getContent().get(0);
+                if (report.getHtmlPath() != null && !report.getHtmlPath().isEmpty()) {
+                    try {
+                        html = java.nio.file.Files.readString(
+                                java.nio.file.Path.of(report.getHtmlPath()),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                    } catch (Exception e) {
+                        log.warn("读取报告缓存文件失败, fallback 到实时生成: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+        // fallback：文件不存在时实时生成
+        if (html == null) {
+            html = extractionReportService.generateHtml(skillId);
+        }
         if (download) {
             response.setHeader("Content-Disposition",
-                    "attachment; filename=extraction-report-" + skillId + ".html");
+                    ReportController.encodeContentDisposition("extraction-report-" + skillId + ".html"));
         }
         return html;
-    }
-
-    /** 萃取报告 PPT 下载 */
-    @GetMapping("/admin/skills/{skillId}/report-ppt")
-    public void getExtractionReportPpt(@PathVariable UUID skillId,
-            jakarta.servlet.http.HttpServletResponse response) {
-        companyScopeService.assertSkillOwnership(skillId);
-        try {
-            byte[] ppt = extractionReportService.generatePpt(skillId);
-            if (ppt == null) {
-                response.sendError(404, "报告数据未就绪");
-                return;
-            }
-            response.setContentType("application/vnd.openxmlformats-officedocument.presentationml.presentation");
-            response.setHeader("Content-Disposition",
-                    "attachment; filename=extraction-report-" + skillId + ".pptx");
-            response.getOutputStream().write(ppt);
-        } catch (Exception e) {
-            response.setStatus(500);
-        }
     }
 
     @PutMapping("/admin/skills/{skillId}/publish")
@@ -408,6 +414,13 @@ public class AdminAuditController {
             skill.setStatus("published");
             skill.setPublishedAt(java.time.LocalDateTime.now());
             skillRepository.save(skill);
+            // 初始化默认分享（对外默认关闭，对内默认开启）
+            UUID adminUserId = com.aiextract.config.TokenContext.get();
+            if (adminUserId == null) {
+                log.warn("发布分身时 TokenContext 为空，跳过分享初始化 skillId={}", skillId);
+            } else {
+                shareService.initDefaultShares(skillId, adminUserId, false);
+            }
             // 异步生成开场白（若已手动填写则跳过）
             skillService.generateOpeningMessage(skillId);
             // 异步预生成推荐问题（基于真实颗粒描述，6-8 条自然语言问题）
@@ -421,9 +434,11 @@ public class AdminAuditController {
             skill.setStatus("reviewing");
             skill.setPublishedAt(null);
             skillRepository.save(skill);
+            orgSkillService.removeMemberFromAllOrgSkills(skillId);
         } else if ("discard".equals(action)) {
             skill.setStatus("discarded");
             skillRepository.save(skill);
+            orgSkillService.removeMemberFromAllOrgSkills(skillId);
         }
         return ApiResponse.success(Map.of("passed", true));
     }
@@ -509,13 +524,6 @@ public class AdminAuditController {
             }
         }
         return ApiResponse.success(result);
-    }
-
-    private String escapeJson(String s) {
-        if (s == null) {
-            return "";
-        }
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n");
     }
 
     /** AI 模拟客户自动对练 SSE 流式 */
@@ -684,5 +692,23 @@ public class AdminAuditController {
         return ApiResponse.success(skillService.uploadAvatar(skillId, file));
     }
 
-    private String nn(String s) { return s != null ? s : ""; }
+    /** 管理员手动重新生成萃取报告 HTML */
+    @PostMapping("/admin/reports/{reportId}/regenerate")
+    public ApiResponse<Map<String, Object>> regenerateReport(@PathVariable UUID reportId) {
+        com.aiextract.model.Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new BusinessException(404, "报告不存在"));
+        UUID spaceId = report.getSpaceId();
+        if (spaceId == null) throw new BusinessException(400, "报告未关联空间");
+        var skill = skillRepository.findBySpaceId(spaceId).orElse(null);
+        if (skill == null) throw new BusinessException(400, "未找到对应的分身");
+        long grains = grainRepository.countBySpaceIdAndStatus(spaceId, "active");
+        if (grains < 10) throw new BusinessException(400,
+                "颗粒数不足（当前 " + grains + "，需要 10），无法生成报告");
+        String html = extractionReportService.generateHtml(skill.getId());
+        if (html == null || html.isBlank()) throw new BusinessException(500, "报告生成失败");
+        com.aiextract.service.ReportGenerationService.writeReportHtml(reportId, html);
+        report.setHtmlPath("./data/reports/" + reportId + ".html");
+        reportRepository.save(report);
+        return ApiResponse.success(Map.of("success", true, "grainCount", (int) grains));
+    }
 }

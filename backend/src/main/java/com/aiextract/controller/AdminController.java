@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.PageResponse;
 import com.aiextract.config.TokenContext;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
@@ -41,6 +42,11 @@ public class AdminController {
     private final com.aiextract.service.AdminService adminService;
     private final JwtUtil jwtUtil;
 
+    /** 平台端地址（C端对外链接用，nginx 8088→platform） */
+    @Value("${app.platform.url:http://localhost:3001}")
+    private String platformUrl;
+
+    /** B端地址（管理后台对外链接用，nginx 8089→frontend） */
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
@@ -59,8 +65,8 @@ public class AdminController {
 
     /** 工作台 v2 — 运营指挥中心，聚合全局数据+分身健康+管道+团队 */
     @GetMapping("/dashboard/v2")
-    public ApiResponse<Map<String, Object>> dashboardV2() {
-        return ApiResponse.success(adminService.getDashboardV2(TokenContext.getCompanyId()));
+    public ApiResponse<Map<String, Object>> dashboardV2(@RequestParam(defaultValue = "7") int days) {
+        return ApiResponse.success(adminService.getDashboardV2(TokenContext.getCompanyId(), days));
     }
 
     // ==================== /admin/spaces ====================
@@ -69,8 +75,7 @@ public class AdminController {
     public ApiResponse<Map<String, Object>> getSpaces(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String status) {
+            @RequestParam(required = false) String keyword) {
 
         UUID companyId = TokenContext.getCompanyId();
         PageRequest pr = PageRequest.of(page - 1, size);
@@ -191,9 +196,13 @@ public class AdminController {
     // ==================== /admin/users ====================
 
     @GetMapping("/users")
-    public ApiResponse<List<Map<String, Object>>> listUsers() {
+    public ApiResponse<Map<String, Object>> listUsers(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         UUID companyId = TokenContext.getCompanyId();
-        List<User> users = userRepository.findByCompanyId(companyId);
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(page - 1, size);
+        var userPage = userRepository.findByCompanyId(companyId, pageable);
+        List<User> users = userPage.getContent();
         List<UUID> userIds = users.stream().map(User::getId).toList();
 
         // 批量查空间（1次查询替代 N 次 findByUserId）
@@ -212,6 +221,30 @@ public class AdminController {
             m.put("spaceId", spaceId != null ? spaceId.toString() : null);
             return m;
         }).collect(Collectors.toList());
+        return ApiResponse.success(PageResponse.of(list, userPage, page, size));
+    }
+
+    /** 用户选择器 — 返回公司内全部用户（不分页），供上传素材/指派等下拉框使用 */
+    @GetMapping("/users/picker")
+    public ApiResponse<List<Map<String, Object>>> listUsersPicker() {
+        UUID companyId = TokenContext.getCompanyId();
+        List<User> users = userRepository.findByCompanyId(companyId);
+        List<UUID> userIds = users.stream().map(User::getId).toList();
+
+        Map<UUID, UUID> userSpaceMap = spaceRepository.findByUserIdIn(userIds).stream()
+                .collect(Collectors.toMap(Space::getUserId, Space::getId, (a, b) -> a));
+
+        List<Map<String, Object>> list = users.stream()
+                .filter(u -> Boolean.TRUE.equals(u.getIsActive()))
+                .map(u -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id", u.getId().toString());
+                    m.put("name", u.getName());
+                    m.put("account", u.getAccount());
+                    UUID spaceId = userSpaceMap.get(u.getId());
+                    m.put("spaceId", spaceId != null ? spaceId.toString() : null);
+                    return m;
+                }).collect(Collectors.toList());
         return ApiResponse.success(list);
     }
 

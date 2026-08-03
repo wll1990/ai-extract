@@ -5,9 +5,6 @@ import { useParams, useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { getSpace, type SpaceDetail } from '@/lib/api/spaces';
 
-/**
- * 空间详情页 — 一个人的知识全景
- */
 export default function SpaceDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -15,16 +12,28 @@ export default function SpaceDetailPage() {
 
   const [space, setSpace] = useState<SpaceDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reportPage, setReportPage] = useState(1);
+  const [reportSort, setReportSort] = useState('createdAt');
 
   useEffect(() => {
     if (!spaceId) return;
-    getSpace(spaceId)
-      .then(data => setSpace(data))
-      .catch(() => {})
+    setLoading(true);
+    getSpace(spaceId, reportPage, 20, reportSort)
+      .then(data => { setSpace(data); setError(''); })
+      .catch(() => setError('加载空间失败'))
       .finally(() => setLoading(false));
-  }, [spaceId]);
+  }, [spaceId, reportPage, reportSort]);
 
   if (loading) return <LoadingSpinner />;
+  if (error && !space) {
+    return (
+      <div className="min-h-screen bg-surface px-6 py-16 text-center">
+        <p className="text-lg text-red-500">{error}</p>
+        <button onClick={() => window.location.reload()} className="mt-4 rounded-lg bg-primary px-6 py-2 text-sm font-semibold text-white">重试</button>
+      </div>
+    );
+  }
   if (!space) {
     return (
       <div className="min-h-screen bg-surface px-6 py-16 text-center">
@@ -38,18 +47,17 @@ export default function SpaceDetailPage() {
   const stats = space.stats || { reportCount: 0, viewCount: 0, grainCount: 0, interviewCount: 0, materialCount: 0 };
   const distribution = space.grainDistribution || [];
   const maxGrain = distribution.length > 0 ? Math.max(...distribution.map(d => d.count)) : 1;
+  const totalReportPages = space.reportTotalPages || 1;
 
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
       <div className="mx-auto max-w-[960px] space-y-8">
-        {/* ====== 概览卡片 ====== */}
         <button onClick={() => router.push('/spaces')} className="text-sm text-muted-foreground hover:text-foreground mb-2 inline-block">
           ← 空间总览
         </button>
 
         <div className="rounded-2xl bg-surface-2 border border-border p-6 shadow-sm">
           <div className="flex items-start justify-between flex-wrap gap-4">
-            {/* 个人信息 */}
             <div className="flex items-center gap-4">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-foreground text-xl font-bold text-white flex-shrink-0">
                 {space.ownerName?.[0] || '?'}
@@ -66,21 +74,14 @@ export default function SpaceDetailPage() {
                 )}
               </div>
             </div>
-
-            {/* 操作按钮 */}
             <div className="flex gap-2">
               <button onClick={() => router.push(`/admin/skills/upload?spaceId=${spaceId}`)}
                 className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-primary-light transition-colors">
                 📄 上传素材
               </button>
-              <button onClick={() => router.push(`/interview/create?spaceId=${spaceId}`)}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover transition-colors">
-                💬 新建访谈
-              </button>
             </div>
           </div>
 
-          {/* 数据卡片 */}
           <div className="mt-6 grid grid-cols-4 sm:grid-cols-5 gap-3">
             <div className="rounded-xl bg-surface border border-border p-3 text-center">
               <p className="text-2xl font-bold text-foreground">{stats.reportCount}</p>
@@ -101,33 +102,22 @@ export default function SpaceDetailPage() {
             <div className="rounded-xl bg-surface border border-border p-3 text-center flex flex-col items-center justify-center">
               {space.skillId ? (
                 space.skillStatus === 'published' ? (
-                  <>
-                    <span className="text-lg">🤖</span>
-                    <p className="text-xs text-success font-medium mt-0.5">已就绪</p>
-                  </>
+                  <><span className="text-lg">🤖</span><p className="text-xs text-success font-medium mt-0.5">已发布</p></>
                 ) : (
-                  <>
-                    <span className="text-lg">⏳</span>
-                    <p className="text-xs text-warning-text font-medium mt-0.5">
-                      {space.skillStatus === 'reviewing' ? '审核中' : '生成中'}
-                    </p>
-                  </>
+                  <><span className="text-lg">⏳</span><p className="text-xs text-warning-text font-medium mt-0.5">
+                    {space.skillStatus === 'generating' ? '萃取中' : space.skillStatus === 'reviewing' ? '待审核' : space.skillStatus === 'discarded' ? '已驳回' : '生成中'}
+                  </p></>
                 )
               ) : (
-                <>
-                  <span className="text-lg">🤖</span>
-                  <p className="text-xs text-muted-foreground font-medium mt-0.5">未创建</p>
-                </>
+                <><span className="text-lg">🤖</span><p className="text-xs text-muted-foreground font-medium mt-0.5">未创建</p></>
               )}
             </div>
           </div>
         </div>
 
-        {/* ====== 知识分布 ====== */}
         {distribution.length > 0 && (
           <div className="rounded-2xl bg-surface-2 border border-border p-6 shadow-sm">
             <h3 className="font-semibold text-foreground mb-4">知识分布</h3>
-            {/* 标签云 — 字号按数量分档，一眼看出核心场景 */}
             <div className="flex flex-wrap gap-2">
               {distribution.map((d) => {
                 const ratio = d.count / maxGrain;
@@ -151,43 +141,60 @@ export default function SpaceDetailPage() {
           </div>
         )}
 
-        {/* ====== 经验报告 ====== */}
+        {/* 萃取报告 — 分页 + 排序 */}
         <div className="rounded-2xl bg-surface-2 border border-border p-6 shadow-sm">
-          <h3 className="font-semibold text-foreground mb-4">
-            萃取报告（{space.reports?.length || 0} 份）
-          </h3>
-          {space.reports && space.reports.length > 0 ? (
-            <div className="space-y-2">
-              {space.reports.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => router.push(`/report/${r.id}`)}
-                  className="w-full flex items-center justify-between rounded-xl bg-surface border border-border px-4 py-3 text-left hover:border-primary/20 hover:shadow-sm transition-all"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-foreground truncate">📄 {r.title}</span>
-                      {r.sceneTags && r.sceneTags.length > 0 && (
-                        <span className="text-xs text-muted-foreground-2">
-                          {r.sceneTags.slice(0, 2).join(' · ')}
-                        </span>
-                      )}
-                    </div>
-                    {r.subtitle && (
-                      <p className="text-xs text-muted-foreground-2 truncate mt-0.5">{r.subtitle}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-muted-foreground flex-shrink-0 ml-4">
-                    <span>⭐ {r.rating}</span>
-                    <span>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : ''}</span>
-                  </div>
-                </button>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold text-foreground">
+              萃取报告（{space.reportTotal || space.reports?.length || 0} 份）
+            </h3>
+            <div className="flex gap-1 text-xs">
+              {[
+                { k: 'createdAt', l: '最新' },
+                { k: 'rating', l: '评分' },
+                { k: 'viewCount', l: '浏览' },
+              ].map(s => (
+                <button key={s.k} onClick={() => { setReportSort(s.k); setReportPage(1); }}
+                  className={`rounded px-2 py-1 ${reportSort === s.k ? 'bg-foreground text-white' : 'text-muted-foreground'}`}>{s.l}</button>
               ))}
             </div>
+          </div>
+          {space.reports && space.reports.length > 0 ? (
+            <>
+              <div className="space-y-2">
+                {space.reports.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => window.open(`/api/v1/reports/${r.id}/html`, '_blank')}
+                    className="w-full flex items-center justify-between rounded-xl bg-surface border border-border px-4 py-3 text-left hover:border-primary/20 hover:shadow-sm transition-all"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-foreground truncate">📄 {r.title}</span>
+                        {r.sceneTags && r.sceneTags.length > 0 && (
+                          <span className="text-xs text-muted-foreground-2">{r.sceneTags.slice(0, 2).join(' · ')}</span>
+                        )}
+                      </div>
+                      {r.subtitle && <p className="text-xs text-muted-foreground-2 truncate mt-0.5">{r.subtitle}</p>}
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-shrink-0 ml-4">
+                      <span>⭐ {r.rating}</span>
+                      <span>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('zh-CN') : ''}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              {totalReportPages > 1 && (
+                <div className="mt-4 flex justify-center gap-2">
+                  <button onClick={() => setReportPage(p => Math.max(1, p - 1))} disabled={reportPage <= 1}
+                    className="rounded border border-border px-3 py-1 text-xs disabled:opacity-30">上一页</button>
+                  <span className="flex items-center px-2 text-xs text-muted-foreground">{reportPage}/{totalReportPages}</span>
+                  <button onClick={() => setReportPage(p => Math.min(totalReportPages, p + 1))} disabled={reportPage >= totalReportPages}
+                    className="rounded border border-border px-3 py-1 text-xs disabled:opacity-30">下一页</button>
+                </div>
+              )}
+            </>
           ) : (
-            <p className="text-sm text-muted-foreground-2 text-center py-8">
-              暂无报告，上传素材或新建访谈后自动生成
-            </p>
+            <p className="text-sm text-muted-foreground-2 text-center py-8">暂无报告</p>
           )}
         </div>
       </div>

@@ -40,6 +40,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * @return 查询结果列表
      */
     List<User> findByCompanyId(UUID companyId);
+    org.springframework.data.domain.Page<User> findByCompanyId(UUID companyId, org.springframework.data.domain.Pageable pageable);
 
     /** 通过 spaceId 直取 userName，避免 space→user 两次查询 */
     @org.springframework.data.jpa.repository.Query(

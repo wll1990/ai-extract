@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface Company {
   id: string; name: string; logoUrl?: string; brandColor?: string;
@@ -25,6 +26,9 @@ const EMPTY_FORM = {
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   // ── 企业 Modal ──
   const [showForm, setShowForm] = useState(false);
@@ -39,15 +43,17 @@ export default function CompaniesPage() {
   const [codesLoading, setCodesLoading] = useState(false);
   const [newCode, setNewCode] = useState(''); // 刚生成的明文码
   const [codeRole, setCodeRole] = useState('employee'); // 注册码默认角色
+  const [codeCopied, setCodeCopied] = useState(false);
 
-  const load = () => {
-    apiClient<Company[]>('/admin/companies')
-      .then(d => setCompanies(Array.isArray(d) ? d : []))
+  const load = useCallback(() => {
+    setLoading(true);
+    apiClient<{ content: Company[]; total: number; totalPages: number }>(`/admin/companies?page=${page}&size=20`)
+      .then(d => { setCompanies(d.content || []); setTotalPages(d.totalPages); setTotalElements(d.total); })
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [page]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   // ── 企业 CRUD ──
 
@@ -125,11 +131,30 @@ export default function CompaniesPage() {
       });
       const data = res; // apiClient already unwraps .data
       setNewCode(data.code || '');
+      setCodeCopied(false);
       // refresh code list
       const d = await apiClient<RegisterCode[]>(`/admin/companies/${codeTarget.id}/codes`);
       setCodes(Array.isArray(d) ? d : []);
     } catch (e: any) { setError(e?.message || '生成失败'); }
     setSaving(false);
+  };
+
+  const handleCopy = (text: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(() => {
+        setCodeCopied(true);
+        setTimeout(() => setCodeCopied(false), 2000);
+      }).catch(() => {});
+    } else {
+      // fallback for non-HTTPS
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); setCodeCopied(true); setTimeout(() => setCodeCopied(false), 2000); } catch {}
+      document.body.removeChild(ta);
+    }
   };
 
   const handleToggleCode = async (code: RegisterCode) => {
@@ -315,8 +340,8 @@ export default function CompaniesPage() {
                   <p className="text-xs text-amber-700 font-medium mb-2">⚠️ 请立即复制并分发给员工，关闭后将无法再次查看</p>
                   <div className="flex items-center gap-2">
                     <code className="bg-white rounded px-3 py-1.5 text-sm font-mono select-all border border-border">{newCode}</code>
-                    <button onClick={() => { navigator.clipboard.writeText(newCode); }}
-                      className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary-hover flex-shrink-0">📋 复制</button>
+                    <button onClick={() => handleCopy(newCode)}
+                      className="text-xs bg-primary text-white px-3 py-1.5 rounded-lg hover:bg-primary-hover flex-shrink-0 min-w-[64px]">{codeCopied ? '✅ 已复制' : '📋 复制'}</button>
                   </div>
                 </div>
               )}
@@ -372,6 +397,8 @@ export default function CompaniesPage() {
             </div>
           </div>
         )}
+        <Pagination page={page} totalPages={totalPages} totalElements={totalElements}
+          onPageChange={p => setPage(p)} loading={loading} />
       </div>
     </div>
   );

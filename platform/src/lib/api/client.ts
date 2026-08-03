@@ -60,7 +60,7 @@ export async function apiClient<T>(
   });
 
   if (!res.ok) {
-    if ((res.status === 401 || res.status === 403) && typeof window !== 'undefined') {
+    if (res.status === 401 && typeof window !== 'undefined') {
       window.location.href = '/login';
       throw new Error('登录已过期，请重新登录');
     }
@@ -77,4 +77,13 @@ export async function apiClient<T>(
     throw new Error(json.message || '请求失败');
   }
   return json.data as T;
+}
+
+/**
+ * 请求头快捷方法。
+ * 仅透传 extra 参数，不注入 Bearer token——B 端走 HttpOnly Cookie 认证。
+ * C 端 Bearer 认证请用 skill.ts 中的 bearer() helper。
+ */
+export function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  return { ...extra };
 }

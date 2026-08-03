@@ -4,7 +4,7 @@ import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.config.PromptLoader;
 import com.aiextract.dto.PracticeRespondRequest;
 import com.aiextract.model.ExperienceGrain;
-import com.aiextract.model.OrganizationSkill;
+
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillProfile;
@@ -385,7 +385,7 @@ public class PromptAssemblyService {
      * @param mode       聊天模式：qa / talk / practice
      * @param channel    渠道：web / h5 / feishu
      */
-    public String buildOrgSkillSystemPrompt(OrganizationSkill orgSkill,
+    public String buildOrgSkillSystemPrompt(Skill orgSkill,
             List<ExperienceGrain> grains, Map<UUID, String> grainTiers,
             Map<UUID, Double> grainSimilarities, String mode, String channel) {
 
@@ -452,7 +452,7 @@ public class PromptAssemblyService {
             expCtx.append("（暂无结构化经验数据，但你依然可以基于团队共识来回答问题）\n");
         }
 
-        String orgName = orgSkill.getName();
+        String orgName = orgSkill.getDisplayName();
         String background = orgSkill.getDescription() != null ? orgSkill.getDescription() : "";
 
         String template = switch (mode) {

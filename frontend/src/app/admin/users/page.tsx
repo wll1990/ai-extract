@@ -5,6 +5,7 @@ import { apiClient } from '@/lib/api/client';
 import { register } from '@/lib/api/auth';
 import { getUser } from '@/lib/storage';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Pagination } from '@/components/ui/Pagination';
 
 interface UserItem {
   id: string; name: string; account: string; role: string;
@@ -22,14 +23,17 @@ export default function AdminUsersPage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const loadUsers = useCallback(() => {
     setLoading(true);
-    apiClient<UserItem[]>('/admin/users')
-      .then(u => setUsers(Array.isArray(u) ? u : []))
+    apiClient<{ content: UserItem[]; total: number; totalPages: number }>(`/admin/users?page=${page}&size=20`)
+      .then(d => { setUsers(d.content); setTotalPages(d.totalPages); setTotalElements(d.total); })
       .catch(e => console.error('加载用户列表失败:', e))
       .finally(() => setLoading(false));
-  }, []);
+  }, [page]);
 
   useEffect(() => { loadUsers(); }, [loadUsers]);
 
@@ -142,6 +146,8 @@ export default function AdminUsersPage() {
             </tbody>
           </table>
         </div>
+        <Pagination page={page} totalPages={totalPages} totalElements={totalElements}
+          onPageChange={p => setPage(p)} loading={loading} />
       </div>
     </div>
   );

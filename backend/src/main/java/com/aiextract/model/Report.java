@@ -73,28 +73,22 @@ public class Report {
     private String contentJson;
 
     /**
-     * Word文件下载链接
+     * 分享码（62-base 随机8位，公开访问凭证）
      */
-    @Column(name = "word_url", length = 500)
-    private String wordUrl;
+    @Column(name = "share_code", length = 16)
+    private String shareCode;
 
     /**
-     * PPT文件下载链接
+     * 分享是否启用
      */
-    @Column(name = "ppt_url", length = 500)
-    private String pptUrl;
+    @Column(name = "share_enabled", nullable = false)
+    private Boolean shareEnabled;
 
     /**
-     * Web版是否已发布
+     * 萃取报告 HTML 文件路径
      */
-    @Column(name = "web_published", nullable = false)
-    private Boolean webPublished;
-
-    /**
-     * 文件同步状态：synced / pending_regenerate
-     */
-    @Column(name = "file_status", nullable = false, length = 20)
-    private String fileStatus;
+    @Column(name = "html_path", length = 500)
+    private String htmlPath;
 
     /**
      * 综合评分（默认4.5）

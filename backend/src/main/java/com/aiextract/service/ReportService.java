@@ -2,9 +2,7 @@ package com.aiextract.service;
 
 import com.aiextract.dto.ReportDetailResponse;
 import com.aiextract.dto.ReportListResponse;
-import com.aiextract.dto.UpdateReportRequest;
 import com.aiextract.common.ErrorMessages;
-import com.aiextract.common.StatusConstants;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Report;
 import com.aiextract.model.Space;
@@ -26,6 +24,7 @@ import java.util.UUID;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -45,10 +44,8 @@ import java.util.stream.Collectors;
 public class ReportService {
 
     private static final int MAX_RATING = 5;
-    private static final String FORMAT_PPT = "ppt";
 
     private final ReportRepository reportRepository;
-    private final ReportGenerationService reportGenerationService;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
     private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
@@ -76,52 +73,37 @@ public class ReportService {
     }
 
     /**
-     * 同步清单状态（存储到report的content_json中）
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public void syncChecklist(String reportId, Map<String, Object> checklist) {
-        Report report = reportRepository.findById(UUID.fromString(reportId)).orElse(null);
-        if (report == null) {
-
-            return;
-
-        }
-        try {
-            String currentJson = report.getContentJson();
-            ObjectMapper mapper = objectMapper;
-            Map<String, Object> content = mapper.readValue(currentJson, Map.class);
-            content.put("checklistState", checklist);
-            report.setContentJson(mapper.writeValueAsString(content));
-            reportRepository.save(report);
-        } catch (Exception e) {
-            log.warn("同步清单失败, reportId: {}", reportId, e);
-        }
-    }
-
-    /**
      * 获取报告列表
      *
      * @param spaceId 空间ID（可选）
-     * @param keyword 搜索关键词（可选，匹配标题和副标题）
+     * @param keyword 搜索关键词（可选）
+     * @param tag     场景标签过滤（可选）
+     * @param sort    排序：rating | createdAt | viewCount
      * @param page    页码
      * @param size    每页条数
      * @return 报告分页列表
      */
     @Transactional(readOnly = true)
-    public Page<ReportListResponse> getReports(String spaceId, String keyword, int page, int size) {
+    public Page<ReportListResponse> getReports(String spaceId, String keyword, String tag, String sort, int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
         Page<Report> reportPage;
 
-        if (keyword != null && !keyword.isEmpty()) {
+        if (tag != null && !tag.isEmpty()) {
+            reportPage = reportRepository.findBySceneTag(tag, pageable);
+        } else if (keyword != null && !keyword.isEmpty()) {
             reportPage = reportRepository.searchFullText(keyword, pageable);
         } else if (spaceId != null && !spaceId.isEmpty()) {
             reportPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
                     UUID.fromString(spaceId), pageable);
+        } else if ("rating".equals(sort)) {
+            reportPage = reportRepository.findAllByOrderByRatingDesc(pageable);
+        } else if ("viewCount".equals(sort)) {
+            reportPage = reportRepository.findAllByOrderByViewCountDesc(pageable);
         } else {
             reportPage = reportRepository.findAllByOrderByCreatedAtDesc(pageable);
         }
 
-        // 批量预加载 author names + scene tags，避免 N+1
+        // 批量预加载 author names + scene tags
         List<UUID> spaceIds = reportPage.getContent().stream()
                 .map(Report::getSpaceId).distinct().toList();
         Map<UUID, String> authorNames = batchResolveAuthorNames(spaceIds);
@@ -145,9 +127,15 @@ public class ReportService {
     private Map<UUID, List<String>> batchResolveSceneTags(List<UUID> spaceIds) {
         if (spaceIds.isEmpty()) { return Map.of(); }
         Map<UUID, List<String>> result = new LinkedHashMap<>();
-        for (UUID sid : spaceIds) {
-            result.put(sid, grainRepository.findTop5DistinctSceneTagsBySpaceId(sid));
+        // 一次查询取所有 space 的 scene tags
+        List<Object[]> rows = grainRepository.findDistinctSceneTagsBySpaceIdIn(spaceIds);
+        for (Object[] row : rows) {
+            UUID sid = (UUID) row[0];
+            String tag = (String) row[1];
+            result.computeIfAbsent(sid, k -> new ArrayList<>()).add(tag);
         }
+        // 截断到 top 5
+        result.replaceAll((k, v) -> v.size() > 5 ? v.subList(0, 5) : v);
         return result;
     }
 
@@ -177,90 +165,6 @@ public class ReportService {
     }
 
     /**
-     * 编辑报告内容
-     *
-     * <p>更新content_json中的对应章节。
-     * 如果regenerate=true，异步重新生成Word/PPT并将file_status置为synced；
-     * 否则将file_status置为pending_regenerate。</p>
-     *
-     * @param reportId 报告ID
-     * @param request  编辑请求
-     * @return 更新后的报告详情
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public ReportDetailResponse updateReport(String reportId, UpdateReportRequest request) {
-        UUID id = UUID.fromString(reportId);
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("报告不存在, reportId: {}", reportId);
-                    return new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND);
-                });
-
-        // 更新章节内容（简化：直接替换content_json）
-        if (request.getChapters() != null && !request.getChapters().isEmpty()) {
-            report.setContentJson(formatChaptersToJson(request.getChapters()));
-        }
-
-        // 判断是否需要重新生成文件
-        if (Boolean.TRUE.equals(request.getRegenerate())) {
-            report.setFileStatus("synced");
-            reportRepository.save(report);
-            // 异步重新生成Word/PPT
-            reportGenerationService.regenerateFilesAsync(report.getId());
-            log.info("触发报告文件重新生成, reportId: {}", reportId);
-        } else {
-            report.setFileStatus("pending_regenerate");
-            reportRepository.save(report);
-            log.info("报告Web版已更新，文件标记为待生成, reportId: {}", reportId);
-        }
-
-        return toDetailResponse(report);
-    }
-
-    /**
-     * 下载报告文件（Word或PPT）
-     *
-     * <p>如果file_status=pending_regenerate，触发重新生成后返回文件流。</p>
-     *
-     * @param reportId 报告ID
-     * @param format   格式：word / ppt
-     * @return 文件下载路径
-     * @throws BusinessException 如果报告不存在
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public String downloadReport(String reportId, String format) {
-        UUID id = UUID.fromString(reportId);
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> {
-                    log.warn("报告不存在, reportId: {}", reportId);
-                    return new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND);
-                });
-
-        String fileUrl;
-        if (FORMAT_PPT.equalsIgnoreCase(format)) {
-            fileUrl = report.getPptUrl();
-        } else {
-            fileUrl = report.getWordUrl();
-        }
-
-        // 如果待生成，触发重新生成
-        if (StatusConstants.FILE_PENDING_REGENERATE.equals(report.getFileStatus()) || fileUrl == null) {
-            log.info("报告文件待生成，触发重新生成, reportId: {}, format: {}", reportId, format);
-            fileUrl = reportGenerationService.regenerateFile(report.getId(), format);
-            report.setFileStatus(StatusConstants.FILE_SYNCED);
-
-            if (FORMAT_PPT.equalsIgnoreCase(format)) {
-                report.setPptUrl(fileUrl);
-            } else {
-                report.setWordUrl(fileUrl);
-            }
-            reportRepository.save(report);
-        }
-
-        return fileUrl;
-    }
-
-    /**
      * 转换报告实体为列表响应
      */
     private ReportListResponse toListResponse(Report report,
@@ -276,7 +180,8 @@ public class ReportService {
                 .sceneTags(sceneTags)
                 .rating(report.getRating())
                 .viewCount(report.getViewCount())
-                .fileStatus(report.getFileStatus())
+                .shareCode(report.getShareCode())
+                .hasHtml(report.getHtmlPath() != null && !report.getHtmlPath().isEmpty())
                 .createdAt(report.getCreatedAt() != null ? report.getCreatedAt().toString() : null)
                 .build();
     }
@@ -285,7 +190,6 @@ public class ReportService {
      * 转换报告实体为详情响应
      */
     private ReportDetailResponse toDetailResponse(Report report) {
-        // 一次子查询拿 userName，一次查 skill，替代原来的 3 次串行查询
         String authorName = null;
         String skillId = null;
         String skillStatus = null;
@@ -305,10 +209,8 @@ public class ReportService {
                 .title(report.getTitle())
                 .subtitle(report.getSubtitle())
                 .contentJson(report.getContentJson())
-                .wordUrl(report.getWordUrl())
-                .pptUrl(report.getPptUrl())
-                .webPublished(report.getWebPublished())
-                .fileStatus(report.getFileStatus())
+                .shareCode(report.getShareCode())
+                .hasHtml(report.getHtmlPath() != null && !report.getHtmlPath().isEmpty())
                 .rating(report.getRating())
                 .viewCount(report.getViewCount())
                 .authorName(authorName)
@@ -357,24 +259,4 @@ public class ReportService {
         }
     }
 
-    /**
-     * 将章节列表格式化为JSON字符串（使用Jackson保证合法JSON）
-     */
-    private String formatChaptersToJson(List<UpdateReportRequest.ChapterUpdate> chapters) {
-        try {
-            ObjectMapper mapper = objectMapper;
-            List<Map<String, Object>> chapterMaps = chapters.stream().map(ch -> {
-                Map<String, Object> map = new LinkedHashMap<>();
-                map.put("order", ch.getOrder());
-                map.put("content", ch.getContent());
-                return map;
-            }).collect(Collectors.toList());
-            Map<String, Object> root = new LinkedHashMap<>();
-            root.put("chapters", chapterMaps);
-            return mapper.writeValueAsString(root);
-        } catch (Exception e) {
-            log.error("格式化章节JSON失败", e);
-            return "{\"chapters\":[]}";
-        }
-    }
 }

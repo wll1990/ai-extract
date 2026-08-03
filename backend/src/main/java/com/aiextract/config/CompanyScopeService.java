@@ -60,7 +60,6 @@ public class CompanyScopeService {
      */
     public Set<UUID> getSpaceIds(UUID companyId) {
         if (isSuperAdmin()) return null;
-        if (isSuperAdmin()) return null;
         if (companyId == null) return null;
         Map<UUID, Set<UUID>> cache = SPACE_ID_CACHE.get();
         return cache.computeIfAbsent(companyId, cid -> {
@@ -76,7 +75,6 @@ public class CompanyScopeService {
      * 获取企业下的所有用户 ID。
      */
     public List<UUID> getUserIds(UUID companyId) {
-        if (isSuperAdmin()) return null;
         if (isSuperAdmin()) return null;
         if (companyId == null) return null;
         return userRepository.findByCompanyId(companyId).stream()

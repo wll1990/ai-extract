@@ -26,6 +26,7 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @return 颗粒列表
      */
     List<ExperienceGrain> findBySpaceId(UUID spaceId);
+    org.springframework.data.domain.Page<ExperienceGrain> findBySpaceId(UUID spaceId, org.springframework.data.domain.Pageable pageable);
 
     /**
      * 每场景最佳颗粒 — PostgreSQL DISTINCT ON，一条查询替代 Java 内存 groupGrainsByScene。
@@ -91,6 +92,10 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @return 颗粒列表
      */
     List<ExperienceGrain> findByReportId(UUID reportId);
+
+    @Query("SELECT DISTINCT g.reportId, g.sceneTag FROM ExperienceGrain g " +
+           "WHERE g.reportId IN :reportIds AND g.sceneTag IS NOT NULL AND g.sceneTag <> ''")
+    List<Object[]> findDistinctSceneTagsByReportIdIn(@Param("reportIds") List<UUID> reportIds);
 
     /**
      * 按场景标签查询经验颗粒
@@ -230,5 +235,22 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
     @Query(value = "UPDATE experience_grain SET embedding = CAST(:embedding AS VECTOR) WHERE id = :id", nativeQuery = true)
     void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
 
+    // ═══════════════════════════════════════════════════════════
+    // SkillStatsScheduler 用 — 替代 findAll() 全表扫描
+    // ═══════════════════════════════════════════════════════════
+
+    /** 查状态为 active 且有反馈的颗粒（权重调权用） */
+    @Query("SELECT g FROM ExperienceGrain g WHERE g.status = :status AND (g.helpfulCount > 0 OR g.unhelpfulCount > 0)")
+    List<ExperienceGrain> findByStatusAndHasFeedback(@Param("status") String status);
+
+    /** 查低质活跃颗粒（多次被踩且很少被赞） */
+    @Query("SELECT g FROM ExperienceGrain g WHERE g.status = :status AND g.unhelpfulCount >= :minUnhelpful AND g.helpfulCount < :maxHelpful")
+    List<ExperienceGrain> findByStatusAndLowQuality(@Param("status") String status,
+            @Param("minUnhelpful") int minUnhelpful, @Param("maxHelpful") int maxHelpful);
+
+    /** 查有足够反馈样本的活跃颗粒（qualityScore 动态更新用） */
+    @Query("SELECT g FROM ExperienceGrain g WHERE g.status = :status AND g.qualityScore IS NOT NULL AND (g.helpfulCount + g.unhelpfulCount) >= :minFeedback")
+    List<ExperienceGrain> findByStatusAndEnoughFeedback(@Param("status") String status,
+            @Param("minFeedback") int minFeedback);
 
 }

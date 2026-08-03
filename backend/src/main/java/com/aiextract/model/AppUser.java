@@ -85,6 +85,13 @@ public class AppUser {
     private String source;
 
     /**
+     * 头像 URL。
+     * 已注册用户可在个人设置中上传。
+     */
+    @Column(name = "avatar_url", length = 500)
+    private String avatarUrl;
+
+    /**
      * 所属企业 UUID。
      * 仅 source='partner' 时有值 = PartnerApp.app_id（即 Company UUID）。
      * C 端独立用户（share/platform）为 null。

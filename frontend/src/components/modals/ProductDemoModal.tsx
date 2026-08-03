@@ -75,7 +75,7 @@ export default function ProductDemoModal({ skillId, skill, scenarioGrains, onClo
   if (state.phase === 'mode-select' && state.currentScene) return (
     <Modal onClose={onClose}>
       <div className="flex items-center justify-between px-6 py-4 border-b">
-        <div><button onClick={() => { const s = flow.sceneList[0]; if (s) dispatch({ type: 'SELECT_SCENE', scene: s }); }} className="text-xs text-muted-foreground-2 hover:text-muted-foreground">← 返回场景列表</button>
+        <div><button onClick={() => dispatch({ type: 'BACK_TO_SCENES' })} className="text-xs text-muted-foreground-2 hover:text-muted-foreground">← 返回场景列表</button>
           <h2 className="text-lg font-bold mt-0.5">{state.currentScene.tag}</h2></div>
         <button onClick={onClose} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button>
       </div>
@@ -338,12 +338,48 @@ function EvaluateOverlay({ mode, evalResult, onCloseOverlay, onRetry, onStartAut
     <div className="absolute inset-0 z-10 bg-surface-2 flex flex-col rounded-2xl overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b"><h2 className="text-lg font-bold">📊 验收报告</h2><button onClick={onCloseOverlay} className="text-muted-foreground-2 hover:text-muted-foreground text-xl">✕</button></div>
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
-        {evalResult.verdictText && <div className={`rounded-xl p-4 ${evalResult.verdict === 'ready' ? 'bg-green-50 border border-green-200' : evalResult.verdict === 'review' ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}><div className={`font-bold ${evalResult.verdict === 'ready' ? 'text-green-700' : evalResult.verdict === 'review' ? 'text-amber-700' : 'text-red-700'}`}>{evalResult.verdictText}</div></div>}
-        {evalResult.traceCoverage && <div className="flex items-center gap-3 text-sm"><span className="text-muted-foreground">溯源覆盖率</span><b className="text-green-600">{evalResult.traceCoverage.rate}%</b><span className="text-xs text-muted-foreground-2">({evalResult.traceCoverage.detail})</span></div>}
-        {evalResult.skillCoverage?.length > 0 && <div className="space-y-2"><h4 className="text-sm font-semibold text-muted-foreground">技能覆盖矩阵</h4><div className="flex gap-1.5 flex-wrap">{evalResult.skillCoverage.map((sc: any) => <span key={sc.tag} className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${sc.status === 'covered' ? 'bg-green-100 text-green-700' : sc.status === 'partial' ? 'bg-amber-100 text-amber-700' : 'bg-red-50 text-red-400'}`}>{sc.status === 'missing' ? '○ ' : '● '}{sc.tag}</span>)}</div></div>}
-        {evalResult.risks?.length > 0 && <div className="space-y-2"><h4 className="text-sm font-semibold text-muted-foreground">风险标注</h4>{evalResult.risks.map((r: any, ri: number) => <div key={ri} className="border border-red-200 bg-red-50 rounded-lg p-3 text-xs text-red-700"><span className="font-medium">{r.type}</span> — {r.detail}</div>)}</div>}
-        {evalResult.roundReviews?.length > 0 && <details className="space-y-2" open><summary className="text-sm font-semibold text-muted-foreground cursor-pointer">逐轮回放 · {evalResult.roundReviews.length}轮</summary><div className="mt-2 space-y-2">{evalResult.roundReviews.map((rd: any) => <div key={rd.round} className={`border rounded-lg p-3 text-xs ${rd.traceable ? 'border-green-200 bg-green-50/30' : 'border-border bg-surface'}`}><div className="flex items-center gap-2 mb-1"><span className="font-semibold text-muted-foreground">第{rd.round}轮</span><span>{rd.traceable ? '✅ 溯源成功' : '⚠️ 未命中'}</span>{rd.matchedSceneTag && <span className="text-green-600">· {rd.matchedSceneTag}</span>}<span className="text-gray-300">· {rd.matchLevel}</span></div><p className="text-muted-foreground-2 mt-1 line-clamp-2">客户: {rd.customerMsg?.substring(0, 80)}</p><p className="text-muted-foreground-2 line-clamp-2">分身: {rd.avatarMsg?.substring(0, 80)}</p></div>)}</div></details>}
-        {evalResult.suggestion && <div className="bg-blue-50 border border-blue-200 rounded-xl p-4"><p className="text-xs text-blue-700 font-medium mb-1">📌 下一步建议</p><p className="text-sm text-blue-800">{evalResult.suggestion}</p></div>}
+        {/* 总分 */}
+        {evalResult.totalScore != null && (
+          <div className={`rounded-xl p-4 ${evalResult.totalScore >= 80 ? 'bg-green-50 border border-green-200' : evalResult.totalScore >= 60 ? 'bg-amber-50 border border-amber-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className={`font-bold text-lg ${evalResult.totalScore >= 80 ? 'text-green-700' : evalResult.totalScore >= 60 ? 'text-amber-700' : 'text-red-700'}`}>综合评分：{evalResult.totalScore} 分</div>
+          </div>
+        )}
+        {/* 五维评分 */}
+        {evalResult.dimensions && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-muted-foreground">五维评估</h4>
+            {Object.entries(evalResult.dimensions as Record<string, any>).map(([key, val]: [string, any]) => (
+              <details key={key} className="border rounded-lg p-3 text-xs">
+                <summary className="cursor-pointer font-medium flex items-center gap-2">
+                  <span className={val.score >= 80 ? 'text-green-600' : val.score >= 60 ? 'text-amber-600' : 'text-red-500'}>{key}</span>
+                  <span className="text-muted-foreground">{val.score} 分</span>
+                </summary>
+                <p className="mt-2 text-muted-foreground-2">{val.comment}</p>
+              </details>
+            ))}
+          </div>
+        )}
+        {/* 亮点 */}
+        {evalResult.highlights?.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-green-600">✨ 亮点</h4>
+            {evalResult.highlights.map((h: string, i: number) => <div key={i} className="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800">{h}</div>)}
+          </div>
+        )}
+        {/* 改进建议 */}
+        {evalResult.improvements?.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-semibold text-amber-600">🔧 改进建议</h4>
+            {evalResult.improvements.map((imp: string, i: number) => <div key={i} className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">{imp}</div>)}
+          </div>
+        )}
+        {/* 颗粒命中率 */}
+        {evalResult.grainHitRate && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+            <p className="text-xs text-blue-700 font-medium mb-1">🎯 颗粒命中</p>
+            <p className="text-sm text-blue-800">{evalResult.grainHitRate}</p>
+          </div>
+        )}
       </div>
       <div className="flex justify-center gap-3 px-6 py-4 border-t">
         <button onClick={onStartAuto} className="px-5 py-2 border border-primary text-primary rounded-lg text-sm">🔄 重新验证</button>

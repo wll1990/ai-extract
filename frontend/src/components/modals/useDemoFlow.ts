@@ -69,6 +69,7 @@ type DemoAction =
   | { type: 'SET_ANGLE'; angle: number }
   | { type: 'SET_EVAL_RESULT'; result: DemoEvalResult }
   | { type: 'SET_AUTO_RUNNING'; running: boolean }
+  | { type: 'BACK_TO_SCENES' }
   | { type: 'BACK_TO_MODE_SELECT' }
   | { type: 'BACK_TO_CHAT' };
 
@@ -106,6 +107,8 @@ function demoReducer(state: DemoState, action: DemoAction): DemoState {
       return { ...state, evalResult: action.result, phase: action.result ? 'evaluate' : state.phase };
     case 'SET_AUTO_RUNNING':
       return { ...state, autoRunning: action.running };
+    case 'BACK_TO_SCENES':
+      return { ...state, phase: 'scenes', currentScene: null, messages: [], evalResult: null };
     case 'BACK_TO_MODE_SELECT':
       return { ...state, phase: 'mode-select', messages: [], evalResult: null };
     case 'BACK_TO_CHAT':
@@ -156,6 +159,28 @@ export function useDemoFlow(skillId: string,
       .catch(() => {});
   }, [skillId]);
 
+  // Auto demo
+  const startAutoDemo = useCallback((_scene: ScenarioInfo, interactive: boolean) => {
+    dispatch({ type: 'SET_AUTO_RUNNING', running: true });
+    dispatch({ type: 'SET_MESSAGES', messages: [] });
+    const modeStr = interactive ? 'full' : 'quick';
+    const ctrl = connectSse(
+      { url: `${getApiBase()}/admin/skills/${skillId}/auto-demo`, method: 'POST', body: { mode: modeStr } },
+      {
+        onEvent: (type, data) => {
+          if (type === 'customer') {
+            dispatch({ type: 'ADD_MESSAGE', message: { role: 'customer', content: data.content as string, sceneTag: data.sceneTag as string } });
+          } else if (type === 'avatar') {
+            dispatch({ type: 'ADD_MESSAGE', message: { role: 'avatar', content: data.content as string, grains: data.grains as GrainTrace[], matchLevel: data.matchLevel as string } });
+          }
+        },
+        onDone: () => dispatch({ type: 'SET_AUTO_RUNNING', running: false }),
+        onError: () => dispatch({ type: 'SET_AUTO_RUNNING', running: false }),
+      }
+    );
+    abortRef.current = ctrl;
+  }, [skillId]);
+
   // Start mode
   const startMode = useCallback((m: Mode) => {
     abortRef.current?.abort(); abortRef.current = new AbortController();
@@ -182,31 +207,9 @@ export function useDemoFlow(skillId: string,
       const tags = sceneTags.slice(0, 2).map(t => t.tag).join('、');
       dispatch({ type: 'SET_MESSAGES', messages: [{ role: 'avatar', content: `你好，我是${ownerName}的AI分身。我擅长${tags}等场景。有什么想问的？`, levelLabel: '💡 开场白' }] });
     } else if (m === 'demo' || m === 'debug') {
-      // auto demo — handled externally via startAutoDemo
+      startAutoDemo(scene, m === 'debug');
     }
-  }, [skillId, state.currentScene, sceneTags, ownerName]);
-
-  // Auto demo
-  const startAutoDemo = useCallback((_scene: ScenarioInfo, interactive: boolean) => {
-    dispatch({ type: 'SET_AUTO_RUNNING', running: true });
-    dispatch({ type: 'SET_MESSAGES', messages: [] });
-    const modeStr = interactive ? 'full' : 'quick';
-    const ctrl = connectSse(
-      { url: `${getApiBase()}/admin/skills/${skillId}/auto-demo`, method: 'POST', body: { mode: modeStr } },
-      {
-        onEvent: (type, data) => {
-          if (type === 'customer') {
-            dispatch({ type: 'ADD_MESSAGE', message: { role: 'customer', content: data.content as string, sceneTag: data.sceneTag as string } });
-          } else if (type === 'avatar') {
-            dispatch({ type: 'ADD_MESSAGE', message: { role: 'avatar', content: data.content as string, grains: data.grains as GrainTrace[], matchLevel: data.matchLevel as string } });
-          }
-        },
-        onDone: () => dispatch({ type: 'SET_AUTO_RUNNING', running: false }),
-        onError: () => dispatch({ type: 'SET_AUTO_RUNNING', running: false }),
-      }
-    );
-    abortRef.current = ctrl;
-  }, [skillId]);
+  }, [skillId, state.currentScene, sceneTags, ownerName, startAutoDemo]);
 
   // Practice: send response
   const sendPractice = useCallback(async () => {

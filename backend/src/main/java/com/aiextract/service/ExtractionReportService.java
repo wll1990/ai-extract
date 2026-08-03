@@ -22,6 +22,7 @@ import java.io.StringWriter;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Comparator;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -37,8 +38,13 @@ public class ExtractionReportService {
     private final PromptLoader promptLoader;
     private final com.aiextract.config.DomainConfigLoader domainConfigLoader;
     private final ObjectMapper objectMapper;
+
+    @org.springframework.beans.factory.annotation.Value("${app.material.report.methodology-top-n:20}")
+    private int methodologyTopN;
+
+    @org.springframework.beans.factory.annotation.Value("${app.material.report.faq-top-n:15}")
+    private int faqTopN;
     private final Configuration freemarkerConfig;
-    private final ExtractionPptService pptService;
 
     public String generateHtml(UUID skillId) {
         Map<String, Object> model = buildReportModel(skillId);
@@ -67,18 +73,6 @@ public class ExtractionReportService {
         }
     }
 
-    public byte[] generatePpt(UUID skillId) {
-        Map<String, Object> model = buildReportModel(skillId);
-        { if (model == null || Boolean.TRUE.equals(model.getOrDefault("empty", false))) return null; }
-
-        Skill skill = skillRepository.findById(skillId).orElse(null);
-        String ownerName = skill != null ? getOwnerName(skill) : "未命名";
-        List<ExperienceGrain> grains = grainRepository.findBySpaceId(
-                skill != null ? skill.getSpaceId() : null);
-
-        return pptService.generate(grains, model, ownerName);
-    }
-
     private Map<String, Object> buildReportModel(UUID skillId) {
         Skill skill = skillRepository.findById(skillId).orElseThrow(() -> new RuntimeException("分身不存在"));
         List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
@@ -103,15 +97,25 @@ public class ExtractionReportService {
             }
         }
 
-        // AI 生成结构化内容
-        String grainText = grains.stream()
+        // AI 生成结构化内容 — 按 qualityScore 取 top N 控制 prompt 规模
+        List<ExperienceGrain> sortedGrains = grains.stream()
+                .sorted(Comparator.comparing(ExperienceGrain::getQualityScore,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+        String methodologyText = sortedGrains.stream().limit(methodologyTopN)
+                .map(g -> String.format("【%s】%s | 思考:%s | 话术:%s",
+                        g.getSceneTag(), trunc(g.getSceneDescription(), 60),
+                        trunc(g.getExpertThought(), 60), trunc(g.getStandardScript(), 60)))
+                .collect(Collectors.joining("\n"));
+        String faqText = sortedGrains.stream().limit(faqTopN)
                 .map(g -> String.format("【%s】%s | 思考:%s | 话术:%s",
                         g.getSceneTag(), trunc(g.getSceneDescription(), 60),
                         trunc(g.getExpertThought(), 60), trunc(g.getStandardScript(), 60)))
                 .collect(Collectors.joining("\n"));
         String domain = domainConfigLoader.resolveDomain(skill);
         ReportContent content = generateReportContent(
-                rawText.substring(0, Math.min(4000, rawText.length())), grainText, extractionMeta, domain);
+                rawText.substring(0, Math.min(4000, rawText.length())),
+                methodologyText, faqText, extractionMeta, domain);
 
         // 构建 FreeMarker 模型
         Map<String, Object> model = new LinkedHashMap<>();
@@ -213,7 +217,8 @@ public class ExtractionReportService {
         return model;
     }
 
-    private ReportContent generateReportContent(String sourceText, String grainText, Map<String, Object> meta, String domain) {
+    private ReportContent generateReportContent(String sourceText, String methodologyText,
+            String faqText, Map<String, Object> meta, String domain) {
         ReportContent result = new ReportContent();
 
         // Part1
@@ -233,20 +238,31 @@ public class ExtractionReportService {
             }
         } catch (Exception e) { log.warn("Part1失败: {}", e.getMessage()); }
 
-        // Part2
+        // Part2: 方法论 — strategies + tactics + donts
         try {
             String json = chatClient.prompt().user(
-                promptLoader.format("extraction_report_part2.md", Map.of("grain_text", grainText), domain))
+                promptLoader.format("extraction_report_part2.md", Map.of("grain_text", methodologyText), domain))
                 .call().content();
             if (json != null) {
                 String clean = cleanJson(json);
                 Map<String, Object> p = objectMapper.readValue(clean, Map.class);
                 result.strategies = convertList(p.get("strategies"), Strategy.class);
                 result.tactics = convertList(p.get("tactics"), Tactic.class);
-                result.faq = convertList(p.get("faq"), FaqItem.class);
                 result.donts = convertStringList(p.get("donts"));
             }
-        } catch (Exception e) { log.warn("Part2失败: {}", e.getMessage()); }
+        } catch (Exception e) { log.warn("Part2(方法论)失败: {}", e.getMessage()); }
+
+        // Part3: FAQ — 独立调用，避免长 QA 截断
+        try {
+            String json = chatClient.prompt().user(
+                promptLoader.format("extraction_report_part3.md", Map.of("grain_text", faqText), domain))
+                .call().content();
+            if (json != null) {
+                String clean = cleanJson(json);
+                Map<String, Object> p = objectMapper.readValue(clean, Map.class);
+                result.faq = convertList(p.get("faq"), FaqItem.class);
+            }
+        } catch (Exception e) { log.warn("Part3(FAQ)失败: {}", e.getMessage()); }
 
         return result;
     }

@@ -7,6 +7,7 @@ import com.aiextract.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,11 @@ public class SpaceService {
     /** 空间详情 — 从 SpaceController 迁移 */
     @SuppressWarnings("PMD.MethodTooLongRule")
     public Map<String, Object> getSpaceDetail(String spaceId) {
+        return getSpaceDetail(spaceId, 1, 20, "createdAt");
+    }
+
+    @SuppressWarnings("PMD.MethodTooLongRule")
+    public Map<String, Object> getSpaceDetail(String spaceId, int reportPage, int reportSize, String reportSort) {
         Space s = spaceRepository.findById(UUID.fromString(spaceId))
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
 
@@ -43,9 +49,30 @@ public class SpaceService {
         String ownerTitle = s.getDescription() != null ? s.getDescription() : "";
         List<String> ownerTags = parseTags(s.getTags());
 
-        // 报告列表
-        List<Report> reports = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
-                s.getId(), PageRequest.of(0, 20)).getContent();
+        // 报告列表（分页 + 排序）
+        PageRequest pageable = PageRequest.of(reportPage - 1, reportSize);
+        Page<Report> reportPageObj;
+        if ("rating".equals(reportSort)) {
+            reportPageObj = reportRepository.findBySpaceIdOrderByRatingDesc(s.getId(), pageable);
+        } else if ("viewCount".equals(reportSort)) {
+            reportPageObj = reportRepository.findBySpaceIdOrderByViewCountDesc(s.getId(), pageable);
+        } else {
+            reportPageObj = reportRepository.findBySpaceIdOrderByCreatedAtDesc(s.getId(), pageable);
+        }
+        List<Report> reports = reportPageObj.getContent();
+
+        // 批量查所有报告的 scene tags（避免 N+1）
+        List<UUID> reportIds = reports.stream().map(Report::getId).toList();
+        Map<UUID, List<String>> sceneTagsMap = new LinkedHashMap<>();
+        if (!reportIds.isEmpty()) {
+            List<Object[]> tagRows = grainRepository.findDistinctSceneTagsByReportIdIn(reportIds);
+            for (Object[] row : tagRows) {
+                UUID rid = (UUID) row[0];
+                String tag = (String) row[1];
+                sceneTagsMap.computeIfAbsent(rid, k -> new ArrayList<>()).add(tag);
+            }
+        }
+
         List<Map<String, Object>> reportList = new ArrayList<>();
         for (Report r : reports) {
             Map<String, Object> ri = new LinkedHashMap<>();
@@ -55,8 +82,8 @@ public class SpaceService {
             ri.put("rating", r.getRating());
             ri.put("viewCount", r.getViewCount());
             ri.put("createdAt", r.getCreatedAt() != null ? r.getCreatedAt().toString() : null);
-            ri.put("stepCount", countSteps(r));
-            ri.put("sceneTags", getSceneTagsForReport(r.getId()));
+            ri.put("stepCount", 0);
+            ri.put("sceneTags", sceneTagsMap.getOrDefault(r.getId(), List.of()).stream().limit(5).toList());
             reportList.add(ri);
         }
 
@@ -94,10 +121,13 @@ public class SpaceService {
                 List.of("completed", "in_progress", "paused"));
         int interviewCount = interviews.size();
 
-        // 素材统计
+        // 素材统计（排除访谈自动转录和已删除的）
         int materialCount = 0;
         if (skill != null) {
-            materialCount = materialRepository.findBySkillId(skill.getId()).size();
+            materialCount = (int) materialRepository.findBySkillId(skill.getId()).stream()
+                    .filter(m -> !"interview".equals(m.getMaterialType()))
+                    .filter(m -> !"deleted".equals(m.getStatus()))
+                    .count();
         }
 
         // 报告统计
@@ -125,6 +155,10 @@ public class SpaceService {
         data.put("isPublic", s.getIsPublic());
         data.put("status", s.getStatus());
         data.put("reports", reportList);
+        data.put("reportPage", reportPage);
+        data.put("reportSize", reportSize);
+        data.put("reportTotal", reportPageObj.getTotalElements());
+        data.put("reportTotalPages", reportPageObj.getTotalPages());
         data.put("skillStatus", skillStatus);
         data.put("skillId", skillId);
         data.put("skillGrainCount", skillGrainCount);

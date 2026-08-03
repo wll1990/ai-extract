@@ -3,6 +3,7 @@ package com.aiextract.repository;
 import com.aiextract.model.SkillShare;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,7 +25,7 @@ public interface SkillShareRepository extends JpaRepository<SkillShare, UUID> {
      */
     Optional<SkillShare> findFirstBySkillIdAndChannel(UUID skillId, String channel);
 
-    /** 组织分身分享查询（与 skillId 互斥）。 */
-    Optional<SkillShare> findFirstByOrgSkillIdAndChannel(UUID orgSkillId, String channel);
+    /** 按渠道+开关状态查所有分享记录。 */
+    List<SkillShare> findByChannelAndEnabled(String channel, boolean enabled);
 
 }

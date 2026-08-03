@@ -622,9 +622,9 @@ public class InterviewService {
             try {
                 var builder = com.aiextract.model.InterviewInviteCode.builder()
                     .id(UUID.randomUUID()).companyId(companyId).code(code)
+                    .type("enterprise")
                     .enabled(true).maxUses(0).usedCount(0)
                     .createdBy(createdBy).createdAt(LocalDateTime.now());
-                // expireDays <= 0 表示永久有效，不设过期时间
                 if (expireDays > 0) {
                     builder.expiresAt(LocalDateTime.now().plusDays(expireDays));
                 }
@@ -632,6 +632,29 @@ public class InterviewService {
                 return code;
             } catch (org.springframework.dao.DataIntegrityViolationException e) {
                 log.warn("邀请码 UNIQUE 冲突，重试中 companyId={} attempt={}", companyId, i + 1);
+            }
+        }
+        throw new BusinessException(500, "邀请码生成失败");
+    }
+
+    /** 生成个人访谈邀请码（C 端用户发起，无企业绑定） */
+    public String generatePersonalInviteCode(String invitedBy, UUID createdBy) {
+        String chars = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        for (int i = 0; i < 3; i++) {
+            StringBuilder sb = new StringBuilder();
+            for (int j = 0; j < 8; j++) sb.append(chars.charAt(random.nextInt(62)));
+            String code = sb.toString();
+            try {
+                inviteCodeRepository.save(com.aiextract.model.InterviewInviteCode.builder()
+                    .id(UUID.randomUUID()).code(code)
+                    .type("personal").invitedBy(invitedBy)
+                    .enabled(true).maxUses(0).usedCount(0)
+                    .createdBy(createdBy).createdAt(LocalDateTime.now())
+                    .build());
+                return code;
+            } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                log.warn("邀请码 UNIQUE 冲突，重试中 personal attempt={}", i + 1);
             }
         }
         throw new BusinessException(500, "邀请码生成失败");

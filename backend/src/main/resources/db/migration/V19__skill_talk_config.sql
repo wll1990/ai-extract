@@ -1,2 +1,0 @@
-ALTER TABLE skill ADD COLUMN IF NOT EXISTS talk_config JSONB DEFAULT '{}';
-ALTER TABLE skill ADD COLUMN IF NOT EXISTS practice_openings TEXT;

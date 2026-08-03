@@ -6,6 +6,7 @@ import com.aiextract.config.PromptLoader;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
+import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -115,7 +116,7 @@ public class AdminGrainService {
                 + " " + (g.getStandardScript() != null ? g.getStandardScript() : "");
             if (text.trim().isEmpty()) { return; }
             float[] vec = embeddingService.embed(text);
-            grainRepository.updateEmbedding(g.getId(), arrayToPgVector(vec));
+            grainRepository.updateEmbedding(g.getId(), new PGvector(vec).toString());
             log.info("颗粒向量化完成 grainId={}", g.getId());
         } catch (Exception e) {
             log.error("向量化失败 grainId={}: {}", g.getId(), e.getMessage());
@@ -171,9 +172,4 @@ public class AdminGrainService {
         return s != null && s.length() > 1000 ? s.substring(0, 1000) : s;
     }
 
-    private String arrayToPgVector(float[] vec) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vec.length; i++) { if (i > 0) { sb.append(","); } sb.append(vec[i]); }
-        return sb.append("]").toString();
-    }
 }

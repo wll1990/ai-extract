@@ -14,15 +14,13 @@ import ProductStep from '@/components/admin/ProductStep';
 
 type Step = 'explicit' | 'skill' | 'scene' | 'product';
 
-const downloadReport = async (skillId: string, format: 'html' | 'ppt') => {
-  const url = format === 'html'
-    ? `${API_BASE}/admin/skills/${skillId}/report?download=true`
-    : `${API_BASE}/admin/skills/${skillId}/report-ppt`;
+const downloadReport = async (skillId: string, format: 'html') => {
+  const url = `${API_BASE}/admin/skills/${skillId}/report?download=true`;
   const res = await fetch(url, { credentials: 'include' });
   const blob = await res.blob();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `extraction-report-${skillId}.${format === 'html' ? 'html' : 'pptx'}`;
+  a.download = `extraction-report-${skillId}.html`;
   a.click();
   URL.revokeObjectURL(a.href);
 };

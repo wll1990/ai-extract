@@ -21,4 +21,4 @@ rsync -av .next/standalone/ mindforge:/opt/mindforge/frontend/
 rsync -av .next/static/ mindforge:/opt/mindforge/frontend/.next/static/
 rsync -av public/ mindforge:/opt/mindforge/frontend/public/
 
-echo "上传服务器完成✅"
+echo "[frontend]上传服务器完成✅"

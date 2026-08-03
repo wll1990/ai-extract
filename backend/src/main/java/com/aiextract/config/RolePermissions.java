@@ -65,7 +65,7 @@ public final class RolePermissions {
             Permission.SKILL_USE, Permission.SPACE_OWN
         ),
         EMPLOYEE, Set.of(
-            Permission.SKILL_USE, Permission.SPACE_OWN
+            Permission.SKILL_USE, Permission.SPACE_OWN, Permission.MATERIAL_MANAGE
         ),
         // C-end 角色 — 服务等级，仅分配基础使用权限
         "c_guest", Set.of(

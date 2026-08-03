@@ -39,16 +39,19 @@ bash scripts/deploy-backend.sh
 echo -e "\n${YELLOW}[3/6] 构建+上传平台端...${NC}"
 bash scripts/deploy-platform.sh
 
-echo -e "\n${YELLOW}[4/6] 构建+上传管理后台...${NC}"
+echo -e "\n${YELLOW}[4/7] 构建+上传管理后台...${NC}"
 bash scripts/deploy-frontend.sh
 
-# 5. 同步配置
-echo -e "\n${YELLOW}[5/6] 同步生产配置...${NC}"
+echo -e "\n${YELLOW}[5/7] 部署 AI 服务...${NC}"
+bash scripts/deploy-ai-service.sh
+
+# 6. 同步配置
+echo -e "\n${YELLOW}[6/7] 同步生产配置...${NC}"
 ssh mindforge "mkdir -p /opt/mindforge/config"
 scp -q config/backend.env config/frontend.env config/platform.env mindforge:/opt/mindforge/config/ 2>/dev/null || true
 
-# 6. 启服
-echo -e "\n${YELLOW}[6/6] 启动所有服务...${NC}"
+# 7. 启服
+echo -e "\n${YELLOW}[7/7] 启动所有服务...${NC}"
 ssh mindforge "bash /opt/mindforge/scripts/start-backend.sh"
 ssh mindforge "bash /opt/mindforge/scripts/start-ai-service.sh"
 ssh mindforge "bash /opt/mindforge/scripts/start-platform.sh"

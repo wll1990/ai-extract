@@ -1,48 +1,53 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { getReports, type ReportListItem } from '@/lib/api/report';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function ExplorePage() {
-  const router = useRouter();
   const [keyword, setKeyword] = useState('');
   const [searchKeyword, setSearchKeyword] = useState('');
-  const [activeTag, setActiveTag] = useState('全部');
+  const [activeTag, setActiveTag] = useState('');
   const [sort, setSort] = useState('rating');
   const [reports, setReports] = useState<ReportListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [allTags, setAllTags] = useState<string[]>([]);
+  const PAGE_SIZE = 12;
 
-  // 后端关键词搜索
   useEffect(() => {
     setLoading(true);
-    getReports(undefined, searchKeyword || undefined, 1, 50)
-      .then((data) => setReports(data.content || []))
-      .catch(e => console.error('加载报告列表失败:', e))
+    getReports(undefined, searchKeyword || undefined, page, PAGE_SIZE, activeTag || undefined, sort)
+      .then((data) => {
+        setReports(data.content || []);
+        setTotal(data.total);
+        setTotalPages(data.totalPages);
+        // 初始加载时提取全部标签（仅一次）
+        if (!searchKeyword && !activeTag && page === 1) {
+          getReports(undefined, undefined, 1, 100)
+            .then(d => {
+              const tags = [...new Set((d.content || []).flatMap(r => r.sceneTags || []))].sort();
+              setAllTags(tags);
+            })
+            .catch(() => {});
+        }
+      })
+      .catch(() => setError('加载报告失败，请刷新重试'))
       .finally(() => setLoading(false));
-  }, [searchKeyword]);
+  }, [searchKeyword, activeTag, sort, page]);
 
-  // 从报告数据中提取场景标签
-  const tagsFromData = [...new Set(reports.flatMap((r) => r.sceneTags || []))];
-  const sceneTagOptions = ['全部', ...tagsFromData.sort()];
-
-  // 场景标签分布统计
-  const tagDistribution = tagsFromData.map(tag => ({
-    tag,
-    count: reports.filter(r => (r.sceneTags || []).includes(tag)).length
-  })).sort((a, b) => b.count - a.count);
-  const maxTagCount = tagDistribution.length > 0 ? Math.max(...tagDistribution.map(d => d.count)) : 1;
-
-  // 客户端标签筛选 + 排序
-  const filtered = reports
-    .filter(r => activeTag === '全部' || (r.sceneTags && r.sceneTags.includes(activeTag)))
-    .sort((a, b) => sort === 'rating'
-      ? (b.rating || 0) - (a.rating || 0)
-      : (b.viewCount || 0) - (a.viewCount || 0));
-
-  const handleSearch = () => setSearchKeyword(keyword);
+  const handleSearch = () => {
+    setPage(1);
+    setSearchKeyword(keyword);
+  };
   const handleKeyDown = (e: React.KeyboardEvent) => { if (e.key === 'Enter') handleSearch(); };
+  const handleTagClick = (tag: string) => {
+    setPage(1);
+    setActiveTag(tag === activeTag ? '' : tag);
+  };
 
   if (loading) return <LoadingSpinner />;
 
@@ -51,23 +56,8 @@ export default function ExplorePage() {
       <div className="mx-auto max-w-[960px]">
         <h1 className="mb-6 text-[28px] font-bold text-foreground">经验广场</h1>
 
-        {/* 知识分布 */}
-        {tagDistribution.length > 0 && (
-          <div className="mb-6 rounded-2xl bg-surface-2 border border-border p-5 shadow-sm">
-            <h3 className="text-sm font-semibold text-foreground mb-3">知识分布</h3>
-            <div className="space-y-2">
-              {tagDistribution.slice(0, 8).map(d => (
-                <div key={d.tag} className="flex items-center gap-3">
-                  <span className="w-20 text-xs text-muted-foreground flex-shrink-0 truncate">{d.tag}</span>
-                  <div className="flex-1 h-4 bg-surface rounded-full overflow-hidden">
-                    <div className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all"
-                      style={{ width: `${Math.max((d.count / maxTagCount) * 100, 6)}%` }} />
-                  </div>
-                  <span className="text-xs font-medium text-foreground w-6 text-right">{d.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+        {error && (
+          <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-600">{error}</div>
         )}
 
         {/* 搜索栏 */}
@@ -79,47 +69,74 @@ export default function ExplorePage() {
             placeholder="搜索报告标题…" className="w-full rounded-lg border border-border-strong py-3 pl-12 pr-4 text-sm outline-none focus:border-foreground" />
         </div>
 
-        {/* 场景标签筛选 + 排序 */}
-        <div className="mb-6 flex items-center justify-between">
+        {/* 标签筛选 + 排序 */}
+        <div className="mb-6 flex items-center justify-between flex-wrap gap-3">
           <div className="flex flex-wrap gap-2">
-            {sceneTagOptions.map(tag => (
-              <button key={tag} onClick={() => setActiveTag(tag)}
+            {['全部', ...allTags].map(tag => (
+              <button key={tag} onClick={() => handleTagClick(tag === '全部' ? '' : tag)}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
-                  activeTag === tag ? 'bg-foreground text-white' : 'bg-primary-light text-primary hover:bg-border-strong'
+                  (tag === '全部' && !activeTag) || tag === activeTag
+                    ? 'bg-foreground text-white'
+                    : 'bg-primary-light text-primary hover:bg-border-strong'
                 }`}>{tag}</button>
             ))}
           </div>
           <div className="flex gap-1 text-xs">
-            <button onClick={() => setSort('rating')} className={`rounded px-2 py-1 ${sort==='rating'?'bg-foreground text-white':'text-muted-foreground'}`}>⭐ 评分</button>
-            <button onClick={() => setSort('views')} className={`rounded px-2 py-1 ${sort==='views'?'bg-foreground text-white':'text-muted-foreground'}`}>👁 浏览</button>
+            {[
+              { k: 'rating', l: '⭐ 评分' },
+              { k: 'viewCount', l: '👁 浏览' },
+              { k: 'createdAt', l: '🕐 最新' },
+            ].map(s => (
+              <button key={s.k} onClick={() => { setSort(s.k); setPage(1); }}
+                className={`rounded px-2 py-1 ${sort === s.k ? 'bg-foreground text-white' : 'text-muted-foreground'}`}>{s.l}</button>
+            ))}
           </div>
         </div>
 
         {/* 报告网格 */}
-        {filtered.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-3">
-            {filtered.map(r => (
-              <button key={r.id} onClick={() => router.push(`/report/${r.id}`)}
-                className="group rounded-xl bg-surface-2 p-5 text-left shadow-md transition-all hover:-translate-y-1 hover:shadow-lg">
-                {r.createdAt && new Date(r.createdAt).getTime() > Date.now() - 86400000 * 7 && (
-                  <span className="absolute right-3 top-3 rounded bg-warning-bg/50 px-2 py-0.5 text-xs text-primary">新</span>
-                )}
-                <h3 className="text-lg font-bold text-foreground line-clamp-1">{r.title}</h3>
-                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{r.subtitle || ''}</p>
-                {r.sceneTags && r.sceneTags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {r.sceneTags.slice(0, 3).map(tag => (
-                      <span key={tag} className="rounded-full bg-primary-light px-2 py-0.5 text-[11px] text-primary">{tag}</span>
-                    ))}
+        {reports.length > 0 ? (
+          <>
+            <div className="grid gap-4 md:grid-cols-3">
+              {reports.map(r => (
+                <button key={r.id}
+                  onClick={() => r.hasHtml && window.open(`/api/v1/reports/${r.id}/html`, '_blank')}
+                  disabled={!r.hasHtml}
+                  className={`group rounded-xl bg-surface-2 p-5 text-left shadow-md transition-all ${
+                    r.hasHtml ? 'hover:-translate-y-1 hover:shadow-lg' : 'opacity-50 cursor-not-allowed'
+                  }`}>
+                  <h3 className="text-lg font-bold text-foreground line-clamp-1">{r.title}</h3>
+                  <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{r.subtitle || ''}</p>
+                  {r.sceneTags && r.sceneTags.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {r.sceneTags.slice(0, 3).map(tag => (
+                        <span key={tag} className="rounded-full bg-primary-light px-2 py-0.5 text-[11px] text-primary">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground-2">{r.authorName || ''}</span>
+                    <span className="flex items-center gap-2">
+                      {r.shareCode && <span className="text-green-600 text-[10px]">🔗</span>}
+                      <span className="text-primary">⭐ {r.rating || 0}</span>
+                    </span>
                   </div>
-                )}
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground-2">{r.authorName || ''}</span>
-                  <span className="text-primary">⭐ {r.rating || 0}</span>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+
+            {/* 分页 */}
+            {totalPages > 1 && (
+              <div className="mt-8 flex justify-center gap-2">
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+                  className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-30">上一页</button>
+                <span className="flex items-center px-3 text-sm text-muted-foreground">
+                  {page} / {totalPages}
+                </span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+                  className="rounded-lg border border-border px-4 py-2 text-sm disabled:opacity-30">下一页</button>
+              </div>
+            )}
+          </>
         ) : (
           <div className="py-12 text-center">
             <p className="text-sm text-muted-foreground-2">没有找到匹配的经验</p>

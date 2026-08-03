@@ -368,7 +368,7 @@ body{
       <circle cx="140" cy="140" r="26" fill="#fbbf24" opacity="0.2"/>
       <circle cx="140" cy="140" r="18" fill="#f59e0b"/>
       <text x="140" y="138" text-anchor="middle" fill="#fff" font-size="6" font-weight="600">CASE</text>
-      <text x="140" y="148" text-anchor="middle" fill="#fff" font-size="6">${(caseSummary.dealTarget!'核心案例')?substring(0,Math.min(8,(caseSummary.dealTarget!'核心案例')?length))}</text>
+      <text x="140" y="148" text-anchor="middle" fill="#fff" font-size="6"><#assign dt=(caseSummary.dealTarget!'核心案例')>${dt?substring(0,(dt?length>8)?then(8,dt?length))}</text>
       <!-- 五维节点 -->
       <circle cx="140" cy="48" r="14" fill="#3b82f6"/><text x="140" y="51" text-anchor="middle" fill="#fff" font-size="9" font-weight="600">心法</text>
       <circle cx="183" cy="140" r="14" fill="#10b981"/><text x="183" y="143" text-anchor="middle" fill="#fff" font-size="9" font-weight="600">战法</text>

@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useInterviewCreate, type ExpertOption } from './useInterviewCreate';
 import { createInvite } from '@/lib/api/admin';
 import QRCode from 'qrcode';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const PRESET_TOPICS = [
   '搞定说太贵了的客户', '如何在复杂决策链中找到关键人', '大客户破冰技巧',
@@ -38,7 +39,8 @@ export default function CreateInterviewPage() {
 
   const copyInviteUrl = async () => {
     if (!inviteData) return;
-    try { await navigator.clipboard.writeText(inviteData.inviteUrl); setInviteCopied(true); setTimeout(() => setInviteCopied(false), 2000); } catch {}
+    const ok = await copyToClipboard(inviteData.inviteUrl);
+    if (ok) { setInviteCopied(true); setTimeout(() => setInviteCopied(false), 2000); }
   };
 
   useEffect(() => {

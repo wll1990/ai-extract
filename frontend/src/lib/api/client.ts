@@ -46,7 +46,7 @@ export async function apiClient<T>(
   });
 
   if (!res.ok) {
-    if ((res.status === 401 || res.status === 403) && typeof window !== 'undefined') {
+    if (res.status === 401 && typeof window !== 'undefined') {
       const path = window.location.pathname;
       // C 端分享页：派发事件由页面弹注册/登录抽屉
       if (path.startsWith('/s/')) {

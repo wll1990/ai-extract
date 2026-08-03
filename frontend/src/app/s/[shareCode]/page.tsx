@@ -1,3 +1,15 @@
+/**
+ * [B 端原始文件]
+ * 本文件已被复制到平台端 platform/src/ 对应路径。
+ *
+ * 维护约定：
+ * - 如果两端需要相同改动 → 通知平台端同步，或抽到 @aiextract/shared-ui 共享库
+ * - 如果只有 B 端需要 → 独立改动，不影响平台端
+ *
+ * 平台端副本: platform/src/ 对应路径
+ */
+
+
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -32,8 +44,8 @@ export default function SharePage() {
   const authToken = guest.session?.token || undefined;
 
   // ---- 视图状态 ----
-  const [view, setView] = useState<'landing' | 'chat'>('landing');
-  const [mode, setMode] = useState<ChatMode>('qa');
+  const [view, setView] = useState<'landing' | 'chat'>('chat');
+  const [mode, setMode] = useState<ChatMode>('talk');
   const [practiceSceneTag, setPracticeSceneTag] = useState('');
   const [practiceKey, setPracticeKey] = useState(0);
   const [practiceHint, setPracticeHint] = useState('');
@@ -98,6 +110,13 @@ export default function SharePage() {
       .then(setInfo)
       .catch(e => setLoadError(e?.message === 'AUTH_REQUIRED' ? '分享链接已失效' : (e?.message || '加载失败')));
   }, [shareCode]);
+
+  // ---- 直接进聊天时自动初始化游客身份 ----
+  useEffect(() => {
+    if (view === 'chat' && info && !guest.session) {
+      guest.ensure().catch(() => {});
+    }
+  }, [view, info, guest]);
 
   // ---- 凭证失效（401/403）→ 弹抽屉 ----
   useEffect(() => {

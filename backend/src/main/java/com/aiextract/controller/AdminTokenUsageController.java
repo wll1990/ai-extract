@@ -32,6 +32,7 @@ public class AdminTokenUsageController {
 
     private final TokenUsageLogRepository repository;
     private final CompanyScopeService companyScopeService;
+    private final com.aiextract.repository.UserRepository userRepository;
 
     /** 汇总卡片：今日 / 本月 / 总计 */
     @GetMapping("/summary")
@@ -110,11 +111,20 @@ public class AdminTokenUsageController {
                 ? repository.countByUserIdIn(userIds)
                 : repository.countAll();
 
+        // 批量查用户名
+        List<UUID> distinctUserIds = list.stream()
+                .map(TokenUsageLog::getUserId).filter(Objects::nonNull).distinct().toList();
+        Map<UUID, String> userNames = distinctUserIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(distinctUserIds).stream()
+                    .collect(java.util.stream.Collectors.toMap(
+                        com.aiextract.model.User::getId, com.aiextract.model.User::getName, (a, b) -> a));
+
         List<Map<String, Object>> items = new ArrayList<>();
         for (TokenUsageLog t : list) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", t.getId().toString());
             m.put("userId", t.getUserId() != null ? t.getUserId().toString() : null);
+            m.put("userName", t.getUserId() != null ? userNames.getOrDefault(t.getUserId(), "系统/调度") : "系统/调度");
             m.put("usageDate", t.getUsageDate().toString());
             m.put("modelType", t.getModelType());
             m.put("modelName", t.getModelName());

@@ -187,10 +187,11 @@ public class SkillController extends BaseController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String status,
-            @RequestParam(required = false) UUID userId) {
+            @RequestParam(required = false) UUID userId,
+            @RequestParam(required = false) String type) {
         UUID companyId = TokenContext.getCompanyId();
         String role = extractRole();
-        return ApiResponse.success(skillService.listAllSkills(page, size, status, userId, companyId, role));
+        return ApiResponse.success(skillService.listAllSkills(page, size, status, userId, companyId, role, type));
     }
 
     /**

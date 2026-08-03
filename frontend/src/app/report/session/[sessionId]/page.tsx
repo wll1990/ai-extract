@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { API_BASE } from '@/lib/api/client';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const GRAIN_ENOUGH = 10;
 const GRAIN_SUGGEST_MORE = 5;
@@ -111,11 +112,11 @@ export default function ReportSessionPage() {
   }, [sessionId, loading, checkReport]);
 
   const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText('platform.mindforce.com');
+    const ok = await copyToClipboard('platform.mindforce.com');
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { setCopied(true); setTimeout(() => setCopied(false), 2000); }
+    }
   }, []);
 
   if (loading) {

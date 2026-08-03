@@ -49,7 +49,7 @@ spring:
         options:
           model: deepseek-chat
           temperature: 0.7        # 0=确定性最高 1=创意最高
-          max-tokens: 2048
+          max-tokens: 8192
 
     # ---- pgvector 向量存储 ----
     vectorstore:
@@ -76,8 +76,8 @@ spring:
   # ---- 文件上传 ----
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 100MB
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 # ---- 服务端口 & 上下文路径 ----
 server:
@@ -92,11 +92,19 @@ ai:
   # ---- 通义千问 / DashScope 嵌入服务 ----
   qwen:
     api-key: ${QWEN_API_KEY}
+  # ---- DashScope 实时语音识别（Paraformer） ----
+  dashscope:
+    api-key: ${DASHSCOPE_API_KEY:${QWEN_API_KEY}}
+    stt:
+      model: paraformer-realtime-v2
+      sample-rate: 16000
+      format: pcm
 
 # ---- JWT 认证 ----
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000           # 24 小时（毫秒）
+  cookie-secure: false           # 生产环境改为 true（仅 HTTPS 下发）
 
 # ---- 合作方对接 ----
 partner:
@@ -117,6 +125,21 @@ app:
     allowed-origins:
       - http://localhost:3000
       - http://localhost:3001
+
+  # ============================================================
+  # 素材上传限制 — 防止超大文件耗尽 LLM token 预算和 API 并发
+  # 超过限制时向前端返回友好提示：不是不支持，而是拆分后效率更高、质量更好
+  # ============================================================
+  material:
+    upload:
+      max-file-size: 50MB                  # 单文件最大大小，需与上方 spring.servlet.multipart.max-file-size 保持一致
+      max-text-length: 100000              # 解析后文本最大字数，约 3-4 小时访谈或 200 页文档，超过建议拆分为多个文件分批上传
+      supported-formats: docx,pdf,txt,md,pptx,xlsx,csv,mp3,wav,html,ppt,xls,jpg,png,jpeg  # 与 ai-service parse-file 支持格式一致
+
+    # ---- 报告生成 ----
+    report:
+      methodology-top-n: 20       # Part2 方法论（strategies+tactics+donts）取 top N 高质量颗粒（按 qualityScore 降序），控制 prompt 规模、报告更精炼
+      faq-top-n: 15               # Part3 FAQ 取 top N 高质量颗粒，FAQ 是原文还原非归纳提炼，样本过多反而稀释重点
 
   # ============================================================
   # Query Gate — 统一安全门控（Controller 层前置拦截）

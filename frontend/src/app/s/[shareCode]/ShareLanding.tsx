@@ -1,7 +1,18 @@
+/**
+ * [B 端原始文件]
+ * 本文件已被复制到平台端 platform/src/ 对应路径。
+ *
+ * 维护约定：
+ * - 如果两端需要相同改动 → 通知平台端同步，或抽到 @aiextract/shared-ui 共享库
+ * - 如果只有 B 端需要 → 独立改动，不影响平台端
+ *
+ * 平台端副本: platform/src/ 对应路径
+ */
+
+
 'use client';
 
 import type { ShareInfo } from '@/lib/api/c';
-import { StatBadge } from '@aiextract/shared-ui';
 
 interface Props {
   info: ShareInfo;

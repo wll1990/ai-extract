@@ -7,7 +7,7 @@ interface Props {
   skillId: string;
   data: AuditDashboard;
   onPreviewReport: (skillId: string) => void;
-  onDownloadReport: (skillId: string, format: 'html' | 'ppt') => Promise<void>;
+  onDownloadReport: (skillId: string, format: 'html') => Promise<void>;
 }
 
 export default function SkillStep({ skillId, data, onPreviewReport, onDownloadReport }: Props) {
@@ -17,8 +17,8 @@ export default function SkillStep({ skillId, data, onPreviewReport, onDownloadRe
   const sceneCount = s.sceneTags?.length || 0;
   const reportReady = grainCount >= 10 && sceneCount >= 3;
   const qDist = s.qualityDistribution || {};
-  const verified = data.extractionResult?.verifiedCount || s.activeGrains;
-  const rejected = data.extractionResult?.rejectedCount || 0;
+  const verified = data.extractionResult?.verifiedCount ?? s.activeGrains;
+  const rejected = data.extractionResult?.rejectedCount ?? 0;
   const total = s.totalGrains;
   const passRate = total > 0 ? verified / total : 0;
   const avgScore = dims.specificity
@@ -56,7 +56,6 @@ export default function SkillStep({ skillId, data, onPreviewReport, onDownloadRe
                 👁 预览 {!reportReady && <span className="ml-1 text-[10px]">({grainCount}/10)</span>}
               </button>
               <button onClick={() => onDownloadReport(skillId, 'html')} className="px-3 py-1.5 bg-gold text-white rounded-lg text-xs hover:bg-amber-600">📄 HTML</button>
-              <button onClick={() => onDownloadReport(skillId, 'ppt')} className="px-3 py-1.5 bg-orange text-white rounded-lg text-xs hover:bg-orange-700">📊 PPT</button>
             </div>
           </div>
         </div>

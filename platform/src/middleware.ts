@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/register'];
-const PUBLIC_PREFIXES = ['/', '/discover'];
+const PUBLIC_PREFIXES = ['/', '/discover', '/h5/', '/s/'];
 const SKIP_PREFIXES = ['/_next', '/api', '/favicon.ico', '/robots.txt'];
 
 export function middleware(request: NextRequest) {
@@ -24,8 +24,11 @@ export function middleware(request: NextRequest) {
   if (PUBLIC_PATHS.includes(pathname)) {
     return NextResponse.next();
   }
-  // 公开前缀放行（/ 和 /discover）
-  if (PUBLIC_PREFIXES.some(p => pathname === p || pathname.startsWith(p + '/'))) {
+  // 公开前缀放行
+  if (PUBLIC_PREFIXES.some(p => {
+    if (p === '/') return pathname === '/';
+    return pathname === p || pathname.startsWith(p);
+  })) {
     return NextResponse.next();
   }
 

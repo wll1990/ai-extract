@@ -7,6 +7,7 @@ import type { SkillDetail } from '@/lib/api/skill';
 import { fetchRecommendedQuestions, getOrCreateShare } from '@/lib/api/skill';
 import { getUser, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
+import { copyToClipboard } from '@/lib/clipboard';
 
 const ORG_AVATAR_COLORS = ['#818cf8', '#a78bfa', '#c084fc', '#e879f9'];
 
@@ -488,7 +489,9 @@ export function SkillCardPage({ skill }: Props) {
 
   const handleCopy = useCallback((code: string) => {
     const base = process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
-    navigator.clipboard.writeText(`${base}/s/${code}`).then(() => { setCopied(code); setTimeout(() => setCopied(null), 2000); });
+    copyToClipboard(`${base}/s/${code}`).then(ok => {
+      if (ok) { setCopied(code); setTimeout(() => setCopied(null), 2000); }
+    });
   }, []);
 
   const intro = skill.introProfile;

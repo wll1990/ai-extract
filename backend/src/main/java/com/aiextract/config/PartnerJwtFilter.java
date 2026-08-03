@@ -27,6 +27,16 @@ import java.util.UUID;
  *
  * <p>合作方用户属于 C 端外部用户体系，与 B 端 user 表完全独立。
  * account = "partner:{appId}:{externalUserId}"，status = "partner"。</p>
+ *
+ * <h3>合作方 JWT payload 格式</h3>
+ * <pre>{@code
+ * {
+ *   "appId": "合作方标识（UUID，即 PartnerApp.app_id）",
+ *   "userId": "合作方系统的用户 ID",
+ *   "userName": "用户昵称"
+ * }
+ * }</pre>
+ * <p>appId 同时作为 app_user.company_id 使用，无需额外传 companyId 字段。</p>
  */
 @Slf4j
 @Component
@@ -62,15 +72,10 @@ public class PartnerJwtFilter {
             throw PartnerException.tokenInvalid("缺少 userId 字段");
         }
 
-        // 3. 校验 companyId 与 PartnerApp.app_id 一致
-        String companyId = claims.get("companyId", String.class);
-        if (companyId == null || !companyId.equals(app.getAppId())) {
-            throw PartnerException.tokenInvalid("companyId 不匹配");
-        }
-
-        // 4. account = partner:{appId}:{externalUserId}，存入 app_user
+        // 3. appId 即合作方标识，直接作为 company_id 使用
+        //    合作方 JWT payload 只需传 { appId, userId, userName }，无需冗余的 companyId
         String account = "partner:" + appId + ":" + externalUserId;
-        UUID companyUuid = UUID.fromString(companyId);
+        UUID companyUuid = UUID.fromString(appId);
         AppUser user = findOrCreateAppUser(account, userName != null ? userName : externalUserId, companyUuid);
 
         log.info("Partner auth success: appId={} externalUserId={} appUserId={}",

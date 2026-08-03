@@ -4,6 +4,8 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient, API_BASE } from '@/lib/api/client';
 import { MaterialUploadGuide } from '@/components/skill/MaterialUploadGuide';
 import { uploadMaterialText } from '@/lib/api/materials';
+import { getUser } from '@/lib/storage';
+import { Permission } from '@/lib/permissions';
 
 interface UserOption {
   id: string; name: string; account: string; spaceId: string;
@@ -28,8 +30,8 @@ export default function UploadPage() {
   const [textTitle, setTextTitle] = useState('');
 
   useEffect(() => {
-    apiClient<UserOption[]>('/admin/users').then(list => {
-      setUsers(Array.isArray(list) ? list.filter(u => u.spaceId) : []);
+    apiClient<UserOption[]>('/admin/users/picker').then(list => {
+      setUsers(Array.isArray(list) ? list.filter((u: UserOption) => u.spaceId) : []);
     }).catch(() => {});
     apiClient<any[]>('/api/domains').then(tree => setDomainTree(tree)).catch(() => {});
   }, []);
@@ -165,7 +167,7 @@ export default function UploadPage() {
             )}
 
             <div className="flex gap-3 justify-center mt-6">
-              {firstItem?.skillId && !isRejected && (
+              {firstItem?.skillId && !isRejected && ((getUser() as any)?.permissions || []).includes(Permission.DASHBOARD_VIEW) && (
                 <button onClick={() => router.push(`/admin/skills/${firstItem.skillId}/audit`)}
                   className="px-4 py-2 bg-primary text-white rounded-lg text-sm">进入审核</button>
               )}

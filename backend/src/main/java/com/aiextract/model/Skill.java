@@ -44,7 +44,7 @@ public class Skill {
     /**
      * 所属空间ID（每个空间一个Skill）
      */
-    @Column(name = "space_id", nullable = false)
+    @Column(name = "space_id")
     private UUID spaceId;
 
     /**
@@ -165,16 +165,30 @@ public class Skill {
 
     /**
      * 分身类型：individual=个人分身, organization=组织分身。
-     * individual 分身为默认值，organization 类型的分身仅作 member 被聚合，
-     * 不单独聊天。
-     * @since 2026-07-28 V31 迁移
      */
-    @Column(name = "org_type", length = 20)
-    private String orgType;
+    @Column(name = "type", length = 20)
+    private String type;
+
+    /** individual: space→user→company 两跳解析, organization: 创建时显式设置, C端=null */
+    @Column(name = "company_id")
+    private UUID companyId;
+
+    /** 组织分身成员（JSONB UUID 数组），individual 为空 */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "member_skill_ids", columnDefinition = "JSONB")
+    private String memberSkillIds;
+
+    /** 组织分身描述，individual 不使用 */
+    @Column(name = "description", columnDefinition = "TEXT")
+    private String description;
+
+    /** 创建者 userId */
+    @Column(name = "created_by")
+    private UUID createdBy;
 
     /**
      * 名片页 3 段式专业介绍 JSON：{"headline":"...","body":"...","closing":"..."}
-     * 发布时 @Async 生成，与 opening_message 互补（后者保留用于向后兼容）。
+     * 发布时 @Async 生成。
      * @since 2026-07-29 V33 迁移
      */
     @JdbcTypeCode(SqlTypes.JSON)

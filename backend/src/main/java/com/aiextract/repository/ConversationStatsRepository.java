@@ -91,6 +91,7 @@ public interface ConversationStatsRepository extends JpaRepository<ConversationS
     @Query("SELECT cs.userId, COUNT(DISTINCT cs.conversationId) " +
            "FROM ConversationStats cs WHERE cs.skillId IN :skillIds " +
            "AND cs.createdAt >= :since AND cs.isTest = false " +
+           "AND cs.userId IS NOT NULL " +
            "GROUP BY cs.userId ORDER BY COUNT(DISTINCT cs.conversationId) DESC")
     List<Object[]> userActivity(@Param("skillIds") List<UUID> skillIds, @Param("since") LocalDateTime since);
 

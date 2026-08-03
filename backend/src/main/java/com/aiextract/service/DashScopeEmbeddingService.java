@@ -5,6 +5,7 @@ import com.aiextract.config.TokenContext;
 import com.aiextract.model.ExperienceGrain;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -139,62 +140,47 @@ public class DashScopeEmbeddingService {
         }
     }
 
-    /** 批量保存 embedding 到 pgvector（JPA 不支持，用 native SQL） */
+    /** 批量保存 embedding 到 pgvector — PGvector 驱动直传，二进制编码 */
     public int[] saveEmbeddings(List<ExperienceGrain> grains, List<float[]> vectors) {
         if (grains.size() != vectors.size()) {
             throw new IllegalArgumentException("grains 和 vectors 数量不一致");
         }
         List<Object[]> batchArgs = new ArrayList<>();
         for (int i = 0; i < grains.size(); i++) {
-            float[] vec = vectors.get(i);
-            StringBuilder sb = new StringBuilder("[");
-            for (int j = 0; j < vec.length; j++) {
-                if (j > 0) {
-
-                    sb.append(",");
-
-                }
-                sb.append(vec[j]);
-            }
-            batchArgs.add(new Object[]{sb.toString(), grains.get(i).getId()});
+            batchArgs.add(new Object[]{
+                new PGvector(vectors.get(i)),
+                grains.get(i).getId()
+            });
         }
         return jdbcTemplate.batchUpdate(
-            "UPDATE experience_grain SET embedding = ?::vector WHERE id = ?::uuid",
-            batchArgs);
+            "UPDATE experience_grain SET embedding = ? WHERE id = ?", batchArgs);
     }
 
-    /** 批量回填 embedding — 文本拼接 + API调用 + 批量写入 */
+    /** 批量回填 embedding — 文本拼接 + API调用 + 批量写入，PGvector 驱动直传 */
     public int[] backfillEmbeddings(List<ExperienceGrain> grains) {
         { if (grains.isEmpty()) return new int[0]; }
         List<String> texts = grains.stream().map(this::grainToText).toList();
         List<float[]> vectors = embedBatch(texts);
         List<Object[]> batchArgs = new ArrayList<>();
         for (int i = 0; i < grains.size(); i++) {
-            float[] vec = vectors.get(i);
-            StringBuilder sb = new StringBuilder("[");
-            for (int j = 0; j < vec.length; j++) {
-                if (j > 0) {
-
-                    sb.append(",");
-
-                }
-                sb.append(vec[j]);
-            }
-            batchArgs.add(new Object[]{sb.toString(), grains.get(i).getId()});
+            batchArgs.add(new Object[]{
+                new PGvector(vectors.get(i)),
+                grains.get(i).getId()
+            });
         }
         return jdbcTemplate.batchUpdate(
-            "UPDATE experience_grain SET embedding = ?::vector WHERE id = ?::uuid", batchArgs);
+            "UPDATE experience_grain SET embedding = ? WHERE id = ?", batchArgs);
     }
 
-    /** 颗粒文本拼接（用于 embedding） — P0-3: 加入 applicableCondition */
+    /** 颗粒文本拼接（用于 embedding） — P3-12: 加字段标签前缀，提升语义检索精度 */
     public String grainToText(ExperienceGrain g) {
         return String.join(" ",
-            g.getSceneTag() != null ? g.getSceneTag() : "",
-            g.getSceneDescription() != null ? g.getSceneDescription() : "",
-            g.getExpertThought() != null ? g.getExpertThought() : "",
-            g.getStandardScript() != null ? g.getStandardScript() : "",
-            g.getCommonMistakes() != null ? g.getCommonMistakes() : "",
-            g.getApplicableCondition() != null ? g.getApplicableCondition() : ""
+            "场景:" + (g.getSceneTag() != null ? g.getSceneTag() : ""),
+            "描述:" + (g.getSceneDescription() != null ? g.getSceneDescription() : ""),
+            "思路:" + (g.getExpertThought() != null ? g.getExpertThought() : ""),
+            "话术:" + (g.getStandardScript() != null ? g.getStandardScript() : ""),
+            "避坑:" + (g.getCommonMistakes() != null ? g.getCommonMistakes() : ""),
+            "条件:" + (g.getApplicableCondition() != null ? g.getApplicableCondition() : "")
         );
     }
 }

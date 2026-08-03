@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { getToken } from '@/lib/storage';
 import { API_BASE } from '@/lib/api/client';
-import { connectRawSse } from '@/lib/sse';
+import { connectSse } from '@/lib/sse';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 
 type GrainInfo = {
@@ -89,8 +89,8 @@ export default function PracticeScenarioModal({ skillId, grain, grains, grainIdx
     setStreamText('');
     setStreamAnalysis('');
 
-    let reply = '', analysis = '';
-    connectRawSse(
+    let reply = '';
+    connectSse(
       {
         url: `${API_BASE}/admin/skills/${skillId}/practice-scenario`,
         method: 'POST',
@@ -106,12 +106,8 @@ export default function PracticeScenarioModal({ skillId, grain, grains, grainIdx
           reply += text;
           setStreamText(reply);
         },
-        onAnalysis: (text) => {
-          analysis = text;
-          setStreamAnalysis(analysis);
-        },
         onDone: () => {
-          setMessages(prev => [...prev, { role: 'sales', content: reply, analysis, skillMode: currentMode }]);
+          setMessages(prev => [...prev, { role: 'sales', content: reply, skillMode: currentMode }]);
           setStreamText('');
           setStreamAnalysis('');
           setStreaming(false);

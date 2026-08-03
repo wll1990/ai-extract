@@ -37,13 +37,15 @@ export default function AdminDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardV2Data | null>(null);
   const [loading, setLoading] = useState(true);
+  const [trendDays, setTrendDays] = useState(7);
 
   useEffect(() => {
-    apiClient<DashboardV2Data>('/admin/dashboard/v2')
+    setLoading(true);
+    apiClient<DashboardV2Data>(`/admin/dashboard/v2?days=${trendDays}`)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, []);
+  }, [trendDays]);
 
   if (loading) return <LoadingSpinner />;
   if (!data) return null;
@@ -76,10 +78,20 @@ export default function AdminDashboard() {
         {/* KPI Hero */}
         <KpiHero items={kpis} />
 
-        {/* 7 天对话趋势 */}
+        {/* N 天对话趋势 */}
         {trend && trend.length > 0 && (
           <div className="rounded-[12px] bg-surface-2 border border-border p-5 shadow-sm">
-            <h2 className="font-semibold text-foreground mb-4">📈 7 天对话趋势</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-foreground">📈 {trendDays} 天对话趋势</h2>
+              <div className="flex gap-1">
+                {[7, 30].map(d => (
+                  <button key={d} onClick={() => setTrendDays(d)}
+                    className={`text-xs px-3 py-1 rounded-full ${trendDays === d ? 'bg-primary text-white' : 'bg-surface text-muted-foreground'}`}>
+                    {d}天
+                  </button>
+                ))}
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={trend}>
                 <defs>

@@ -1,14 +1,13 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.BaseController;
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.SkillShare;
 import com.aiextract.service.ShareService;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
@@ -31,16 +29,10 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/admin/skills/{skillId}/share")
 @RequiredArgsConstructor
-public class AdminShareController {
+public class AdminShareController extends BaseController {
 
     private final ShareService shareService;
-    private final JwtUtil jwtUtil;
     private final CompanyScopeService companyScopeService;
-
-    private UUID extractUserId() {
-        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-        return jwtUtil.getUserIdFromToken(token);
-    }
 
     /**
      * 生成（或获取已有）分享链接
@@ -48,7 +40,7 @@ public class AdminShareController {
     @PostMapping
     public ApiResponse<Map<String, Object>> getOrCreate(@PathVariable UUID skillId) {
         companyScopeService.assertSkillOwnership(skillId);
-        return ApiResponse.success(toMap(shareService.getOrCreateShare(skillId, extractUserId())));
+        return ApiResponse.success(toShareMap(shareService.getOrCreateShare(skillId, extractUserId())));
     }
 
     /**
@@ -59,7 +51,7 @@ public class AdminShareController {
         companyScopeService.assertSkillOwnership(skillId);
         SkillShare share = shareService.findShare(skillId)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
-        return ApiResponse.success(toMap(share));
+        return ApiResponse.success(toShareMap(share));
     }
 
     /**
@@ -70,7 +62,7 @@ public class AdminShareController {
             @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
         companyScopeService.assertSkillOwnership(skillId);
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
-        return ApiResponse.success(toMap(shareService.toggleShare(skillId, enabled)));
+        return ApiResponse.success(toShareMap(shareService.toggleShare(skillId, enabled)));
     }
 
     /**
@@ -87,16 +79,6 @@ public class AdminShareController {
         if (!customCode.matches("^[a-zA-Z0-9\\-]{4,30}$")) {
             throw new BusinessException(400, "格式: 字母数字+连字符，4-30位");
         }
-        return ApiResponse.success(toMap(shareService.updateShareCode(skillId, customCode)));
-    }
-
-    private Map<String, Object> toMap(SkillShare share) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("skillId", share.getSkillId().toString());
-        m.put("shareCode", share.getShareCode());
-        m.put("channel", share.getChannel());
-        m.put("enabled", share.getEnabled());
-        m.put("createdAt", share.getCreatedAt() != null ? share.getCreatedAt().toString() : null);
-        return m;
+        return ApiResponse.success(toShareMap(shareService.updateShareCode(skillId, customCode)));
     }
 }

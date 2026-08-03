@@ -8,7 +8,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { QuickReplies, ThinkingCard } from '@aiextract/shared-ui';
 import { PortraitCard } from '@aiextract/shared-ui';
-import { VoiceInput } from '@/components/voice/VoiceInput';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 import { ResumeModal } from '@/components/modals/ResumeModal';
 import { pauseSession, getSession } from '@/lib/api/interview';
 import { useInterviewSession } from './useInterviewSession';
@@ -47,6 +47,7 @@ export function SalesInterviewChat() {
   const [skipTopicClicked, setSkipTopicClicked] = useState(false);
   const [newAngleClicked, setNewAngleClicked] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [interimVoiceText, setInterimVoiceText] = useState('');
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const showToast = useCallback((msg: string) => {
@@ -197,7 +198,6 @@ export function SalesInterviewChat() {
     }
   }, [sessionId, router, h.setErrorBanner]);
 
-  const handleTranscription = useCallback((text: string) => { h.setInputValue(prev => prev + text); }, [h.setInputValue]);
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); h.handleSend(); } }, [h.handleSend]);
 
   const currentPhase = state.session?.currentPhase || 'opening';
@@ -228,6 +228,9 @@ export function SalesInterviewChat() {
         <div className="flex items-center justify-between px-4 sm:px-6 py-2" style={{ height: 74 }}>
           {/* 左侧品牌 */}
           <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => router.back()} className="text-[#63708f] hover:text-[#10162f] transition-colors flex-shrink-0" title="返回">
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
             <img src="/def-avatar.png" alt="logo"
               className="h-[42px] w-[42px] rounded-[13px] object-cover flex-shrink-0"
               style={{ boxShadow: '0 8px 20px rgba(33,71,255,0.18)' }} />
@@ -525,16 +528,26 @@ export function SalesInterviewChat() {
 
           {/* 输入框 + 发送 */}
           <div className="mx-auto flex max-w-[720px] items-end gap-3">
-            <VoiceInput onTranscription={handleTranscription} disabled={h.isStreaming} />
-            <div className="flex flex-1 items-end gap-2 rounded-3xl border border-[#aab8ff] bg-white/97 px-3 py-2"
+            <div className="flex flex-1 items-center gap-2 rounded-3xl border border-[#aab8ff] bg-white/97 px-3 py-2"
               style={{ boxShadow: '0 12px 28px rgba(37,67,166,0.10)' }}>
-              <textarea ref={h.inputRef} value={h.inputValue} onChange={(e) => h.setInputValue(e.target.value)} onKeyDown={handleKeyDown}
-                placeholder="和萃取师一起，探索你的经验与价值…"
+              <VoiceRecorder
+                onTranscription={(text) => {
+                  setInterimVoiceText('');
+                  h.setInputValue(prev => prev + text);
+                }}
+                onInterimText={(text) => setInterimVoiceText(text)}
+                disabled={h.isStreaming}
+              />
+              <textarea ref={h.inputRef}
+                value={interimVoiceText || h.inputValue}
+                onChange={(e) => { setInterimVoiceText(''); h.setInputValue(e.target.value); }}
+                onKeyDown={handleKeyDown}
+                placeholder={interimVoiceText ? '' : '和萃取师一起，探索你的经验与价值…'}
                 disabled={h.isStreaming} rows={1}
                 className="flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-foreground placeholder-[#a3abc0] outline-none disabled:opacity-50"
                 style={{ minHeight: '42px', maxHeight: '120px', lineHeight: 1.6 }}
                 onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
-              <button type="button" onClick={h.handleSend} disabled={!h.inputValue.trim() || h.isStreaming}
+              <button type="button" onClick={h.handleSend} disabled={(!h.inputValue.trim() && !interimVoiceText) || h.isStreaming}
                 className="interview-send-btn flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-full text-white disabled:cursor-not-allowed disabled:opacity-40"
                 style={{
                   background: 'linear-gradient(135deg, #2147ff, #3b60ff)',

@@ -68,40 +68,54 @@ public class ReportGenerationService {
 
     /** 保存或更新报告到 report 表 */
     private void saveOrUpdateReport(Skill skill, int grainCount, String html) {
-        try {
-            var existingPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
-                    skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 1));
-            Report report;
-            String title = (skill.getOwnerName() != null ? skill.getOwnerName() : "未命名") + " · 经验萃取报告";
-            String subtitle = grainCount + "个经验颗粒";
+        var existingPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
+                skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 1));
+        Report report;
+        String title = (skill.getOwnerName() != null ? skill.getOwnerName() : "未命名") + " · 经验萃取报告";
+        String subtitle = grainCount + "个经验颗粒";
 
-            if (existingPage.hasContent()) {
-                report = existingPage.getContent().get(0);
-                report.setTitle(title);
-                report.setSubtitle(subtitle);
-                report.setUpdatedAt(LocalDateTime.now());
-            } else {
-                report = Report.builder()
-                    .id(UUID.randomUUID())
-                    .spaceId(skill.getSpaceId())
-                    .title(title)
-                    .subtitle(subtitle)
-                    .webPublished(false)
-                    .viewCount(0)
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
-            }
-            /** contentJson 存 HTML */
-            try {
-                report.setContentJson(objectMapper.writeValueAsString(Map.of("html", html)));
-            } catch (Exception ignored) {
-                report.setContentJson("{}");
-            }
-            reportRepository.save(report);
-            log.info("报告已保存, skillId: {}, reportId: {}, title: {}", skill.getId(), report.getId(), title);
-        } catch (Exception e) {
-            log.error("保存报告失败, skillId: {}", skill.getId(), e);
+        if (existingPage.hasContent()) {
+            report = existingPage.getContent().get(0);
+            report.setTitle(title);
+            report.setSubtitle(subtitle);
+            report.setUpdatedAt(LocalDateTime.now());
+        } else {
+            report = Report.builder()
+                .id(UUID.randomUUID())
+                .spaceId(skill.getSpaceId())
+                .title(title)
+                .subtitle(subtitle)
+                .shareEnabled(true)
+                .viewCount(0)
+                .rating(java.math.BigDecimal.valueOf(4.5))
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        }
+
+        // HTML 写文件
+        writeReportHtml(report.getId(), html);
+        report.setHtmlPath("./data/reports/" + report.getId() + ".html");
+
+        // content_json 改为轻量统计
+        try {
+            report.setContentJson(objectMapper.writeValueAsString(Map.of("grainCount", grainCount)));
+        } catch (Exception ignored) {
+            report.setContentJson("{}");
+        }
+        reportRepository.save(report);
+        log.info("报告已保存, skillId: {}, reportId: {}, htmlPath: {}", skill.getId(), report.getId(), report.getHtmlPath());
+    }
+
+    /** 写报告 HTML 到文件（供 saveOrUpdateReport 和 AdminAuditController 复用） */
+    public static void writeReportHtml(UUID reportId, String html) {
+        try {
+            java.nio.file.Path dir = java.nio.file.Paths.get("./data/reports");
+            java.nio.file.Files.createDirectories(dir);
+            java.nio.file.Files.writeString(dir.resolve(reportId + ".html"), html,
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new RuntimeException("写入报告文件失败: " + reportId, e);
         }
     }
 
@@ -124,13 +138,4 @@ public class ReportGenerationService {
         return skill.getId();
     }
 
-    @Async("embeddingExecutor")
-    public void regenerateFilesAsync(UUID reportId) {
-        log.info("regenerateFilesAsync called, reportId: {}", reportId);
-    }
-
-    public String regenerateFile(UUID reportId, String format) {
-        log.info("regenerateFile called, reportId: {}, format: {}", reportId, format);
-        return "";
-    }
 }

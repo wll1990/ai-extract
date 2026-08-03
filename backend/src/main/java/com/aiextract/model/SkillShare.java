@@ -48,17 +48,10 @@ public class SkillShare {
     private UUID id;
 
     /**
-     * 所属AI分身ID（个体分身分享使用，与 orgSkillId 互斥）
+     * 所属AI分身ID（个体/组织统一）
      */
     @Column(name = "skill_id")
     private UUID skillId;
-
-    /**
-     * 所属组织分身ID（组织分身分享使用，与 skillId 互斥）
-     * @since 2026-07-28 V32 迁移
-     */
-    @Column(name = "org_skill_id")
-    private UUID orgSkillId;
 
     /**
      * 分身所属企业ID（建码时解析冗余，归因用）。

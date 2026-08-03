@@ -59,7 +59,7 @@ export default function LoginPage() {
             </button>
           </form>
           <p className="mt-6 text-center text-sm text-muted-foreground">
-            没有账号？<Link href="/register" className="text-primary hover:underline">去注册</Link>
+            没有账号？<Link href="/register" prefetch={false} className="text-primary hover:underline">去注册</Link>
           </p>
         </div>
         {/* 右侧品牌区 */}

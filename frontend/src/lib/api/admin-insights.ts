@@ -54,7 +54,10 @@ export function getSkillOverview(skillId: string) { return apiClient<SkillOvervi
 export function getSceneTop(skillId: string) { return apiClient<SceneTopItem[]>(`/admin/insights/${skillId}/scene-top`); }
 export function getRagDistribution(skillId: string) { return apiClient<RagDistribution>(`/admin/insights/${skillId}/rag-distribution`); }
 export function getTopGrains(skillId: string, sort: 'best' | 'worst' = 'best') { return apiClient<GrainRankItem[]>(`/admin/insights/${skillId}/grains-top?sort=${sort}`); }
-export function getKnowledgeGaps(skillId: string) { return apiClient<KnowledgeGapItem[]>(`/admin/insights/${skillId}/knowledge-gaps`); }
+export function getKnowledgeGaps(skillId: string) {
+  return apiClient<{ content: KnowledgeGapItem[] }>(`/admin/insights/${skillId}/knowledge-gaps?page=0&size=100`)
+    .then(d => d.content || []);
+}
 export function getGlobalOverview() { return apiClient<GlobalOverview>('/admin/insights/overview'); }
 
 // ── 自动发现 API ──

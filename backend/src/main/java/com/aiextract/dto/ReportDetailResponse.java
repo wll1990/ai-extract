@@ -36,17 +36,11 @@ public class ReportDetailResponse {
     /** 报告内容（JSON） */
     private Object contentJson;
 
-    /** Word下载链接 */
-    private String wordUrl;
+    /** 分享码 */
+    private String shareCode;
 
-    /** PPT下载链接 */
-    private String pptUrl;
-
-    /** Web版是否已发布 */
-    private Boolean webPublished;
-
-    /** 文件同步状态 */
-    private String fileStatus;
+    /** 是否有 HTML 文件 */
+    private Boolean hasHtml;
 
     /** 评分 */
     private BigDecimal rating;

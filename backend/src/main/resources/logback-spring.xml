@@ -11,9 +11,9 @@
 
     <!-- 文件：全部日志 -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/ai-extract.log</file>
+        <file>logs/backend.log</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/ai-extract.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <fileNamePattern>logs/backend.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <maxFileSize>50MB</maxFileSize>
             <maxHistory>30</maxHistory>
             <totalSizeCap>1GB</totalSizeCap>
@@ -25,7 +25,7 @@
 
     <!-- 文件：错误日志 -->
     <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/ai-extract-error.log</file>
+        <file>logs/backend-error.log</file>
         <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
             <level>ERROR</level>
         </filter>

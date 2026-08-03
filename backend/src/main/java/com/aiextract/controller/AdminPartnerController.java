@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.PageResponse;
 import com.aiextract.config.PartnerCrypto;
 import com.aiextract.model.PartnerApp;
 import com.aiextract.model.PartnerApp.PartnerStatus;
@@ -19,12 +20,15 @@ public class AdminPartnerController {
     private final PartnerAppRepository repository;
     private final PartnerCrypto crypto;
 
-    /** 合作方列表 */
+    /** 合作方列表（分页） */
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> list() {
-        List<PartnerApp> all = repository.findAll();
+    public ApiResponse<Map<String, Object>> list(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        var pageable = org.springframework.data.domain.PageRequest.of(page - 1, size);
+        var partnerPage = repository.findAll(pageable);
         List<Map<String, Object>> result = new ArrayList<>();
-        for (PartnerApp p : all) {
+        for (PartnerApp p : partnerPage.getContent()) {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", p.getId().toString());
             m.put("appId", p.getAppId());
@@ -35,7 +39,7 @@ public class AdminPartnerController {
             m.put("createdAt", p.getCreatedAt() != null ? p.getCreatedAt().toString() : null);
             result.add(m);
         }
-        return ApiResponse.success(result);
+        return ApiResponse.success(PageResponse.of(result, partnerPage, page, size));
     }
 
     /** 新建合作方 — 返回 SK 明文（仅此一次） */

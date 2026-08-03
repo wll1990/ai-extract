@@ -28,7 +28,7 @@ export default function AdminSkillsPage() {
   if (loading) return <LoadingSpinner />;
 
   const STATUS_LABELS: Record<string, string> = {
-    generating: '生成中...', reviewing: '审核中', published: '已发布', discarded: '已废弃'
+    generating: '萃取中...', reviewing: '待审核', published: '已发布', discarded: '已驳回'
   };
   const activeSkills = skills.filter((s: any) => s.status === 'published');
   const pendingSkills = skills.filter((s: any) => s.status === 'generating' || s.status === 'reviewing');

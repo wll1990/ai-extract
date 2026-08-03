@@ -1,13 +1,14 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.BaseController;
+import com.aiextract.common.PageResponse;
 import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
-import com.aiextract.model.OrganizationSkill;
+import com.aiextract.model.Skill;
 import com.aiextract.model.SkillShare;
 import com.aiextract.service.OrganizationSkillService;
 import com.aiextract.service.ShareService;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -36,25 +37,26 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/admin/organization-skills")
 @RequiredArgsConstructor
-public class OrganizationSkillController {
+public class OrganizationSkillController extends BaseController {
 
     private final OrganizationSkillService orgSkillService;
     private final ShareService shareService;
-    private final JwtUtil jwtUtil;
 
     // ============================================================
-    // 列表
+    // 列表（分页）
     // ============================================================
 
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> list(
-            @RequestParam(required = false) String status) {
+    public ApiResponse<Map<String, Object>> list(
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         UUID companyId = TokenContext.getCompanyId();
-        List<OrganizationSkill> orgs = orgSkillService.listByCompany(companyId, status);
-        List<Map<String, Object>> result = orgs.stream()
+        var orgPage = orgSkillService.listByCompanyPaged(companyId, status, page, size);
+        List<Map<String, Object>> result = orgPage.getContent().stream()
                 .map(orgSkillService::toApiMap)
                 .collect(Collectors.toList());
-        return ApiResponse.success(result);
+        return ApiResponse.success(PageResponse.of(result, orgPage, page, size));
     }
 
     // ============================================================
@@ -73,8 +75,8 @@ public class OrganizationSkillController {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "请至少选择一位成员分身");
         }
         UUID companyId = TokenContext.getCompanyId();
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
-        OrganizationSkill org = orgSkillService.create(name, description, memberUuids, avatarUrl, companyId, userId);
+        UUID userId = extractUserId();
+        Skill org = orgSkillService.create(name, description, memberUuids, avatarUrl, companyId, userId);
         return ApiResponse.success(orgSkillService.toApiMap(org));
     }
 
@@ -82,8 +84,8 @@ public class OrganizationSkillController {
     // 更新
     // ============================================================
 
-    private OrganizationSkill requireCompanyAccess(String id) {
-        OrganizationSkill org = orgSkillService.findById(UUID.fromString(id));
+    private Skill requireCompanyAccess(String id) {
+        Skill org = orgSkillService.findById(UUID.fromString(id));
         UUID callerCompanyId = TokenContext.getCompanyId();
         if (!callerCompanyId.equals(org.getCompanyId())) {
             throw new BusinessException(403, "无权操作其他企业的组织分身");
@@ -103,7 +105,7 @@ public class OrganizationSkillController {
         List<UUID> memberUuids = memberIds != null
                 ? memberIds.stream().map(UUID::fromString).collect(Collectors.toList())
                 : null;
-        OrganizationSkill org = orgSkillService.update(UUID.fromString(id), name, description, memberUuids, avatarUrl);
+        Skill org = orgSkillService.update(UUID.fromString(id), name, description, memberUuids, avatarUrl);
         return ApiResponse.success(orgSkillService.toApiMap(org));
     }
 
@@ -142,14 +144,16 @@ public class OrganizationSkillController {
     @PutMapping("/{id}/status")
     public ApiResponse<Void> updateStatus(
             @PathVariable String id, @RequestBody Map<String, String> body) {
-        requireCompanyAccess(id);
+        Skill org = requireCompanyAccess(id);
         String status = body.get("status");
         if (status == null || status.isBlank()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "status 不能为空");
         }
         orgSkillService.updateStatus(UUID.fromString(id), status);
-        // 发布时异步生成 3 段式自我介绍（Controller 触发以经过 Spring AOP 代理）
         if ("published".equals(status)) {
+            // 初始化默认分享（对外默认关闭，对内默认开启）
+            shareService.initDefaultShares(UUID.fromString(id), org.getCreatedBy(), false);
+            // 异步生成 3 段式自我介绍
             orgSkillService.generateOrgIntroProfile(UUID.fromString(id));
         }
         return ApiResponse.success();
@@ -175,14 +179,14 @@ public class OrganizationSkillController {
             @RequestBody(required = false) Map<String, String> body) {
         requireCompanyAccess(id);
         String channel = body != null ? body.getOrDefault("channel", SkillShare.CHANNEL_PUBLIC) : SkillShare.CHANNEL_PUBLIC;
-        SkillShare share = shareService.getOrCreateOrgSkillShare(UUID.fromString(id), extractUserId(), channel);
+        SkillShare share = shareService.getOrCreateShare(UUID.fromString(id), extractUserId(), channel);
         return ApiResponse.success(toShareMap(share));
     }
 
     @GetMapping("/{id}/share")
     public ApiResponse<Map<String, Object>> getShare(@PathVariable String id) {
         requireCompanyAccess(id);
-        return shareService.findOrgSkillShare(UUID.fromString(id))
+        return shareService.findShare(UUID.fromString(id))
                 .map(s -> ApiResponse.success(toShareMap(s)))
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
     }
@@ -192,7 +196,7 @@ public class OrganizationSkillController {
             @PathVariable String id, @RequestBody Map<String, Object> body) {
         requireCompanyAccess(id);
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
-        SkillShare share = shareService.toggleOrgSkillShare(UUID.fromString(id), enabled);
+        SkillShare share = shareService.toggleShare(UUID.fromString(id), enabled);
         return ApiResponse.success(toShareMap(share));
     }
 
@@ -207,32 +211,13 @@ public class OrganizationSkillController {
         if (!customCode.matches("^[a-zA-Z0-9\\-]{4,30}$")) {
             throw new BusinessException(400, "短码格式不正确（4-30位，仅字母数字和短横线）");
         }
-        SkillShare share = shareService.updateOrgSkillShareCode(UUID.fromString(id), customCode);
+        SkillShare share = shareService.updateShareCode(UUID.fromString(id), customCode);
         return ApiResponse.success(toShareMap(share));
     }
 
     // ============================================================
     // helpers
     // ============================================================
-
-    private UUID extractUserId() {
-        return jwtUtil.getUserIdFromToken(getToken());
-    }
-
-    private Map<String, Object> toShareMap(SkillShare share) {
-        Map<String, Object> map = new java.util.LinkedHashMap<>();
-        map.put("skillId", share.getOrgSkillId() != null ? share.getOrgSkillId().toString() : null);
-        map.put("shareCode", share.getShareCode());
-        map.put("channel", share.getChannel());
-        map.put("enabled", share.getEnabled());
-        map.put("createdAt", share.getCreatedAt() != null ? share.getCreatedAt().toString() : null);
-        return map;
-    }
-
-    private String getToken() {
-        return (String) org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication().getCredentials();
-    }
 
     private String require(Map<String, Object> body, String key) {
         Object val = body.get(key);

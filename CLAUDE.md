@@ -95,6 +95,25 @@ ai-extract/
 
 5. **复用现有模式** — 新增 Scheduler 参照 `ExpertAnalysisScheduler`（乐观锁+自注入），新增 Service 注入 `ChatClient`/`WebClient` 参照 `MaterialCleaningService`。
 
+6. **分页响应统一用 `PageResponse`** — 所有返回分页列表的 Controller 必须使用 `common.PageResponse.of()` 组装响应，禁止手写 `Map.put("content")` / `Map.put("total")` 等样板代码。
+
+```java
+// ✅ 正确：一行搞定
+return ApiResponse.success(PageResponse.of(customContent, springPage, page, size));
+
+// ✅ 直接用 Page content 时
+return ApiResponse.success(PageResponse.of(skillPage, page, size));
+
+// ❌ 禁止：手写 7 行样板
+Map<String, Object> response = new LinkedHashMap<>();
+response.put("content", result);
+response.put("page", page);
+response.put("size", size);
+response.put("total", page.getTotalElements());
+response.put("totalPages", page.getTotalPages());
+return ApiResponse.success(response);
+```
+
 ## 禁止的反模式
 
 以下代码模式在 CR 阶段直接拒绝，无一例外：

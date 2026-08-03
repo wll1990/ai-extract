@@ -1,10 +1,10 @@
 package com.aiextract.scheduler;
 
-import com.aiextract.model.OrganizationSkill;
+
 import com.aiextract.model.Skill;
 import com.aiextract.repository.ConversationStatsRepository;
 import com.aiextract.repository.FeedbackLogRepository;
-import com.aiextract.repository.OrganizationSkillRepository;
+
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.util.JsonUtil;
 import lombok.RequiredArgsConstructor;
@@ -55,7 +55,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class SkillStatsScheduler {
 
     private final SkillRepository skillRepository;
-    private final OrganizationSkillRepository orgSkillRepository;
     private final ConversationStatsRepository conversationStatsRepository;
     private final FeedbackLogRepository feedbackLogRepository;
     private final com.aiextract.service.SkillService skillService;
@@ -153,7 +152,7 @@ public class SkillStatsScheduler {
     }
 
     private void refreshOrgSkillStats() {
-        List<OrganizationSkill> orgSkills = orgSkillRepository.findByStatusIn(
+        List<Skill> orgSkills = skillRepository.findByTypeAndStatusIn("organization",
                 List.of("published"));
         if (orgSkills.isEmpty()) return;
 
@@ -161,7 +160,7 @@ public class SkillStatsScheduler {
         LocalDateTime now = LocalDateTime.now();
         int updated = 0;
 
-        for (OrganizationSkill org : orgSkills) {
+        for (Skill org : orgSkills) {
             List<UUID> memberIds = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
             if (memberIds.isEmpty()) continue;
 
@@ -276,10 +275,7 @@ public class SkillStatsScheduler {
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 */30 * * * ?")
     public void updateGrainWeights() {
         try {
-            var grains = grainRepository.findAll().stream()
-                .filter(g -> "active".equals(g.getStatus()))
-                .filter(g -> g.getHelpfulCount() > 0 || g.getUnhelpfulCount() > 0)
-                .toList();
+            var grains = grainRepository.findByStatusAndHasFeedback("active");
             if (grains.isEmpty()) return;
 
             int updated = 0;
@@ -317,10 +313,7 @@ public class SkillStatsScheduler {
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 0 * * * ?")
     public void autoDeprecateGrains() {
         try {
-            var grains = grainRepository.findAll().stream()
-                .filter(g -> "active".equals(g.getStatus()))
-                .filter(g -> g.getUnhelpfulCount() >= 10 && g.getHelpfulCount() < 3)
-                .toList();
+            var grains = grainRepository.findByStatusAndLowQuality("active", 10, 3);
             if (grains.isEmpty()) return;
             for (var g : grains) {
                 g.setStatus("deprecated");
@@ -342,11 +335,7 @@ public class SkillStatsScheduler {
     @org.springframework.scheduling.annotation.Scheduled(cron = "0 30 * * * ?")
     public void updateQualityScores() {
         try {
-            var grains = grainRepository.findAll().stream()
-                .filter(g -> "active".equals(g.getStatus()))
-                .filter(g -> g.getQualityScore() != null)
-                .filter(g -> g.getHelpfulCount() + g.getUnhelpfulCount() >= 5)
-                .toList();
+            var grains = grainRepository.findByStatusAndEnoughFeedback("active", 5);
             if (grains.isEmpty()) return;
             int updated = 0;
             for (var g : grains) {

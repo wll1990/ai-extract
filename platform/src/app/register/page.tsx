@@ -21,6 +21,8 @@ export default function RegisterPage() {
 
   // 个人注册
   const [cNickname, setCNickname] = useState('');
+  const [cAvatar, setCAvatar] = useState<File | null>(null);
+  const [cAvatarPreview, setCAvatarPreview] = useState<string | null>(null);
   const [cAccount, setCAccount] = useState('');
   const [cPassword, setCPassword] = useState('');
 
@@ -58,18 +60,19 @@ export default function RegisterPage() {
     if (cPassword.length < 6) { setError('密码至少 6 位'); return; }
     setLoading(true); setError('');
     try {
+      const formData = new FormData();
+      formData.append('account', cAccount.trim());
+      formData.append('password', cPassword);
+      formData.append('nickname', cNickname.trim() || ('用户' + cAccount.trim().substring(0, 6)));
+      if (cAvatar) formData.append('avatar', cAvatar);
+
       const r = await fetch('/api/v1/c/auth/register/new', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          account: cAccount.trim(),
-          password: cPassword,
-          nickname: cNickname.trim() || ('用户' + cAccount.trim().substring(0, 6)),
-        }),
+        body: formData,
       });
       const d = await r.json();
       if (d.code !== 200) throw new Error(d.message || '注册失败');
-      localStorage.setItem('c_auth', JSON.stringify({ token: d.data.token, user: { userId: d.data.userId, nickname: d.data.nickname, status: d.data.status } }));
+      localStorage.setItem('c_auth', JSON.stringify({ token: d.data.token, user: { userId: d.data.userId, nickname: d.data.nickname, avatarUrl: d.data.avatarUrl, status: d.data.status } }));
       router.push('/platform/my');
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败');
@@ -181,6 +184,48 @@ export default function RegisterPage() {
 
           {tab === 'personal' && (
             <>
+              {/* 头像上传 */}
+              <div style={{ marginBottom: 14, textAlign: 'center' }}>
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 8 }}>
+                  头像（选填）
+                </label>
+                <label style={{
+                  display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                  cursor: 'pointer',
+                }}>
+                  {cAvatarPreview ? (
+                    <img src={cAvatarPreview} alt="头像预览" style={{
+                      width: 72, height: 72, borderRadius: '50%', objectFit: 'cover',
+                      border: '2px solid var(--border-subtle)',
+                    }} />
+                  ) : (
+                    <div style={{
+                      width: 72, height: 72, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, var(--s12), var(--tangerine))',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 28, fontWeight: 700,
+                    }}>
+                      {cNickname?.trim()?.[0] || '?'}
+                    </div>
+                  )}
+                  <span style={{ fontSize: 11, color: 'var(--tangerine)', marginTop: 6 }}>
+                    {cAvatarPreview ? '点击更换' : '点击上传'}
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        setCAvatar(file);
+                        setCAvatarPreview(URL.createObjectURL(file));
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 6 }}>昵称（选填）</label>
                 <input type="text" value={cNickname} onChange={(e) => setCNickname(e.target.value)}

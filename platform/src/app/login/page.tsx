@@ -63,7 +63,7 @@ export default function LoginPage() {
       const d = await r.json();
       if (d.code !== 200) throw new Error(d.message || '登录失败');
       // C 端 token 存 localStorage.c_auth（与分享页一致）
-      localStorage.setItem('c_auth', JSON.stringify({ token: d.data.token, user: { userId: d.data.userId, nickname: d.data.nickname, status: d.data.status } }));
+      localStorage.setItem('c_auth', JSON.stringify({ token: d.data.token, user: { userId: d.data.userId, nickname: d.data.nickname, avatarUrl: d.data.avatarUrl, status: d.data.status } }));
       router.push('/platform/my');
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败');
@@ -191,7 +191,7 @@ export default function LoginPage() {
                 {loading ? '登录中...' : '企业登录'}
               </button>
               <p style={{ textAlign: 'center', marginTop: 20, fontSize: 12, color: 'var(--fg-low)' }}>
-                还没有账户？ <Link href="/register" style={{ color: 'var(--tangerine)', fontWeight: 600, textDecoration: 'none' }}>注册</Link>
+                还没有账户？ <Link href="/register" prefetch={false} style={{ color: 'var(--tangerine)', fontWeight: 600, textDecoration: 'none' }}>注册</Link>
               </p>
             </>
           )}

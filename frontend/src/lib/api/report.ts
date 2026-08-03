@@ -4,8 +4,7 @@
  * @since 2026-06-29
  */
 
-import { apiClient, authHeaders, API_BASE } from './client';
-import { getToken } from '@/lib/storage';
+import { apiClient } from './client';
 
 /** 报告列表项 */
 export interface ReportListItem {
@@ -15,9 +14,10 @@ export interface ReportListItem {
   subtitle: string;
   rating: number;
   viewCount: number;
-  fileStatus: string;
   authorName?: string;
   sceneTags?: string[];
+  shareCode?: string;
+  hasHtml: boolean;
   createdAt: string;
 }
 
@@ -28,10 +28,8 @@ export interface ReportDetail {
   title: string;
   subtitle: string;
   contentJson: Record<string, unknown>;
-  wordUrl: string | null;
-  pptUrl: string | null;
-  webPublished: boolean;
-  fileStatus: string;
+  shareCode?: string;
+  hasHtml: boolean;
   rating: number;
   viewCount: number;
   authorName: string;
@@ -51,26 +49,20 @@ export interface PageResponse<T> {
   totalPages: number;
 }
 
-export interface UpdateReportRequest {
-  chapters: ChapterUpdate[];
-  regenerate: boolean;
-}
-
-export interface ChapterUpdate {
-  order: number;
-  content: Record<string, unknown>;
-}
-
 /** 获取报告列表 */
 export async function getReports(
   spaceId?: string,
   keyword?: string,
   page = 1,
-  size = 20,
+  size = 12,
+  tag?: string,
+  sort = 'createdAt',
 ): Promise<PageResponse<ReportListItem>> {
   const params = new URLSearchParams();
   if (spaceId) params.set('spaceId', spaceId);
   if (keyword) params.set('keyword', keyword);
+  if (tag) params.set('tag', tag);
+  params.set('sort', sort);
   params.set('page', String(page));
   params.set('size', String(size));
   return apiClient<PageResponse<ReportListItem>>(`/reports?${params.toString()}`);
@@ -81,45 +73,21 @@ export async function getReport(reportId: string): Promise<ReportDetail> {
   return apiClient<ReportDetail>(`/reports/${reportId}`);
 }
 
-/** 编辑报告 */
-export async function updateReport(
-  reportId: string,
-  chapters: ChapterUpdate[],
-  regenerate: boolean,
-): Promise<ReportDetail> {
-  return apiClient<ReportDetail>(`/reports/${reportId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ chapters, regenerate }),
+/** 生成分享链接 */
+export async function shareReport(reportId: string): Promise<{ shareCode: string; shareUrl: string }> {
+  return apiClient<{ shareCode: string; shareUrl: string }>(`/reports/${reportId}/share`, {
+    method: 'POST',
   });
 }
 
-/** 构建下载 URL */
-export function getDownloadUrl(reportId: string, format: 'word' | 'ppt'): string {
-  return `${API_BASE}/reports/${reportId}/download?format=${format}`;
-}
-
-/** 下载报告文件 */
-export async function downloadReport(reportId: string, format: 'word' | 'ppt'): Promise<void> {
-  const url = getDownloadUrl(reportId, format);
-  const res = await fetch(url, { headers: authHeaders() });
-  if (!res.ok) throw new Error('下载失败');
-  const blob = await res.blob();
-  const downloadUrl = window.URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = downloadUrl;
-  a.download = `report.${format === 'ppt' ? 'pptx' : 'docx'}`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(downloadUrl);
+/** 管理员重新生成报告 */
+export async function regenerateReport(reportId: string): Promise<{ success: boolean; grainCount: number }> {
+  return apiClient<{ success: boolean; grainCount: number }>(`/admin/reports/${reportId}/regenerate`, {
+    method: 'POST',
+  });
 }
 
 /** 提交评分 */
 export function rateReport(reportId: string, rating: number): Promise<void> {
   return apiClient<void>(`/reports/${reportId}/rate`, { method: 'POST', body: JSON.stringify({ rating }) });
-}
-
-/** 同步检查清单 */
-export function syncChecklist(reportId: string, items: Record<string, boolean>): Promise<void> {
-  return apiClient<void>(`/reports/${reportId}/checklist`, { method: 'POST', body: JSON.stringify(items) });
 }

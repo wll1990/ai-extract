@@ -10,9 +10,12 @@ import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.repository.CompanyRepository;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.InterviewInviteCodeRepository;
-import com.aiextract.repository.OrganizationSkillRepository;
+import com.aiextract.model.SkillShare;
+
 import com.aiextract.repository.SkillConversationRepository;
 import com.aiextract.repository.SkillRepository;
+import com.aiextract.repository.SkillShareRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,7 +49,9 @@ public class PublicController {
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final InterviewInviteCodeRepository inviteCodeRepository;
     private final CompanyRepository companyRepository;
-    private final OrganizationSkillRepository orgSkillRepository;
+    
+    private final com.aiextract.repository.SkillShareRepository shareRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 落地页数据背书 — 平台实时统计数据。
@@ -70,10 +75,23 @@ public class PublicController {
      * 只返回已发布分身的基本信息，无需认证。
      */
     @GetMapping("/skills")
-    public ApiResponse<List<Map<String, Object>>> listPublicSkills(
+    public ApiResponse<Map<String, Object>> listPublicSkills(
             @RequestParam(defaultValue = "") String search,
-            @RequestParam(defaultValue = "") String topic) {
+            @RequestParam(defaultValue = "") String type,
+            @RequestParam(defaultValue = "recommended") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         List<Skill> skills = skillRepository.findByStatus("published");
+
+        // 只展示已开启对外分享的分身
+        Set<UUID> sharedSkillIds = shareRepository
+                .findByChannelAndEnabled(SkillShare.CHANNEL_PUBLIC, true).stream()
+                .map(SkillShare::getSkillId)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        skills = skills.stream()
+                .filter(s -> sharedSkillIds.contains(s.getId()))
+                .toList();
 
         // 批量查颗粒数
         List<UUID> spaceIds = skills.stream().map(Skill::getSpaceId).distinct().toList();
@@ -81,28 +99,26 @@ public class PublicController {
                 .collect(java.util.stream.Collectors.toMap(
                         row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
 
-        // 收集所有话题标签
-        Set<String> allTopics = new LinkedHashSet<>();
-
+        String q = search.trim().toLowerCase();
         List<Map<String, Object>> result = new ArrayList<>();
         for (Skill skill : skills) {
-            // 搜索过滤
             String name = skill.getDisplayName() != null ? skill.getDisplayName()
                     : skill.getOwnerName() != null ? skill.getOwnerName() : "";
             String title = skill.getOwnerTitle() != null ? skill.getOwnerTitle() : "";
-            if (!search.isBlank()) {
-                String q = search.toLowerCase();
-                if (!name.toLowerCase().contains(q) && !title.toLowerCase().contains(q)) {
-                    continue;
-                }
+            List<String> tagList = parseTags(skill.getTags());
+            String skillType = skill.getType() != null ? skill.getType() : "individual";
+
+            // 搜索过滤：姓名、标签、领域
+            if (!q.isBlank()) {
+                boolean hit = name.toLowerCase().contains(q)
+                        || title.toLowerCase().contains(q)
+                        || tagList.stream().anyMatch(t -> t.toLowerCase().contains(q))
+                        || (skill.getDomain() != null && skill.getDomain().toLowerCase().contains(q));
+                if (!hit) continue;
             }
 
-            // 话题过滤 — 从 tags JSONB 匹配
-            List<String> tagList = parseTags(skill.getTags());
-            if (!topic.isBlank() && !tagList.contains(topic)) {
-                continue;
-            }
-            allTopics.addAll(tagList);
+            // 类型过滤
+            if (!type.isBlank() && !type.equals(skillType)) continue;
 
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", skill.getId().toString());
@@ -115,7 +131,7 @@ public class PublicController {
             item.put("grainCount", grainCountMap.getOrDefault(skill.getSpaceId(), 0L).intValue());
             item.put("openingMessage", skill.getOpeningMessage());
             item.put("domain", skill.getDomain());
-            // 互动统计 — 从 Skill 实体缓存字段直接读
+            item.put("type", skillType);
             Map<String, Object> stats = new LinkedHashMap<>();
             stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
             stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
@@ -124,36 +140,39 @@ public class PublicController {
             result.add(item);
         }
 
-        // 追加已发布的组织分身
-        List<com.aiextract.model.OrganizationSkill> orgSkills =
-                orgSkillRepository.findByStatus("published");
-        for (com.aiextract.model.OrganizationSkill org : orgSkills) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("id", org.getId().toString());
-            item.put("type", "organization");
-            item.put("displayName", org.getName());
-            item.put("ownerName", org.getName());
-            item.put("ownerTitle", org.getDescription() != null ? org.getDescription() : "");
-            item.put("avatarUrl", org.getAvatarUrl());
-            item.put("department", "");
-            item.put("tags", List.of());
-            item.put("grainCount", 0);
-            item.put("openingMessage", org.getOpeningMessage());
-            item.put("domain", org.getDomain());
-            Map<String, Object> stats = new LinkedHashMap<>();
-            stats.put("conversationCount", org.getConversationCount() != null ? org.getConversationCount() : 0);
-            stats.put("userCount", org.getUserCount() != null ? org.getUserCount() : 0);
-            stats.put("satisfactionRate", org.getSatisfactionRate() != null ? org.getSatisfactionRate() : 0);
-            item.put("stats", stats);
-            result.add(item);
+        // 排序
+        switch (sort) {
+            case "popular":
+                result.sort((a, b) -> Integer.compare(
+                        (int) ((Map<String, Object>) b.get("stats")).getOrDefault("conversationCount", 0),
+                        (int) ((Map<String, Object>) a.get("stats")).getOrDefault("conversationCount", 0)));
+                break;
+            case "grains":
+                result.sort((a, b) -> Integer.compare(
+                        (int) b.getOrDefault("grainCount", 0),
+                        (int) a.getOrDefault("grainCount", 0)));
+                break;
+            default: // recommended
+                result.sort((a, b) -> Integer.compare(
+                        (int) b.getOrDefault("grainCount", 0),
+                        (int) a.getOrDefault("grainCount", 0)));
         }
 
-        // 按颗粒数降序
-        result.sort((a, b) -> Integer.compare(
-                (int) b.getOrDefault("grainCount", 0),
-                (int) a.getOrDefault("grainCount", 0)));
+        // 分页
+        int total = result.size();
+        int totalPages = (int) Math.ceil((double) total / size);
+        int fromIndex = (page - 1) * size;
+        int toIndex = Math.min(fromIndex + size, total);
+        List<Map<String, Object>> paged = fromIndex < total ? result.subList(fromIndex, toIndex) : List.of();
 
-        return ApiResponse.success(result);
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("content", paged);
+        response.put("page", page);
+        response.put("size", size);
+        response.put("total", total);
+        response.put("totalPages", totalPages);
+
+        return ApiResponse.success(response);
     }
 
     /**
@@ -189,10 +208,15 @@ public class PublicController {
         if (c.getExpiresAt() != null && c.getExpiresAt().isBefore(LocalDateTime.now())) {
             throw new BusinessException(404, "邀请码已过期");
         }
-        Company company = companyRepository.findById(c.getCompanyId()).orElse(null);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("companyId", c.getCompanyId().toString());
-        result.put("companyName", company != null ? company.getName() : "未知企业");
+        result.put("type", c.getType() != null ? c.getType() : "enterprise");
+        if ("personal".equals(c.getType())) {
+            result.put("inviterName", c.getInvitedBy() != null ? c.getInvitedBy() : "平台用户");
+        } else {
+            Company company = companyRepository.findById(c.getCompanyId()).orElse(null);
+            result.put("companyId", c.getCompanyId() != null ? c.getCompanyId().toString() : null);
+            result.put("companyName", company != null ? company.getName() : "未知企业");
+        }
         return ApiResponse.success(result);
     }
 
@@ -202,7 +226,7 @@ public class PublicController {
             return List.of();
         }
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(tagsJson, List.class);
+            return objectMapper.readValue(tagsJson, List.class);
         } catch (Exception e) {
             return List.of();
         }

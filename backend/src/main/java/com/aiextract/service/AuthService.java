@@ -87,13 +87,13 @@ public class AuthService {
         // 验证密码
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("密码错误, userId: {}", user.getId());
-            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), ErrorMessages.PASSWORD_WRONG);
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), ErrorMessages.PASSWORD_WRONG);
         }
 
         // 检查账户是否激活
         if (Boolean.FALSE.equals(user.getIsActive())) {
             log.warn("账户已禁用, userId: {}", user.getId());
-            throw new BusinessException(HttpStatus.FORBIDDEN.value(), ErrorMessages.ACCOUNT_DISABLED);
+            throw new BusinessException(HttpStatus.LOCKED.value(), ErrorMessages.ACCOUNT_DISABLED);
         }
 
         // 生成Token

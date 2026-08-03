@@ -13,12 +13,9 @@ from typing import Dict
 from fastapi import FastAPI
 
 from routers.internal import router as internal_router
+from logger_config import setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging("ai-service")
 
 
 @asynccontextmanager

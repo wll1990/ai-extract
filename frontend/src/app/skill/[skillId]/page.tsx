@@ -7,13 +7,14 @@ import { SkillOpeningView } from '@/components/skill/SkillOpeningView';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 import RecommendedQuestions from '@/components/skill/RecommendedQuestions';
 import HistorySidebar from '@/components/skill/HistorySidebar';
-import { API_BASE } from '@/lib/api/client';
+import { API_BASE, apiClient } from '@/lib/api/client';
 import PracticeChatSection from './PracticeChatSection';
 import { useQaChat } from './hooks/useQaChat';
 import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import SceneTagBar from '@/components/skill/SceneTagBar';
 import { getOrCreateSkillShare, toggleSkillShare, createInternalShare } from '@/lib/api/skill';
+import type { SkillShareInfo } from '@/lib/api/admin';
 import { TrustBadge, StatBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
@@ -116,6 +117,9 @@ export default function SkillChatPage() {
       <div className="flex-1 flex flex-col min-w-0">
         {/* 顶栏 — sticky 固定，滚动时不隐藏 */}
         <header className="flex items-center gap-3 px-5 py-3 border-b border-border bg-surface-2 flex-shrink-0 sticky top-0 z-10">
+          <button onClick={() => router.back()} className="text-muted-foreground-2 hover:text-foreground transition-colors" title="返回">
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+          </button>
           <ChatAvatar role="ai" src={avatarUrl || undefined} size={32} />
 
           <div className="min-w-0 leading-tight">
@@ -238,6 +242,8 @@ export default function SkillChatPage() {
           {(chatMode === 'qa' || chatMode === 'talk') && (
             <SkillChatView inputValue={qa.inputValue} onInputChange={qa.setInputValue} onSend={qa.handleQaSend}
               isStreaming={qa.isStreaming} streamText={qa.qaStreamText} ownerName={ownerName}
+              showVoice
+              onVoiceTranscription={(text) => qa.setInputValue(prev => prev + text)}
               placeholder={chatMode === 'talk' ? '聊聊你的想法...' : '问我任何销售问题...'}
               footer={
                 <div className="flex items-center justify-center gap-2">

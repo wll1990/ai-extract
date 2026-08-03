@@ -83,6 +83,14 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      * @param workerId workerId
      * @return 统计数量
      */
+    /** 分页查分身素材，排除指定类型（如访谈转录）。NULL materialType 视为用户上传。 */
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.skillId = :skillId AND (sm.materialType <> :excludeType OR sm.materialType IS NULL) ORDER BY sm.createdAt DESC")
+    Page<SkillMaterial> findBySkillIdExcludingType(@Param("skillId") UUID skillId, @Param("excludeType") String excludeType, Pageable pageable);
+
+    /** 从一批 skillId 中找出至少有一条非 interview 素材的。NULL materialType 视为用户上传。 */
+    @Query("SELECT DISTINCT sm.skillId FROM SkillMaterial sm WHERE sm.skillId IN :skillIds AND (sm.materialType <> 'interview' OR sm.materialType IS NULL)")
+    List<UUID> findSkillIdsWithRealMaterials(@Param("skillIds") List<UUID> skillIds);
+
     @Modifying
     @Query("UPDATE SkillMaterial sm SET sm.lockedBy = :workerId, sm.lockedAt = CURRENT_TIMESTAMP WHERE sm.id = :id AND sm.lockedBy IS NULL")
     int tryLock(@Param("id") UUID id, @Param("workerId") String workerId);

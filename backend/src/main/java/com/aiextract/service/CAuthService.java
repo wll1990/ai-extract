@@ -21,6 +21,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -53,6 +54,9 @@ public class CAuthService {
 
     @Value("${app.share.c-user-token-ttl-days:30}")
     private int cUserTokenTtlDays;
+
+    @Value("${app.storage.base-path:data/files}")
+    private String storageBasePath;
 
     @Value("${app.share.guest-token-ttl-days:7}")
     private int guestTokenTtlDays;
@@ -117,11 +121,11 @@ public class CAuthService {
     }
 
     /**
-     * C 端独立注册（非游客升级，source='platform'）。
+     * C 端独立注册（非游客升级，source='platform'），支持上传头像。
      * 用户在 platform 直接注册，没有经过分享链接。
      */
     @Transactional(rollbackFor = Exception.class)
-    public GuestSessionResponse registerNew(String account, String password, String nickname) {
+    public GuestSessionResponse registerNew(String account, String password, String nickname, MultipartFile avatar) {
         if (appUserRepository.existsByAccount(account)) {
             throw new BusinessException(400, "账号已被占用");
         }
@@ -135,6 +139,13 @@ public class CAuthService {
             .createdAt(LocalDateTime.now())
             .updatedAt(LocalDateTime.now())
             .build();
+
+        // 上传头像（可选）
+        if (avatar != null && !avatar.isEmpty()) {
+            String avatarUrl = saveUserAvatar(user.getId(), avatar);
+            user.setAvatarUrl(avatarUrl);
+        }
+
         appUserRepository.save(user);
         // 自动创建个人空间
         spaceRepository.save(com.aiextract.model.Space.builder()
@@ -147,6 +158,26 @@ public class CAuthService {
         return buildSession(user, issueToken(user));
     }
 
+    /** 保存用户头像文件，返回相对路径 URL */
+    private String saveUserAvatar(UUID userId, MultipartFile file) {
+        String dir = storageBasePath + "/avatars/users/" + userId + "/";
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
+        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+
+        java.io.File destDir = new java.io.File(dir).getAbsoluteFile();
+        if (!destDir.exists()) destDir.mkdirs();
+        java.io.File dest = new java.io.File(destDir, safeName);
+
+        try {
+            file.transferTo(dest);
+        } catch (Exception e) {
+            log.error("用户头像保存失败 userId={} path={}", userId, dest.getAbsolutePath(), e);
+            throw new RuntimeException("头像保存失败: " + e.getMessage());
+        }
+
+        return "/files/avatars/users/" + userId + "/" + safeName;
+    }
+
     /**
      * C 端登录（平台级账号密码，无企业 ID）
      */
@@ -157,7 +188,7 @@ public class CAuthService {
         if (user.getPasswordHash() == null
                 || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("C端密码错误 userId={}", user.getId());
-            throw new BusinessException(401, ErrorMessages.PASSWORD_WRONG);
+            throw new BusinessException(400, ErrorMessages.PASSWORD_WRONG);
         }
         LocalDateTime now = LocalDateTime.now();
         user.setLastActiveAt(now);
@@ -208,6 +239,7 @@ public class CAuthService {
                 .token(token)
                 .userId(user.getId().toString())
                 .nickname(user.getNickname())
+                .avatarUrl(user.getAvatarUrl())
                 .status(user.getStatus())
                 .remaining(remaining)
                 .limit(isGuest ? guestMessageLimit : null)

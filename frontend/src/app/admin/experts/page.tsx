@@ -4,6 +4,7 @@ import React from 'react';
 import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Toast } from '@/components/ui/Toast';
+import { copyToClipboard } from '@/lib/clipboard';
 import { activateExpert, extractGrains, getExpertDetail, deleteExpert, deleteGrain, getCompositeDetail, retryExpert, uploadExpertMaterials, uploadDocumentFile, type CompositeInfo } from '@/lib/api/expert';
 import { UploadExpertModal } from '@/components/modals/UploadExpertModal';
 import { ReviewGrainsModal } from '@/components/modals/ReviewGrainsModal';
@@ -51,9 +52,9 @@ export default function AdminExpertsPage() {
           <button onClick={() => h.setShowUpload(true)} className="rounded-md border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-primary-light">
             📤 上传新材料
           </button>
-          <button onClick={() => {
-            navigator.clipboard.writeText(window.location.origin + '/interview/create?invite=expert');
-            h.showToast('邀请链接已复制！');
+          <button onClick={async () => {
+            const ok = await copyToClipboard(window.location.origin + '/interview/create?invite=expert');
+            if (ok) h.showToast('邀请链接已复制！');
           }} className="rounded-lg border border-border-strong px-4 py-2 text-sm text-primary hover:bg-primary-light">
             🔗 邀请萃取师访谈
           </button>

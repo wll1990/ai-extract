@@ -9,7 +9,7 @@ export function Footer() {
       }}>
         <Link href="/discover" style={{ color: 'var(--fg-dim)', textDecoration: 'none', fontSize: 12 }}>发现专家</Link>
         <Link href="/login" style={{ color: 'var(--fg-dim)', textDecoration: 'none', fontSize: 12 }}>登录</Link>
-        <Link href="/register" style={{ color: 'var(--fg-dim)', textDecoration: 'none', fontSize: 12 }}>注册</Link>
+        <Link href="/register" prefetch={false} style={{ color: 'var(--fg-dim)', textDecoration: 'none', fontSize: 12 }}>注册</Link>
       </div>
       <div style={{ fontSize: 12, color: 'var(--fg-dim)' }}>
         &copy; {new Date().getFullYear()} MindForge &middot; Forge Expertise, Scale Minds

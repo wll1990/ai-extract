@@ -22,6 +22,7 @@ export interface SpaceDetail extends SpaceInfo {
   grainDistribution: GrainDistribution[];
   interviewCount: number; materialCount: number;
   status: string;
+  reportPage: number; reportSize: number; reportTotal: number; reportTotalPages: number;
   stats: { reportCount: number; viewCount: number; grainCount: number; interviewCount: number; materialCount: number };
 }
 
@@ -41,6 +42,10 @@ export function getSpaces(keyword?: string, tag?: string, page = 1, size = 20, u
 }
 
 /** 获取空间详情 */
-export function getSpace(spaceId: string): Promise<SpaceDetail> {
-  return apiClient<SpaceDetail>(`/spaces/${spaceId}`);
+export function getSpace(spaceId: string, reportPage = 1, reportSize = 10, reportSort = 'createdAt'): Promise<SpaceDetail> {
+  const p = new URLSearchParams();
+  p.set('reportPage', String(reportPage));
+  p.set('reportSize', String(reportSize));
+  p.set('reportSort', reportSort);
+  return apiClient<SpaceDetail>(`/spaces/${spaceId}?${p}`);
 }

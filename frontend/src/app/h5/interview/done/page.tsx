@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { copyToClipboard } from '@/lib/clipboard';
 
 function DoneContent() {
   const router = useRouter();
@@ -10,12 +11,8 @@ function DoneContent() {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText('platform.mindforce.com');
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // fallback for older browsers
+    const ok = await copyToClipboard('platform.mindforce.com');
+    if (ok) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }

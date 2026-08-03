@@ -49,6 +49,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/auth/register/with-code").permitAll()
 
                         // ── 公开接口 ──
+                        .requestMatchers("/public/reports/**").permitAll()
                         .requestMatchers("/public/**").permitAll()
 
                         // ── C 端认证 ──
@@ -60,6 +61,9 @@ public class SecurityConfig {
                         // ── Swagger / 健康检查 ──
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
+
+                        // ── WebSocket 语音识别 ──
+                        .requestMatchers("/ws/**").permitAll()
 
                         // ── IM 回调：无需 JWT ──
                         .requestMatchers("/im/*/callback").permitAll()
@@ -78,6 +82,11 @@ public class SecurityConfig {
                         .requestMatchers("/admin/companies/**").hasAuthority(Permission.COMPANY_MANAGE)
                         .requestMatchers("/admin/partners/**").hasAuthority(Permission.PARTNER_MANAGE)
                         .requestMatchers("/admin/im/**").hasAuthority(Permission.IM_MANAGE)
+                        .requestMatchers(HttpMethod.POST, "/admin/invite").hasAnyAuthority("super_admin", "company_admin", "employee")
+                        .requestMatchers("/admin/materials/**").hasAuthority(Permission.MATERIAL_MANAGE)
+                        .requestMatchers("/admin/skills/picker").hasAuthority(Permission.MATERIAL_MANAGE)
+                        .requestMatchers("/admin/users/picker").hasAuthority(Permission.MATERIAL_MANAGE)
+                        .requestMatchers("/admin/skills/*/materials/**").hasAuthority(Permission.MATERIAL_MANAGE)
                         .requestMatchers("/admin/**").hasAuthority(Permission.DASHBOARD_VIEW)
 
                         // ── 访谈：B端全员 + C端注册用户 + 合作方（排除游客） ──
@@ -99,10 +108,12 @@ public class SecurityConfig {
                         .requestMatchers("/skills/**").hasAuthority(Permission.SKILL_USE)
 
                         // ── 报告 ──
-                        .requestMatchers(HttpMethod.GET, "/reports/*").authenticated()
+                        .requestMatchers("/reports/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/reports/by-session/**").authenticated()
 
-                        // ── 其余内部接口：B 端全员 ──
+                        // ── 其余内部接口：仅 B 端全员 ──
+                        // ⚠️ 注意：C 端接口（c_guest/c_user/c_partner）必须在上方显式声明，
+                        // 否则会被此 catch-all 规则拒绝。新增 C 端接口时务必加 .requestMatchers()。
                         .anyRequest().hasAnyAuthority("super_admin", "company_admin", "employee"))
 
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

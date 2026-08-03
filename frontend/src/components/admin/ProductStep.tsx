@@ -22,7 +22,7 @@ interface Props {
   showDemoModal: boolean;
   setShowDemoModal: (v: boolean) => void;
   onPreviewReport: (skillId: string) => void;
-  onDownloadReport: (skillId: string, format: 'html' | 'ppt') => Promise<void>;
+  onDownloadReport: (skillId: string, format: 'html') => Promise<void>;
   onDataRefresh: (d: AuditDashboard) => void;
 }
 
@@ -271,7 +271,6 @@ export default function ProductStep({
                     );
                   })()}
                   <button onClick={() => onDownloadReport(skillId, 'html')} className="px-4 py-2 bg-gold text-white rounded-lg text-sm">📄 HTML</button>
-                  <button onClick={() => onDownloadReport(skillId, 'ppt')} className="px-4 py-2 bg-orange text-white rounded-lg text-sm">📊 PPT</button>
                 </div>
               </>
             ) : (

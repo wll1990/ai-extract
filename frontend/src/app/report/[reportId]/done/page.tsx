@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getReport, getDownloadUrl, type ReportDetail } from '@/lib/api/report';
+import { getReport, type ReportDetail } from '@/lib/api/report';
 
 /** 生成阶段 */
 type GenerationPhase = 'generating' | 'done' | 'failed';
@@ -43,6 +43,8 @@ export default function ReportDonePage() {
     let cancelled = false;
     let pollTimer: ReturnType<typeof setTimeout>;
     let stepTimer: ReturnType<typeof setInterval>;
+    let retries = 0;
+    const MAX_RETRIES = 60; // 2分钟超时
 
     // 进度动画
     stepTimer = setInterval(() => {
@@ -52,7 +54,7 @@ export default function ReportDonePage() {
       });
     }, 2000);
 
-    // 立即尝试加载 + 轮询
+    // 轮询拉取报告
     const pollReport = async () => {
       try {
         const data = await getReport(reportId);
@@ -62,7 +64,14 @@ export default function ReportDonePage() {
           setActiveStep(PROGRESS_STEPS.length);
         }
       } catch {
-        // 报告尚未生成完毕，2秒后重试
+        retries++;
+        if (retries >= MAX_RETRIES) {
+          if (!cancelled) {
+            setPhase('failed');
+            setError('报告生成超时，请稍后重试');
+          }
+          return;
+        }
         if (!cancelled) {
           pollTimer = setTimeout(pollReport, 2000);
         }
@@ -87,15 +96,6 @@ export default function ReportDonePage() {
     setError(null);
     window.location.reload();
   }, []);
-
-  /**
-   * 下载文件
-   */
-  const handleDownload = useCallback((format: 'word' | 'ppt') => {
-    if (!reportId) return;
-    const url = getDownloadUrl(reportId, format);
-    window.open(url, '_blank');
-  }, [reportId]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface">
@@ -182,28 +182,8 @@ export default function ReportDonePage() {
               </div>
             </div>
 
-            {/* 下载按钮 */}
-            <div className="grid grid-cols-4 gap-3">
-              <button
-                type="button"
-                onClick={() => handleDownload('word')}
-                className="flex flex-col items-center gap-1 rounded-xl bg-primary-light px-4 py-4 text-sm text-foreground transition-colors hover:bg-border"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#165DFF" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                </svg>
-                <span>Word</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleDownload('ppt')}
-                className="flex flex-col items-center gap-1 rounded-xl bg-primary-light px-4 py-4 text-sm text-foreground transition-colors hover:bg-border"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#DC2626" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-                </svg>
-                <span>PPT</span>
-              </button>
+            {/* 查看报告 */}
+            <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => router.push(`/report/${reportId}`)}
@@ -212,17 +192,7 @@ export default function ReportDonePage() {
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#00B42A" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                 </svg>
-                <span>Web版</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push(`/report/${reportId}`)}
-                className="flex flex-col items-center gap-1 rounded-xl bg-primary-light px-4 py-4 text-sm text-foreground transition-colors hover:bg-border"
-              >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="#4E5969" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                </svg>
-                <span>分享</span>
+                <span>查看报告</span>
               </button>
             </div>
 
@@ -232,7 +202,7 @@ export default function ReportDonePage() {
                 <span className="text-[40px]">🤖</span>
                 <div>
                   <h3 className="text-lg font-semibold text-foreground">
-                    AI分身已就绪
+                    AI分身已发布
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     你的经验已经被AI学习，现在团队可以直接向"你的分身"提问，

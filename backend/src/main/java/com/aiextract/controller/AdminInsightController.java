@@ -2,11 +2,13 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.common.PageResponse;
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
+import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -155,12 +157,15 @@ public class AdminInsightController {
      * 知识缺口列表 — 按次数降序。
      */
     @GetMapping("/{skillId}/knowledge-gaps")
-    public ApiResponse<List<Map<String, Object>>> getKnowledgeGaps(@PathVariable String skillId) {
+    public ApiResponse<Map<String, Object>> getKnowledgeGaps(
+            @PathVariable String skillId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         UUID id = UUID.fromString(skillId);
         companyScopeService.assertSkillOwnership(id);
-        List<com.aiextract.model.KnowledgeGap> gaps = knowledgeGapRepository
-            .findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(id, "open");
-        List<Map<String, Object>> result = gaps.stream().map(g -> {
+        var pageable = org.springframework.data.domain.PageRequest.of(page, size);
+        var gapPage = knowledgeGapRepository.findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(id, "open", pageable);
+        List<Map<String, Object>> result = gapPage.getContent().stream().map(g -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", g.getId().toString());
             m.put("query", g.getQuery());
@@ -171,7 +176,7 @@ public class AdminInsightController {
             m.put("note", g.getNote());
             return m;
         }).collect(Collectors.toList());
-        return ApiResponse.success(result);
+        return ApiResponse.success(PageResponse.of(result, gapPage, page, size));
     }
 
     /**
@@ -411,7 +416,7 @@ public class AdminInsightController {
         if (!text.trim().isEmpty()) {
             try {
                 float[] vec = embeddingService.embed(text);
-                grainRepository.updateEmbedding(grain.getId(), arrayToPgVector(vec));
+                grainRepository.updateEmbedding(grain.getId(), new PGvector(vec).toString());
                 log.info("候选颗粒已写入并向量化 grainId={} sceneTag={}", grain.getId(), candidate.getSceneTag());
             } catch (Exception e) {
                 log.error("候选颗粒向量化失败 grainId={}", grain.getId(), e);
@@ -523,16 +528,6 @@ public class AdminInsightController {
         m.put(KEY_NOTE, g.getNote());
         m.put("createdAt", g.getCreatedAt() != null ? g.getCreatedAt().toString() : null);
         return m;
-    }
-
-    private String arrayToPgVector(float[] vec) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vec.length; i++) {
-            if (i > 0) { sb.append(","); }
-            sb.append(String.format("%.8f", vec[i]));
-        }
-        sb.append("]");
-        return sb.toString();
     }
 
     // ==================== P1-7: 回答矫正 ====================

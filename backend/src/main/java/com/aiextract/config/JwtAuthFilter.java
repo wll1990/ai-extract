@@ -51,56 +51,50 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         TraceContext.init(java.util.UUID.randomUUID());
         response.setHeader("X-Trace-Id", TraceContext.get());
 
-        // ── 合作方 JWT 验证（URL ?token= 参数） ──
-        String partnerToken = request.getParameter("token");
-        if (partnerToken != null && !partnerToken.isBlank()) {
-            try {
-                UUID userId = partnerJwtFilter.authenticate(partnerToken);
-                setAuthentication(userId, "c_partner", partnerToken, null, request);
-                filterChain.doFilter(request, response);
-                return;
-            } catch (Exception e) {
-                log.warn("Partner JWT 验证失败: {}", e.getMessage());
-                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, e.getMessage());
-                return;
-            } finally {
-                TraceContext.clear();
-                TokenContext.clear();
-                CompanyScopeService.clearCache();
+        try {
+            // ── 1. 标准 JWT 验证（优先，覆盖 99% 流量） ──
+            String token = extractToken(request);
+
+            if (token != null) {
+                try {
+                    if (jwtUtil.validateToken(token)) {
+                        UUID userId = jwtUtil.getUserIdFromToken(token);
+                        String role = jwtUtil.getRoleFromToken(token);
+                        UUID companyId = jwtUtil.getCompanyIdFromToken(token);
+                        setAuthentication(userId, role, token, companyId, request);
+                        request.setAttribute("token", token);
+                        log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
+                } catch (Exception e) {
+                    log.debug("标准 JWT 校验失败 (将尝试合作方): {}", e.getMessage());
+                    // 标准 JWT 失败 → 降级到合作方验证
+                }
             }
-        }
 
-        String token = extractToken(request);
-
-        if (token == null) {
-            filterChain.doFilter(request, response);
+            // ── 2. 合作方 JWT 验证（仅 ?token= + appId 字段） ──
+            String paramToken = request.getParameter("token");
+            if (paramToken != null && !paramToken.isBlank() && hasAppIdClaim(paramToken)) {
+                try {
+                    UUID userId = partnerJwtFilter.authenticate(paramToken);
+                    setAuthentication(userId, "c_partner", paramToken, null, request);
+                    filterChain.doFilter(request, response);
+                    return;
+                } catch (Exception e) {
+                    log.warn("Partner JWT 验证失败: {}", e.getMessage());
+                    response.sendError(HttpServletResponse.SC_UNAUTHORIZED, e.getMessage());
+                    return;
+                }
+            }
+        } finally {
             TraceContext.clear();
             TokenContext.clear();
-                CompanyScopeService.clearCache();
-            return;
+            CompanyScopeService.clearCache();
         }
 
-        try {
-            if (jwtUtil.validateToken(token)) {
-                UUID userId = jwtUtil.getUserIdFromToken(token);
-                String role = jwtUtil.getRoleFromToken(token);
-                UUID companyId = jwtUtil.getCompanyIdFromToken(token);
-
-                setAuthentication(userId, role, token, companyId, request);
-                request.setAttribute("token", token);
-                log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
-            } else {
-                clearTokenCookie(response);
-            }
-        } catch (Exception e) {
-            log.warn("JWT Token解析失败: {}", e.getMessage());
-            clearTokenCookie(response);
-        }
-
+        // ── 3. 无认证通过 ──
         filterChain.doFilter(request, response);
-        TraceContext.clear();
-        TokenContext.clear();
-                CompanyScopeService.clearCache();
     }
 
     private void setAuthentication(UUID userId, String role, String credentials,
@@ -119,14 +113,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         TokenContext.set(userId, companyId);
     }
 
-    /** 清除客户端过期 token cookie */
-    private void clearTokenCookie(HttpServletResponse response) {
-        SecurityContextHolder.clearContext();
-        jakarta.servlet.http.Cookie expired = new jakarta.servlet.http.Cookie("token", "");
-        expired.setHttpOnly(true);
-        expired.setPath("/");
-        expired.setMaxAge(0);
-        response.addCookie(expired);
+    /**
+     * 检查 JWT payload 中是否包含 appId 字段（合作方 token 的特征）。
+     * 不解签名，仅 Base64 解码 payload 段做快速判断。
+     */
+    private boolean hasAppIdClaim(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            if (parts.length < 2) return false;
+            byte[] payloadBytes = java.util.Base64.getUrlDecoder().decode(parts[1]);
+            com.fasterxml.jackson.databind.JsonNode payload =
+                    new com.fasterxml.jackson.databind.ObjectMapper().readTree(payloadBytes);
+            return payload.has("appId") && !payload.get("appId").asText().isBlank();
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**

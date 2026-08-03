@@ -1,7 +1,7 @@
 package com.aiextract.service;
 
-import com.aiextract.common.TraceContext;
 import com.aiextract.model.ExperienceGrain;
+import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -43,16 +43,16 @@ public class GrainRetriever {
             log.error("嵌入服务返回空 question={}", question.substring(0, Math.min(100, question.length())));
             return List.of();
         }
-        String vectorStr = arrayToPgVector(queryVector);
+        PGvector queryVec = new PGvector(queryVector);
 
         // Step 1: ANN 检索 + 记录余弦相似度
         Map<UUID, Double> simMap = new LinkedHashMap<>();
         List<ExperienceGrain> candidates = jdbc.query("""
-            SELECT g.*, 1.0 - (g.embedding <=> ?::vector) AS similarity
+            SELECT g.*, 1.0 - (g.embedding <=> ?) AS similarity
             FROM experience_grain g
             WHERE g.space_id = ? AND g.status = 'active' AND g.embedding IS NOT NULL
             AND (g.quality_score IS NULL OR g.quality_score >= 3.0)
-            ORDER BY g.embedding <=> ?::vector
+            ORDER BY g.embedding <=> ?
             LIMIT ?
             """,
             (rs, rowNum) -> {
@@ -60,7 +60,7 @@ public class GrainRetriever {
                 simMap.put(g.getId(), rs.getDouble("similarity"));
                 return g;
             },
-            vectorStr, spaceId, vectorStr, topK * 3
+            queryVec, spaceId, queryVec, topK * 3
         );
 
         // Step 2: weight 重排 → 组装结果
@@ -100,7 +100,7 @@ public class GrainRetriever {
             log.error("嵌入服务返回空 question={}", question.substring(0, Math.min(100, question.length())));
             return List.of();
         }
-        String vectorStr = arrayToPgVector(queryVector);
+        PGvector queryVec = new PGvector(queryVector);
 
         // ── Step 1: 多空间并行 ANN 检索（P1-5） ──
         Map<UUID, Double> simMap = new java.util.concurrent.ConcurrentHashMap<>();
@@ -109,11 +109,11 @@ public class GrainRetriever {
         List<java.util.concurrent.CompletableFuture<Void>> futures = spaceIds.stream()
             .map(spaceId -> java.util.concurrent.CompletableFuture.runAsync(() -> {
                 List<ExperienceGrain> spaceResults = jdbc.query("""
-                    SELECT g.*, 1.0 - (g.embedding <=> ?::vector) AS similarity
+                    SELECT g.*, 1.0 - (g.embedding <=> ?) AS similarity
                     FROM experience_grain g
                     WHERE g.space_id = ? AND g.status = 'active' AND g.embedding IS NOT NULL
                     AND (g.quality_score IS NULL OR g.quality_score >= 3.0)
-                    ORDER BY g.embedding <=> ?::vector
+                    ORDER BY g.embedding <=> ?
                     LIMIT ?
                     """,
                     (rs, rowNum) -> {
@@ -122,7 +122,7 @@ public class GrainRetriever {
                         simMap.merge(g.getId(), sim, Math::max);
                         return g;
                     },
-                    vectorStr, spaceId, vectorStr, topK * 3
+                    queryVec, spaceId, queryVec, topK * 3
                 );
                 candidates.addAll(spaceResults);
             }))
@@ -194,17 +194,17 @@ public class GrainRetriever {
         if (queryVector == null || queryVector.length == 0) {
             return retrieveWithScores(question, spaceId, topK); // fallback
         }
-        String vectorStr = arrayToPgVector(queryVector);
+        PGvector queryVec = new PGvector(queryVector);
 
         // 并行执行 dense + sparse
         var denseFuture = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
             Map<UUID, Double> simMap = new LinkedHashMap<>();
             List<ExperienceGrain> candidates = jdbc.query("""
-                SELECT g.*, 1.0 - (g.embedding <=> ?::vector) AS similarity
+                SELECT g.*, 1.0 - (g.embedding <=> ?) AS similarity
                 FROM experience_grain g
                 WHERE g.space_id = ? AND g.status = 'active' AND g.embedding IS NOT NULL
                   AND (g.quality_score IS NULL OR g.quality_score >= 3.0)
-                ORDER BY g.embedding <=> ?::vector
+                ORDER BY g.embedding <=> ?
                 LIMIT ?
                 """,
                 (rs, rn) -> {
@@ -212,7 +212,7 @@ public class GrainRetriever {
                     simMap.put(g.getId(), rs.getDouble("similarity"));
                     return g;
                 },
-                vectorStr, spaceId, vectorStr, topK * 3
+                queryVec, spaceId, queryVec, topK * 3
             );
             return new AbstractMap.SimpleEntry<>(candidates, simMap);
         });
@@ -265,19 +265,6 @@ public class GrainRetriever {
 
     private double getWeight(ExperienceGrain g) {
         return g.getWeight() != null ? g.getWeight() : 1.0;
-    }
-
-    private String arrayToPgVector(float[] vec) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vec.length; i++) {
-            if (i > 0) {
-
-                sb.append(",");
-
-            }
-            sb.append(vec[i]);
-        }
-        return sb.append("]").toString();
     }
 
     private ExperienceGrain mapGrainRow(ResultSet rs, int rowNum) throws SQLException {

@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.PageResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.exception.BusinessException;
@@ -33,27 +34,26 @@ public class AdminGrainController {
     private final com.aiextract.repository.GrainRetrieveLogRepository grainRetrieveLogRepository;
     private final com.aiextract.repository.FeedbackLogRepository feedbackLogRepository;
 
-    /** 颗粒列表 — 按分身空间查询 */
+    /** 颗粒列表 — 按分身空间查询（分页） */
     @GetMapping
-    public ApiResponse<List<Map<String, Object>>> listGrains(
+    public ApiResponse<Map<String, Object>> listGrains(
             @RequestParam UUID skillId,
-            @RequestParam(defaultValue = "helpful") String sort) {
+            @RequestParam(defaultValue = "helpful") String sort,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
         companyScopeService.assertSkillOwnership(skillId);
         var skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
 
-        List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId()).stream()
-            .sorted((a, b) -> {
-                if ("unhelpful".equals(sort)) return Integer.compare(b.getUnhelpfulCount(), a.getUnhelpfulCount());
-                if ("recent".equals(sort)) {
-                    if (a.getCreatedAt() == null) return 1;
-                    if (b.getCreatedAt() == null) return -1;
-                    return b.getCreatedAt().compareTo(a.getCreatedAt());
-                }
-                return Integer.compare(b.getHelpfulCount(), a.getHelpfulCount());
-            }).limit(50).collect(Collectors.toList());
+        var pageable = org.springframework.data.domain.PageRequest.of(page - 1, size,
+            sort.equals("unhelpful") ? org.springframework.data.domain.Sort.by("unhelpfulCount").descending()
+            : sort.equals("recent") ? org.springframework.data.domain.Sort.by("createdAt").descending()
+            : org.springframework.data.domain.Sort.by("helpfulCount").descending());
+        var grainPage = grainRepository.findBySpaceId(skill.getSpaceId(), pageable);
 
-        return ApiResponse.success(grains.stream().map(this::toMap).collect(Collectors.toList()));
+        return ApiResponse.success(PageResponse.of(
+            grainPage.getContent().stream().map(this::toMap).collect(Collectors.toList()),
+            grainPage, page, size));
     }
 
     /** 颗粒详情 */

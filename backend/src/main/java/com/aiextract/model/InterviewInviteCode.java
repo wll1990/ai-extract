@@ -34,9 +34,18 @@ public class InterviewInviteCode {
     @Id
     private UUID id;
 
-    /** 所属企业ID */
-    @Column(name = "company_id", nullable = false)
+    /** 邀请类型：enterprise（企业邀请）| personal（个人邀请） */
+    @Column(name = "type", nullable = false, length = 10)
+    @Builder.Default
+    private String type = "enterprise";
+
+    /** 所属企业ID（enterprise 类型时必填） */
+    @Column(name = "company_id")
     private UUID companyId;
+
+    /** 邀请者昵称（personal 类型时必填） */
+    @Column(name = "invited_by", length = 100)
+    private String invitedBy;
 
     /** 邀请码（base62 8位，全局唯一） */
     @Column(nullable = false, length = 20, unique = true)

@@ -48,8 +48,19 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
      */
     Page<Skill> findBySpaceIdInAndStatusOrderByCreatedAtDesc(List<UUID> spaceIds, String status, Pageable pageable);
 
+    /** 按 space 列表 + 类型分页 */
+    Page<Skill> findBySpaceIdInAndType(List<UUID> spaceIds, String type, Pageable pageable);
+    /** 按 space 列表 + 类型 + 状态分页 */
+    Page<Skill> findBySpaceIdInAndTypeAndStatusOrderByCreatedAtDesc(List<UUID> spaceIds, String type, String status, Pageable pageable);
+    /** 按类型 + 状态分页（super_admin 全量） */
+    Page<Skill> findByTypeAndStatusOrderByCreatedAtDesc(String type, String status, Pageable pageable);
+    /** 按类型分页（super_admin 全量，无状态过滤） */
+    Page<Skill> findByType(String type, Pageable pageable);
+
     /** 按状态 + 空间列表查询（非分页） */
     List<Skill> findByStatusAndSpaceIdIn(String status, List<UUID> spaceIds);
+    /** 按状态列表 + 空间列表查询（非分页） */
+    List<Skill> findByStatusInAndSpaceIdIn(List<String> statuses, List<UUID> spaceIds);
     /**
      * 查询（Status,Created,At）。
      * @param status status
@@ -66,6 +77,17 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
     List<Skill> findByIdInAndStatus(List<UUID> ids, String status);
     /** 按状态列表批量查询 — SkillStatsScheduler 用 */
     List<Skill> findByStatusIn(List<String> statuses);
+    /** 按类型+状态列表查询 — 组织分身统计 */
+    List<Skill> findByTypeAndStatusIn(String type, List<String> statuses);
+    /** 按企业ID查询 — 企业数据范围 */
+    List<Skill> findByCompanyId(UUID companyId);
+    Page<Skill> findByCompanyId(UUID companyId, Pageable pageable);
+    List<Skill> findByCompanyIdAndStatus(UUID companyId, String status);
+    Page<Skill> findByCompanyIdAndStatus(UUID companyId, String status, Pageable pageable);
+    /** 按企业+类型查询 */
+    Page<Skill> findByCompanyIdAndType(UUID companyId, String type, Pageable pageable);
+    /** 按类型+状态查询 */
+    List<Skill> findByTypeAndStatus(String type, String status);
     /**
      * 查询（Display,Name）。
      * @param displayName displayName

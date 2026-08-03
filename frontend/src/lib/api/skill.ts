@@ -56,11 +56,12 @@ export interface SkillInfo {
   }>;
 }
 
-/** 获取分身列表（分页，可选状态过滤 + userId 过滤"我的分身"） */
-export function listSkills(page = 1, size = 50, status?: string, userId?: string): Promise<{ content: SkillInfo[]; total: number; totalPages: number }> {
+/** 获取分身列表（分页，可选状态过滤 + userId 过滤"我的分身" + type 过滤 individual/organization） */
+export function listSkills(page = 1, size = 50, status?: string, userId?: string, type?: string): Promise<{ content: SkillInfo[]; total: number; totalPages: number }> {
   const params = new URLSearchParams({ page: String(page), size: String(size) });
   if (status) params.set('status', status);
   if (userId) params.set('userId', userId);
+  if (type) params.set('type', type);
   return apiClient<{ content: SkillInfo[]; total: number; totalPages: number }>(`/skills/list?${params.toString()}`);
 }
 

@@ -13,14 +13,14 @@ import com.aiextract.config.RolePermissions;
 import com.aiextract.config.Permission;
 import com.aiextract.model.ChatChunk;
 import com.aiextract.model.ExperienceGrain;
-import com.aiextract.model.OrganizationSkill;
+
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillProfile;
 import com.aiextract.model.Space;
 import com.aiextract.model.User;
 import com.aiextract.repository.ExperienceGrainRepository;
-import com.aiextract.repository.OrganizationSkillRepository;
+
 import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SkillProfileRepository;
 import com.aiextract.repository.SkillRepository;
@@ -82,7 +82,6 @@ public class ChatStreamService {
     private final GrainRecommendationService grainRec;
     private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
     private final ShareRateLimiter shareRateLimiter;
-    private final OrganizationSkillRepository orgSkillRepository;
     private final OrganizationSkillService orgSkillService;
 
     @Value("${app.share.guest-message-limit:5}")
@@ -132,20 +131,17 @@ public class ChatStreamService {
     // ============================================================
 
     /**
-     * 分身问答入口分发 — 先查个体 Skill，再查 OrganizationSkill，都不存在则报错。
+     * 分身问答入口分发 — 统一查 skill 表，按 type 字段分发到个体/组织两条链路。
      */
     public Flux<ChatChunk> chat(UUID skillId, SkillChatRequest request, UUID userId, String role) {
         Skill skill = skillRepository.findById(skillId).orElse(null);
-        if (skill != null) {
-            return chatIndividual(skill, skillId, request, userId, role);
+        if (skill == null) {
+            return Flux.just(ChatChunk.error(ErrorMessages.SKILL_NOT_FOUND));
         }
-
-        OrganizationSkill orgSkill = orgSkillRepository.findById(skillId).orElse(null);
-        if (orgSkill != null) {
-            return chatOrganization(orgSkill, skillId, request, userId, role);
+        if ("organization".equals(skill.getType())) {
+            return chatOrganization(skill, skillId, request, userId, role);
         }
-
-        return Flux.just(ChatChunk.error(ErrorMessages.SKILL_NOT_FOUND));
+        return chatIndividual(skill, skillId, request, userId, role);
     }
 
     /**
@@ -319,13 +315,13 @@ public class ChatStreamService {
      * 组织分身问答 — 多 space RAG + org_skill prompt。
      * 三阶段对标 {@link #chatIndividual}：Setup → Stream → Post-stream。
      */
-    private Flux<ChatChunk> chatOrganization(OrganizationSkill orgSkill, UUID orgSkillId,
+    private Flux<ChatChunk> chatOrganization(Skill orgSkill, UUID orgSkillId,
             SkillChatRequest request, UUID userId, String role) {
         TraceContext.init(orgSkillId);
         long t0 = System.currentTimeMillis();
 
         log.info("═══ 组织分身问答开始 ═══ orgSkillId={} name={} userId={}",
-                orgSkillId, orgSkill.getName(), userId);
+                orgSkillId, orgSkill.getDisplayName(), userId);
 
         // 仅 published 可对话
         if (!"published".equals(orgSkill.getStatus())) {
@@ -532,6 +528,7 @@ public class ChatStreamService {
                         .skillType("individual")
                         .conversationId(finalPracticeConvId)
                         .mode("practice")
+                        .userId(userId)
                         .ragHighCount(request.getSceneTag() != null ? 1 : 0)
                         .ragNoneCount(request.getSceneTag() != null ? 0 : 1)
                         .createdAt(LocalDateTime.now())

@@ -3,16 +3,21 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
+import { Pagination } from '@/components/ui/Pagination';
 
 export default function ConversationsPage() {
   const router = useRouter();
   const [convs, setConvs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
   useEffect(() => {
+    setLoading(true);
     apiClient<any>(`/admin/conversations?page=${page}&size=20`)
-      .then(d => setConvs(d.content || [])).catch(() => {}).finally(() => setLoading(false));
+      .then(d => { setConvs(d.content || []); setTotalElements(d.totalElements || 0); setTotalPages(d.totalPages || 0); })
+      .catch(() => {}).finally(() => setLoading(false));
   }, [page]);
 
   if (loading) return <LoadingSpinner />;
@@ -57,6 +62,8 @@ export default function ConversationsPage() {
             </table>
           </div>
         )}
+        <Pagination page={page} totalPages={totalPages} totalElements={totalElements}
+          onPageChange={p => setPage(p)} loading={loading} />
       </div>
     </div>
   );

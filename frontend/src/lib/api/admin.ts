@@ -83,6 +83,7 @@ export interface DailyTokenRow {
 export interface TokenLogItem {
   id: string;
   userId: string | null;
+  userName: string;
   usageDate: string;
   modelType: string;
   modelName: string;

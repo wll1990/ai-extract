@@ -47,7 +47,7 @@ export function Hero() {
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Link href="/discover" className="btn btn-primary btn-xl">发现专家</Link>
-          <Link href="/register" className="btn btn-ghost btn-xl">成为专家</Link>
+          <Link href="/register" prefetch={false} className="btn btn-ghost btn-xl">成为专家</Link>
         </div>
       </div>
     </section>
