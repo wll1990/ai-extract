@@ -58,6 +58,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (token != null) {
                 try {
                     if (jwtUtil.validateToken(token)) {
+                        // Cookie 身份不在 /public/ 路径生效：防止 B 端 HttpOnly Cookie
+                        // 泄露到 C 端分享页，导致游客发证拿到 B 端用户身份。
+                        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+                        if (authHeader == null && request.getRequestURI().contains("/public/")) {
+                            log.debug("public路径跳过Cookie认证, uri={}", request.getRequestURI());
+                            filterChain.doFilter(request, response);
+                            return;
+                        }
                         UUID userId = jwtUtil.getUserIdFromToken(token);
                         String role = jwtUtil.getRoleFromToken(token);
                         UUID companyId = jwtUtil.getCompanyIdFromToken(token);
