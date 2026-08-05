@@ -82,7 +82,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const isPublicPage = pathname === '/login' || pathname === '/register'
-    || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
+    || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/')
+    || pathname.startsWith('/report/');
 
   // 从公开页进入需登录页时重新获取用户信息
   useEffect(() => {
