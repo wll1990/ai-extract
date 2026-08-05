@@ -58,14 +58,6 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (token != null) {
                 try {
                     if (jwtUtil.validateToken(token)) {
-                        // Cookie 身份不在 /public/ 路径生效：防止 B 端 HttpOnly Cookie
-                        // 泄露到 C 端分享页，导致游客发证拿到 B 端用户身份。
-                        String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
-                        if (authHeader == null && request.getRequestURI().contains("/public/")) {
-                            log.debug("public路径跳过Cookie认证, uri={}", request.getRequestURI());
-                            filterChain.doFilter(request, response);
-                            return;
-                        }
                         UUID userId = jwtUtil.getUserIdFromToken(token);
                         String role = jwtUtil.getRoleFromToken(token);
                         UUID companyId = jwtUtil.getCompanyIdFromToken(token);
@@ -146,20 +138,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
      * 页面加载场景 Cookie 作为降级回退。</p>
      */
     private String extractToken(HttpServletRequest request) {
-        // 1. Authorization header — 优先级最高，适用于所有 API 调用场景
+        // 1. Authorization header — 适用于所有 API 调用场景
         String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith(BEARER_PREFIX)) {
             return authHeader.substring(BEARER_PREFIX_LENGTH);
         }
-        // 2. HttpOnly Cookie — 页面加载 / 跨代理场景的降级回退
-        if (request.getCookies() != null) {
-            for (jakarta.servlet.http.Cookie c : request.getCookies()) {
-                if ("token".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
-                    return c.getValue();
-                }
-            }
-        }
-        // 3. query param — SSE/WebSocket 等无法设 header 的场景
+        // 2. query param — SSE/WebSocket 等无法设 header 的场景
         return request.getParameter("token");
     }
 }

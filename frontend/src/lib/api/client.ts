@@ -42,7 +42,6 @@ export async function apiClient<T>(
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
-    credentials: 'include', // 发送 HttpOnly Cookie（B端）
   });
 
   if (!res.ok) {

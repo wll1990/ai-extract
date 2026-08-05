@@ -82,9 +82,8 @@ public class AuthController {
         return ApiResponse.success(response);
     }
 
-    /** 检查请求是否携带有效 token（判断是否为已登录管理员操作） */
+    /** 检查请求是否携带有效 Bearer token（判断是否为已登录管理员操作） */
     private boolean hasValidToken(HttpServletRequest request) {
-        // 1. Authorization header（API 调用场景）
         String authHeader = request.getHeader(org.springframework.http.HttpHeaders.AUTHORIZATION);
         if (authHeader != null && authHeader.startsWith("Bearer ")) {
             try {
@@ -92,19 +91,6 @@ public class AuthController {
                 return true;
             } catch (Exception e) {
                 return false;
-            }
-        }
-        // 2. HttpOnly Cookie（页面操作场景）
-        if (request.getCookies() != null) {
-            for (Cookie c : request.getCookies()) {
-                if ("token".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
-                    try {
-                        jwtUtil.getUserIdFromToken(c.getValue());
-                        return true;
-                    } catch (Exception e) {
-                        return false;
-                    }
-                }
             }
         }
         return false;
@@ -191,20 +177,12 @@ public class AuthController {
         response.addCookie(cookie);
     }
 
-    /** 从 SecurityContext 或 Cookie 取 token */
+    /** 从 SecurityContext 取 token */
     private String getTokenFromSecurityContext(HttpServletRequest request) {
         var auth = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
         if (auth != null && auth.getCredentials() instanceof String token && !token.isEmpty()) {
             return token;
-        }
-        // fallback: 直接从 Cookie 取（未登录场景 SecurityContext 为空）
-        if (request.getCookies() != null) {
-            for (Cookie c : request.getCookies()) {
-                if ("token".equals(c.getName()) && c.getValue() != null && !c.getValue().isEmpty()) {
-                    return c.getValue();
-                }
-            }
         }
         return null;
     }

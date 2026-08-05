@@ -69,7 +69,6 @@ function buildFetchOptions(options: SseConnectOptions, controller: AbortControll
     method: options.method || 'POST',
     headers,
     signal,
-    credentials: 'include', // 发送 HttpOnly Cookie
   };
   if (options.body) fetchOptions.body = JSON.stringify(options.body);
   return fetchOptions;
@@ -226,7 +225,6 @@ export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks):
     method: options.method || 'POST',
     headers,
     signal,
-    credentials: 'include',
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   }).then(async (response) => {
     if (!response.ok) { callbacks.onError?.(`HTTP ${response.status}`); return; }
