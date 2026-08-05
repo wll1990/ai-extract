@@ -101,7 +101,7 @@ export interface SkillDetail {
 }
 
 export function fetchSkillDetail(skillId: string): Promise<SkillDetail> {
-  return apiClient(`/skills/${skillId}/detail`);
+  return apiClient(`/public/skills/${skillId}`);
 }
 
 /** 生成或获取已有分享码（需 Cookie 认证）。channel 默认 "public"，可传 "card" */

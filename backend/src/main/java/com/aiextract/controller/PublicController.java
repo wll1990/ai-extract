@@ -71,6 +71,43 @@ public class PublicController {
     }
 
     /**
+     * 公开分身详情 — 平台端专家名片页，无需登录。
+     * 仅返回已发布且开启对外分享的分身基本资料。
+     */
+    @GetMapping("/skills/{skillId}")
+    public ApiResponse<Map<String, Object>> getPublicSkillDetail(@PathVariable String skillId) {
+        Skill skill = skillRepository.findById(UUID.fromString(skillId)).orElse(null);
+        if (skill == null || !"published".equals(skill.getStatus())) {
+            throw new BusinessException(404, "分身不存在");
+        }
+        List<SkillShare> shares = shareRepository.findBySkillIdAndChannelAndEnabled(
+                skill.getId(), SkillShare.CHANNEL_PUBLIC, true);
+        if (shares.isEmpty()) {
+            throw new BusinessException(404, "分身未开放");
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("id", skill.getId().toString());
+        detail.put("displayName", skill.getDisplayName() != null ? skill.getDisplayName() : skill.getOwnerName());
+        detail.put("ownerName", skill.getOwnerName());
+        detail.put("ownerTitle", skill.getOwnerTitle());
+        detail.put("avatarUrl", skill.getAvatarUrl());
+        detail.put("department", skill.getDepartment());
+        detail.put("tags", parseTags(skill.getTags()));
+        detail.put("sceneTags", List.of());
+        detail.put("grainCount", grainRepository.countBySpaceId(skill.getSpaceId()));
+        detail.put("openingMessage", skill.getOpeningMessage());
+        detail.put("domain", skill.getDomain());
+        detail.put("type", skill.getType() != null ? skill.getType() : "individual");
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
+        stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);
+        stats.put("satisfactionRate", skill.getSatisfactionRate() != null ? skill.getSatisfactionRate() : 0);
+        detail.put("stats", stats);
+        detail.put("introProfile", skill.getIntroProfile());
+        return ApiResponse.success(detail);
+    }
+
+    /**
      * 公开分身列表 — 发现页浏览。
      * 只返回已发布分身的基本信息，无需认证。
      */
