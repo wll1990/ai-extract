@@ -57,6 +57,7 @@ export default function LoginPage() {
     setError('');
     try {
       const resp = await cLogin(cAccount.trim(), cPassword);
+      if (!resp.token) throw new Error('登录失败');
       setCAuth(resp.token, { userId: resp.userId, nickname: resp.nickname, status: resp.status });
       router.push('/platform/my');
     } catch (err) {
