@@ -1,7 +1,8 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ShareModal from './ShareModal';
 import { shareReport, regenerateReport } from '@/lib/api/report';
+import { apiClient } from '@/lib/api/client';
 
 interface ReportViewerProps {
   htmlUrl: string;
@@ -25,6 +26,19 @@ export default function ReportViewer({
     initialShareCode ? { shareCode: initialShareCode, shareUrl: initialShareUrl || `/public/report/${initialShareCode}` } : null
   );
   const [regenerating, setRegenerating] = useState(false);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // 带 Bearer 拉取 HTML 内容，绕过 iframe src 直接请求无法带 auth header 的问题
+  useEffect(() => {
+    setLoading(true);
+    fetch(htmlUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } })
+      .then(r => r.text())
+      .then(setHtmlContent)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [htmlUrl]);
 
   const handleShare = async () => {
     if (shareInfo) {
@@ -96,13 +110,20 @@ export default function ReportViewer({
         )}
       </div>
 
-      {/* iframe */}
-      <iframe
-        data-report
-        src={htmlUrl}
-        style={{ width: '100%', height: 'calc(100vh - 52px)', border: 'none' }}
-        title="萃取报告"
-      />
+      {/* iframe — 用 srcdoc 注入已认证拉取的 HTML */}
+      {loading ? (
+        <div className="flex items-center justify-center" style={{ height: 'calc(100vh - 52px)' }}>
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        </div>
+      ) : (
+        <iframe
+          data-report
+          ref={iframeRef}
+          srcDoc={htmlContent || ''}
+          style={{ width: '100%', height: 'calc(100vh - 52px)', border: 'none' }}
+          title="萃取报告"
+        />
+      )}
 
       {/* Share Modal */}
       {showShare && shareInfo && (

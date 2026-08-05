@@ -4,7 +4,8 @@ import { useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { login } from '@/lib/api/auth';
-import { setAuth } from '@/lib/storage';
+import { setAuth, getUser } from '@/lib/storage';
+import { cLogin, setCAuth } from '@/lib/api/c';
 
 type LoginTab = 'enterprise' | 'personal';
 
@@ -55,15 +56,8 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const r = await fetch('/api/v1/c/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: cAccount.trim(), password: cPassword }),
-      });
-      const d = await r.json();
-      if (d.code !== 200) throw new Error(d.message || '登录失败');
-      // C 端 token 存 localStorage.c_auth（与分享页一致）
-      localStorage.setItem('c_auth', JSON.stringify({ token: d.data.token, user: { userId: d.data.userId, nickname: d.data.nickname, avatarUrl: d.data.avatarUrl, status: d.data.status } }));
+      const resp = await cLogin(cAccount.trim(), cPassword);
+      setCAuth(resp.token, { userId: resp.userId, nickname: resp.nickname, status: resp.status });
       router.push('/platform/my');
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败');
