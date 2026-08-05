@@ -98,6 +98,13 @@ export default function ReportViewer({
         >
           📥 下载
         </button>
+        <button
+          type="button"
+          onClick={() => iframeRef.current?.contentWindow?.print()}
+          className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-primary-light"
+        >
+          🖨️ 导出 PDF
+        </button>
         {canRegenerate && (
           <button
             type="button"

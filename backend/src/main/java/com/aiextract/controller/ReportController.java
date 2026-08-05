@@ -90,7 +90,7 @@ public class ReportController {
         }
         try {
             String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
-            html = injectToolbar(html, reportId, null);
+            // 认证接口不再注入工具栏 — ReportViewer 已提供分享/下载/导出按钮
             return ResponseEntity.ok(html);
         } catch (Exception e) {
             log.error("读取报告 HTML 文件失败, reportId: {}, path: {}", reportId, report.getHtmlPath(), e);
