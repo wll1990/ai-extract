@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/register'];
-const PUBLIC_PREFIXES = ['/', '/discover', '/skill/', '/h5/', '/s/'];
+const PUBLIC_PREFIXES = ['/', '/discover', '/skill/', '/chat/', '/h5/', '/s/'];
 const SKIP_PREFIXES = ['/_next', '/api', '/favicon.ico', '/robots.txt'];
 
 export function middleware(request: NextRequest) {
