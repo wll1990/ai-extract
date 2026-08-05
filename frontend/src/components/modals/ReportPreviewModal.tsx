@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { apiClient, API_BASE } from '@/lib/api/client';
+import { getToken } from '@/lib/storage';
 
 interface Props {
   skillId: string;
@@ -20,7 +21,15 @@ interface Readiness {
 export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [htmlContent, setHtmlContent] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  useEffect(() => {
+    if (!readiness?.ready) return;
+    fetch(`${API_BASE}/admin/skills/${skillId}/report`, {
+      headers: { Authorization: `Bearer ${getToken()}` },
+    }).then(r => r.text()).then(setHtmlContent).catch(() => {});
+  }, [readiness?.ready, skillId]);
 
   useEffect(() => {
     apiClient(`/admin/skills/${skillId}/report-readiness`)
@@ -58,7 +67,7 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
                 className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
                 导出 PDF
               </button>
-              <a href={reportUrl} target="_blank" rel="noopener"
+              <a href={`/report/${skillId}`} target="_blank" rel="noopener"
                 className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
                 下载 HTML
               </a>
@@ -107,7 +116,7 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
             </div>
           </div>
         ) : (
-          <iframe ref={iframeRef} src={reportUrl} className="w-full h-full border-0 bg-white" title="萃取报告" />
+          <iframe ref={iframeRef} srcDoc={htmlContent || ''} className="w-full h-full border-0 bg-white" title="萃取报告" />
         )}
       </div>
     </div>

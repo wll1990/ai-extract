@@ -164,7 +164,7 @@ export default function SpaceDetailPage() {
                 {space.reports.map((r) => (
                   <button
                     key={r.id}
-                    onClick={() => window.open(`/api/v1/reports/${r.id}/html`, '_blank')}
+                    onClick={() => window.open(`/report/${r.id}`, '_blank')}
                     className="w-full flex items-center justify-between rounded-xl bg-surface border border-border px-4 py-3 text-left hover:border-primary/20 hover:shadow-sm transition-all"
                   >
                     <div className="min-w-0">

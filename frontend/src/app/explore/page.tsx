@@ -99,7 +99,7 @@ export default function ExplorePage() {
             <div className="grid gap-4 md:grid-cols-3">
               {reports.map(r => (
                 <button key={r.id}
-                  onClick={() => r.hasHtml && window.open(`/api/v1/reports/${r.id}/html`, '_blank')}
+                  onClick={() => r.hasHtml && window.open(`/report/${r.id}`, '_blank')}
                   disabled={!r.hasHtml}
                   className={`group rounded-xl bg-surface-2 p-5 text-left shadow-md transition-all ${
                     r.hasHtml ? 'hover:-translate-y-1 hover:shadow-lg' : 'opacity-50 cursor-not-allowed'
