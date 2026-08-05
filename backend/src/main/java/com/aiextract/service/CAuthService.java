@@ -232,7 +232,8 @@ public class CAuthService {
         boolean isGuest = AppUser.STATUS_GUEST.equals(user.getStatus());
         Long remaining = null;
         if (isGuest) {
-            long used = skillMessageRepository.countUserMessagesByUserId(user.getId());
+            long used = skillMessageRepository.countUserMessagesByUserIdSince(
+                user.getId(), java.time.LocalDate.now().atStartOfDay());
             remaining = Math.max(0, guestMessageLimit - used);
         }
         return GuestSessionResponse.builder()

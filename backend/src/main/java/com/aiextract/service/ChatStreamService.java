@@ -81,50 +81,13 @@ public class ChatStreamService {
     private final PromptAssemblyService promptAssembly;
     private final GrainRecommendationService grainRec;
     private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
-    private final ShareRateLimiter shareRateLimiter;
     private final OrganizationSkillService orgSkillService;
-
-    @Value("${app.share.guest-message-limit:5}")
-    private int guestMessageLimit;
 
     @Value("${app.chat.timeout-seconds:120}")
     private int chatTimeoutSeconds;
 
     @Value("${app.rag.top-k:5}")
     private int ragTopK;
-
-    // ============================================================
-    // 游客拦截
-    // ============================================================
-
-    /**
-     * C 端游客拦截 — 频率限流 + 免费额度判定。
-     *
-     * <p>必须在 LLM 调用与消息落库之前执行，被拦截的消息不落库。</p>
-     *
-     * @return 非 null 表示拦截，null 表示放行
-     */
-    private Flux<ChatChunk> interceptGuest(String role, UUID userId) {
-        if (!"c_guest".equals(role)) {
-            return null;
-        }
-        if (!shareRateLimiter.allowGuestMessage(userId)) {
-            log.warn("游客消息频率超限 userId={}", userId);
-            return Flux.just(ChatChunk.error("发送太频繁，请稍后再试"), ChatChunk.done());
-        }
-        long used = skillMessageRepository.countUserMessagesByUserIdSince(
-            userId, LocalDate.now().atStartOfDay());
-        if (used >= guestMessageLimit) {
-            log.info("游客免费额度已用完 userId={} used={}/{}", userId, used, guestMessageLimit);
-            return Flux.just(
-                ChatChunk.event("limit", Map.of(
-                    "code", "GUEST_LIMIT_REACHED",
-                    "used", used,
-                    "limit", guestMessageLimit)),
-                ChatChunk.done());
-        }
-        return null;
-    }
 
     // ============================================================
     // 分身问答（QA / Talk）
@@ -174,14 +137,6 @@ public class ChatStreamService {
             log.warn("Skill不可用 status={} userId={}", skill.getStatus(), userId);
             TraceContext.clear();
             return Flux.just(ChatChunk.error("分身未发布"));
-        }
-
-        // 游客拦截已迁移至 QueryGate.audit() → Layer 4（Controller 层前置执行）
-        // 此处仅保留 null check 向后兼容（Controller 层未注入 QueryGate 时仍走老逻辑）
-        Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
-        if (guestBlock != null) {
-            TraceContext.clear();
-            return guestBlock;
         }
 
         SkillProfile profile = profileRepository.findBySkillId(skillId).orElse(null);
@@ -329,13 +284,6 @@ public class ChatStreamService {
             return Flux.just(ChatChunk.error("组织分身未发布"));
         }
 
-        // 游客拦截
-        Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
-        if (guestBlock != null) {
-            TraceContext.clear();
-            return guestBlock;
-        }
-
         // 解析成员 spaceId 列表
         List<UUID> spaceIds = orgSkillService.resolveMemberSpaceIds(orgSkill);
         if (spaceIds.isEmpty()) {
@@ -445,12 +393,6 @@ public class ChatStreamService {
         Skill skill = skillRepository.findById(skillId).orElse(null);
         if (skill == null) {
             return Flux.just(ChatChunk.error(ErrorMessages.SKILL_NOT_FOUND));
-        }
-
-        // 游客拦截已迁移至 QueryGate.audit() → Layer 4（Controller 层前置执行）
-        Flux<ChatChunk> guestBlock = interceptGuest(role, userId);
-        if (guestBlock != null) {
-            return guestBlock;
         }
 
         String systemPrompt = promptAssembly.buildPracticeSystemPrompt(skill, request);
