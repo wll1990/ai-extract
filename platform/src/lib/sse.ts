@@ -65,7 +65,6 @@ function buildFetchOptions(options: SseConnectOptions, controller: AbortControll
     method: options.method || 'POST',
     headers,
     signal,
-    credentials: 'include',
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   };
 }
