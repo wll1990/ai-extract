@@ -158,7 +158,7 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
               <p className="text-xs text-[#747f9e] mb-3">平台登录用户可访问</p>
               <button
                 onClick={async () => {
-                  const r = await fetch(`/api/v1/i/${skillId}/share/internal`, { method: 'POST', credentials: 'include' });
+                  const r = await fetch(`/api/v1/i/${skillId}/share/internal`, { method: 'POST', headers: { Authorization: `Bearer ${getToken()}` } });
                   const d = await r.json();
                   if (d.code === 200) {
                     alert(`对内分享码：${d.data.shareCode}`);

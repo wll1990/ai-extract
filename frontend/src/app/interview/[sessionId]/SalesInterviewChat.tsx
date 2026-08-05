@@ -70,7 +70,8 @@ export function SalesInterviewChat() {
     setEnding(true);
     try {
       const res = await fetch(`${API_BASE}/interviews/${sessionId}/force-complete`, {
-        method: 'POST', credentials: 'include',
+        method: 'POST',
+        headers: { Authorization: `Bearer ${getToken()}` },
       });
       const data = await res.json();
       if (data.code !== 200) {

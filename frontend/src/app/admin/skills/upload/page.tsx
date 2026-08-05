@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient, API_BASE } from '@/lib/api/client';
+import { getToken } from '@/lib/storage';
 import { MaterialUploadGuide } from '@/components/skill/MaterialUploadGuide';
 import { uploadMaterialText } from '@/lib/api/materials';
 import { getUser } from '@/lib/storage';
@@ -52,7 +53,8 @@ export default function UploadPage() {
 
     try {
       const res = await fetch(`${API_BASE}/admin/materials/upload`, {
-        method: 'POST', credentials: 'include', body: form,
+        method: 'POST', body: form,
+        headers: { Authorization: `Bearer ${getToken()}` },
       });
       const data = await res.json();
       if (data.code === 200) {

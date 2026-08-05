@@ -35,7 +35,7 @@ export default function InternalSharePage() {
   const [loadError, setLoadError] = useState('');
   const [authChecked, setAuthChecked] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [view, setView] = useState<'landing' | 'chat'>('landing');
+  const [view, setView] = useState<'landing' | 'chat'>('chat');
   const [mode, setMode] = useState<ChatMode>('qa');
   const [practiceSceneTag, setPracticeSceneTag] = useState('');
   const [practiceKey, setPracticeKey] = useState(0);
@@ -60,7 +60,7 @@ export default function InternalSharePage() {
 
   // Check auth
   useEffect(() => {
-    fetch('/api/v1/auth/me', { credentials: 'include' })
+    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${getToken()}` } })
       .then((r) => { if (r.ok) setIsLoggedIn(true); })
       .catch(() => {})
       .finally(() => setAuthChecked(true));
@@ -126,11 +126,10 @@ export default function InternalSharePage() {
       const r = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({ account: bAccount.trim(), password: bPassword, companyId: info?.companyId }),
       });
       const d = await r.json();
-      if (d.code === 200) setIsLoggedIn(true);
+      if (d.code === 200) { localStorage.setItem('token', d.data.token); setIsLoggedIn(true); }
       else setAuthError(d.message || '登录失败');
     } catch { setAuthError('网络错误'); }
     finally { setAuthLoading(false); }
@@ -147,7 +146,6 @@ export default function InternalSharePage() {
       const r = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           companyId: info?.companyId,
           name: regName.trim(),
@@ -157,7 +155,7 @@ export default function InternalSharePage() {
         }),
       });
       const d = await r.json();
-      if (d.code === 200) setIsLoggedIn(true);
+      if (d.code === 200) { localStorage.setItem('token', d.data.token); setIsLoggedIn(true); }
       else setAuthError(d.message || '注册失败');
     } catch { setAuthError('网络错误'); }
     finally { setAuthLoading(false); }
@@ -231,8 +229,12 @@ export default function InternalSharePage() {
     return (
       <div className="min-h-screen bg-[#f7f9ff] flex flex-col items-center justify-center px-6 text-center"
         style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2147ff] to-[#ff4d5f] flex items-center justify-center text-white text-2xl font-bold mb-4 mx-auto">
-          {info.ownerName?.charAt(0) || '?'}
+        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-[#2147ff] to-[#ff4d5f] flex items-center justify-center text-white text-2xl font-bold mb-4 mx-auto overflow-hidden">
+          {info.avatarUrl ? (
+            <img src={info.avatarUrl} alt={info.ownerName} className="w-full h-full object-cover" />
+          ) : (
+            info.ownerName?.charAt(0) || '?'
+          )}
         </div>
         <h1 className="text-xl font-bold text-[#10162f] mb-1">{info.ownerName || '销冠'}</h1>
         {info.ownerTitle && <p className="text-sm text-[#747f9e] mb-6">{info.ownerTitle}</p>}

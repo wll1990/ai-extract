@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getAuditDashboard, publishSkill, type AuditDashboard } from '@/lib/api/audit';
 import { API_BASE } from '@/lib/api/client';
+import { getToken } from '@/lib/storage';
 import PracticeScenarioModal from '@/components/modals/PracticeScenarioModal';
 import ProductDemoModal from '@/components/modals/ProductDemoModal';
 import { ReportPreviewModal } from '@/components/modals/ReportPreviewModal';
@@ -16,7 +17,7 @@ type Step = 'explicit' | 'skill' | 'scene' | 'product';
 
 const downloadReport = async (skillId: string, format: 'html') => {
   const url = `${API_BASE}/admin/skills/${skillId}/report?download=true`;
-  const res = await fetch(url, { credentials: 'include' });
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${getToken()}` } });
   const blob = await res.blob();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { API_BASE } from '@/lib/api/client';
+import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
 
 const GRAIN_ENOUGH = 10;
@@ -47,8 +47,8 @@ export default function ReportSessionPage() {
   // Poll report by sessionId
   const checkReport = useCallback(async () => {
     try {
-      const r = await fetch(`${API_BASE}/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
-        credentials: 'include',
+      const r = await fetch(`/api/v1/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
       });
       setLastCheck(new Date());
       setPollCount(c => c + 1);

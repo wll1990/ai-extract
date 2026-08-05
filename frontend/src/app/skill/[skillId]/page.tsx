@@ -75,16 +75,14 @@ export default function SkillChatPage() {
 
   useEffect(() => {
     if (!skillId) return;
-    fetch(`${API_BASE}/skills/${skillId}/detail`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => {
-        if (d?.data?.type === 'organization') setIsOrgSkill(true);
-        if (d?.data?.openingMessage) setOpeningMessage(d.data.openingMessage);
-        setAvatarUrl(d?.data?.avatarUrl || null);
-        if (d?.data?.stats) setSkillStats(d.data.stats);
-        if (d?.data?.grainCount) setGrainCount(d.data.grainCount);
-        if (d?.data?.sceneTags) setSceneCount(d.data.sceneTags.length);
-        if (d?.data?.tags) setSkillTags(d.data.tags);
+    apiClient(`/skills/${skillId}/detail`).then((d: any) => {
+        if (d?.type === 'organization') setIsOrgSkill(true);
+        if (d?.openingMessage) setOpeningMessage(d.openingMessage);
+        setAvatarUrl(d?.avatarUrl || null);
+        if (d?.stats) setSkillStats(d.stats);
+        if (d?.grainCount) setGrainCount(d.grainCount);
+        if (d?.sceneTags) setSceneCount(d.sceneTags.length);
+        if (d?.tags) setSkillTags(d.tags);
       })
       .catch(() => {})
       .finally(() => setDetailFetched(true));

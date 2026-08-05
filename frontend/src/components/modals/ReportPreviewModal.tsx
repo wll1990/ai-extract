@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { API_BASE } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 
 interface Props {
   skillId: string;
@@ -23,9 +23,8 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/admin/skills/${skillId}/report-readiness`, { credentials: 'include' })
-      .then(r => r.json())
-      .then(d => setReadiness(d.data || null))
+    apiClient(`/admin/skills/${skillId}/report-readiness`)
+      .then((d: any) => setReadiness(d || null))
       .catch(() => setReadiness(null))
       .finally(() => setLoading(false));
   }, [skillId]);

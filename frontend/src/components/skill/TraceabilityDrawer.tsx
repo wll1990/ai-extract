@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { API_BASE, authHeaders } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 import { copyToClipboard } from '@/lib/clipboard';
 
 interface GrainTrace {
@@ -64,21 +64,15 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
   useEffect(() => {
     if (!open || !grainIds) return;
     setLoading(true);
-    fetch(`${API_BASE}/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`, {
-      headers: authHeaders(), credentials: 'include',
-    })
-      .then(r => r.json())
-      .then(r => setData(r.data || []))
+    apiClient(`/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`)
+      .then(r => setData((r as any) || []))
       .finally(() => setLoading(false));
   }, [open, grainIds]);
 
   // 组织分身：查 spaceId → skillId 映射
   useEffect(() => {
     if (!orgSkillId || !open) return;
-    fetch(`${API_BASE}/admin/organization-skills/${orgSkillId}/member-links`, {
-      headers: authHeaders(), credentials: 'include',
-    })
-      .then(r => r.json())
+    apiClient(`/admin/organization-skills/${orgSkillId}/member-links`)
       .then(r => { if (r?.data) setMemberLinks(r.data); })
       .catch(() => {});
   }, [orgSkillId, open]);

@@ -85,11 +85,6 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
         }
       }
     } catch {}
-    // B端 cookie
-    try {
-      const r = await fetch('/api/v1/auth/me', { credentials: 'include' });
-      if (r.ok) return true;
-    } catch {}
     return false;
   }, [partnerToken, inviteCode, router]);
 
@@ -110,7 +105,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
         if (stored) { const s = JSON.parse(stored); if (s?.token) headers['Authorization'] = `Bearer ${s.token}`; }
       }
       const r = await fetch('/api/v1/interviews', {
-        method: 'POST', headers, credentials: 'include',
+        method: 'POST', headers,
         body: JSON.stringify({ topic: topic.trim(), inviteCode }),
       });
       const d = await r.json();
@@ -125,10 +120,10 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
   const doBLogin = async (e: React.FormEvent) => { e.preventDefault();
     setAuthLoading(true); setAuthError(null);
     try {
-      const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ account: bAccount.trim(), password: bPassword, companyId: info?.companyId }) });
       const d = await r.json();
-      if (d.code === 200) { setAuthed(true); setShowLogin(false); }
+      if (d.code === 200) { localStorage.setItem('token', d.data.token); setAuthed(true); setShowLogin(false); }
       else setAuthError(d.message || '登录失败');
     } catch { setAuthError('网络错误'); } finally { setAuthLoading(false); }
   };
@@ -137,10 +132,10 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
     if (bRegPassword.length < 6) { setAuthError('密码至少6位'); return; }
     setAuthLoading(true); setAuthError(null);
     try {
-      const r = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      const r = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ companyId: info?.companyId, name: bRegName.trim(), account: bRegAccount.trim(), password: bRegPassword, role: 'employee' }) });
       const d = await r.json();
-      if (d.code === 200) { setAuthed(true); setShowLogin(false); }
+      if (d.code === 200) { localStorage.setItem('token', d.data.token); setAuthed(true); setShowLogin(false); }
       else setAuthError(d.message || '注册失败');
     } catch { setAuthError('网络错误'); } finally { setAuthLoading(false); }
   };
@@ -171,7 +166,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
   /** 退出登录 — 清 C 端 localStorage + B 端 Cookie，重置所有状态 */
   const handleLogout = useCallback(async () => {
     try { localStorage.removeItem('c_auth'); } catch {}
-    try { await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+    try { localStorage.removeItem('token'); await fetch('/api/v1/auth/logout', { method: 'POST' }); } catch {}
     setAuthed(false); setAuthChecked(true); setCUser(null);
     setActiveSession(null); setActiveChecked(true);
     setShowLogin(false);

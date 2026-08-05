@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/api/client';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
 
@@ -47,13 +48,9 @@ export default function H5ReportPage() {
   // Load session data (always available)
   useEffect(() => {
     if (!sessionId) return;
-    fetch(`/api/v1/interviews/${encodeURIComponent(sessionId)}`, {
-      credentials: 'include', headers: authHeaders(),
-    })
-      .then(r => r.json())
-      .then(d => {
-        if (d.code === 200) setSession(d.data);
-        else setError('会话不存在');
+    apiClient(`/interviews/${encodeURIComponent(sessionId)}`)
+      .then((d: any) => {
+        setSession(d);
       })
       .catch(() => setError('加载失败'))
       .finally(() => setLoading(false));
@@ -62,9 +59,7 @@ export default function H5ReportPage() {
   // Poll for report HTML
   const checkReport = useCallback(async () => {
     try {
-      const r = await fetch(`/api/v1/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
-        credentials: 'include', headers: authHeaders(),
-      });
+      const r = await apiClient(`/reports/by-session/${encodeURIComponent(sessionId)}/html`);
       setLastCheck(new Date());
       setPollCount(c => c + 1);
 
