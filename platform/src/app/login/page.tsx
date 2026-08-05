@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [tab, setTab] = useState<LoginTab>('enterprise');
 
   // 企业登录
-  const [companyCode, setCompanyCode] = useState('DEFAULT01');
+  const [companyCode, setCompanyCode] = useState('');
   const [bAccount, setBAccount] = useState('');
   const [bPassword, setBPassword] = useState('');
 
