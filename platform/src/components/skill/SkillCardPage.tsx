@@ -470,9 +470,12 @@ export function SkillCardPage({ skill }: Props) {
 
   const doAction = useCallback((text?: string) => {
     const q = (text || inputValue.trim());
-    if (q) router.push(`/chat/${skill.id}?q=${encodeURIComponent(q)}&mode=talk`);
-    else router.push(`/chat/${skill.id}`);
-  }, [inputValue, skill.id, router]);
+    const code = skill.shareCode;
+    if (!code) return;
+    const base = `/s/${code}`;
+    if (q) router.push(`${base}?q=${encodeURIComponent(q)}&mode=talk`);
+    else router.push(base);
+  }, [inputValue, skill, router]);
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [pubCode, setPubCode] = useState<string | null>(null);

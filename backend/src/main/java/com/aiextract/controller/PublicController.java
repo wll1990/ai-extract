@@ -82,15 +82,13 @@ public class PublicController {
         if (skill == null || !"published".equals(skill.getStatus())) {
             throw new BusinessException(404, "分身不存在");
         }
-        boolean shared = shareRepository.findFirstBySkillIdAndChannel(
+        SkillShare share = shareRepository.findFirstBySkillIdAndChannel(
                 skill.getId(), SkillShare.CHANNEL_PUBLIC)
-                .map(s -> Boolean.TRUE.equals(s.getEnabled()))
-                .orElse(false);
-        if (!shared) {
-            throw new BusinessException(404, "分身未开放");
-        }
+                .filter(s -> Boolean.TRUE.equals(s.getEnabled()))
+                .orElseThrow(() -> new BusinessException(404, "分身未开放"));
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("id", skill.getId().toString());
+        detail.put("shareCode", share.getShareCode());
         detail.put("displayName", skill.getDisplayName() != null ? skill.getDisplayName() : skill.getOwnerName());
         detail.put("ownerName", skill.getOwnerName());
         detail.put("ownerTitle", skill.getOwnerTitle());

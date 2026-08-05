@@ -92,6 +92,7 @@ export interface SkillDetail {
   }>;
   introProfile?: { headline: string; body: string; closing: string };
   recommendedQuestions?: string[];
+  shareCode?: string;
   talkConfig?: string;
   stats?: {
     conversationCount: number;
