@@ -16,7 +16,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import {
   getShareInfo, cRegister, cLogin, setLastShareCode,
   type ShareInfo,
@@ -37,6 +37,10 @@ import RegisterSheet, { type SheetMode } from './RegisterSheet';
 export default function SharePage() {
   const params = useParams<{ shareCode: string }>();
   const shareCode = params.shareCode;
+  const searchParams = useSearchParams();
+  const urlQ = searchParams.get('q');
+  const urlMode = searchParams.get('mode');
+  const initialMode = (urlMode === 'qa' || urlMode === 'talk') ? urlMode as ChatMode : 'talk';
 
   // ---- 落地信息 ----
   const [info, setInfo] = useState<ShareInfo | null>(null);
@@ -48,7 +52,7 @@ export default function SharePage() {
 
   // ---- 视图状态 ----
   const [view, setView] = useState<'landing' | 'chat'>('chat');
-  const [mode, setMode] = useState<ChatMode>('talk');
+  const [mode, setMode] = useState<ChatMode>(initialMode);
   const [practiceSceneTag, setPracticeSceneTag] = useState('');
   const [practiceKey, setPracticeKey] = useState(0);
   const [practiceHint, setPracticeHint] = useState('');
@@ -142,6 +146,15 @@ export default function SharePage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sheetOpen, authToken, guest.session?.user.status]);
+
+  // ---- 名片页带入问题：authToken 就绪后自动发送 ----
+  const autoSentRef = useRef(false);
+  useEffect(() => {
+    if (urlQ && authToken && !autoSentRef.current) {
+      autoSentRef.current = true;
+      qa.sendMessageImmediate(urlQ);
+    }
+  }, [urlQ, authToken, qa.sendMessageImmediate]);
 
   /** 落地页点模式入口：静默领证 → 进聊天 */
   const handleStart = useCallback(async (m: ChatMode) => {

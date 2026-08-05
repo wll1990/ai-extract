@@ -94,11 +94,11 @@ export default function MobileChatShell({
   const [interimVoiceText, setInterimVoiceText] = useState('');
   useEffect(() => {
     if (mode === 'talk' && info?.skillId) {
-      fetchRecommendedQuestions(info.skillId)
+      fetchRecommendedQuestions(info.skillId, undefined, authToken)
         .then(qs => { if (Array.isArray(qs)) setTalkQuestions(qs); })
         .catch(() => {});
     }
-  }, [mode, info?.skillId]);
+  }, [mode, info?.skillId, authToken]);
 
   const totalGrains = (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0);
 
