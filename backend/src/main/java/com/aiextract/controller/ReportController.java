@@ -139,7 +139,7 @@ public class ReportController {
                 && Boolean.TRUE.equals(report.getShareEnabled())) {
             return ApiResponse.success(Map.of(
                     "shareCode", report.getShareCode(),
-                    "shareUrl", "/public/report/" + report.getShareCode()));
+                    "shareUrl", "/api/v1/public/reports/" + report.getShareCode()));
         }
 
         // 生成 shareCode，唯一索引 → saveAndFlush 即时检测冲突
@@ -151,7 +151,7 @@ public class ReportController {
                 reportRepository.saveAndFlush(report);
                 return ApiResponse.success(Map.of(
                         "shareCode", code,
-                        "shareUrl", "/public/report/" + code));
+                        "shareUrl", "/api/v1/public/reports/" + code));
             } catch (org.springframework.dao.DataIntegrityViolationException e) {
                 if (retry == 2) {
                     log.error("生成分享码冲突(重试耗尽), reportId: {}", reportId, e);

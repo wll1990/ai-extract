@@ -45,7 +45,7 @@ public class PublicReportController {
             int vc = report.getViewCount() != null ? report.getViewCount() : 0;
             report.setViewCount(vc + 1);
             reportRepository.save(report);
-            html = ReportController.injectToolbar(html, null, "/public/report/" + shareCode);
+            html = ReportController.injectToolbar(html, null, "/api/v1/public/reports/" + shareCode);
             return ResponseEntity.ok(html);
         } catch (Exception e) {
             log.error("读取公开报告 HTML 失败, shareCode: {}, path: {}", shareCode, report.getHtmlPath(), e);
