@@ -26,6 +26,9 @@ export default function PlatformMyPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
+  const [inviteUrl, setInviteUrl] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const authHeaders = useCallback((): Record<string, string> => {
     const token = getToken();
@@ -94,10 +97,9 @@ export default function PlatformMyPage() {
                   const d = await r.json();
                   if (d.code === 200) {
                     const base = process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin;
-                    const url = base + '/h5/interview/m/' + encodeURIComponent(d.data.inviteCode);
-                    const ok = await copyToClipboard(url);
-                    if (ok) alert('邀请链接已复制到剪贴板！\n\n' + url);
-                    else alert('复制失败，请手动复制链接：\n' + url);
+                    setInviteUrl(base + '/h5/interview/m/' + encodeURIComponent(d.data.inviteCode));
+                    setShowInviteModal(true);
+                    setInviteCopied(false);
                   } else {
                     alert(d.message || '生成失败');
                   }
@@ -217,6 +219,31 @@ export default function PlatformMyPage() {
           </div>
         )}
       </div>
+
+      {/* 邀请专家弹窗 */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowInviteModal(false)}>
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-[90%] shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-[#10162f] mb-4">邀请专家</h3>
+            <div className="flex justify-center mb-4">
+              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(inviteUrl)}`}
+                width={180} height={180} alt="邀请二维码" className="rounded-xl border" />
+            </div>
+            <div className="flex gap-2 mb-2">
+              <input value={inviteUrl} readOnly
+                className="flex-1 px-3 py-2 rounded-lg border border-[#cdd7ff] text-xs text-[#10162f] bg-[#f7f9ff] outline-none" />
+              <button onClick={() => { copyToClipboard(inviteUrl); setInviteCopied(true); }}
+                className="px-4 py-2 rounded-lg bg-[#2147ff] text-white text-xs font-medium whitespace-nowrap">
+                {inviteCopied ? '已复制' : '复制链接'}
+              </button>
+            </div>
+            <button onClick={() => setShowInviteModal(false)}
+              className="w-full py-2 rounded-lg border border-[#cdd7ff] text-sm text-[#747f9e] mt-2">
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
