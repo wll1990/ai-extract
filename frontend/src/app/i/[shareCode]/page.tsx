@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { getToken } from '@/lib/storage';
 import { useQaChat, type ChatMode } from '@/app/skill/[skillId]/hooks/useQaChat';
 import MobileChatShell from '@/app/s/[shareCode]/MobileChatShell';
 

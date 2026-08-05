@@ -2,6 +2,7 @@
 
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { API_BASE } from '@/lib/api/client';
+import { getToken } from '@/lib/storage';
 
 import React, { useCallback, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
