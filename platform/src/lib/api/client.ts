@@ -2,10 +2,12 @@
  * 统一 API 请求客户端 — @synced-from frontend/src/lib/api/client.ts
  *
  * 差异：401/403 跳转 /login（企业端无 /s/ 分享页逻辑）。
- * JWT 通过 HttpOnly Cookie 自动发送。
+ * Bearer 优先（localStorage c_auth），API 调用唯一认证通道。
  *
  * @since 2026-07-20
  */
+
+import { getToken } from '@/lib/storage';
 
 function resolveBaseUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
@@ -51,6 +53,12 @@ export async function apiClient<T>(
 
   if (options.headers) {
     Object.assign(headers, options.headers as Record<string, string>);
+  }
+
+  // C 端 Bearer token（localStorage c_auth），无显式 Authorization 时自动补齐
+  if (!headers['Authorization']) {
+    const token = getToken();
+    if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
   const res = await fetch(`${API_BASE}${path}`, {
