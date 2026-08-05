@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { SkillDetail } from '@/lib/api/skill';
 import { fetchRecommendedQuestions, getOrCreateShare } from '@/lib/api/skill';
-import { getUser, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
+import { getUser, getToken, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
 import { copyToClipboard } from '@/lib/clipboard';
 
@@ -447,6 +447,9 @@ export function SkillCardPage({ skill }: Props) {
 
   useEffect(() => {
     if (questionsLoading && skill.id) {
+      // 仅已登录用户拉取推荐问题，未登录访客跳过（无需认证的公开数据已由 skill.recommendedQuestions 提供）
+      const token = getToken();
+      if (!token) { setQuestionsLoading(false); return; }
       fetchRecommendedQuestions(skill.id)
         .then(qs => { if (Array.isArray(qs) && qs.length > 0) setQuestions(qs.slice(0, 5)); })
         .catch(() => {}).finally(() => setQuestionsLoading(false));
