@@ -49,7 +49,7 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
     <div className="min-h-screen bg-[#f7f9ff] px-5 py-8" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="max-w-2xl mx-auto">
         <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.back()} className="text-sm text-[#747f9e]">← 返回</button>
+          <button onClick={() => router.push('/platform/my')} className="text-sm text-[#747f9e]">← 返回</button>
           <button onClick={() => router.push(`/skill/${skillId}`)} className="text-sm text-[#2147ff] font-medium">👁 预览名片</button>
         </div>
         <h1 className="text-xl font-bold text-[#10162f] mb-1">{skill?.displayName || '分身'}</h1>
