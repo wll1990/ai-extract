@@ -222,8 +222,8 @@ public class ReportController {
             .__rb_btn{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;border:none}
             .__rb_share{background:#2563eb;color:#fff}
             .__rb_share:hover{background:#1d4ed8}
-            .__rb_dl{background:#fff;color:#374151;border:1px solid #d1d5db!important;text-decoration:none}
-            .__rb_dl:hover{background:#f9fafb}
+            .__rb_dl,.__rb_pdf{background:#fff;color:#374151;border:1px solid #d1d5db!important;text-decoration:none}
+            .__rb_dl:hover,.__rb_pdf:hover{background:#f9fafb}
             .__rb_overlay{display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.4);align-items:center;justify-content:center}
             .__rb_overlay.show{display:flex}
             .__rb_modal{background:#fff;border-radius:16px;padding:24px;max-width:360px;width:90%%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.15)}
@@ -243,29 +243,31 @@ public class ReportController {
                 <div id="__report_bar">
                 <button class="__rb_btn __rb_share" onclick="document.getElementById('__rb_overlay').classList.add('show')">分享</button>
                 <a class="__rb_btn __rb_dl" href="%s/download">下载报告</a>
+                <button class="__rb_btn __rb_pdf" onclick="window.print()">导出 PDF</button>
                 </div>
                 <div id="__rb_overlay" class="__rb_overlay" onclick="this.classList.remove('show')">
                 <div class="__rb_modal" onclick="event.stopPropagation()">
                 <h3>分享萃取报告</h3>
                 <div class="__rb_qr"><img src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=%s" width="160" height="160" alt="QR"></div>
-                <div class="__rb_url"><input id="__rb_input" value="%s" readonly><button class="__rb_copy" onclick="navigator.clipboard.writeText(document.getElementById('__rb_input').value);this.textContent='已复制'">复制链接</button></div>
+                <div class="__rb_url"><input id="__rb_input" value="%s" readonly><button class="__rb_copy" onclick="var i=document.getElementById('__rb_input');i.select();i.setSelectionRange(0,99999);document.execCommand('copy');this.textContent='已复制'">复制链接</button></div>
                 <button class="__rb_close" onclick="document.getElementById('__rb_overlay').classList.remove('show')">关闭</button>
                 </div></div>
-                """.formatted(shareUrl, fullUrl, fullUrl);
+                """.formatted(shareUrl, shareUrl, fullUrl, fullUrl);
         } else {
             bar = barCss + """
                 <div id="__report_bar">
                 <button class="__rb_btn __rb_share" id="__share_btn" onclick="var b=this;b.textContent='...';b.disabled=true;fetch('/api/v1/reports/%s/share',{method:'POST',credentials:'include'}).then(r=>r.json()).then(d=>{var u=location.origin+d.data.shareUrl;document.getElementById('__rb_input').value=u;document.getElementById('__rb_qr_img').src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='+encodeURIComponent(u);document.getElementById('__rb_overlay').classList.add('show');b.textContent='分享';b.disabled=false}).catch(()=>{alert('分享失败');b.textContent='分享';b.disabled=false})">分享</button>
                 <a class="__rb_btn __rb_dl" href="/api/v1/reports/%s/download">下载报告</a>
+                <button class="__rb_btn __rb_pdf" onclick="window.print()">导出 PDF</button>
                 </div>
                 <div id="__rb_overlay" class="__rb_overlay" onclick="this.classList.remove('show')">
                 <div class="__rb_modal" onclick="event.stopPropagation()">
                 <h3>分享萃取报告</h3>
                 <div class="__rb_qr"><img id="__rb_qr_img" src="" width="160" height="160" alt="QR"></div>
-                <div class="__rb_url"><input id="__rb_input" value="" readonly><button class="__rb_copy" onclick="navigator.clipboard.writeText(document.getElementById('__rb_input').value);this.textContent='已复制'">复制链接</button></div>
+                <div class="__rb_url"><input id="__rb_input" value="" readonly><button class="__rb_copy" onclick="var i=document.getElementById('__rb_input');i.select();i.setSelectionRange(0,99999);document.execCommand('copy');this.textContent='已复制'">复制链接</button></div>
                 <button class="__rb_close" onclick="document.getElementById('__rb_overlay').classList.remove('show')">关闭</button>
                 </div></div>
-                """.formatted(reportId, reportId);
+                """.formatted(reportId, reportId, reportId);
         }
         int idx = html.lastIndexOf("</body>");
         if (idx > 0) {

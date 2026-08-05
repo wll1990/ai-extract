@@ -288,7 +288,6 @@ body{
     <a href="#sandbox">智能体手术台</a>
     <a href="#impact">影响辐射</a>
   </div>
-  <button class="nav-btn" onclick="window.print()">导出 PDF</button>
 </nav>
 
 <div class="container">
