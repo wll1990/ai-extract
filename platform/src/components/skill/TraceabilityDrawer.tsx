@@ -73,7 +73,7 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
   useEffect(() => {
     if (!orgSkillId || !open) return;
     apiClient(`/admin/organization-skills/${orgSkillId}/member-links`)
-      .then(r => { if (r?.data) setMemberLinks(r.data); })
+      .then((r: any) => { if (r) setMemberLinks(r); })
       .catch(() => {});
   }, [orgSkillId, open]);
 

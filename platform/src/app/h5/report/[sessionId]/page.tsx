@@ -49,10 +49,8 @@ export default function H5ReportPage() {
   useEffect(() => {
     if (!sessionId) return;
     apiClient(`/interviews/${encodeURIComponent(sessionId)}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.code === 200) setSession(d.data);
-        else setError('会话不存在');
+      .then((d: any) => {
+        setSession(d);
       })
       .catch(() => setError('加载失败'))
       .finally(() => setLoading(false));

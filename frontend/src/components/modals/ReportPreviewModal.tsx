@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, API_BASE } from '@/lib/api/client';
 
 interface Props {
   skillId: string;
