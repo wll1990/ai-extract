@@ -157,8 +157,7 @@ export default function MaterialsPage() {
       minHeight: '100vh',
       background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)',
     }}>
-      <div style={{ maxWidth: 672, margin: '0 auto', padding: '32px 20px' }}>
-        {/* 返回 */}
+      <div style={{ maxWidth: 1024, margin: '0 auto', padding: '32px 20px' }}>
         <button
           onClick={() => router.push('/platform/my')}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#747f9e', fontFamily: 'inherit', marginBottom: 12 }}
@@ -173,88 +172,64 @@ export default function MaterialsPage() {
           上传销售素材，AI 自动萃取经验
         </p>
 
-        {/* ① 素材类型选择 */}
-        <MaterialTypeSelector value={selectedType} onChange={setSelectedType} />
+        {/* 桌面端左右布局，移动端堆叠 */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 24, alignItems: 'start' }}
+          className="upload-layout">
+          {/* 左侧：上传流程 */}
+          <div style={{ minWidth: 0 }}>
+            <MaterialTypeSelector value={selectedType} onChange={setSelectedType} />
+            <PreUploadChecklist read={guideRead} onMarkRead={markGuideRead} onReset={resetGuide} />
+            <MaterialUploadZone disabled={!guideRead} onFilesSelected={handleFilesSelected} />
 
-        {/* ② 上传前必看 */}
-        <PreUploadChecklist read={guideRead} onMarkRead={markGuideRead} onReset={resetGuide} />
+            {files.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                {files.map((f, i) => (
+                  <FilePreviewCard key={i} fileName={f.file.name} fileSize={f.file.size}
+                    progress={f.progress} status={f.status} error={f.error}
+                    materialType={selectedType} onRemove={() => removeFile(i)} />
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+                  <span style={{ fontSize: 12, color: '#747f9e' }}>
+                    已选 {files.length} 个文件{files.length > 0 && `，共 ${(files.reduce((s, f) => s + f.file.size, 0) / 1024 / 1024).toFixed(1)}MB`}
+                  </span>
+                  <button onClick={handleUploadAll} disabled={uploading || files.every((f) => f.status === 'done')}
+                    style={{ padding: '8px 20px', borderRadius: 100, border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
+                      background: uploading ? '#a0b4ff' : '#2147ff', color: '#fff', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', opacity: uploading ? 0.7 : 1 }}>
+                    {uploading ? '上传中...' : '上传全部文件'}
+                  </button>
+                </div>
+              </div>
+            )}
 
-        {/* ③ 上传区域（必看确认后激活） */}
-        <MaterialUploadZone
-          disabled={!guideRead}
-          onFilesSelected={handleFilesSelected}
-        />
-
-        {/* 已选文件卡片 */}
-        {files.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            {files.map((f, i) => (
-              <FilePreviewCard
-                key={i}
-                fileName={f.file.name}
-                fileSize={f.file.size}
-                progress={f.progress}
-                status={f.status}
-                error={f.error}
-                materialType={selectedType}
-                onRemove={() => removeFile(i)}
-              />
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-              <span style={{ fontSize: 12, color: '#747f9e' }}>
-                已选 {files.length} 个文件
-                {files.length > 0 && `，共 ${(files.reduce((s, f) => s + f.file.size, 0) / 1024 / 1024).toFixed(1)}MB`}
-              </span>
-              <button
-                onClick={handleUploadAll}
-                disabled={uploading || files.every((f) => f.status === 'done')}
-                style={{
-                  padding: '8px 20px', borderRadius: 100, border: 'none', cursor: uploading ? 'not-allowed' : 'pointer',
-                  background: uploading ? '#a0b4ff' : '#2147ff', color: '#fff', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
-                  opacity: uploading ? 0.7 : 1,
-                }}
-              >
-                {uploading ? '上传中...' : '上传全部文件'}
-              </button>
-            </div>
+            {uploadDone && (
+              <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 14,
+                background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: '#166534', fontWeight: 500 }}>✅ 素材已上传，AI 正在后台萃取经验颗粒</span>
+                <button onClick={() => router.push(`/platform/my/${skillId}/audit`)}
+                  style={{ padding: '7px 16px', borderRadius: 100, border: 'none', cursor: 'pointer',
+                    background: '#166534', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>
+                  去审核页查看 →
+                </button>
+              </div>
+            )}
           </div>
-        )}
 
-        {/* 上传完成引导 */}
-        {uploadDone && (
-          <div style={{
-            marginTop: 16, padding: '14px 18px', borderRadius: 14,
-            background: '#f0fdf4', border: '1px solid #bbf7d0',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <span style={{ fontSize: 13, color: '#166534', fontWeight: 500 }}>
-              ✅ 素材已上传，AI 正在后台萃取经验颗粒
-            </span>
-            <button
-              onClick={() => router.push(`/platform/my/${skillId}/audit`)}
-              style={{
-                padding: '7px 16px', borderRadius: 100, border: 'none', cursor: 'pointer',
-                background: '#166534', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-              }}
-            >
-              去审核页查看 →
-            </button>
+          {/* 右侧：指南 + 素材列表 */}
+          <div style={{ minWidth: 0 }}>
+            <UploadTips />
+            <MaterialList materials={materials} loading={loading} error={error}
+              onDelete={handleDelete} onRetry={fetchMaterials}
+              onUpload={() => { markGuideRead(); document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth' }); }} />
           </div>
-        )}
-
-        {/* ④ 完整上传指南 */}
-        <UploadTips />
-
-        {/* ⑤ 已上传素材列表 */}
-        <MaterialList
-          materials={materials}
-          loading={loading}
-          error={error}
-          onDelete={handleDelete}
-          onRetry={fetchMaterials}
-          onUpload={() => { markGuideRead(); document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth' }); }}
-        />
+        </div>
       </div>
+
+      {/* 移动端响应式：窄屏切回堆叠 */}
+      <style jsx>{`
+        @media (max-width: 767px) {
+          .upload-layout { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }
