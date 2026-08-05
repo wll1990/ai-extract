@@ -220,6 +220,7 @@ public class ReportController {
             <style>
             #__report_bar{position:fixed;top:16px;right:16px;z-index:9999;display:flex;gap:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif}
             .__rb_btn{padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;border:none}
+            @media(max-width:640px){#__report_bar{top:auto;bottom:12px;right:8px;left:8px;justify-content:center;gap:6px}.__rb_btn{padding:6px 12px;font-size:11px}}
             .__rb_share{background:#2563eb;color:#fff}
             .__rb_share:hover{background:#1d4ed8}
             .__rb_dl,.__rb_pdf{background:#fff;color:#374151;border:1px solid #d1d5db!important;text-decoration:none}
