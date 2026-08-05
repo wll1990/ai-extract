@@ -23,6 +23,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -158,18 +160,33 @@ public class PublicController {
             @RequestParam(defaultValue = "recommended") String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        size = Math.min(Math.max(size, 1), 50); // 防拖库，上限 50
-        List<Skill> skills = skillRepository.findByStatus("published");
+        size = Math.min(Math.max(size, 1), 50);
+        PageRequest pageable = PageRequest.of(page - 1, size);
 
-        // 只展示已开启对外分享的分身
-        Set<UUID> sharedSkillIds = shareRepository
+        List<UUID> sharedSkillIds = shareRepository
                 .findByChannelAndEnabled(SkillShare.CHANNEL_PUBLIC, true).stream()
                 .map(SkillShare::getSkillId)
                 .filter(java.util.Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        skills = skills.stream()
-                .filter(s -> sharedSkillIds.contains(s.getId()))
-                .toList();
+                .distinct().toList();
+        if (sharedSkillIds.isEmpty()) {
+            return ApiResponse.success(Map.of("content", List.of(), "page", page, "size", size, "total", 0, "totalPages", 0));
+        }
+
+        String q = search.trim().toLowerCase();
+        boolean dbPaginated = q.isBlank();
+        long dbTotal = 0;
+        int dbTotalPages = 0;
+        List<Skill> skills;
+        if (dbPaginated) {
+            Page<Skill> skillPage = skillRepository.findPublishedShared(sharedSkillIds, type, pageable);
+            skills = skillPage.getContent();
+            dbTotal = skillPage.getTotalElements();
+            dbTotalPages = skillPage.getTotalPages();
+        } else {
+            skills = skillRepository.findByStatus("published").stream()
+                    .filter(s -> sharedSkillIds.contains(s.getId()))
+                    .toList();
+        }
 
         // 批量查颗粒数
         List<UUID> spaceIds = skills.stream().map(Skill::getSpaceId).distinct().toList();
@@ -177,7 +194,6 @@ public class PublicController {
                 .collect(java.util.stream.Collectors.toMap(
                         row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
 
-        String q = search.trim().toLowerCase();
         List<Map<String, Object>> result = new ArrayList<>();
         for (Skill skill : skills) {
             String name = skill.getDisplayName() != null ? skill.getDisplayName()
@@ -237,11 +253,20 @@ public class PublicController {
         }
 
         // 分页
-        int total = result.size();
-        int totalPages = (int) Math.ceil((double) total / size);
-        int fromIndex = (page - 1) * size;
-        int toIndex = Math.min(fromIndex + size, total);
-        List<Map<String, Object>> paged = fromIndex < total ? result.subList(fromIndex, toIndex) : List.of();
+        final int total;
+        final int totalPages;
+        final List<Map<String, Object>> paged;
+        if (dbPaginated) {
+            total = (int) dbTotal;
+            totalPages = dbTotalPages;
+            paged = result; // DB 已分页
+        } else {
+            total = result.size();
+            totalPages = (int) Math.ceil((double) total / size);
+            int fromIndex = (page - 1) * size;
+            int toIndex = Math.min(fromIndex + size, total);
+            paged = fromIndex < total ? result.subList(fromIndex, toIndex) : List.of();
+        }
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("content", paged);

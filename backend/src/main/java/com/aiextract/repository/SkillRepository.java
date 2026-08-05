@@ -88,6 +88,13 @@ public interface SkillRepository extends JpaRepository<Skill, UUID> {
     Page<Skill> findByCompanyIdAndType(UUID companyId, String type, Pageable pageable);
     /** 按类型+状态查询 */
     List<Skill> findByTypeAndStatus(String type, String status);
+    /** 公开分页: 已发布+已分享+可选类型过滤，DB 层分页 */
+    @Query("SELECT s FROM Skill s WHERE s.status = 'published' "
+         + "AND s.id IN :sharedIds "
+         + "AND (:type = '' OR s.type = :type)")
+    Page<Skill> findPublishedShared(@org.springframework.data.repository.query.Param("sharedIds") List<UUID> sharedIds,
+                                     @org.springframework.data.repository.query.Param("type") String type,
+                                     Pageable pageable);
     /**
      * 查询（Display,Name）。
      * @param displayName displayName
