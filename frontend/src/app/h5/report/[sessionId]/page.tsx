@@ -59,7 +59,9 @@ export default function H5ReportPage() {
   // Poll for report HTML
   const checkReport = useCallback(async () => {
     try {
-      const r = await apiClient(`/reports/by-session/${encodeURIComponent(sessionId)}/html`);
+      const r = await fetch(`/api/v1/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
       setLastCheck(new Date());
       setPollCount(c => c + 1);
 
