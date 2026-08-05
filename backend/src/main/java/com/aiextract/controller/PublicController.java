@@ -51,6 +51,8 @@ public class PublicController {
     private final CompanyRepository companyRepository;
     
     private final com.aiextract.repository.SkillShareRepository shareRepository;
+    private final com.aiextract.service.SkillService skillService;
+    private final com.aiextract.service.OrganizationSkillService orgSkillService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -80,9 +82,11 @@ public class PublicController {
         if (skill == null || !"published".equals(skill.getStatus())) {
             throw new BusinessException(404, "分身不存在");
         }
-        List<SkillShare> shares = shareRepository.findBySkillIdAndChannelAndEnabled(
-                skill.getId(), SkillShare.CHANNEL_PUBLIC, true);
-        if (shares.isEmpty()) {
+        boolean shared = shareRepository.findFirstBySkillIdAndChannel(
+                skill.getId(), SkillShare.CHANNEL_PUBLIC)
+                .map(s -> Boolean.TRUE.equals(s.getEnabled()))
+                .orElse(false);
+        if (!shared) {
             throw new BusinessException(404, "分身未开放");
         }
         Map<String, Object> detail = new LinkedHashMap<>();
@@ -92,12 +96,42 @@ public class PublicController {
         detail.put("ownerTitle", skill.getOwnerTitle());
         detail.put("avatarUrl", skill.getAvatarUrl());
         detail.put("department", skill.getDepartment());
-        detail.put("tags", parseTags(skill.getTags()));
-        detail.put("sceneTags", List.of());
+        List<String> tagList = parseTags(skill.getTags());
+        detail.put("tags", tagList);
+        // sceneTags: 从颗粒按场景分组统计，展示"🎯 N 个业务场景"
+        try {
+            detail.put("sceneTags", skillService.getSceneTags(skillId));
+        } catch (Exception e) {
+            detail.put("sceneTags", List.of());
+        }
         detail.put("grainCount", grainRepository.countBySpaceId(skill.getSpaceId()));
         detail.put("openingMessage", skill.getOpeningMessage());
         detail.put("domain", skill.getDomain());
-        detail.put("type", skill.getType() != null ? skill.getType() : "individual");
+        String skillType = skill.getType() != null ? skill.getType() : "individual";
+        detail.put("type", skillType);
+        // 组织分身：成员列表 + 成员数
+        if ("organization".equals(skillType)) {
+            List<com.aiextract.model.Skill> members = orgSkillService.resolveMembers(skill);
+            detail.put("memberCount", members.size());
+            detail.put("members", members.stream().map(m -> {
+                Map<String, Object> mb = new LinkedHashMap<>();
+                mb.put("id", m.getId().toString());
+                mb.put("displayName", m.getDisplayName());
+                mb.put("ownerName", m.getOwnerName());
+                mb.put("ownerTitle", m.getOwnerTitle());
+                mb.put("avatarUrl", m.getAvatarUrl());
+                mb.put("department", m.getDepartment());
+                mb.put("domain", m.getDomain());
+                mb.put("conversationCount", m.getConversationCount() != null ? m.getConversationCount() : 0);
+                return mb;
+            }).toList());
+        }
+        // 推荐问题: 从标签生成基本提问
+        List<String> questions = new ArrayList<>();
+        for (int i = 0; i < Math.min(tagList.size(), 5); i++) {
+            questions.add("关于" + tagList.get(i) + "，你能分享一下经验吗？");
+        }
+        detail.put("recommendedQuestions", questions);
         Map<String, Object> stats = new LinkedHashMap<>();
         stats.put("conversationCount", skill.getConversationCount() != null ? skill.getConversationCount() : 0);
         stats.put("userCount", skill.getUserCount() != null ? skill.getUserCount() : 0);

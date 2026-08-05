@@ -1,12 +1,12 @@
 /**
  * 分身 API 客户端 — @synced-from frontend/src/lib/api/skill.ts
  *
- * 差异：去除 authToken 参数（企业端无 C 端 Bearer 头场景）。
- * 企业端统一走 HttpOnly Cookie 认证。
+ * 双端点策略：已登录走认证接口(/skills/**)，访客走公开接口(/public/skills/**)。
  *
  * @since 2026-07-20
  */
 
+import { getToken } from '@/lib/storage';
 import { apiClient, API_BASE } from './client';
 import { connectSse, type SseCallbacks } from '@/lib/sse';
 
@@ -100,7 +100,16 @@ export interface SkillDetail {
   };
 }
 
+/**
+ * 分身详情 — 企业级双端点策略：
+ * 已登录（有 token）→ /skills/{id}/detail（全量数据）
+ * 未登录（访客）  → /public/skills/{id}（公开子集）
+ */
 export function fetchSkillDetail(skillId: string): Promise<SkillDetail> {
+  const token = getToken();
+  if (token) {
+    return apiClient(`/skills/${skillId}/detail`, { headers: { Authorization: `Bearer ${token}` } });
+  }
   return apiClient(`/public/skills/${skillId}`);
 }
 
