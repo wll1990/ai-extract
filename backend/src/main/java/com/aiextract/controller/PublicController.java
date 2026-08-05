@@ -158,6 +158,7 @@ public class PublicController {
             @RequestParam(defaultValue = "recommended") String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
+        size = Math.min(Math.max(size, 1), 50); // 防拖库，上限 50
         List<Skill> skills = skillRepository.findByStatus("published");
 
         // 只展示已开启对外分享的分身
