@@ -124,10 +124,18 @@ public class PublicController {
                 return mb;
             }).toList());
         }
-        // 推荐问题: 从标签生成基本提问
+        // 推荐问题: 优先从 sceneTags 生成，次选 tags
         List<String> questions = new ArrayList<>();
-        for (int i = 0; i < Math.min(tagList.size(), 5); i++) {
-            questions.add("关于" + tagList.get(i) + "，你能分享一下经验吗？");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> stList = (List<Map<String, Object>>) detail.get("sceneTags");
+        if (stList != null && !stList.isEmpty()) {
+            for (int i = 0; i < Math.min(stList.size(), 5); i++) {
+                questions.add("关于「" + stList.get(i).get("tag") + "」，你能分享一个实战案例吗？");
+            }
+        } else {
+            for (int i = 0; i < Math.min(tagList.size(), 5); i++) {
+                questions.add("关于" + tagList.get(i) + "，你能分享一下经验吗？");
+            }
         }
         detail.put("recommendedQuestions", questions);
         Map<String, Object> stats = new LinkedHashMap<>();
