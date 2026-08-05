@@ -10,6 +10,7 @@ export default function H5InterviewStartPage() {
   const [error, setError] = useState<string | null>(null);
   const [cUser, setCUser] = useState<{ userId: string; extractionRemaining?: number; extractionLimit?: number } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [activeSession, setActiveSession] = useState<{ sessionId: string; topic: string } | null>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem('c_auth');
@@ -23,6 +24,16 @@ export default function H5InterviewStartPage() {
             .then((r) => r.json())
             .then((d) => {
               if (d.code === 200) setCUser(d.data);
+            })
+            .catch(() => {});
+
+          // 检测是否有进行中的萃取会话
+          fetch('/api/v1/interviews/active', {
+            headers: { Authorization: `Bearer ${session.token}` },
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              if (d.code === 200 && d.data) setActiveSession(d.data);
             })
             .catch(() => {});
         }
@@ -67,8 +78,20 @@ export default function H5InterviewStartPage() {
   return (
     <div className="min-h-screen bg-[#f7f9ff] flex flex-col items-center px-5 py-10" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="w-full max-w-sm">
+        <button onClick={() => router.push('/platform/my')} className="text-sm text-[#747f9e] hover:text-[#10162f] mb-6">← 返回</button>
         <h1 className="text-xl font-bold text-[#10162f] mb-1">AI 经验萃取师</h1>
         <p className="text-sm text-[#747f9e] mb-8">发现你未被看见的价值</p>
+
+        {activeSession && (
+          <div className="mb-4 p-4 rounded-xl bg-white border border-[#2147ff]/20 shadow-sm">
+            <p className="text-sm font-medium text-[#10162f] mb-1">有正在进行的萃取</p>
+            <p className="text-xs text-[#747f9e] mb-3">「{activeSession.topic}」</p>
+            <button onClick={() => router.push(`/h5/interview/chat/${activeSession.sessionId}`)}
+              className="px-4 py-2 rounded-full bg-[#2147ff] text-white text-sm font-medium">
+              继续萃取 →
+            </button>
+          </div>
+        )}
 
         {authChecked && cUser && cUser.extractionRemaining !== undefined && (
           <div className="mb-4 px-4 py-2.5 rounded-xl bg-white border border-[#dfe6ff] text-sm text-[#10162f]">
