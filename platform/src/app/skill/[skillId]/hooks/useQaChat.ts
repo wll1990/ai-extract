@@ -95,7 +95,7 @@ export function useQaChat({
 
   const handleQaSend = useCallback(() => {
     const text = inputValue.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || !skillId) return;
 
     setSuggestedQuestions([]);  // 新消息 → 清掉上一轮的推荐
 
@@ -158,7 +158,7 @@ export function useQaChat({
   }, [inputValue, isStreaming, skillId, messages, skillInfo, currentConvId, chatMode, authToken, onLimit]);
 
   const sendMessageImmediate = useCallback((text: string) => {
-    if (isStreaming) return;
+    if (isStreaming || !skillId) return;
     setInputValue('');
     setSuggestedQuestions([]);
     const ownerName = skillInfo?.ownerName || '销冠';

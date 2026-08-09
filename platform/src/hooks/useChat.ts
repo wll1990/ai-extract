@@ -149,6 +149,7 @@ export function useChat({ skillId, ownerName, enterprise }: UseChatOptions) {
   const sendMessage = useCallback((text: string, mode: string = 'qa') => {
     const trimmed = text.trim();
     if (!trimmed || state.phase === 'streaming') return;
+    if (!skillId && !enterprise) return;
 
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
     dispatch({ type: 'SEND', userMsg });
