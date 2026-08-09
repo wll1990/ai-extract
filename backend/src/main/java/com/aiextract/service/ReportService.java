@@ -9,7 +9,6 @@ import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.Space;
 import com.aiextract.model.User;
-import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SpaceRepository;
 import com.aiextract.repository.UserRepository;
@@ -56,7 +55,6 @@ public class ReportService {
     private final com.aiextract.repository.InterviewSessionRepository sessionRepository;
     private final ExtractionReportService extractionReportService;
     private final CompanyScopeService companyScopeService;
-    private final AppUserRepository appUserRepository;
     private final ObjectMapper objectMapper;
 
     @org.springframework.beans.factory.annotation.Value("${app.report.min-grains:10}")
@@ -144,11 +142,6 @@ public class ReportService {
         List<UUID> userIds = spaces.stream().map(Space::getUserId).distinct().toList();
         Map<UUID, String> userNames = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
-        // C 端用户降级：user 表查不到 → 查 app_user 表
-        List<UUID> missingIds = userIds.stream().filter(id -> !userNames.containsKey(id)).toList();
-        if (!missingIds.isEmpty()) {
-            appUserRepository.findAllById(missingIds).forEach(u -> userNames.put(u.getId(), u.getNickname()));
-        }
         return spaces.stream()
                 .collect(Collectors.toMap(Space::getId,
                         s -> userNames.getOrDefault(s.getUserId(), "未知用户"),

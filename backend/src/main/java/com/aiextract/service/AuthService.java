@@ -150,6 +150,7 @@ public class AuthService {
                 .account(request.getAccount())
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
+                .source(User.SOURCE_ENTERPRISE)
                 .isActive(true)
                 .createdAt(now)
                 .updatedAt(now)
@@ -223,7 +224,7 @@ public class AuthService {
                 .name(user.getName())
                 .role(user.getRole())
                 .avatarUrl(user.getAvatarUrl())
-                .companyId(user.getCompanyId().toString())
+                .companyId(user.getCompanyId() != null ? user.getCompanyId().toString() : null)
                 .companyName(companyName)
                 .permissions(new ArrayList<>(RolePermissions.getPermissions(user.getRole())))
                 .build();

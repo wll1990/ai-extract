@@ -100,8 +100,7 @@ public class Space {
 
     /**
      * 当前用户是否是此空间的所有者。
-     * user_id 存储的可能是 user.id（B端）或 app_user.id（C端），
-     * 取决于创建时的 JWT 角色。调用方不关心类型，直接传当前 userId 匹配。
+     * user_id 统一存 user.id，B端和C端用户共用一张表。
      */
     public boolean isOwnedBy(UUID userId) {
         return userId.equals(this.userId);

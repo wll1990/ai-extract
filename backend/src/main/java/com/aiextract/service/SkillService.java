@@ -12,7 +12,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import com.aiextract.common.TraceContext;
 import com.aiextract.exception.BusinessException;
-import com.aiextract.model.AppUser;
 import com.aiextract.model.ExperienceGrain;
 
 import com.aiextract.model.Report;
@@ -220,7 +219,7 @@ public class SkillService {
      * 会话属主校验 — 对外开放后所有按 convId 的读/删/写都必须先过此闸。
      *
      * <p>规则：会话属主本人可访问；B 端 super_admin 豁免（后台运营需要）。
-     * C 端用户（app_user）在企业 user 表中查不到，自然只能访问自己的会话。</p>
+     * C 端用户 source 非 enterprise，B 端查询时自然隔离。</p>
      *
      * @throws BusinessException 404 会话不存在 / 403 无权访问
      */
@@ -228,7 +227,6 @@ public class SkillService {
 
     // ========== 分身列表 ==========
 
-    private final com.aiextract.repository.AppUserRepository appUserRepository;
 
     public Map<String, Object> listAllSkills(int page, int size, String status, UUID userId,
                                               UUID companyId, String role, String type) {
@@ -329,7 +327,6 @@ public class SkillService {
         List<UUID> ownerIds = spaceMap.values().stream().map(Space::getUserId).distinct().toList();
         Map<UUID, String> userNameMap = new HashMap<>();
         userRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getName()));
-        appUserRepository.findAllById(ownerIds).forEach(u -> userNameMap.put(u.getId(), u.getNickname()));
         Map<UUID, Long> grainCountMap = grainRepository.countBySpaceIdIn(spaceIds).stream()
                 .collect(Collectors.toMap(row -> (UUID) row[0], row -> (Long) row[1], (a, b) -> a));
 

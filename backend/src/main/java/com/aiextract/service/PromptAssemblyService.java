@@ -14,8 +14,6 @@ import com.aiextract.repository.SkillMessageRepository;
 import com.aiextract.repository.SkillProfileRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.repository.SpaceRepository;
-import com.aiextract.model.AppUser;
-import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.UserRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +45,6 @@ public class PromptAssemblyService {
     private final SkillProfileRepository profileRepository;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
-    private final AppUserRepository appUserRepository;
     private final DomainConfigLoader domainConfigLoader;
     private final PromptLoader promptLoader;
     private final SkillMessageRepository skillMessageRepository;
@@ -514,11 +511,8 @@ public class PromptAssemblyService {
      */
     public String getOwnerName(UUID spaceId) {
         return spaceRepository.findById(spaceId)
-                .flatMap(space -> {
-                    var bUser = userRepository.findById(space.getUserId());
-                    if (bUser.isPresent()) return bUser.map(User::getName);
-                    return appUserRepository.findById(space.getUserId()).map(AppUser::getNickname);
-                })
+                .flatMap(space -> userRepository.findById(space.getUserId()))
+                .map(User::getName)
                 .orElse("销冠");
     }
 

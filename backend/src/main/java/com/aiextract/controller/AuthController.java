@@ -99,10 +99,13 @@ public class AuthController {
     @GetMapping("/me")
     public ApiResponse<UserInfoResponse> getCurrentUser(HttpServletRequest request) {
         String token = getTokenFromSecurityContext(request);
-        if (token == null) {
+        if (token == null || token.isBlank()) {
             return ApiResponse.error(401, "未登录");
         }
         UUID userId = jwtUtil.getUserIdFromToken(token);
+        if (userId == null) {
+            return ApiResponse.error(401, "token无效");
+        }
         UserInfoResponse response = authService.getCurrentUser(userId);
         return ApiResponse.success(response);
     }

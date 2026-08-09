@@ -129,7 +129,7 @@ public class InterviewService {
      * 创建访谈会话。
      *
      * <p>B端：spaceId 由前端传入（管理员选了 space）。
-     * C端：spaceId 不传，从当前 userId（app_user.id）找/建 personal Space。</p>
+     * C端：spaceId 不传，从当前 userId 找/建 personal Space。</p>
      *
      * @param request       创建请求
      * @param userId        当前登录用户

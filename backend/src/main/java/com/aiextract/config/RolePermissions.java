@@ -30,6 +30,9 @@ public final class RolePermissions {
     public static final String SUPER_ADMIN = "super_admin";
     public static final String COMPANY_ADMIN = "company_admin";
     public static final String EMPLOYEE = "employee";
+    public static final String C_GUEST = "c_guest";
+    public static final String C_USER = "c_user";
+    public static final String C_PARTNER = "c_partner";
 
     /**
      * 角色→权限码集合映射。

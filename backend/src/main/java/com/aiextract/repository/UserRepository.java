@@ -52,5 +52,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     java.util.Optional<String> findNameBySpaceId(@org.springframework.data.repository.query.Param("spaceId") UUID spaceId);
 
+    // ========== C 端查询 ==========
 
+    /** 按 account 全局查找（C 端登录/注册查重，需配合 isCEnd() 过滤 B 端） */
+    Optional<User> findByAccount(String account);
+
+    /** account 是否已被 C 端用户占用 */
+    boolean existsByAccount(String account);
+
+    /** 按分享来源查用户（归因分析） */
+    List<User> findBySourceShareId(UUID sourceShareId);
 }

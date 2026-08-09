@@ -1,14 +1,15 @@
 package com.aiextract.service;
 
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.RolePermissions;
 import com.aiextract.dto.CLoginRequest;
 import com.aiextract.dto.CRegisterRequest;
 import com.aiextract.dto.GuestSessionResponse;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.AnalyticsEvent;
-import com.aiextract.model.AppUser;
+import com.aiextract.model.User;
 import com.aiextract.repository.AnalyticsEventRepository;
-import com.aiextract.repository.AppUserRepository;
+import com.aiextract.repository.UserRepository;
 import com.aiextract.repository.InterviewSessionRepository;
 import com.aiextract.repository.SkillMessageRepository;
 import com.aiextract.repository.SpaceRepository;
@@ -29,7 +30,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * C 端认证服务 — 平台级用户体系（app_user），与企业 user 表完全独立
+ * C 端认证服务 — 统一用户体系，查 user 表按 source 区分 B/C 端
  *
  * <p>注册 = 游客原地升级（同一行补 account/password，status→registered，
  * UUID 不变，会话历史自动继承）。登录无需企业 ID。</p>
@@ -43,7 +44,7 @@ import java.util.UUID;
 @SuppressWarnings("PMD.ClassNamingShouldBeCamelRule")
 public class CAuthService {
 
-    private final AppUserRepository appUserRepository;
+    private final UserRepository userRepository;
     private final SkillMessageRepository skillMessageRepository;
     private final SpaceRepository spaceRepository;
     private final InterviewSessionRepository sessionRepository;
@@ -75,13 +76,13 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse register(UUID userId, CRegisterRequest request) {
-        AppUser user = appUserRepository.findById(userId)
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
-        if (!AppUser.STATUS_GUEST.equals(user.getStatus())) {
+        if (!User.STATUS_GUEST.equals(user.getStatus())) {
             throw new BusinessException(400, "当前账号已注册，无需升级");
         }
         String account = request.getAccount().trim();
-        if (appUserRepository.existsByAccount(account)) {
+        if (userRepository.existsByAccount(account)) {
             throw new BusinessException(400, "账号已被占用，换一个试试");
         }
 
@@ -89,17 +90,18 @@ public class CAuthService {
         user.setAccount(account);
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         if (request.getNickname() != null && !request.getNickname().isBlank()) {
-            user.setNickname(request.getNickname().trim());
+            user.setName(request.getNickname().trim());
         }
-        user.setStatus(AppUser.STATUS_REGISTERED);
+        user.setStatus(User.STATUS_REGISTERED);
+        user.setRole(RolePermissions.C_USER);
         // 游客升级注册的，来源标记为分享链接
         if (user.getSource() == null) {
-            user.setSource(AppUser.SOURCE_SHARE);
+            user.setSource(User.SOURCE_SHARE);
         }
         user.setLastActiveAt(now);
         user.setUpdatedAt(now);
         try {
-            appUserRepository.saveAndFlush(user);
+            userRepository.saveAndFlush(user);
         } catch (DataIntegrityViolationException e) {
             // account 全局 UNIQUE 兜底并发双提交
             throw new BusinessException(400, "账号已被占用，换一个试试");
@@ -109,7 +111,7 @@ public class CAuthService {
         if (spaceRepository.findByUserId(userId).isEmpty()) {
             spaceRepository.save(com.aiextract.model.Space.builder()
                 .id(UUID.randomUUID()).userId(userId)
-                .title((user.getNickname() != null ? user.getNickname() : account) + "的空间")
+                .title((user.getName() != null ? user.getName() : account) + "的空间")
                 .isPublic(false).status("active")
                 .createdAt(now).updatedAt(now)
                 .build());
@@ -126,18 +128,21 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse registerNew(String account, String password, String nickname, MultipartFile avatar) {
-        if (appUserRepository.existsByAccount(account)) {
+        if (userRepository.existsByAccount(account)) {
             throw new BusinessException(400, "账号已被占用");
         }
-        AppUser user = AppUser.builder()
+        LocalDateTime now = LocalDateTime.now();
+        User user = User.builder()
             .id(UUID.randomUUID())
             .account(account)
             .passwordHash(passwordEncoder.encode(password))
-            .nickname(nickname)
-            .status(AppUser.STATUS_REGISTERED)
-            .source(AppUser.SOURCE_PLATFORM)
-            .createdAt(LocalDateTime.now())
-            .updatedAt(LocalDateTime.now())
+            .name(nickname)
+            .role(RolePermissions.C_USER)
+            .status(User.STATUS_REGISTERED)
+            .source(User.SOURCE_PLATFORM)
+            .isActive(true)
+            .createdAt(now)
+            .updatedAt(now)
             .build();
 
         // 上传头像（可选）
@@ -146,13 +151,13 @@ public class CAuthService {
             user.setAvatarUrl(avatarUrl);
         }
 
-        appUserRepository.save(user);
+        userRepository.save(user);
         // 自动创建个人空间
         spaceRepository.save(com.aiextract.model.Space.builder()
             .id(UUID.randomUUID()).userId(user.getId())
             .title((nickname != null ? nickname : account) + "的空间")
             .isPublic(false).status("active")
-            .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+            .createdAt(now).updatedAt(now)
             .build());
         log.info("C端独立注册成功 userId={} account={}", user.getId(), account);
         return buildSession(user, issueToken(user));
@@ -183,7 +188,8 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse login(CLoginRequest request) {
-        AppUser user = appUserRepository.findByAccount(request.getAccount().trim())
+        User user = userRepository.findByAccount(request.getAccount().trim())
+                .filter(User::isCEnd)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
         if (user.getPasswordHash() == null
                 || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -193,20 +199,20 @@ public class CAuthService {
         LocalDateTime now = LocalDateTime.now();
         user.setLastActiveAt(now);
         user.setUpdatedAt(now);
-        appUserRepository.save(user);
+        userRepository.save(user);
 
         log.info("C端登录成功 userId={}", user.getId());
         return buildSession(user, issueToken(user));
     }
 
     /**
-     * 当前 C 端身份探测（token 为 null — 不重签；B 端 token 的 userId 在 app_user 查不到 → 404，
-     * 前端据此按"无 C 端身份"处理）。
+     * 当前 C 端身份探测（token 为 null — 不重签；B 端 token 的 userId 查到 source=enterprise → 404）。
      * 返回萃取剩余次数（用于前端展示）。
      */
     @Transactional(readOnly = true)
     public GuestSessionResponse me(UUID userId) {
-        AppUser user = appUserRepository.findById(userId)
+        User user = userRepository.findById(userId)
+                .filter(User::isCEnd)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
         GuestSessionResponse resp = buildSession(user, null);
 
@@ -221,15 +227,14 @@ public class CAuthService {
         return resp;
     }
 
-    private String issueToken(AppUser user) {
-        boolean isGuest = AppUser.STATUS_GUEST.equals(user.getStatus());
-        String role = isGuest ? ShareService.ROLE_C_GUEST : ShareService.ROLE_C_USER;
+    private String issueToken(User user) {
+        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        return jwtUtil.generateToken(user.getId(), null, role, ttlDays * 86_400_000L);
+        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L);
     }
 
-    private GuestSessionResponse buildSession(AppUser user, String token) {
-        boolean isGuest = AppUser.STATUS_GUEST.equals(user.getStatus());
+    private GuestSessionResponse buildSession(User user, String token) {
+        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         Long remaining = null;
         if (isGuest) {
             long used = skillMessageRepository.countUserMessagesByUserIdSince(
@@ -239,7 +244,7 @@ public class CAuthService {
         return GuestSessionResponse.builder()
                 .token(token)
                 .userId(user.getId().toString())
-                .nickname(user.getNickname())
+                .nickname(user.getName())
                 .avatarUrl(user.getAvatarUrl())
                 .status(user.getStatus())
                 .remaining(remaining)
@@ -248,7 +253,7 @@ public class CAuthService {
     }
 
     /** 埋点写入（内部吞异常，不影响注册/登录主流程与事务） */
-    private void recordEvent(String eventType, AppUser user) {
+    private void recordEvent(String eventType, User user) {
         try {
             analyticsEventRepository.save(AnalyticsEvent.builder()
                     .id(UUID.randomUUID())

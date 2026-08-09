@@ -1,11 +1,12 @@
 package com.aiextract.config;
 
+import com.aiextract.config.RolePermissions;
 import com.aiextract.exception.PartnerException;
-import com.aiextract.model.AppUser;
 import com.aiextract.model.PartnerApp;
 import com.aiextract.model.PartnerApp.PartnerStatus;
-import com.aiextract.repository.AppUserRepository;
+import com.aiextract.model.User;
 import com.aiextract.repository.PartnerAppRepository;
+import com.aiextract.repository.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Claims;
@@ -23,20 +24,19 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 合作方 JWT 验证器 — 解析 ?token= 参数，验证签名，自动注册/查找用户到 app_user 表。
+ * 合作方 JWT 验证器 — 解析 ?token= 参数，验证签名，自动注册/查找用户到统一 user 表。
  *
- * <p>合作方用户属于 C 端外部用户体系，与 B 端 user 表完全独立。
- * account = "partner:{appId}:{externalUserId}"，status = "partner"。</p>
+ * <p>合作方用户写入 user 表（source=partner, role=c_partner, companyId=appId）。
+ * account = "partner:{appId}:{externalUserId}"。</p>
  *
  * <h3>合作方 JWT payload 格式</h3>
  * <pre>{@code
  * {
- *   "appId": "合作方标识（UUID，即 PartnerApp.app_id）",
+ *   "appId": "合作方标识（UUID，即 PartnerApp.app_id = Company.id）",
  *   "userId": "合作方系统的用户 ID",
  *   "userName": "用户昵称"
  * }
  * }</pre>
- * <p>appId 同时作为 app_user.company_id 使用，无需额外传 companyId 字段。</p>
  */
 @Slf4j
 @Component
@@ -45,11 +45,11 @@ public class PartnerJwtFilter {
 
     private final PartnerAppRepository partnerAppRepository;
     private final PartnerCrypto partnerCrypto;
-    private final AppUserRepository appUserRepository;
+    private final UserRepository userRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
-     * 验证合作方 JWT，返回 app_user 的 UUID（新用户自动创建）。
+     * 验证合作方 JWT，返回 user.id（新用户自动创建）。
      */
     public UUID authenticate(String rawToken) {
         // 1. 不解签名先读 appId
@@ -76,9 +76,9 @@ public class PartnerJwtFilter {
         //    合作方 JWT payload 只需传 { appId, userId, userName }，无需冗余的 companyId
         String account = "partner:" + appId + ":" + externalUserId;
         UUID companyUuid = UUID.fromString(appId);
-        AppUser user = findOrCreateAppUser(account, userName != null ? userName : externalUserId, companyUuid);
+        User user = findOrCreateUser(account, userName != null ? userName : externalUserId, companyUuid);
 
-        log.info("Partner auth success: appId={} externalUserId={} appUserId={}",
+        log.info("Partner auth success: appId={} externalUserId={} userId={}",
             appId, externalUserId, user.getId());
         return user.getId();
     }
@@ -120,29 +120,31 @@ public class PartnerJwtFilter {
             .parseSignedClaims(token).getPayload();
     }
 
-    private AppUser findOrCreateAppUser(String account, String nickname, UUID companyId) {
-        Optional<AppUser> existing = appUserRepository.findByAccount(account);
+    private User findOrCreateUser(String account, String nickname, UUID companyId) {
+        Optional<User> existing = userRepository.findByAccount(account);
         if (existing.isPresent()) {
             // 更新最后活跃时间
-            AppUser u = existing.get();
+            User u = existing.get();
             u.setLastActiveAt(LocalDateTime.now());
             u.setUpdatedAt(LocalDateTime.now());
-            return appUserRepository.save(u);
+            return userRepository.save(u);
         }
 
-        AppUser user = AppUser.builder()
+        User user = User.builder()
             .id(UUID.randomUUID())
             .account(account)
-            .nickname(nickname)
-            .status(AppUser.STATUS_REGISTERED)
-            .source(AppUser.SOURCE_PARTNER)
+            .name(nickname)
+            .role(RolePermissions.C_PARTNER)
+            .status(User.STATUS_REGISTERED)
+            .source(User.SOURCE_PARTNER)
             .companyId(companyId)
+            .isActive(true)
             .lastActiveAt(LocalDateTime.now())
             .createdAt(LocalDateTime.now())
             .updatedAt(LocalDateTime.now())
             .build();
-        AppUser saved = appUserRepository.save(user);
-        log.info("合作方用户已创建 appUserId={} account={}", saved.getId(), account);
+        User saved = userRepository.save(user);
+        log.info("合作方用户已创建 userId={} account={}", saved.getId(), account);
         return saved;
     }
 }

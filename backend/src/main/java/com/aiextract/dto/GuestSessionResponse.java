@@ -25,7 +25,7 @@ public class GuestSessionResponse {
     /** C 端 JWT（Bearer 使用；me 接口不重签为 null） */
     private String token;
 
-    /** C 端用户ID（app_user.id，访客身份本体） */
+    /** C 端用户ID */
     private String userId;
 
     /** 昵称 */

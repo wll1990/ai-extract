@@ -1,17 +1,16 @@
 package com.aiextract.service;
 
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.RolePermissions;
 import com.aiextract.dto.GuestSessionResponse;
 import com.aiextract.dto.ShareInfoResponse;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.AnalyticsEvent;
-import com.aiextract.model.AppUser;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillShare;
 import com.aiextract.model.Space;
 import com.aiextract.model.User;
 import com.aiextract.repository.AnalyticsEventRepository;
-import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.SkillMessageRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.repository.SkillShareRepository;
@@ -55,12 +54,6 @@ public class ShareService {
 
     private static final int MAX_SHARE_CODE_RETRIES = 3;
 
-    /** C 端游客角色（JWT role claim） */
-    public static final String ROLE_C_GUEST = "c_guest";
-
-    /** C 端注册用户角色（JWT role claim） */
-    public static final String ROLE_C_USER = "c_user";
-
     private static final String BASE62 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SHARE_CODE_LENGTH = 10;
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -69,7 +62,6 @@ public class ShareService {
     private final SkillRepository skillRepository;
     private final SpaceRepository spaceRepository;
     private final UserRepository userRepository;
-    private final AppUserRepository appUserRepository;
     private final SkillMessageRepository skillMessageRepository;
     private final SkillService skillService;
     private final ShareRateLimiter rateLimiter;
@@ -213,10 +205,10 @@ public class ShareService {
         Long remaining = null;
         String viewerStatus = null;
         if (viewerUserIdOrNull != null) {
-            AppUser viewer = appUserRepository.findById(viewerUserIdOrNull).orElse(null);
+            User viewer = userRepository.findById(viewerUserIdOrNull).orElse(null);
             if (viewer != null) {
                 viewerStatus = viewer.getStatus();
-                if (AppUser.STATUS_GUEST.equals(viewer.getStatus())) {
+                if (User.STATUS_GUEST.equals(viewer.getStatus())) {
                     remaining = remainingQuota(viewer.getId());
                 }
             }
@@ -266,7 +258,7 @@ public class ShareService {
                     .shareCode(shareCode)
                     .ownerName(skill.getDisplayName())
                     .ownerTitle(skill.getDescription())
-                    .avatarUrl(skill.getAvatarUrl())
+                    .avatarUrl(resolveAvatarUrl(skill))
                     .tags(List.of())
                     .sceneTags(sceneTags)
                     .guestLimit(guestMessageLimit)
@@ -296,7 +288,7 @@ public class ShareService {
                 .shareCode(shareCode)
                 .ownerName(skill.getOwnerName() != null ? skill.getOwnerName() : skill.getDisplayName())
                 .ownerTitle(skill.getOwnerTitle())
-                .avatarUrl(skill.getAvatarUrl())
+                .avatarUrl(resolveAvatarUrl(skill))
                 .tags(parseTags(skill.getTags()))
                 .sceneTags(sceneTags)
                 .guestLimit(guestMessageLimit)
@@ -310,12 +302,21 @@ public class ShareService {
                 .build();
     }
 
+    /** Skill 没头像时降级取 space owner 的头像 */
+    private String resolveAvatarUrl(Skill skill) {
+        if (skill.getAvatarUrl() != null) return skill.getAvatarUrl();
+        Space space = spaceRepository.findById(skill.getSpaceId()).orElse(null);
+        if (space == null) return null;
+        return userRepository.findById(space.getUserId())
+                .map(User::getAvatarUrl).orElse(null);
+    }
+
     /**
      * 游客发证（幂等 + 滑动续期）
      *
      * <p>无 C 端身份 → IP 限流后新建游客并签 7 天 token；
      * 已是 C 端身份（游客/注册均可）→ 刷新活跃时间并重签 token（滑动续期，活跃用户永不掉线）。
-     * B 端 token 打进来时 userId 在 app_user 查不到，按无身份处理 —— 企业员工在分享页就是普通 C 端用户。</p>
+     * B 端 token 打进来时查到 source=enterprise 的用户，按无 C 端身份处理。</p>
      */
     public GuestSessionResponse createGuestSession(String shareCode, String clientIp, UUID currentUserIdOrNull) {
         SkillShare share = requireEnabledShare(shareCode);
@@ -325,27 +326,30 @@ public class ShareService {
 
         // 已有 C 端身份：滑动续期
         if (currentUserIdOrNull != null) {
-            AppUser existing = appUserRepository.findById(currentUserIdOrNull).orElse(null);
-            if (existing != null) {
+            User existing = userRepository.findById(currentUserIdOrNull).orElse(null);
+            if (existing != null && existing.isCEnd()) {
                 existing.setLastActiveAt(now);
                 existing.setUpdatedAt(now);
-                appUserRepository.save(existing);
+                userRepository.save(existing);
                 return buildSession(existing, issueToken(existing));
             }
         }
 
-        // 新访客：IP 防刷 → INSERT 一行 app_user（UUID 主键 = 访客身份本体）
+        // 新访客：IP 防刷 → INSERT 一行 user（UUID = 访客身份，role=c_guest）
         if (!rateLimiter.allowGuestCreate(clientIp)) {
             log.warn("游客创建IP限流触发 ip={}", clientIp);
             throw new BusinessException(429, "操作太频繁，请稍后再试");
         }
 
         UUID id = UUID.randomUUID();
-        AppUser guest = appUserRepository.save(AppUser.builder()
+        User guest = userRepository.save(User.builder()
                 .id(id)
-                .nickname("访客" + id.toString().replace("-", "").substring(0, 4))
-                .status(AppUser.STATUS_GUEST)
+                .name("访客" + id.toString().replace("-", "").substring(0, 4))
+                .role(RolePermissions.C_GUEST)
+                .status(User.STATUS_GUEST)
+                .source(User.SOURCE_SHARE)
                 .sourceShareId(share.getId())
+                .isActive(true)
                 .lastActiveAt(now)
                 .createdAt(now)
                 .updatedAt(now)
@@ -377,25 +381,20 @@ public class ShareService {
     }
 
     /**
-     * 解析分身的企业归属。双表降级：先查 B 端 user，查不到再查 C 端 app_user。
-     * B端 → user.companyId
-     * Partner → app_user.companyId
-     * 纯C端 → null
+     * 解析分身的企业归属。统一查 user 表，按 source 区分：
+     * enterprise/partner → 有 companyId，纯 C 端 → null
      */
     private UUID resolveCompanyId(Skill skill) {
         try {
             Space space = spaceRepository.findById(skill.getSpaceId()).orElse(null);
             if (space == null) return null;
-            UUID ownerId = space.getUserId();
-            // 先查 B 端 user 表
-            User bUser = userRepository.findById(ownerId).orElse(null);
-            if (bUser != null) return bUser.getCompanyId();
-            // 降级查 C 端 app_user 表
-            AppUser cUser = appUserRepository.findById(ownerId).orElse(null);
-            if (cUser != null && AppUser.SOURCE_PARTNER.equals(cUser.getSource())) {
-                return cUser.getCompanyId();
+            User owner = userRepository.findById(space.getUserId()).orElse(null);
+            if (owner == null) return null;
+            if (User.SOURCE_ENTERPRISE.equals(owner.getSource())
+                    || User.SOURCE_PARTNER.equals(owner.getSource())) {
+                return owner.getCompanyId();
             }
-            return null; // 纯 C 端独立用户 → 无企业归属
+            return null;
         } catch (Exception e) {
             log.warn("分身企业归属解析失败 skillId={}: {}", skill.getId(), e.getMessage());
             return null;
@@ -450,19 +449,20 @@ public class ShareService {
             });
     }
 
-    private String issueToken(AppUser user) {
-        boolean isGuest = AppUser.STATUS_GUEST.equals(user.getStatus());
-        String role = isGuest ? ROLE_C_GUEST : ROLE_C_USER;
+    private String issueToken(User user) {
+        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        return jwtUtil.generateToken(user.getId(), null, role, ttlDays * 86_400_000L);
+        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L);
     }
 
-    private GuestSessionResponse buildSession(AppUser user, String token) {
-        boolean isGuest = AppUser.STATUS_GUEST.equals(user.getStatus());
+    private GuestSessionResponse buildSession(User user, String token) {
+        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         return GuestSessionResponse.builder()
                 .token(token)
                 .userId(user.getId().toString())
-                .nickname(user.getNickname())
+                .nickname(user.getName())
+                .nickname(user.getName())
+                .avatarUrl(user.getAvatarUrl())
                 .status(user.getStatus())
                 .remaining(isGuest ? remainingQuota(user.getId()) : null)
                 .limit(isGuest ? guestMessageLimit : null)
