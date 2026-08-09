@@ -86,7 +86,7 @@ public class ChatStreamService {
     @Value("${app.chat.timeout-seconds:120}")
     private int chatTimeoutSeconds;
 
-    @Value("${app.rag.top-k:5}")
+    @Value("${app.rag.top-k:8}")
     private int ragTopK;
 
     // ============================================================
@@ -157,7 +157,7 @@ public class ChatStreamService {
         String domain = domainConfigLoader.resolveDomain(skill);
         String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, skill.getId());
         RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(skill.getId(), convId, request.getMessage());
-        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(ragQuery, skill.getSpaceId(), ragTopK, domain, ragCtx);
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, skill.getSpaceId(), ragTopK, domain, ragCtx, "skillId=" + skillId);
 
         final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
         final UUID persistedReportId = grains.grains().stream()
@@ -302,8 +302,7 @@ public class ChatStreamService {
         String domain = orgSkill.getDomain() != null ? orgSkill.getDomain() : "sales";
         String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, orgSkillId);
         RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(orgSkillId, convId, request.getMessage());
-        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(
-                ragQuery, spaceIds, ragTopK, domain, ragCtx);
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, spaceIds, ragTopK, domain, ragCtx, "org");
 
         final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
         final UUID persistedReportId = grains.grains().stream()
@@ -510,8 +509,7 @@ public class ChatStreamService {
         String ragQuery = ragPipelineService.rewriteQuery(query, null, domain, null);
         UUID pseudoConvId = UUID.randomUUID();
         RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(null, pseudoConvId, query);
-        RagPipelineService.GrainResult grains = ragPipelineService.retrieveGrainsWithScores(
-                ragQuery, companySpaceIds, ragTopK, domain, ragCtx);
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, companySpaceIds, ragTopK, domain, ragCtx, "enterprise");
 
         // 组装 prompt + 流式
         final long tAiStart = System.currentTimeMillis();
@@ -776,6 +774,24 @@ public class ChatStreamService {
         } catch (Exception e) {
             log.warn("构建溯源信息失败: {}", e.getMessage());
             return Flux.empty();
+        }
+    }
+
+    private RagPipelineService.GrainResult getGrainsSafely(String query, UUID spaceId, int topK, String domain, RagPipelineService.RagContext ragCtx, String label) {
+        try {
+            return ragPipelineService.retrieveGrainsWithScores(query, spaceId, topK, domain, ragCtx);
+        } catch (Exception e) {
+            log.warn("RAG检索失败({})，降级为空: {}", label, e.getMessage());
+            return new RagPipelineService.GrainResult(List.of(), Map.of(), Map.of());
+        }
+    }
+
+    private RagPipelineService.GrainResult getGrainsSafely(String query, List<UUID> spaceIds, int topK, String domain, RagPipelineService.RagContext ragCtx, String label) {
+        try {
+            return ragPipelineService.retrieveGrainsWithScores(query, spaceIds, topK, domain, ragCtx);
+        } catch (Exception e) {
+            log.warn("RAG检索失败({})，降级为空: {}", label, e.getMessage());
+            return new RagPipelineService.GrainResult(List.of(), Map.of(), Map.of());
         }
     }
 }

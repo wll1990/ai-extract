@@ -65,12 +65,18 @@ public class RagPipelineService {
     /**
      * RAG 检索聚合结果。
      *
-     * @param grains       检索到的颗粒列表
-     * @param tiers        grainId → tier 标记（"high" / "ref"）
-     * @param similarities grainId → 相似度分数
+     * @param grains        检索到的颗粒列表
+     * @param tiers         grainId → tier 标记（"high" / "ref" / "low" / "fallback"）
+     * @param similarities  grainId → 相似度分数
+     * @param fallbackLevel 降级层级（0=正常，1=降阈值，2=去质量门禁，3=Dense-only）
      */
     public record GrainResult(List<ExperienceGrain> grains, Map<UUID, String> tiers,
-                               Map<UUID, Double> similarities) {}
+                               Map<UUID, Double> similarities, int fallbackLevel) {
+        public GrainResult(List<ExperienceGrain> grains, Map<UUID, String> tiers,
+                           Map<UUID, Double> similarities) {
+            this(grains, tiers, similarities, 0);
+        }
+    }
 
     /**
      * RAG 检索上下文 — 用于检索日志与知识缺口记录。
@@ -155,116 +161,114 @@ public class RagPipelineService {
     // 语义检索 + 分层
     // ============================================================
 
+    /** 降级时使用的最小相似度阈值 */
+    private static final double FALLBACK_MIN_SIMILARITY = 0.15;
+    /** 降级时 tier 标记前缀 */
+    private static final String TIER_FALLBACK = "fallback";
+
     /**
-     * pgvector 语义检索并按领域阈值分层标记。
+     * pgvector 语义检索 + 4 级降级链路。
      *
      * <p>阈值从 {@link DomainConfig.PreCheckConfig} 读取，默认 high ≥ 0.50、ref ≥ 0.30。
-     * 每条命中颗粒写检索日志；无匹配时自动记录知识缺口并返回空结果。</p>
+     * 每条命中颗粒写检索日志；全部失败时记录知识缺口。</p>
+     *
+     * <p>降级链路：Level 0(正常) → Level 1(降阈值) → Level 2(去质量门禁) → Level 3(Dense-only) → Level 4(记录缺口)。</p>
      *
      * @param query   改写后查询
      * @param spaceId 空间 ID
      * @param topK    最大返回数
      * @param domain  领域标识
      * @param ragCtx  检索上下文
-     * @return 聚合结果，无匹配返回空列表
+     * @return 聚合结果，无匹配返回空列表（fallbackLevel=4）
      */
     public GrainResult retrieveGrainsWithScores(String query, UUID spaceId, int topK,
                                                  String domain, RagContext ragCtx) {
+        // ── Level 0: 正常检索 ──
+        GrainResult result = doRetrieve(query, spaceId, topK, domain, ragCtx, minSimilarity, false);
+        if (!result.grains().isEmpty()) return result;
+
+        // ── Level 1: 降低 min-similarity 重试 ──
+        log.info("RAG Level 0 无结果，降级 Level 1: minSim={}", FALLBACK_MIN_SIMILARITY);
+        result = doRetrieve(query, spaceId, topK, domain, ragCtx, FALLBACK_MIN_SIMILARITY, false);
+        if (!result.grains().isEmpty()) {
+            Map<UUID, String> fallbackTiers = new java.util.LinkedHashMap<>();
+            result.grains().forEach(g -> fallbackTiers.put(g.getId(), "low"));
+            return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 1);
+        }
+
+        // ── Level 2: 跳过质量门禁 + 降阈值 ──
+        log.info("RAG Level 1 无结果，降级 Level 2: skipQualityGate + minSim={}", FALLBACK_MIN_SIMILARITY);
+        result = doRetrieve(query, spaceId, topK, domain, ragCtx, FALLBACK_MIN_SIMILARITY, true);
+        if (!result.grains().isEmpty()) {
+            Map<UUID, String> fallbackTiers = new java.util.LinkedHashMap<>();
+            result.grains().forEach(g -> fallbackTiers.put(g.getId(), TIER_FALLBACK));
+            return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 2);
+        }
+
+        // ── Level 3: Dense-only 兜底（如果启用了 Hybrid） ──
+        if (hybridSearchEnabled) {
+            log.info("RAG Level 2 无结果，降级 Level 3: Dense-only + skipQualityGate + minSim={}", FALLBACK_MIN_SIMILARITY);
+            result = doRetrieveDense(query, spaceId, topK, domain, ragCtx, FALLBACK_MIN_SIMILARITY, true);
+            if (!result.grains().isEmpty()) {
+                Map<UUID, String> fallbackTiers = new java.util.LinkedHashMap<>();
+                result.grains().forEach(g -> fallbackTiers.put(g.getId(), TIER_FALLBACK + "_dense"));
+                return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 3);
+            }
+        }
+
+        // ── 全部失败：记录缺口 ──
+        writeKnowledgeGap(query, spaceId, ragCtx);
+        return new GrainResult(List.of(), Map.of(), Map.of(), 4);
+    }
+
+    /**
+     * 执行一次检索+后处理。
+     * 注意：processRetrievedGrains 返回的 GrainResult 默认 fallbackLevel=0，
+     * 由上层 fallback 链路在返回前用正确的 fallbackLevel 重建 GrainResult。
+     */
+    private GrainResult doRetrieve(String query, UUID spaceId, int topK,
+                                   String domain, RagContext ragCtx, double minSim, boolean skipQualityGate) {
         long tRag = System.currentTimeMillis();
-        // P1-9: Hybrid Search 开关 — Dense + Sparse → RRF
-        List<GrainRetriever.GrainResult> scored = hybridSearchEnabled
-            ? grainRetriever.retrieveHybrid(query, spaceId, topK)
-            : grainRetriever.retrieveWithScores(query, spaceId, topK);
+        List<GrainRetriever.GrainResult> scored;
+        try {
+            if (hybridSearchEnabled) {
+                scored = grainRetriever.retrieveHybrid(query, spaceId, topK, skipQualityGate);
+            } else {
+                scored = grainRetriever.retrieveWithScores(query, spaceId, topK, skipQualityGate);
+            }
+        } catch (Exception e) {
+            log.warn("RAG检索异常 query={}: {}", query.substring(0, Math.min(50, query.length())), e.getMessage());
+            return new GrainResult(List.of(), Map.of(), Map.of());
+        }
         long ragMs = System.currentTimeMillis() - tRag;
 
         if (scored.isEmpty()) {
-            log.info("Step2 RAG无结果 hybrid={}，记录缺口", hybridSearchEnabled);
-            writeKnowledgeGap(query, spaceId, ragCtx);
             return new GrainResult(List.of(), Map.of(), Map.of());
         }
 
-        // ── min-similarity 硬拦截：低于阈值的颗粒不进 LLM ──
-        List<GrainRetriever.GrainResult> filtered = scored.stream()
-                .filter(r -> r.similarity() >= minSimilarity)
-                .toList();
-        if (filtered.isEmpty()) {
-            log.info("Step2 RAG全部低于阈值 minSim={} results={}，记录缺口",
-                    minSimilarity, scored.size());
-            writeKnowledgeGap(query, spaceId, ragCtx);
+        return processRetrievedGrains(scored, query, domain, ragCtx, minSim, ragMs,
+            "Step2 RAG检索完成");
+    }
+
+    /** Dense-only 检索（用于 Hybrid 失败时的最终兜底） */
+    private GrainResult doRetrieveDense(String query, UUID spaceId, int topK,
+                                        String domain, RagContext ragCtx, double minSim, boolean skipQualityGate) {
+        long tRag = System.currentTimeMillis();
+        List<GrainRetriever.GrainResult> scored;
+        try {
+            scored = grainRetriever.retrieveWithScores(query, spaceId, topK, skipQualityGate);
+        } catch (Exception e) {
+            log.warn("Dense-only检索异常 query={}: {}", query.substring(0, Math.min(50, query.length())), e.getMessage());
             return new GrainResult(List.of(), Map.of(), Map.of());
         }
-        if (filtered.size() < scored.size()) {
-            log.info("Step2 硬拦截过滤 {}→{} 条 (minSim={})",
-                    scored.size(), filtered.size(), minSimilarity);
+        long ragMs = System.currentTimeMillis() - tRag;
+
+        if (scored.isEmpty()) {
+            return new GrainResult(List.of(), Map.of(), Map.of());
         }
 
-        double highThreshold = 0.50;
-        double refThreshold = 0.30;
-        if (domain != null) {
-            DomainConfig dc = domainConfigLoader.load(domain);
-            if (dc != null && dc.getPrecheck() != null) {
-                highThreshold = dc.getPrecheck().getRagHighThreshold();
-                refThreshold = dc.getPrecheck().getRagRefThreshold();
-            }
-        }
-
-        // 先建 similarities map（初始分数）
-        Map<UUID, Double> similarities = new java.util.LinkedHashMap<>();
-        List<ExperienceGrain> grains = filtered.stream()
-            .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
-        for (var r : filtered) {
-            similarities.put(r.grain().getId(), r.similarity());
-        }
-
-        // P1-2: sceneTag boost — 必须在 tier 分层之前，否则分数变了标签没变
-        boostBySceneTagMatch(query, grains, similarities);
-
-        // tier 分层（使用 boost 后的分数）
-        Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
-        int pos = 1;
-        for (var r : filtered) {
-            double sim = similarities.getOrDefault(r.grain().getId(), r.similarity());
-            if (sim >= highThreshold) {
-                tiers.put(r.grain().getId(), "high");
-            } else if (sim >= refThreshold) {
-                tiers.put(r.grain().getId(), "ref");
-            }
-            try {
-                grainRetrieveLogRepository.save(com.aiextract.model.GrainRetrieveLog.builder()
-                    .id(UUID.randomUUID())
-                    .skillId(ragCtx != null ? ragCtx.skillId() : null)
-                    .conversationId(ragCtx != null ? ragCtx.conversationId() : UUID.randomUUID())
-                    .originalQuery(ragCtx != null ? ragCtx.originalQuery() : null)
-                    .rewrittenQuery(query)
-                    .grainId(r.grain().getId())
-                    .sceneTag(r.grain().getSceneTag())
-                    .similarity(sim)
-                    .tier(tiers.get(r.grain().getId()))
-                    .position(pos++)
-                    .createdAt(LocalDateTime.now())
-                    .build());
-            } catch (Exception e) {
-                log.debug("写检索日志失败: {}", e.getMessage());
-            }
-        }
-
-        // 所有颗粒均低于参考阈值 → 记录缺口
-        boolean allBelowRef = tiers.isEmpty();
-        if (allBelowRef && !filtered.isEmpty()) {
-            double bestSim = filtered.stream().mapToDouble(r ->
-                similarities.getOrDefault(r.grain().getId(), r.similarity())).max().orElse(0);
-            String matchInfo = String.format("type=all_low_similarity bestSim=%.3f grainCount=%d threshold=%.2f",
-                bestSim, filtered.size(), refThreshold);
-            log.info("Step2 RAG全部低分匹配 bestSim={} threshold={}，记录缺口", bestSim, refThreshold);
-            writeKnowledgeGap(query, spaceId, ragCtx, matchInfo);
-        }
-
-        log.info("Step2 RAG检索完成 {}ms topK={} tags={} high={} ref={}",
-            ragMs, filtered.size(),
-            grains.stream().map(g -> g.getSceneTag()).distinct().limit(5).toList(),
-            tiers.values().stream().filter("high"::equals).count(),
-            tiers.values().stream().filter("ref"::equals).count());
-        return new GrainResult(grains, tiers, similarities);
+        return processRetrievedGrains(scored, query, domain, ragCtx, minSim, ragMs,
+            "Dense-only兜底检索完成");
     }
 
     /**
@@ -309,42 +313,93 @@ public class RagPipelineService {
      */
     public GrainResult retrieveGrainsWithScores(String query, List<UUID> spaceIds, int topK,
                                                  String domain, RagContext ragCtx) {
+        // ── Level 0: 正常检索 ──
+        GrainResult result = doMultiSpaceRetrieve(query, spaceIds, topK, domain, ragCtx, minSimilarity, false);
+        if (!result.grains().isEmpty()) return result;
+
+        // ── Level 1: 降阈值 ──
+        log.info("多空间RAG Level 0 无结果，降级 Level 1: minSim={}", FALLBACK_MIN_SIMILARITY);
+        result = doMultiSpaceRetrieve(query, spaceIds, topK, domain, ragCtx, FALLBACK_MIN_SIMILARITY, false);
+        if (!result.grains().isEmpty()) {
+            Map<UUID, String> fallbackTiers = new java.util.LinkedHashMap<>();
+            result.grains().forEach(g -> fallbackTiers.put(g.getId(), "low"));
+            return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 1);
+        }
+
+        // ── Level 2: 去质量门禁 ──
+        log.info("多空间RAG Level 1 无结果，降级 Level 2: skipQualityGate + minSim={}", FALLBACK_MIN_SIMILARITY);
+        result = doMultiSpaceRetrieve(query, spaceIds, topK, domain, ragCtx, FALLBACK_MIN_SIMILARITY, true);
+        if (!result.grains().isEmpty()) {
+            Map<UUID, String> fallbackTiers = new java.util.LinkedHashMap<>();
+            result.grains().forEach(g -> fallbackTiers.put(g.getId(), TIER_FALLBACK));
+            return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 2);
+        }
+
+        // ── 全部失败 ──
+        writeKnowledgeGap(query,
+            spaceIds.isEmpty() ? null : spaceIds.get(0), ragCtx);
+        return new GrainResult(List.of(), Map.of(), Map.of(), 3);
+    }
+
+    /** 执行一次多空间检索+后处理 */
+    private GrainResult doMultiSpaceRetrieve(String query, List<UUID> spaceIds, int topK,
+                                              String domain, RagContext ragCtx, double minSim, boolean skipQualityGate) {
         long tRag = System.currentTimeMillis();
-        // P1-9: multi-space hybrid — 每个 space 独立跑 Dense+Sparse→RRF 后合并
         List<GrainRetriever.GrainResult> scored;
-        if (hybridSearchEnabled) {
-            scored = java.util.Collections.synchronizedList(new ArrayList<>());
-            java.util.List<java.util.concurrent.CompletableFuture<Void>> futs = spaceIds.stream()
-                .map(sid -> java.util.concurrent.CompletableFuture.runAsync(() -> {
-                    java.util.List<GrainRetriever.GrainResult> r =
-                        grainRetriever.retrieveHybrid(query, sid, topK);
-                    scored.addAll(r);
-                }))
-                .toList();
-            java.util.concurrent.CompletableFuture.allOf(
-                futs.toArray(new java.util.concurrent.CompletableFuture[0])).join();
-        } else {
-            scored = grainRetriever.retrieveWithScores(query, spaceIds, topK);
+        try {
+            if (hybridSearchEnabled) {
+                scored = java.util.Collections.synchronizedList(new ArrayList<>());
+                java.util.List<java.util.concurrent.CompletableFuture<Void>> futs = spaceIds.stream()
+                    .map(sid -> java.util.concurrent.CompletableFuture.runAsync(() -> {
+                        java.util.List<GrainRetriever.GrainResult> r =
+                            grainRetriever.retrieveHybrid(query, sid, topK, skipQualityGate);
+                        scored.addAll(r);
+                    }))
+                    .toList();
+                java.util.concurrent.CompletableFuture.allOf(
+                    futs.toArray(new java.util.concurrent.CompletableFuture[0])).join();
+            } else {
+                scored = grainRetriever.retrieveWithScores(query, spaceIds, topK, skipQualityGate);
+            }
+        } catch (Exception e) {
+            log.warn("多空间RAG检索异常: {}", e.getMessage());
+            return new GrainResult(List.of(), Map.of(), Map.of());
         }
         long ragMs = System.currentTimeMillis() - tRag;
 
         if (scored.isEmpty()) {
-            log.info("多空间RAG无结果 hybrid={} spaceIds={} query={}", hybridSearchEnabled,
-                    spaceIds.size(), query.substring(0, Math.min(50, query.length())));
             return new GrainResult(List.of(), Map.of(), Map.of());
         }
 
-        // ── min-similarity 硬拦截（与单 space 版本共享） ──
+        return processRetrievedGrains(scored, query, domain, ragCtx, minSim, ragMs,
+            "多空间RAG检索完成");
+    }
+
+    /** Post-retrieval 处理：boost → min-similarity 过滤 → tier 分层 → 日志 */
+    private GrainResult processRetrievedGrains(List<GrainRetriever.GrainResult> scored,
+            String query, String domain, RagContext ragCtx, double minSim, long ragMs, String logPrefix) {
+        // 先建 similarities map + grains → boost → filter
+        Map<UUID, Double> similarities = new java.util.LinkedHashMap<>();
+        List<ExperienceGrain> grains = scored.stream()
+                .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
+        for (var r : scored) {
+            similarities.put(r.grain().getId(), r.similarity());
+        }
+        boostBySceneTagMatch(query, grains, similarities);
+
+        // min-similarity 硬拦截（boost 后执行）
         List<GrainRetriever.GrainResult> filtered = scored.stream()
-                .filter(r -> r.similarity() >= minSimilarity)
+                .filter(r -> similarities.getOrDefault(r.grain().getId(), r.similarity()) >= minSim)
                 .toList();
         if (filtered.isEmpty()) {
-            log.info("多空间RAG全部低于阈值 minSim={} results={} spaceIds={}",
-                    minSimilarity, scored.size(), spaceIds.size());
+            log.info("{}全部低于阈值 minSim={} results={}", logPrefix, minSim, scored.size());
             return new GrainResult(List.of(), Map.of(), Map.of());
         }
+        if (filtered.size() < scored.size()) {
+            log.info("硬拦截过滤 {}→{} 条 (minSim={})", scored.size(), filtered.size(), minSim);
+        }
 
-        // tier 阈值（从 domain config 读取，与单 space 版本共享逻辑）
+        // tier 阈值
         double highThreshold = 0.50;
         double refThreshold = 0.30;
         if (domain != null) {
@@ -359,19 +414,9 @@ public class RagPipelineService {
             }
         }
 
-        // 先建 similarities map + grains 列表
-        Map<UUID, Double> similarities = new java.util.LinkedHashMap<>();
-        List<ExperienceGrain> grains = filtered.stream()
-                .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
-        for (var r : filtered) {
-            similarities.put(r.grain().getId(), r.similarity());
-        }
-
-        // P1-2: boost 必须在 tier 分层之前
-        boostBySceneTagMatch(query, grains, similarities);
-
-        // tier 分层（使用 boost 后的分数）
+        // tier 分层 + 批量写入检索日志
         Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
+        List<com.aiextract.model.GrainRetrieveLog> logs = new ArrayList<>();
         int pos = 1;
         for (var r : filtered) {
             double sim = similarities.getOrDefault(r.grain().getId(), r.similarity());
@@ -380,31 +425,42 @@ public class RagPipelineService {
             } else if (sim >= refThreshold) {
                 tiers.put(r.grain().getId(), "ref");
             }
-            try {
-                grainRetrieveLogRepository.save(com.aiextract.model.GrainRetrieveLog.builder()
-                        .id(UUID.randomUUID())
-                        .skillId(ragCtx != null ? ragCtx.skillId() : null)
-                        .conversationId(ragCtx != null ? ragCtx.conversationId() : UUID.randomUUID())
-                        .originalQuery(ragCtx != null ? ragCtx.originalQuery() : null)
-                        .rewrittenQuery(query)
-                        .grainId(r.grain().getId())
-                        .sceneTag(r.grain().getSceneTag())
-                        .similarity(sim)
-                        .tier(tiers.get(r.grain().getId()))
-                        .position(pos++)
-                        .createdAt(LocalDateTime.now())
-                        .build());
-            } catch (Exception e) {
-                log.debug("写检索日志失败: {}", e.getMessage());
-            }
+            logs.add(com.aiextract.model.GrainRetrieveLog.builder()
+                    .id(UUID.randomUUID())
+                    .skillId(ragCtx != null ? ragCtx.skillId() : null)
+                    .conversationId(ragCtx != null ? ragCtx.conversationId() : UUID.randomUUID())
+                    .originalQuery(ragCtx != null ? ragCtx.originalQuery() : null)
+                    .rewrittenQuery(query)
+                    .grainId(r.grain().getId())
+                    .sceneTag(r.grain().getSceneTag())
+                    .similarity(sim)
+                    .tier(tiers.get(r.grain().getId()))
+                    .position(pos++)
+                    .createdAt(LocalDateTime.now())
+                    .build());
+        }
+        if (!logs.isEmpty()) {
+            try { grainRetrieveLogRepository.saveAll(logs); }
+            catch (Exception e) { log.debug("批量写检索日志失败: {}", e.getMessage()); }
         }
 
-        log.info("多空间RAG检索完成 {}ms topK={} tags={} high={} ref={}",
-                ragMs, filtered.size(),
-                grains.stream().map(ExperienceGrain::getSceneTag).distinct().limit(5).collect(Collectors.toList()),
+        // 所有颗粒均低于参考阈值 → 记录缺口
+        if (tiers.isEmpty() && !filtered.isEmpty()) {
+            double bestSim = filtered.stream().mapToDouble(r ->
+                similarities.getOrDefault(r.grain().getId(), r.similarity())).max().orElse(0);
+            log.info("{}全部低于参考阈值 bestSim={} high={} ref={}", logPrefix, bestSim, highThreshold, refThreshold);
+        }
+
+        // 更新 grains 为 filtered 的子集（单 space 版本下游使用）
+        List<ExperienceGrain> filteredGrains = filtered.stream()
+                .map(GrainRetriever.GrainResult::grain).collect(Collectors.toList());
+
+        log.info("{} {}ms topK={} tags={} high={} ref={}",
+                logPrefix, ragMs, filtered.size(),
+                filteredGrains.stream().map(ExperienceGrain::getSceneTag).distinct().limit(5).collect(Collectors.toList()),
                 tiers.values().stream().filter("high"::equals).count(),
                 tiers.values().stream().filter("ref"::equals).count());
-        return new GrainResult(grains, tiers, similarities);
+        return new GrainResult(filteredGrains, tiers, similarities);
     }
 
     // ============================================================

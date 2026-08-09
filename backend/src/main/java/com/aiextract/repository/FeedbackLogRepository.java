@@ -62,4 +62,16 @@ public interface FeedbackLogRepository extends JpaRepository<FeedbackLog, UUID> 
     /** 按颗粒 ID 查询反馈记录，按时间降序 */
     List<FeedbackLog> findByGrainIdOrderByCreatedAtDesc(UUID grainId, Pageable pageable);
 
+    /** 查询指定颗粒列表中最近 N 天被踩的 grain ID */
+    @Query("SELECT DISTINCT fl.grainId FROM FeedbackLog fl WHERE fl.grainId IN :grainIds AND fl.rating = 'down' AND fl.createdAt >= :since")
+    java.util.Set<UUID> findDownvotedGrainIds(@Param("grainIds") java.util.List<UUID> grainIds, @Param("since") java.time.LocalDateTime since);
+
+    /** 查询指定颗粒列表中最近 N 天的赞/踩计数，用于拉普拉斯平滑权重计算 */
+    @Query("SELECT fl.grainId, " +
+           "COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN fl.rating = 'down' THEN 1 ELSE 0 END), 0) " +
+           "FROM FeedbackLog fl WHERE fl.grainId IN :grainIds AND fl.createdAt >= :since " +
+           "GROUP BY fl.grainId")
+    java.util.List<Object[]> findFeedbackCounts(@Param("grainIds") java.util.List<UUID> grainIds, @Param("since") java.time.LocalDateTime since);
+
 }
