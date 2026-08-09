@@ -32,8 +32,8 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // /chat/* 需登录
-  const token = request.cookies.get('token');
+  // 需登录：检查 B 端 token 或 C 端 c_token（任一存在即放行）
+  const token = request.cookies.get('token') || request.cookies.get('c_token');
   if (!token?.value) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);

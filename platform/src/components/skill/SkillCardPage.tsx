@@ -354,13 +354,17 @@ function QuestionRow({ q, onClick }: { q: string; onClick: () => void }) {
 
 /* ═══ ShareLinkRow ═══ */
 function ShareLinkRow({ icon, label, desc, url, copied, onCopy }: {
-  icon: string; label: string; desc: string; url: string; copied: boolean; onCopy: () => void;
+  icon?: string; label?: string; desc?: string; url: string; copied: boolean; onCopy: () => void;
 }) {
   return (
     <div style={{ marginBottom: 10, textAlign: 'left' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)', marginBottom: 4 }}>
-        {icon} {label} <span style={{ fontWeight: 400, color: 'var(--sk-text-tertiary)' }}>— {desc}</span>
-      </div>
+      {(label || desc) && (
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)', marginBottom: 4 }}>
+          {icon && <span>{icon} </span>}
+          {label && <span>{label}</span>}
+          {desc && <span style={{ fontWeight: 400, color: 'var(--sk-text-tertiary)' }}> — {desc}</span>}
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 6 }}>
         <div style={{
           flex: 1, background: 'var(--sk-bg-btn-ghost)', border: '1px solid var(--sk-border-medium)',
@@ -468,10 +472,19 @@ export function SkillCardPage({ skill }: Props) {
 
   const currentPlaceholder = questions.length > 0 ? questions[placeholderIdx] : '试着问他一个问题吧…';
 
-  const doAction = useCallback((text?: string) => {
+  const doAction = useCallback(async (text?: string) => {
     const q = (text || inputValue.trim());
-    const code = skill.shareCode;
-    if (!code) return;
+    let code = skill.shareCode;
+    if (!code) {
+      // 自动生成分享码
+      try {
+        const result = await getOrCreateShare(skill.id);
+        code = result.shareCode;
+      } catch {
+        alert('网络异常，请稍后重试');
+        return;
+      }
+    }
     const base = `/s/${code}`;
     if (q) router.push(`${base}?q=${encodeURIComponent(q)}&mode=talk`);
     else router.push(base);
@@ -531,36 +544,51 @@ export function SkillCardPage({ skill }: Props) {
         {/* ═══ Top Bar ═══ */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '12px 20px', position: 'sticky', top: 0, zIndex: 10,
+          padding: '10px 20px', position: 'sticky', top: 0, zIndex: 10,
           background: 'var(--sk-bg-topbar)', backdropFilter: 'blur(12px)',
           borderBottom: '1px solid var(--sk-border-subtle)',
         }}>
           <button onClick={() => router.push('/discover')} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            fontSize: 13, color: 'var(--sk-text-tertiary)', fontFamily: 'inherit', padding: 0,
-          }}>← 返回发现</button>
+            fontSize: 13, color: 'var(--sk-text-tertiary)', fontFamily: 'inherit', padding: '6px 12px',
+            borderRadius: 8, transition: 'all 0.15s',
+          }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--sk-bg-btn-ghost)'; e.currentTarget.style.color = 'var(--sk-text-primary)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--sk-text-tertiary)'; }}
+          >← 发现</button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {!mounted ? <span style={{ width: 100, height: 34 }} /> : user ? (
               <>
+                <button onClick={handleShare} disabled={shareLoading} style={{
+                  fontSize: 12, background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-secondary)',
+                  border: '1px solid var(--sk-border-medium)', borderRadius: 8,
+                  padding: '5px 12px', cursor: 'pointer', fontWeight: 500,
+                  fontFamily: 'inherit', opacity: shareLoading ? 0.5 : 1, transition: 'all 0.15s',
+                }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--sk-bg-card-solid)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--sk-bg-btn-ghost)'; }}
+                >📤 分享</button>
                 <div style={{ position: 'relative' }}>
                   <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '4px 10px 4px 4px',
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px 3px 3px',
                     borderRadius: 100, background: 'var(--sk-bg-user-btn)', border: '1px solid var(--sk-border-medium)',
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}>
+                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                  }}
+                    onMouseEnter={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-accent)'; }}
+                    onMouseLeave={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-border-medium)'; }}
+                  >
                     {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt={user.name} style={{ width: 26, height: 26, borderRadius: 8, objectFit: 'cover' }} />
+                      <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: 8, objectFit: 'cover' }} />
                     ) : (
                       <span style={{
-                        width: 26, height: 26, borderRadius: 8,
+                        width: 24, height: 24, borderRadius: 8,
                         background: 'var(--sk-avatar-gradient)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 12, fontWeight: 700,
+                        color: '#fff', fontSize: 11, fontWeight: 700,
                       }}>{userInitial}</span>
                     )}
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)' }}>{user.name}</span>
-                    <span style={{ fontSize: 10, color: 'var(--sk-text-tertiary)' }}>▾</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</span>
                   </button>
                   {showUserMenu && (
                     <div onClick={e => e.stopPropagation()} style={{
@@ -580,26 +608,20 @@ export function SkillCardPage({ skill }: Props) {
                     </div>
                   )}
                 </div>
-                <button onClick={handleShare} disabled={shareLoading} style={{
-                  fontSize: 12, background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-secondary)',
-                  border: '1px solid var(--sk-border-medium)', borderRadius: 8,
-                  padding: '6px 14px', cursor: 'pointer', fontWeight: 500,
-                  fontFamily: 'inherit', opacity: shareLoading ? 0.5 : 1,
-                }}>📤 分享</button>
               </>
             ) : (
               <>
                 <Link href="/login" style={{
                   fontSize: 12, color: 'var(--sk-text-secondary)', background: 'var(--sk-bg-btn-ghost)',
                   border: '1px solid var(--sk-border-medium)', borderRadius: 8,
-                  padding: '6px 14px', cursor: 'pointer', fontWeight: 500,
-                  fontFamily: 'inherit', textDecoration: 'none',
+                  padding: '5px 14px', cursor: 'pointer', fontWeight: 500,
+                  fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
                 }}>登录</Link>
-                <Link href="/login?redirect=/platform/my" style={{
+                <Link href="/register" style={{
                   fontSize: 12, background: 'var(--sk-accent)', color: '#fff', border: 'none',
-                  borderRadius: 8, padding: '6px 14px', cursor: 'pointer', fontWeight: 600,
-                  fontFamily: 'inherit', textDecoration: 'none',
-                }}>创建我的分身</Link>
+                  borderRadius: 8, padding: '5px 14px', cursor: 'pointer', fontWeight: 600,
+                  fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
+                }}>注册</Link>
               </>
             )}
           </div>
@@ -959,13 +981,31 @@ export function SkillCardPage({ skill }: Props) {
             boxShadow: 'var(--sk-shadow-modal)',
           }}>
             <h3 style={{ fontSize: 17, fontWeight: 700, color: 'var(--sk-text-primary)', margin: '0 0 4px' }}>📤 分享名片</h3>
-            <p style={{ fontSize: 12, color: 'var(--sk-text-tertiary)', margin: '0 0 16px' }}>两种分享方式，选一个发给对方</p>
-            {pubCode && <ShareLinkRow icon="📱" label="经典版" desc="标准落地页，含销冠名片+三模式入口"
-              url={`${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin) : ''}/s/${pubCode}`}
-              copied={copied === pubCode} onCopy={() => handleCopy(pubCode!)} />}
-            {cardCode && <ShareLinkRow icon="🎴" label="名片版" desc="新卡片式布局，更简洁直观"
-              url={`${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin) : ''}/s/${cardCode}`}
-              copied={copied === cardCode} onCopy={() => handleCopy(cardCode!)} />}
+            <p style={{ fontSize: 12, color: 'var(--sk-text-tertiary)', margin: '0 0 16px' }}>扫码或复制链接发送给对方</p>
+            {pubCode && (() => {
+              const pubUrl = `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin) : ''}/s/${pubCode}`;
+              return (
+                <div key="pub" style={{ marginBottom: 16 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--sk-text-primary)', margin: '0 0 8px' }}>📱 经典版 · 标准落地页</p>
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pubUrl)}`}
+                    width={140} height={140} alt="经典版二维码"
+                    style={{ borderRadius: 12, border: '1px solid var(--sk-border-subtle)', marginBottom: 8 }} />
+                  <ShareLinkRow url={pubUrl} copied={copied === pubCode} onCopy={() => handleCopy(pubCode!)} />
+                </div>
+              );
+            })()}
+            {cardCode && (() => {
+              const cardUrl = `${typeof window !== 'undefined' ? (process.env.NEXT_PUBLIC_SHARE_BASE_URL || window.location.origin) : ''}/s/${cardCode}`;
+              return (
+                <div key="card">
+                  <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--sk-text-primary)', margin: '0 0 8px' }}>🎴 名片版 · 卡片式布局</p>
+                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(cardUrl)}`}
+                    width={140} height={140} alt="名片版二维码"
+                    style={{ borderRadius: 12, border: '1px solid var(--sk-border-subtle)', marginBottom: 8 }} />
+                  <ShareLinkRow url={cardUrl} copied={copied === cardCode} onCopy={() => handleCopy(cardCode!)} />
+                </div>
+              );
+            })()}
             <button onClick={() => setShowShareModal(false)} style={{
               marginTop: 12, padding: '10px 24px', borderRadius: 10,
               background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-tertiary)',

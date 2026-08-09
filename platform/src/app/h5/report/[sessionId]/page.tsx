@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api/client';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
+import { useRequireAuth } from '@/hooks/useRequireAuth';
 
 /** 颗粒分级阈值，与 application.yml app.interview.* 保持一致 */
 const GRAIN_ENOUGH = 10;
@@ -23,6 +24,7 @@ interface SessionData {
 }
 
 export default function H5ReportPage() {
+  useRequireAuth();
   const params = useParams();
   const sessionId = params.sessionId as string;
   const router = useRouter();
@@ -150,7 +152,14 @@ export default function H5ReportPage() {
   if (html) return (
     <div className="min-h-screen bg-[#f7f9ff]" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="mx-auto max-w-[640px] px-5 py-10">
-        <button onClick={() => router.back()} className="text-sm text-[#747f9e] hover:text-[#10162f] mb-6">← 返回</button>
+        <button onClick={() => router.back()} style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px',
+          borderRadius: 8, fontSize: 13, color: '#5b6886', fontFamily: 'inherit',
+          marginBottom: 16, marginLeft: -12, transition: 'all 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#f5f7fd'; e.currentTarget.style.color = '#10162f'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5b6886'; }}
+        >← 返回</button>
         <div className="bg-white rounded-[26px] border border-[#e1e7ff] p-5 shadow-[0_18px_50px_rgba(42,74,177,0.08)] report-html-content"
           dangerouslySetInnerHTML={{ __html: html }} />
         {/* platform link */}
@@ -174,7 +183,14 @@ export default function H5ReportPage() {
   return (
     <div className="min-h-screen bg-[#f7f9ff]" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="mx-auto max-w-[640px] px-5 py-10">
-        <button onClick={() => router.back()} className="text-sm text-[#747f9e] hover:text-[#10162f] mb-6">← 返回</button>
+        <button onClick={() => router.back()} style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px',
+          borderRadius: 8, fontSize: 13, color: '#5b6886', fontFamily: 'inherit',
+          marginBottom: 16, marginLeft: -12, transition: 'all 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#f5f7fd'; e.currentTarget.style.color = '#10162f'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5b6886'; }}
+        >← 返回</button>
 
         {/* Session info */}
         <div className="bg-white rounded-[26px] border border-[#e1e7ff] p-6 mb-6 shadow-[0_18px_50px_rgba(42,74,177,0.08)]">

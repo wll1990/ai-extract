@@ -8,6 +8,7 @@
  */
 
 import { apiClient, API_BASE } from './client';
+import { getToken } from '@/lib/storage';
 
 // ---- Types ----
 
@@ -79,7 +80,8 @@ export function uploadMaterial(
     xhr.addEventListener('abort', () => reject(new Error('上传已取消')));
 
     xhr.open('POST', `${API_BASE}/skills/${skillId}/materials/upload`);
-    xhr.withCredentials = true;
+    const token = getToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     xhr.send(fd);
   });
 }

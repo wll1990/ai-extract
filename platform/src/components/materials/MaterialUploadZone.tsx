@@ -26,7 +26,7 @@ export function MaterialUploadZone({ disabled, onFilesSelected }: Props) {
   };
 
   return (
-    <div style={{ marginBottom: 20 }}>
+    <div id="upload-zone" style={{ marginBottom: 20 }}>
       <div
         onDragOver={(e) => { e.preventDefault(); if (!disabled) setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}

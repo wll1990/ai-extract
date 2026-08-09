@@ -197,6 +197,16 @@ public class InterviewController {
     }
 
     /**
+     * 用户手动停止萃取 — 标记为 abandoned，释放活跃槽位。
+     */
+    @PostMapping("/{sessionId}/cancel")
+    public ApiResponse<Void> cancel(@PathVariable String sessionId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        interviewService.cancelSession(sessionId, userId);
+        return ApiResponse.success();
+    }
+
+    /**
      * 获取访谈会话产生的颗粒列表（C端审核用）。
      */
     @GetMapping("/{sessionId}/grains")

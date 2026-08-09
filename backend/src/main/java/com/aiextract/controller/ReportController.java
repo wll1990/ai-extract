@@ -4,6 +4,7 @@ import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.dto.ReportDetailResponse;
 import com.aiextract.dto.ReportListResponse;
+import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Report;
 import com.aiextract.repository.ReportRepository;
@@ -65,7 +66,8 @@ public class ReportController {
             @RequestParam(required = false, defaultValue = "createdAt") String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "12") int size) {
-        Page<ReportListResponse> reports = reportService.getReports(spaceId, keyword, tag, sort, page, size);
+        UUID companyId = TokenContext.getCompanyId();
+        Page<ReportListResponse> reports = reportService.getReports(companyId, spaceId, keyword, tag, sort, page, size);
         return ApiResponse.success(reports);
     }
 
@@ -73,6 +75,38 @@ public class ReportController {
     public ApiResponse<ReportDetailResponse> getReport(@PathVariable String reportId) {
         ReportDetailResponse response = reportService.getReport(reportId);
         return ApiResponse.success(response);
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    // 按分身查询报告
+    // ════════════════════════════════════════════════════════════════
+
+    /** 按分身ID获取报告元信息（需属主校验） */
+    @GetMapping("/by-skill/{skillId}")
+    public ApiResponse<ReportDetailResponse> getReportBySkill(@PathVariable String skillId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        Report report = reportService.getReportBySkillId(UUID.fromString(skillId), userId);
+        ReportDetailResponse response = reportService.getReport(report.getId().toString());
+        return ApiResponse.success(response);
+    }
+
+    /** 按分身ID获取报告HTML（新标签页预览用，需属主校验） */
+    @GetMapping(value = "/by-skill/{skillId}/html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> getReportHtmlBySkill(@PathVariable String skillId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        Report report = reportService.getReportBySkillId(UUID.fromString(skillId), userId);
+        if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("<html><body><h1>报告尚未生成</h1><p>请等待萃取完成后刷新页面。</p></body></html>");
+        }
+        try {
+            String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
+            return ResponseEntity.ok(html);
+        } catch (Exception e) {
+            log.error("读取报告HTML文件失败, reportId: {}, path: {}", report.getId(), report.getHtmlPath(), e);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body("<html><body><h1>报告文件读取失败</h1></body></html>");
+        }
     }
 
     // ════════════════════════════════════════════════════════════════

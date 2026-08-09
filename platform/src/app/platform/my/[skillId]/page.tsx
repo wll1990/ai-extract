@@ -1,15 +1,18 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import PageHeader from '@/components/ui/PageHeader';
 import { listSkillMaterials } from '@/lib/api/materials';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
 
-export default function SkillDetailPage({ params }: { params: Promise<{ skillId: string }> }) {
-  const { skillId } = use(params);
+export default function SkillDetailPage() {
+  const { skillId } = useParams<{ skillId: string }>();
   const router = useRouter();
-  const [tab, setTab] = useState<'grains' | 'materials' | 'share'>('grains');
+  const searchParams = useSearchParams();
+  const initialTab = (searchParams.get('tab') as 'grains' | 'materials' | 'share' | 'report') || 'grains';
+  const [tab, setTab] = useState<'grains' | 'materials' | 'share' | 'report'>(initialTab);
   const [skill, setSkill] = useState<{ displayName: string; status: string; shareCode?: string } | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
   const [materialCount, setMaterialCount] = useState(0);
@@ -42,18 +45,31 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
   const tabs = [
     { key: 'grains' as const, label: '颗粒' },
     { key: 'materials' as const, label: '素材' },
+    { key: 'report' as const, label: '报告' },
     { key: 'share' as const, label: '分享' },
   ];
 
   return (
     <div className="min-h-screen bg-[#f7f9ff] px-5 py-8" style={{ background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)' }}>
       <div className="max-w-2xl mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <button onClick={() => router.push('/platform/my')} className="text-sm text-[#747f9e]">← 返回</button>
-          <button onClick={() => router.push(`/skill/${skillId}`)} className="text-sm text-[#2147ff] font-medium">👁 预览名片</button>
-        </div>
-        <h1 className="text-xl font-bold text-[#10162f] mb-1">{skill?.displayName || '分身'}</h1>
-        <p className="text-sm text-[#747f9e] mb-6">{skill?.status === 'published' ? '已发布' : skill?.status}</p>
+        <PageHeader
+          backTo="/platform/my" backLabel="我的分身"
+          title={skill?.displayName || '分身详情'}
+          subtitle={skill?.status === 'published' ? '已发布' : skill?.status || ''}
+          actions={
+            <button onClick={() => router.push(`/skill/${skillId}`)} style={{
+              padding: '8px 16px', borderRadius: 8, border: '1px solid #e8ecf4', cursor: 'pointer',
+              background: '#fff', color: '#5b6886', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+              transition: 'all 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#f5f7fd'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; }}
+            >
+              预览名片
+            </button>
+          }
+          transparent
+        />
 
         {/* Tabs */}
         <div className="flex gap-1 bg-white rounded-xl border border-[#dfe6ff] p-1 mb-6">
@@ -110,6 +126,9 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
             </div>
           </div>
         )}
+
+        {/* Report Tab */}
+        {tab === 'report' && <ReportTab skillId={skillId} />}
 
         {/* Share Tab */}
         {tab === 'share' && (
@@ -171,6 +190,116 @@ export default function SkillDetailPage({ params }: { params: Promise<{ skillId:
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── Report tab sub-component ──
+
+function ReportTab({ skillId }: { skillId: string }) {
+  const [report, setReport] = useState<{ id: string; title: string; subtitle?: string; createdAt?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const token = getToken();
+    fetch(`/api/v1/reports/by-skill/${encodeURIComponent(skillId)}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.code === 200) setReport(d.data);
+        else setError(d.message || '加载失败');
+      })
+      .catch(() => setError('网络错误'))
+      .finally(() => setLoading(false));
+  }, [skillId]);
+
+  const handlePreview = async () => {
+    try {
+      const token = getToken();
+      const r = await fetch(`/api/v1/reports/by-skill/${encodeURIComponent(skillId)}/html`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error('加载失败');
+      const html = await r.text();
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
+    } catch { alert('加载报告失败'); }
+  };
+
+  const handleDownload = async () => {
+    if (!report?.id) return;
+    try {
+      const token = getToken();
+      const r = await fetch(`/api/v1/reports/${encodeURIComponent(report.id)}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) throw new Error('下载失败');
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${report.title || '萃取报告'}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { alert('下载失败'); }
+  };
+
+  if (loading) {
+    return <p style={{ textAlign: 'center', padding: '40px 0', fontSize: 14, color: '#94a3b8' }}>加载中...</p>;
+  }
+
+  if (error) {
+    return (
+      <div style={{ textAlign: 'center', padding: '40px 0' }}>
+        <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
+        <p style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', margin: '0 0 4px' }}>报告尚未生成</p>
+        <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>
+          {error === '报告尚未生成，请等待萃取完成'
+            ? 'AI 萃取完成后会自动生成报告'
+            : error}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ textAlign: 'center', padding: '24px 0' }}>
+      <div style={{ fontSize: 40, marginBottom: 12 }}>📊</div>
+      <h3 style={{ fontSize: 18, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>
+        {report!.title || '萃取报告'}
+      </h3>
+      {report!.subtitle && (
+        <p style={{ fontSize: 13, color: '#475569', margin: '0 0 4px' }}>{report!.subtitle}</p>
+      )}
+      {report!.createdAt && (
+        <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 24px' }}>
+          {report!.createdAt.replace('T', ' ').substring(0, 19)}
+        </p>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button onClick={handlePreview} style={{
+          padding: '10px 24px', borderRadius: 100, border: 'none', cursor: 'pointer',
+          background: '#2563eb', color: '#fff', fontSize: 14, fontWeight: 600,
+          fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          预览报告
+        </button>
+        <button onClick={handleDownload} style={{
+          padding: '10px 24px', borderRadius: 100, cursor: 'pointer',
+          border: '1.5px solid #e2e8f0', background: '#fff',
+          color: '#475569', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          下载报告
+        </button>
       </div>
     </div>
   );

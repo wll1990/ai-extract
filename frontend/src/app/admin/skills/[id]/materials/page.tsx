@@ -32,7 +32,6 @@ export default function MaterialsPage() {
     const fetchData = () => {
       listMaterials(id).then(d => {
         setMaterials(d.content);
-        setLoading(false);
         // 全部素材到达终端状态时停止轮询
         const terminal = new Set(['extracted', 'rejected', 'discarded']);
         const allTerminal = d.content.every(m => terminal.has(m.status));
@@ -40,7 +39,9 @@ export default function MaterialsPage() {
           clearInterval(timer);
           timer = null;
         }
-      }).catch(() => {});
+      }).catch((e) => {
+        console.error('加载素材列表失败', e);
+      }).finally(() => setLoading(false));
     };
     fetchData();
     timer = setInterval(fetchData, 3000);

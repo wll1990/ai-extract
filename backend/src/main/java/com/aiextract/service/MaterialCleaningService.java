@@ -12,6 +12,7 @@ import com.aiextract.repository.ExtractionDropLogRepository;
 import com.aiextract.repository.SkillMaterialRepository;
 import com.aiextract.repository.SkillRepository;
 import com.aiextract.repository.SpaceRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -211,6 +212,7 @@ public class MaterialCleaningService {
                     .displayName(skillName)
                     .ownerName(autoOwnerName)
                     .ownerTitle(autoOwnerTitle)
+                    .type("individual")
                     .domain(domain)
                     .status("generating")
                     .modelName("deepseek-chat")
@@ -245,6 +247,7 @@ public class MaterialCleaningService {
                     .id(UUID.randomUUID())
                     .spaceId(spaceId)
                     .displayName(skillName)
+                    .type("individual")
                     .domain(domain)
                     .status("generating")
                     .modelName("deepseek-chat")
@@ -413,6 +416,7 @@ public class MaterialCleaningService {
                     .displayName(skillName)
                     .ownerName(autoOwnerName)
                     .ownerTitle(autoOwnerTitle)
+                    .type("individual")
                     .domain(domain)
                     .status("generating")
                     .modelName("deepseek-chat")
@@ -443,6 +447,7 @@ public class MaterialCleaningService {
                     .id(UUID.randomUUID())
                     .spaceId(newSpaceId)
                     .displayName(skillName)
+                    .type("individual")
                     .domain(domain)
                     .status("generating")
                     .modelName("deepseek-chat")
@@ -700,10 +705,11 @@ public class MaterialCleaningService {
                 grainBlock.append(String.format("[%d] %s\n", i, candidatePreview(c)));
             }
 
+            String prompt = promptLoader.format("material_verify.md", Map.of(
+                    "candidates_json", grainBlock.toString()), domain);
+            String json = null;
             try {
-                String prompt = promptLoader.format("material_verify.md", Map.of(
-                        "candidates_json", grainBlock.toString()), domain);
-                String json = chatStreamAdapter.chat(prompt);
+                json = chatStreamAdapter.chat(prompt);
                 if (json == null) {
                     throw new RuntimeException("AI验证响应为空, materialId=" + materialId
                             + ", batchStart=" + start + ", batchSize=" + batch.size());
@@ -711,7 +717,9 @@ public class MaterialCleaningService {
 
                 String clean = json.trim();
                 if (clean.startsWith("```")) {
-                    clean = clean.replaceAll("```json\\s*|```\\s*", "").trim();
+                    clean = clean.replaceFirst("^```json\\s*", "")
+                                 .replaceFirst("\\s*```$", "")
+                                 .trim();
                 }
 
                 Map<String, Object> wrapper = objectMapper.readValue(clean, Map.class);
@@ -768,9 +776,31 @@ public class MaterialCleaningService {
                 }
                 log.info("批次验证: {}-{}, 通过:{}, 拒绝:{}", start, end - 1, batch.size() - batchRejected, batchRejected);
             } catch (Exception e) {
-                log.error("批次验证异常({}-{}), materialId={}: {}", start, end - 1, materialId, e.getMessage());
-                throw new RuntimeException("AI验证异常, materialId=" + materialId
-                        + ", batchStart=" + start + ", batchSize=" + batch.size(), e);
+                log.error("批次验证异常({}-{}) materialId={}: {}",
+                        start, end - 1, materialId, e.getMessage());
+                if (e instanceof JsonProcessingException && batch.size() > 1) {
+                    log.warn("AI返回不完整JSON, 逐条重试({}-{}), raw前300字: {}",
+                            start, end - 1,
+                            json != null && json.length() > 300 ? json.substring(0, 300) : json);
+                    for (GrainCandidate c : batch) {
+                        approved.addAll(verifyGrains(
+                                List.of(c), context, materialId, spaceId, domain, drops));
+                    }
+                } else if (batch.size() == 1) {
+                    // 单个候选最终失败 → 绕过验证通过，qualityScore=0 标记人工复核
+                    var c = batch.get(0);
+                    log.warn("单个候选验证失败, 标记待复核: {}", candidatePreview(c));
+                    drops.add(ExtractionDropLog.builder()
+                            .materialId(materialId).spaceId(spaceId)
+                            .stage("verification_bypass")
+                            .contentPreview(candidatePreview(c))
+                            .detail("{\"reason\":\"AI验证JSON解析失败\",\"error\":\"" + e.getMessage() + "\"}")
+                            .build());
+                    approved.add(new GrainCandidate(
+                            c.sceneTag(), c.insight(), materialId,
+                            0.0, null, "{\"bypass\":true,\"reason\":\"AI返回JSON不完整\"}"));
+                }
+                // 非JSON错误且>1 → 直接跳过不阻断
             }
         }
         return approved;

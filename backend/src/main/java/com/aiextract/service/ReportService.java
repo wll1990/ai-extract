@@ -4,9 +4,12 @@ import com.aiextract.dto.ReportDetailResponse;
 import com.aiextract.dto.ReportListResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.exception.BusinessException;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.model.Report;
+import com.aiextract.model.Skill;
 import com.aiextract.model.Space;
 import com.aiextract.model.User;
+import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.ReportRepository;
 import com.aiextract.repository.SpaceRepository;
 import com.aiextract.repository.UserRepository;
@@ -52,6 +55,8 @@ public class ReportService {
     private final com.aiextract.repository.SkillRepository skillRepository;
     private final com.aiextract.repository.InterviewSessionRepository sessionRepository;
     private final ExtractionReportService extractionReportService;
+    private final CompanyScopeService companyScopeService;
+    private final AppUserRepository appUserRepository;
     private final ObjectMapper objectMapper;
 
     @org.springframework.beans.factory.annotation.Value("${app.report.min-grains:10}")
@@ -84,8 +89,17 @@ public class ReportService {
      * @return 报告分页列表
      */
     @Transactional(readOnly = true)
-    public Page<ReportListResponse> getReports(String spaceId, String keyword, String tag, String sort, int page, int size) {
+    public Page<ReportListResponse> getReports(UUID companyId, String spaceId, String keyword, String tag, String sort, int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
+
+        // 公司隔离：非 super_admin 只查本公司 space 下的报告
+        List<UUID> companySpaceIds = null;
+        if (companyId != null) {
+            companySpaceIds = companyScopeService.getSpaceIds(companyId) != null
+                    ? new ArrayList<>(companyScopeService.getSpaceIds(companyId))
+                    : null;
+        }
+
         Page<Report> reportPage;
 
         if (tag != null && !tag.isEmpty()) {
@@ -96,11 +110,23 @@ public class ReportService {
             reportPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
                     UUID.fromString(spaceId), pageable);
         } else if ("rating".equals(sort)) {
-            reportPage = reportRepository.findAllByOrderByRatingDesc(pageable);
+            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
+                    ? reportRepository.findBySpaceIdInOrderByRatingDesc(companySpaceIds, pageable)
+                    : companySpaceIds != null
+                        ? Page.empty(pageable)
+                        : reportRepository.findAllByOrderByRatingDesc(pageable);
         } else if ("viewCount".equals(sort)) {
-            reportPage = reportRepository.findAllByOrderByViewCountDesc(pageable);
+            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
+                    ? reportRepository.findBySpaceIdInOrderByViewCountDesc(companySpaceIds, pageable)
+                    : companySpaceIds != null
+                        ? Page.empty(pageable)
+                        : reportRepository.findAllByOrderByViewCountDesc(pageable);
         } else {
-            reportPage = reportRepository.findAllByOrderByCreatedAtDesc(pageable);
+            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
+                    ? reportRepository.findBySpaceIdInOrderByCreatedAtDesc(companySpaceIds, pageable)
+                    : companySpaceIds != null
+                        ? Page.empty(pageable)
+                        : reportRepository.findAllByOrderByCreatedAtDesc(pageable);
         }
 
         // 批量预加载 author names + scene tags
@@ -118,6 +144,11 @@ public class ReportService {
         List<UUID> userIds = spaces.stream().map(Space::getUserId).distinct().toList();
         Map<UUID, String> userNames = userRepository.findAllById(userIds).stream()
                 .collect(Collectors.toMap(User::getId, User::getName, (a, b) -> a));
+        // C 端用户降级：user 表查不到 → 查 app_user 表
+        List<UUID> missingIds = userIds.stream().filter(id -> !userNames.containsKey(id)).toList();
+        if (!missingIds.isEmpty()) {
+            appUserRepository.findAllById(missingIds).forEach(u -> userNames.put(u.getId(), u.getNickname()));
+        }
         return spaces.stream()
                 .collect(Collectors.toMap(Space::getId,
                         s -> userNames.getOrDefault(s.getUserId(), "未知用户"),
@@ -162,6 +193,28 @@ public class ReportService {
         reportRepository.save(report);
 
         return toDetailResponse(report);
+    }
+
+    /**
+     * 按分身 ID 查询报告（含属主校验）。
+     * report 和 skill 通过 spaceId 关联（一个 Space 只有一个 Skill 和一个 Report）。
+     */
+    @Transactional(readOnly = true)
+    public Report getReportBySkillId(UUID skillId, UUID userId) {
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "分身不存在"));
+        // 属主校验：只有 skill 所属 space 的 owner 才能查看报告
+        Space space = spaceRepository.findById(skill.getSpaceId())
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "空间不存在"));
+        if (!space.isOwnedBy(userId)) {
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "无权查看此报告");
+        }
+        Page<Report> page = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
+                skill.getSpaceId(), PageRequest.of(0, 1));
+        if (page.isEmpty()) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "报告尚未生成，请等待萃取完成");
+        }
+        return page.getContent().get(0);
     }
 
     /**

@@ -31,7 +31,10 @@ export function connectSse(
 ): AbortController {
   const controller = new AbortController();
   const baseUrl = getApiBaseUrl();
-  const fullUrl = options.url.startsWith('http') ? options.url : `${baseUrl}${options.url}`;
+  // 防止调用方已拼接 baseUrl 导致双重前缀（如 chat() 已拼了 /api/v1）
+  const fullUrl = options.url.startsWith('http') ? options.url
+    : options.url.startsWith(baseUrl) ? options.url
+    : `${baseUrl}${options.url}`;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',

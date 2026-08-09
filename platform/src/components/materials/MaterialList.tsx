@@ -9,7 +9,6 @@ interface Props {
   error: string | null;
   onDelete: (id: string) => void;
   onRetry: () => void;
-  onUpload?: () => void;
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string; pulse?: boolean }> = {
@@ -53,7 +52,7 @@ function fileIcon(type: string): string {
   return '📎';
 }
 
-export function MaterialList({ materials, loading, error, onDelete, onRetry, onUpload }: Props) {
+export function MaterialList({ materials, loading, error, onDelete, onRetry }: Props) {
   return (
     <div style={{ marginTop: 8 }}>
       <p style={{ fontSize: 13, fontWeight: 600, color: '#10162f', marginBottom: 10 }}>
@@ -76,7 +75,6 @@ export function MaterialList({ materials, loading, error, onDelete, onRetry, onU
           icon="📎"
           title="暂无素材"
           description="上传对话记录、经验心得或访谈实录，让分身更懂你"
-          action={onUpload ? { label: '上传素材', onClick: onUpload } : undefined}
         />
       )}
 

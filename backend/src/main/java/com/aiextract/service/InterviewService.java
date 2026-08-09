@@ -197,7 +197,7 @@ public class InterviewService {
                 : "sales.b2b_enterprise";
             com.aiextract.model.Skill s = com.aiextract.model.Skill.builder()
                 .id(UUID.randomUUID()).spaceId(spaceId)
-                .domain(fallbackDomain).status("generating")
+                .type("individual").domain(fallbackDomain).status("generating")
                 .modelName("deepseek-chat").modelConfig("{}")
                 .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
                 .build();
@@ -542,6 +542,24 @@ public class InterviewService {
         session.setLastActiveAt(LocalDateTime.now());
         sessionRepository.save(session);
         log.info("访谈已暂停, sessionId: {}", sessionId);
+    }
+
+    /**
+     * 用户手动停止萃取 — 将会话标记为 abandoned，释放活跃槽位。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void cancelSession(String sessionId, UUID userId) {
+        UUID id = parseUuid(sessionId);
+        InterviewSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
+        if (STATUS_COMPLETED.equals(session.getStatus()) || STATUS_ABANDONED.equals(session.getStatus())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "该萃取已经结束");
+        }
+        session.setStatus(STATUS_ABANDONED);
+        session.setLastActiveAt(LocalDateTime.now());
+        sessionRepository.save(session);
+        log.info("用户手动停止萃取, sessionId: {}", sessionId);
     }
 
     /**

@@ -5,6 +5,7 @@ import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.TokenContext;
 import com.aiextract.model.SkillConversation;
 import com.aiextract.model.SkillMessage;
+import com.aiextract.repository.AppUserRepository;
 import com.aiextract.repository.SkillConversationRepository;
 import com.aiextract.repository.SkillMessageRepository;
 import com.aiextract.repository.SkillRepository;
@@ -27,6 +28,7 @@ public class AdminConversationController {
     private final SkillMessageRepository messageRepository;
     private final com.aiextract.repository.SkillRepository skillRepository;
     private final com.aiextract.repository.UserRepository userRepository;
+    private final AppUserRepository appUserRepository;
     private final CompanyScopeService companyScopeService;
 
     /** 对话历史列表（管理员） */
@@ -68,6 +70,11 @@ public class AdminConversationController {
                         com.aiextract.model.User::getId,
                         com.aiextract.model.User::getName,
                         (a, b) -> a));
+        // C 端用户降级：user 表找不到 → 查 app_user
+        List<UUID> missingUserIds = userIds.stream().filter(id -> !userNames.containsKey(id)).toList();
+        if (!missingUserIds.isEmpty()) {
+            appUserRepository.findAllById(missingUserIds).forEach(u -> userNames.put(u.getId(), u.getNickname()));
+        }
 
         // 批量查消息数，避免 N+1
         List<UUID> convIds = convPage.getContent().stream().map(SkillConversation::getId).toList();

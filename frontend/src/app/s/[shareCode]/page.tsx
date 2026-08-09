@@ -114,7 +114,7 @@ export default function SharePage() {
   // ---- 直接进聊天时自动初始化游客身份 ----
   useEffect(() => {
     if (view === 'chat' && info && !guest.session) {
-      guest.ensure().catch(() => {});
+      guest.ensure().catch(() => setLoadError('网络异常，请刷新页面重试'));
     }
   }, [view, info, guest]);
 

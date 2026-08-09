@@ -411,6 +411,8 @@ public class SkillController extends BaseController {
                 m.put("standardScript", g.getStandardScript());
                 m.put("commonMistakes", g.getCommonMistakes());
                 m.put("status", g.getStatus());
+                m.put("qualityScore", g.getQualityScore());
+                m.put("verificationNotes", g.getVerificationNotes());
                 m.put("sourceType", g.getSourceType());
                 if (g.getSourceMaterialId() != null) {
                     m.put("sourceMaterialId", g.getSourceMaterialId().toString());

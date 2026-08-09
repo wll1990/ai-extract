@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 
 type Role = 'ai' | 'user' | 'customer';
 
@@ -18,11 +18,14 @@ const ROLE_CONFIG: Record<Role, { label: string; bg: string }> = {
 
 /**
  * ChatAvatar — 聊天消息小头像。
- * 有照片显示照片，没照片显示单字+纯色底。
+ * 有照片显示照片，没照片或加载失败显示单字+纯色底。
  */
 export function ChatAvatar({ role, src, size = 32 }: ChatAvatarProps) {
   const { label, bg } = ROLE_CONFIG[role];
   const fontSize = size < 30 ? size * 0.42 : size * 0.38;
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const showImg = src && !imgFailed;
 
   return (
     <div
@@ -32,15 +35,16 @@ export function ChatAvatar({ role, src, size = 32 }: ChatAvatarProps) {
         borderRadius: '50%',
         overflow: 'hidden',
         flexShrink: 0,
-        background: src ? undefined : bg,
+        background: showImg ? undefined : bg,
         boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
       }}
     >
-      {src ? (
-        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      {showImg ? (
+        <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={() => setImgFailed(true)} />
       ) : (
         <span style={{
           color: '#fff',

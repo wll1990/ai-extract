@@ -40,9 +40,9 @@ export function getUser(): { name: string; role: string; [key: string]: unknown 
       const session = JSON.parse(cAuth);
       if (session?.token || session?.userId) {
         return {
-          name: session.nickname || session.userId?.substring(0, 8) || '用户',
-          role: session.status || 'registered',
-          avatarUrl: session.avatarUrl || undefined,
+          name: (session.user?.nickname) || (session.user?.userId?.substring(0, 8)) || session.nickname || session.userId?.substring(0, 8) || '用户',
+          role: (session.user?.status) || session.status || 'registered',
+          avatarUrl: (session.user?.avatarUrl) || session.avatarUrl || undefined,
         };
       }
     } catch { /* fall through */ }

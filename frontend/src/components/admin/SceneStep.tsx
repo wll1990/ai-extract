@@ -4,6 +4,7 @@ import React from 'react';
 import type { AuditDashboard } from '@/lib/api/audit';
 
 interface GrainInfo {
+  id?: string;
   sceneDescription?: string;
   qualityScore?: number;
   standardScript?: string;
@@ -81,8 +82,20 @@ export default function SceneStep({ data, sceneTag, setSceneTag, grainIdx, setGr
                       ⭐ {grain.qualityScore?.toFixed(1)}
                     </div>
                   )}
+                  {grain.id && (
+                    <a href={`/admin/grains/${grain.id}/edit`} target="_blank" rel="noreferrer"
+                      className="ml-2 px-3 py-1.5 border rounded-lg text-xs hover:bg-surface shrink-0 no-underline">
+                      ✏️ 编辑
+                    </a>
+                  )}
+                  {grain.id && (
+                    <button onClick={() => { if (confirm('确定废弃这条颗粒？')) fetch(`/api/v1/admin/grains/${grain.id}/deprecate`, { method: 'POST' }).then(() => location.reload()); }}
+                      className="ml-1 px-3 py-1.5 border border-red-200 rounded-lg text-xs text-red-600 hover:bg-red-50 shrink-0">
+                      废弃
+                    </button>
+                  )}
                   <button onClick={() => onPracticeGrain(grain)}
-                    className="ml-3 px-3 py-1.5 bg-primary text-white rounded-lg text-xs hover:bg-primary-hover shrink-0">
+                    className="ml-2 px-3 py-1.5 bg-primary text-white rounded-lg text-xs hover:bg-primary-hover shrink-0">
                     练这个场景 →
                   </button>
                 </div>

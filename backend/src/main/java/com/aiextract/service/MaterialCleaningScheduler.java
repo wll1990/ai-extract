@@ -8,6 +8,7 @@ import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillMaterialRepository;
 import com.aiextract.repository.SkillRepository;
 import lombok.extern.slf4j.Slf4j;
+import java.util.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -264,17 +265,20 @@ public class MaterialCleaningScheduler {
     public void embedGrains(UUID materialId, List<MaterialCleaningService.GrainCandidate> candidates) {
         try {
             List<ExperienceGrain> freshGrains = grainRepository.findBySourceMaterialId(materialId);
+            // 预建 sceneTag→grain 映射，O(1) 查找替代 N+1 stream
+            Map<String, ExperienceGrain> byTag = new LinkedHashMap<>();
+            for (ExperienceGrain g : freshGrains) {
+                String tag = g.getSceneTag();
+                if (byTag.containsKey(tag)) {
+                    log.warn("同场景多颗粒 tag={} grainId={} 只embed第一条", tag, g.getId());
+                }
+                byTag.putIfAbsent(tag, g);
+            }
             List<ExperienceGrain> toEmbed = new java.util.ArrayList<>();
             List<String> texts = new java.util.ArrayList<>();
             for (MaterialCleaningService.GrainCandidate c : candidates) {
-                ExperienceGrain grain = freshGrains.stream()
-                        .filter(g -> c.sceneTag().equals(g.getSceneTag()))
-                        .findFirst().orElse(null);
-                if (grain == null) {
-
-                    continue;
-
-                }
+                ExperienceGrain grain = byTag.get(c.sceneTag());
+                if (grain == null) continue;
                 toEmbed.add(grain);
                 texts.add(embeddingService.grainToText(grain));
             }

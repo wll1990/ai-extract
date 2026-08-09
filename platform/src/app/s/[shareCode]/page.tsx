@@ -121,7 +121,7 @@ export default function SharePage() {
   // ---- 直接进聊天时自动初始化游客身份 ----
   useEffect(() => {
     if (view === 'chat' && info && !guest.session) {
-      guest.ensure().catch(() => {});
+      guest.ensure().catch(() => setLoadError('网络异常，请刷新页面重试'));
     }
   }, [view, info, guest]);
 
@@ -221,7 +221,7 @@ export default function SharePage() {
   const remainingLabel = guest.isGuest && guest.remaining !== null ? `剩 ${guest.remaining} 条` : null;
 
   return (
-    <div className="mx-auto h-[100dvh] w-full max-w-[520px] bg-surface">
+    <div className="mx-auto h-[100dvh] w-full max-w-3xl lg:max-w-4xl bg-surface">
       {view === 'landing' ? (
         <ShareLanding
           info={info}
@@ -255,6 +255,7 @@ export default function SharePage() {
           practiceHint={practiceHint}
           isLimitReached={guest.isGuest && guest.remaining === 0}
           onRegisterPrompt={handleOpenRegisterSheet}
+          shareChannel={info.shareChannel}
         />
       )}
 

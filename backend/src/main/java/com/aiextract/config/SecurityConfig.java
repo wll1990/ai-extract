@@ -69,6 +69,7 @@ public class SecurityConfig {
                         .requestMatchers("/im/*/callback").permitAll()
 
                         // ── 登录状态检查 ──
+                        .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
 
                         // ── 对内分享 ──

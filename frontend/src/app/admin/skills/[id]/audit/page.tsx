@@ -70,10 +70,13 @@ export default function AuditPage() {
       getAuditDashboard(id).then(d => {
         if (!mounted) return;
         setData(d);
-        setLoading(false);
         const allDone = d.materials.every((m: any) => m.status === 'extracted' || m.status === 'discarded');
         if (!allDone && mounted) timerId = setTimeout(poll, 5000);
-      }).catch(() => {});
+      }).catch((e) => {
+        console.error('加载审核面板失败', e);
+      }).finally(() => {
+        if (mounted) setLoading(false);
+      });
     };
 
     poll();

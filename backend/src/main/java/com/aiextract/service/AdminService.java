@@ -113,7 +113,7 @@ public class AdminService {
 
         // 最近活动
         List<Report> recentReports = scope.isScoped()
-                ? reportRepository.findBySpaceIdInOrderByCreatedAtDesc(scope.spaceIds, PageRequest.of(0, 5))
+                ? reportRepository.findBySpaceIdInOrderByCreatedAtDesc(scope.spaceIds, PageRequest.of(0, 5)).getContent()
                 : reportRepository.findAll(PageRequest.of(0, 5, Sort.by("createdAt").descending())).getContent();
         Map<UUID, Space> recentSpaceMap = Collections.emptyMap();
         Map<UUID, String> userNameMap = Collections.emptyMap();

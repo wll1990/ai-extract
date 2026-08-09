@@ -48,7 +48,7 @@ spring:
       chat:
         options:
           model: deepseek-chat
-          temperature: 0.7        # 0=确定性最高 1=创意最高
+          temperature: 0.1        # 0=确定性最高 1=创意最高，萃取需要稳定结果
           max-tokens: 8192
 
     # ---- pgvector 向量存储 ----
@@ -201,7 +201,7 @@ app:
     top-k: 5                      # 单次检索最大返回颗粒数
     context-max-tokens: 8192      # LLM 上下文窗口大小（token 预检用）
     hybrid-search:
-      enabled: false              # Hybrid Search (Dense + BM25 → RRF)，生产就绪后开启
+      enabled: true               # Hybrid Search (Dense + BM25 → RRF)混合检索
 
   # ---- 聊天流超时（秒） ----
   chat:

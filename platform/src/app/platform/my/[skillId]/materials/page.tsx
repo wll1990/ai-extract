@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import PlatformTopBar from '@/components/ui/PlatformTopBar';
 import { MaterialTypeSelector } from '@/components/materials/MaterialTypeSelector';
 import { PreUploadChecklist } from '@/components/materials/PreUploadChecklist';
 import { MaterialUploadZone } from '@/components/materials/MaterialUploadZone';
@@ -59,8 +60,15 @@ export default function MaterialsPage() {
   useEffect(() => {
     if (!skillId) return;
     fetchSkillDetail(skillId)
-      .then((d) => setSkillName(d.displayName || d.ownerName || ''))
-      .catch(() => {});
+      .then((d) => {
+        const name = d.displayName || d.ownerName;
+        if (!name) console.warn('分身详情缺少名称字段', d);
+        setSkillName(name || '素材管理');
+      })
+      .catch((e) => {
+        console.error('获取分身名称失败', e);
+        setSkillName('素材管理');
+      });
   }, [skillId]);
 
   // 加载素材列表（generation 计数器防止竞态）
@@ -155,22 +163,16 @@ export default function MaterialsPage() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'radial-gradient(circle at 50% 0%, #eef2ff 0%, #f7f9ff 60%)',
+      background: '#f8fafc',
     }}>
+      <PlatformTopBar backTo="/platform/my" backLabel="我的分身" />
       <div style={{ maxWidth: 1024, margin: '0 auto', padding: '32px 20px' }}>
-        <button
-          onClick={() => router.push('/platform/my')}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#747f9e', fontFamily: 'inherit', marginBottom: 12 }}
-        >
-          ← 返回我的分身
-        </button>
-
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#10162f', marginBottom: 4 }}>
-          {skillName || '加载中...'}
-        </h1>
-        <p style={{ fontSize: 13, color: '#747f9e', marginBottom: 24 }}>
-          上传销售素材，AI 自动萃取经验
-        </p>
+        <div style={{ marginBottom: 28 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: '#0f172a', margin: '0 0 6px', letterSpacing: '-0.02em' }}>
+            {skillName || '素材管理'}
+          </h1>
+          <p style={{ fontSize: 14, color: '#475569', margin: 0 }}>上传销售素材，AI 自动萃取经验</p>
+        </div>
 
         {/* 桌面端左右布局，移动端堆叠 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 320px', gap: 24, alignItems: 'start' }}
@@ -218,8 +220,7 @@ export default function MaterialsPage() {
           <div style={{ minWidth: 0 }}>
             <UploadTips />
             <MaterialList materials={materials} loading={loading} error={error}
-              onDelete={handleDelete} onRetry={fetchMaterials}
-              onUpload={() => { markGuideRead(); document.getElementById('upload-zone')?.scrollIntoView({ behavior: 'smooth' }); }} />
+              onDelete={handleDelete} onRetry={fetchMaterials} />
           </div>
         </div>
       </div>

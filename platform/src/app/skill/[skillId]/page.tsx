@@ -41,9 +41,8 @@ export default function SkillPage() {
           <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
           <p style={{ fontSize: 14 }}>{error || '专家不存在'}</p>
           <button onClick={() => router.push('/discover')} style={{
-            marginTop: 12, padding: '8px 20px', borderRadius: 8,
-            background: 'var(--tangerine)', color: '#fff', border: 'none',
-            cursor: 'pointer', fontSize: 13, fontFamily: 'inherit',
+            marginTop: 12, padding: '8px 20px', borderRadius: 100, border: 'none', cursor: 'pointer',
+            background: '#2147ff', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
           }}>
             返回发现页
           </button>

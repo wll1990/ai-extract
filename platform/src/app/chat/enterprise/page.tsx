@@ -24,12 +24,12 @@ export default function EnterpriseChatPage() {
         background: 'var(--surface)', flexShrink: 0,
       }}>
         <a href="/discover" style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 13, color: 'var(--fg-mid)', textDecoration: 'none',
+          background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px',
+          borderRadius: 8, fontSize: 13, color: '#5b6886', textDecoration: 'none', marginLeft: -12,
         }}>
-          ← 返回发现页
+          ← 发现
         </a>
-        <span style={{ fontSize: 12, color: 'var(--fg-dim)' }}>企业总调度</span>
+        <span style={{ fontSize: 12, fontWeight: 500, color: '#5b6886' }}>企业总调度</span>
         <div style={{ width: 48 }} />
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

@@ -46,6 +46,8 @@ interface Props {
   isLimitReached?: boolean;
   /** 点击"注册解锁"的回调 */
   onRegisterPrompt?: () => void;
+  /** 分享渠道：public=经典版, card=名片版 */
+  shareChannel?: string;
 }
 
 const TABS: Array<{ mode: ChatMode; label: string }> = [
@@ -61,7 +63,7 @@ const TABS: Array<{ mode: ChatMode; label: string }> = [
 export default function MobileChatShell({
   info, mode, onSwitchMode, remainingLabel, onOpenHistory, qa, onAfterSend,
   practiceSceneTag, practiceKey, onPickScene, abortRef, authToken, onPracticeLimit, practiceHint,
-  isLimitReached, onRegisterPrompt,
+  isLimitReached, onRegisterPrompt, shareChannel,
 }: Props) {
   const isOrg = info.skillType === 'organization';
   const orgMembers = info.members || [];
@@ -99,6 +101,11 @@ export default function MobileChatShell({
         .catch(() => {});
     }
   }, [mode, info?.skillId, authToken]);
+
+  const isCard = shareChannel === 'card';
+  const heroBg = isCard
+    ? 'radial-gradient(circle at 18% 28%, rgba(245,158,11,.12), transparent 24%), radial-gradient(circle at 80% 10%, rgba(239,68,68,.06), transparent 20%), rgba(255,255,255,.9)'
+    : 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)';
 
   const totalGrains = (info.sceneTags || []).reduce((sum, s) => sum + (s.count || 0), 0);
 
@@ -187,7 +194,7 @@ export default function MobileChatShell({
             {/* ① 名片卡片 — 同 QA/Talk */}
             <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-[26px] bg-white py-5 px-4 border border-[#e1e7ff] overflow-hidden"
               style={{
-                background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                background: heroBg,
                 boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
               }}>
               <div className="flex items-center gap-4">
@@ -304,7 +311,7 @@ export default function MobileChatShell({
                 {(mode === 'qa' || mode === 'talk') && (
                   <div className="mb-5 animate-[messageArrive_400ms_ease-out] rounded-[26px] bg-white py-5 px-4 border border-[#e1e7ff] overflow-hidden"
                     style={{
-                      background: 'radial-gradient(circle at 18% 28%, rgba(65,91,255,.09), transparent 24%), radial-gradient(circle at 80% 10%, rgba(255,77,95,.03), transparent 20%), rgba(255,255,255,.9)',
+                      background: heroBg,
                       boxShadow: '0 18px 50px rgba(42,74,177,.08), 0 3px 12px rgba(34,55,126,.04)',
                     }}>
                     {/* 头部：左头像 + 右文案 */}

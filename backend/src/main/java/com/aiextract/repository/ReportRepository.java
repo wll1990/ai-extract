@@ -27,7 +27,11 @@ public interface ReportRepository extends JpaRepository<Report, UUID> {
 
     Page<Report> findBySpaceIdOrderByViewCountDesc(UUID spaceId, Pageable pageable);
 
-    List<Report> findBySpaceIdInOrderByCreatedAtDesc(List<UUID> spaceIds, Pageable pageable);
+    Page<Report> findBySpaceIdInOrderByCreatedAtDesc(List<UUID> spaceIds, Pageable pageable);
+
+    Page<Report> findBySpaceIdInOrderByRatingDesc(List<UUID> spaceIds, Pageable pageable);
+
+    Page<Report> findBySpaceIdInOrderByViewCountDesc(List<UUID> spaceIds, Pageable pageable);
 
     Page<Report> findAllByOrderByCreatedAtDesc(Pageable pageable);
 

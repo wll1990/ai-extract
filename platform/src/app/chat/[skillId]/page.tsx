@@ -60,28 +60,31 @@ export default function ChatPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* 顶部导航：返回 + 用户 */}
+      {/* 顶部导航 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '8px 20px', borderBottom: '1px solid var(--s5)',
-        background: 'var(--surface)', flexShrink: 0,
+        padding: '8px 20px', borderBottom: '1px solid #e8ecf4',
+        background: 'rgba(255,255,255,0.9)', backdropFilter: 'blur(8px)', flexShrink: 0,
       }}>
         <button onClick={() => router.back()} style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 13, color: 'var(--fg-mid)', fontFamily: 'inherit',
-          display: 'flex', alignItems: 'center', gap: 4,
-        }}>
+          background: 'none', border: 'none', cursor: 'pointer', padding: '6px 12px',
+          borderRadius: 8, fontSize: 13, color: '#5b6886', fontFamily: 'inherit',
+          display: 'flex', alignItems: 'center', gap: 4, marginLeft: -12, transition: 'all 0.15s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#f5f7fd'; e.currentTarget.style.color = '#10162f'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5b6886'; }}
+        >
           ← 返回
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {!mounted ? null : user ? (
-            <span style={{ fontSize: 12, color: 'var(--fg-mid)' }}>
+            <span style={{ fontSize: 12, fontWeight: 500, color: '#5b6886' }}>
               {user.name}
             </span>
           ) : (
             <Link href="/login" style={{
-              fontSize: 12, color: 'var(--tangerine)', textDecoration: 'none', fontWeight: 500,
+              fontSize: 12, color: '#2147ff', textDecoration: 'none', fontWeight: 600,
             }}>
               登录
             </Link>
