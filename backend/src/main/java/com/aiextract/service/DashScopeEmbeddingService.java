@@ -27,8 +27,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class DashScopeEmbeddingService {
 
-    private static final String URL = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/text-embedding/text-embedding";
-    private static final int EMBEDDING_DIM = 1024;
+    @Value("${ai.dashscope.base-url}")
+    private String baseUrl;
+
+    @Value("${ai.dashscope.embedding.model}")
+    private String embeddingModel;
+
+    @Value("${ai.dashscope.embedding.dimension}")
+    private int embeddingDim;
 
     private static RestTemplate createRestTemplate() {
         org.springframework.http.client.SimpleClientHttpRequestFactory f =
@@ -42,7 +48,7 @@ public class DashScopeEmbeddingService {
     private final JdbcTemplate jdbcTemplate;
     private final TokenUsageService tokenUsageService;
 
-    @Value("${ai.qwen.api-key}")
+    @Value("${ai.dashscope.api-key}")
     private String apiKey;
 
     /** 单条文本 → 1024 维向量 */
@@ -57,12 +63,13 @@ public class DashScopeEmbeddingService {
             headers.set("Authorization", "Bearer " + apiKey);
 
             Map<String, Object> body = new LinkedHashMap<>();
-            body.put("model", "text-embedding-v4");
+            body.put("model", embeddingModel);
             body.put("input", Map.of("texts", List.of(text)));
-            body.put("parameters", Map.of("dimension", 1024));
+            body.put("parameters", Map.of("dimension", embeddingDim));
 
+            String url = baseUrl + "/api/v1/services/embeddings/text-embedding/text-embedding";
             ResponseEntity<String> resp = rest.postForEntity(
-                URL, new HttpEntity<>(objectMapper.writeValueAsString(body), headers), String.class);
+                url, new HttpEntity<>(objectMapper.writeValueAsString(body), headers), String.class);
 
             if (!resp.getStatusCode().is2xxSuccessful()) {
                 throw new RuntimeException("DashScope HTTP " + resp.getStatusCode() + ": " + resp.getBody());
@@ -122,10 +129,10 @@ public class DashScopeEmbeddingService {
                     Map<String, Object> body = new LinkedHashMap<>();
                     body.put("model", "text-embedding-v4");
                     body.put("input", Map.of("texts", chunk));
-                    body.put("parameters", Map.of("dimension", EMBEDDING_DIM));
+                    body.put("parameters", Map.of("dimension", embeddingDim));
 
                     ResponseEntity<String> resp = rest.postForEntity(
-                        URL, new HttpEntity<>(objectMapper.writeValueAsString(body), headers), String.class);
+                        baseUrl, new HttpEntity<>(objectMapper.writeValueAsString(body), headers), String.class);
 
                     if (!resp.getStatusCode().is2xxSuccessful()) {
                         throw new RuntimeException("DashScope HTTP " + resp.getStatusCode() + ": " + resp.getBody());
@@ -176,9 +183,9 @@ public class DashScopeEmbeddingService {
             throw new IllegalArgumentException("grains 和 vectors 数量不一致");
         }
         for (int i = 0; i < vectors.size(); i++) {
-            if (vectors.get(i).length != EMBEDDING_DIM) {
+            if (vectors.get(i).length != embeddingDim) {
                 throw new IllegalArgumentException(
-                    "向量维度异常 grain[" + i + "] dim=" + vectors.get(i).length + " expected=" + EMBEDDING_DIM);
+                    "向量维度异常 grain[" + i + "] dim=" + vectors.get(i).length + " expected=" + embeddingDim);
             }
         }
         List<Object[]> batchArgs = new ArrayList<>();

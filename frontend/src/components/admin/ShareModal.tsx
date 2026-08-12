@@ -53,8 +53,12 @@ export default function ShareModal({
     if (rect.bottom > window.innerHeight - 16) setFlipUp(true);
   }, [share, qrDataUrl, channel]);
 
+  const platformBase = process.env.NEXT_PUBLIC_PLATFORM_URL || window.location.origin;
+  const adminBase = process.env.NEXT_PUBLIC_FRONTEND_URL || window.location.origin;
   const shareUrl = share
-    ? `${window.location.origin}/${channel === 'public' ? 's' : 'i'}/${share.shareCode}`
+    ? channel === 'internal'
+      ? `${adminBase}/i/${share.shareCode}`
+      : `${platformBase}/s/${share.shareCode}`
     : '';
 
   // 加载分享数据

@@ -153,7 +153,7 @@ export function VoiceRecorder({
 
       ws.onclose = () => {
         wsRef.current = null;
-        if (statusRef.current === 'recording') {
+        if (statusRef.current === 'recording' || statusRef.current === 'recognizing') {
           setStatusAndNotify('idle');
         }
       };
@@ -292,7 +292,7 @@ export function VoiceRecorder({
       setStatusAndNotify('idle');
     };
     recognition.onend = () => {
-      if (statusRef.current === 'recording') setStatusAndNotify('idle');
+      if (statusRef.current === 'recording' || statusRef.current === 'recognizing') setStatusAndNotify('idle');
     };
 
     recognition.start();

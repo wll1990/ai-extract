@@ -92,11 +92,17 @@ ai:
   # ---- 通义千问 / DashScope 嵌入服务 ----
   qwen:
     api-key: ${QWEN_API_KEY}
-  # ---- DashScope 实时语音识别（Paraformer） ----
+  # ---- 阿里云百炼 DashScope（语音识别 / 向量） ----
   dashscope:
     api-key: ${DASHSCOPE_API_KEY:${QWEN_API_KEY}}
+    # 华北2-北京工作空间，替换旧的 dashscope.aliyuncs.com
+    base-url: ${DASHSCOPE_BASE_URL:https://dashscope.aliyuncs.com}
+    embedding:
+      model: ${DASHSCOPE_EMBEDDING_MODEL:text-embedding-v4}
+      dimension: ${DASHSCOPE_EMBEDDING_DIM:1024}
     stt:
-      model: paraformer-realtime-v2
+      model: ${DASHSCOPE_STT_MODEL:paraformer-realtime-v2}
+      ws-url: ${DASHSCOPE_STT_WS_URL:wss://dashscope.aliyuncs.com/api-ws/v1/realtime}
       sample-rate: 16000
       format: pcm
 

@@ -8,7 +8,7 @@ import { login } from '@/lib/api/auth';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [companyCode, setCompanyCode] = useState('DEFAULT01');
+  const [companyCode, setCompanyCode] = useState('');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);

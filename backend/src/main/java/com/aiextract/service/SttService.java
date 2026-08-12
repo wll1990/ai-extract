@@ -38,8 +38,10 @@ import java.util.concurrent.TimeUnit;
 @Service
 public class SttService {
 
-    private static final String DASHSCOPE_STT_URL = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime";
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Value("${ai.dashscope.stt.ws-url}")
+    private String sttWsUrl;
 
     /** 复用 HttpClient 实例，避免高并发耗尽连接 */
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
@@ -49,13 +51,13 @@ public class SttService {
     @Value("${ai.dashscope.api-key}")
     private String apiKey;
 
-    @Value("${ai.dashscope.stt.model:paraformer-realtime-v2}")
+    @Value("${ai.dashscope.stt.model}")
     private String model;
 
-    @Value("${ai.dashscope.stt.sample-rate:16000}")
+    @Value("${ai.dashscope.stt.sample-rate}")
     private int sampleRate;
 
-    @Value("${ai.dashscope.stt.format:pcm}")
+    @Value("${ai.dashscope.stt.format}")
     private String format;
 
     /**
@@ -67,7 +69,7 @@ public class SttService {
      */
     public SttSession createSession(Listener listener) {
         String taskId = UUID.randomUUID().toString().replace("-", "");
-        String url = DASHSCOPE_STT_URL + "?model=" + model;
+        String url = sttWsUrl + "?model=" + model;
 
         DashScopeWebSocketListener dashScopeListener = new DashScopeWebSocketListener(taskId, listener);
 
