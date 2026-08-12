@@ -314,6 +314,7 @@ export function VoiceRecorder({
     onMouseUp: handlePressEnd,
     onTouchStart: handlePressStart,
     onTouchEnd: handlePressEnd,
+    onTouchCancel: handlePressEnd,
   } : {};
 
   return (
