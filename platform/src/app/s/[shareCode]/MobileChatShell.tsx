@@ -526,7 +526,7 @@ export default function MobileChatShell({
 
             {/* 思考中 — ThinkingCard */}
             {qa.isStreaming && !qa.qaStreamText && (
-              <ThinkingCard name={info.ownerName} text="正在结合经验库，为你整理答案…" />
+              <ThinkingCard name={info.ownerName || undefined} text="正在结合经验库，为你整理答案…" />
             )}
 
             <div ref={bottomRef} />

@@ -51,7 +51,7 @@ export function ChatActive({
           {children}
           {/* 思考中 — ThinkingCard（自带进度条，首 chunk 到达前显示） */}
           {isStreaming && !streamText && (
-            <ThinkingCard name={ownerName} text="正在结合经验库，为你整理答案…" />
+            <ThinkingCard name={ownerName || undefined} text="正在结合经验库，为你整理答案…" />
           )}
           {messages.map((msg, i) => (
             <div key={msg.id} style={{
