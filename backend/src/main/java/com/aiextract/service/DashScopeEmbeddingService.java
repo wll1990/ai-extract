@@ -25,9 +25,6 @@ import java.util.*;
 @Service
 public class DashScopeEmbeddingService {
 
-    @Value("${ai.dashscope.base-url}")
-    private String baseUrl;
-
     @Value("${ai.dashscope.embedding.model}")
     private String model;
 
@@ -42,7 +39,7 @@ public class DashScopeEmbeddingService {
         this.tokenUsageService = tokenUsageService;
     }
 
-    /** SDK 自动读 DASHSCOPE_API_KEY，只需设 workspace URL */
+    /** SDK 自动读 DASHSCOPE_API_KEY，设 workspace URL 后生效 */
     @Value("${ai.dashscope.base-url}")
     public void setBaseHttpUrl(String url) {
         Constants.baseHttpApiUrl = url + "/api/v1";
