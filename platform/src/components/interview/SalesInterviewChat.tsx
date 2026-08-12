@@ -534,6 +534,7 @@ export function SalesInterviewChat() {
             <div className="flex flex-1 items-center gap-2 rounded-3xl border border-[#aab8ff] bg-white/97 px-3 py-2"
               style={{ boxShadow: '0 12px 28px rgba(37,67,166,0.10)' }}>
               <VoiceRecorder
+                mode="longpress"
                 onTranscription={(text) => {
                   setInterimVoiceText('');
                   h.setInputValue(prev => prev + text);

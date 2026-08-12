@@ -570,6 +570,7 @@ export default function MobileChatShell({
                 <div className="relative flex-1">
                   <div className="absolute left-3 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
                     <VoiceRecorder
+                      mode="longpress"
                       onTranscription={(text) => { setInterimVoiceText(''); qa.setInputValue(prev => prev + text); }}
                       onInterimText={setInterimVoiceText}
                       disabled={qa.isStreaming}

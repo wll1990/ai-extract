@@ -17,6 +17,8 @@ export interface VoiceRecorderProps {
   onStatusChange?: (status: VoiceStatus) => void;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 交互模式：click=点击切换 / longpress=按住说话松手转文字 */
+  mode?: 'click' | 'longpress';
   /** 自定义 className */
   className?: string;
 }
@@ -43,6 +45,7 @@ export function VoiceRecorder({
   onInterimText,
   onStatusChange,
   disabled = false,
+  mode = 'click',
   className,
 }: VoiceRecorderProps) {
   const [status, setStatus] = useState<VoiceStatus>('idle');
@@ -101,8 +104,6 @@ export function VoiceRecorder({
       }
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // 开发模式：Next.js rewrites 不代理 WebSocket，直连后端 8080
-      // 生产模式：Nginx 反向代理统一处理，同域连接
       const wsHost = process.env.NODE_ENV === 'development'
         ? 'localhost:8080'
         : window.location.host;
@@ -125,7 +126,6 @@ export function VoiceRecorder({
           }
           if (data.text) {
             if (data.isFinal) {
-              // 最终结果：追加到已有文本后面
               const finalText = interimRef.current + data.text;
               interimRef.current = '';
               onInterimText?.('');
@@ -137,7 +137,6 @@ export function VoiceRecorder({
                 }
               }, 1000);
             } else {
-              // 中间结果：实时展示
               interimRef.current = data.text;
               onInterimText?.(data.text);
             }
@@ -167,14 +166,12 @@ export function VoiceRecorder({
     if (disabled) return;
     setError(null);
 
-    // HTTP 环境 getUserMedia 必败，直接走 Web Speech 降级
     if (!window.isSecureContext) {
       fallbackToWebSpeech();
       return;
     }
 
     try {
-      // 1. 建立 WebSocket
       await connectWs();
     } catch (e) {
       console.warn('WebSocket 连接失败，降级到 Web Speech API:', e);
@@ -183,7 +180,6 @@ export function VoiceRecorder({
     }
 
     try {
-      // 2. 获取麦克风
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
@@ -194,14 +190,10 @@ export function VoiceRecorder({
       });
       streamRef.current = stream;
 
-      // 3. 创建 AudioContext，重采样到 16kHz
       const audioCtx = new AudioContext({ sampleRate: 16000 });
       audioCtxRef.current = audioCtx;
 
       const source = audioCtx.createMediaStreamSource(stream);
-
-      // 4. ScriptProcessorNode 获取原始 PCM 数据
-      // bufferSize=4096 → ~256ms @ 16kHz
       const processor = audioCtx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -210,7 +202,6 @@ export function VoiceRecorder({
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
         const inputData = e.inputBuffer.getChannelData(0);
-        // Float32 → Int16 PCM
         const pcm = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const s = Math.max(-1, Math.min(1, inputData[i]));
@@ -220,7 +211,6 @@ export function VoiceRecorder({
       };
 
       source.connect(processor);
-      // 零音量 GainNode 保持音频图活跃，避免啸叫
       const gainNode = audioCtx.createGain();
       gainNode.gain.value = 0;
       processor.connect(gainNode);
@@ -238,14 +228,10 @@ export function VoiceRecorder({
    * 停止录音
    */
   const stopRecording = useCallback(() => {
-    // 发送 finish 文本帧通知后端结束识别
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send('finish');
-      // 延迟关闭以接收最后的识别结果
-      setTimeout(() => {
-        cleanup();
-      }, 1500);
+      setTimeout(() => { cleanup(); }, 1500);
     } else {
       cleanup();
     }
@@ -296,20 +282,39 @@ export function VoiceRecorder({
     };
 
     recognition.start();
-  }, [status, onTranscription, setStatusAndNotify]);
+  }, [onTranscription, setStatusAndNotify]);
 
-  /**
-   * 点击处理 — 切换录音状态
-   */
+  /** 开始录音 — 长按和点击共用 */
+  const handlePressStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (status === 'idle') startRecording();
+  }, [status, startRecording]);
+
+  /** 停止录音 — 长按释放 */
+  const handlePressEnd = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    if (status === 'recording' || status === 'recognizing') stopRecording();
+  }, [status, stopRecording]);
+
+  /** 点击处理 — click 模式切换录音状态 */
   const handleClick = useCallback(() => {
+    if (mode !== 'click') return;
     if (status === 'recording' || status === 'recognizing') {
       stopRecording();
     } else {
       startRecording();
     }
-  }, [status, startRecording, stopRecording]);
+  }, [mode, status, startRecording, stopRecording]);
 
   const isActive = status === 'recording' || status === 'recognizing';
+
+  /** 长按模式的事件绑定 */
+  const pressProps = mode === 'longpress' ? {
+    onMouseDown: handlePressStart,
+    onMouseUp: handlePressEnd,
+    onTouchStart: handlePressStart,
+    onTouchEnd: handlePressEnd,
+  } : {};
 
   return (
     <div className="relative flex items-center">
@@ -317,9 +322,10 @@ export function VoiceRecorder({
       type="button"
       onClick={handleClick}
       onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseLeave={(e) => { setHover(false); if (mode === 'longpress') handlePressEnd(e); }}
       disabled={disabled || !supported}
-      title={!supported ? '当前浏览器不支持语音输入' : isActive ? '停止录音' : '语音输入'}
+      title={!supported ? '当前浏览器不支持语音输入' : isActive ? '停止录音' : mode === 'longpress' ? '按住说话，松手发送' : '语音输入'}
+      {...pressProps}
       className={cn(
         'relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200',
         'focus:outline-none',
