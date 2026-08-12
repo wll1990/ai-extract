@@ -39,7 +39,8 @@ export const ThinkingCard: React.FC<ThinkingCardProps> = ({
 }) => {
   if (!visible) return null;
 
-  const title = `${name}正在思考`;
+  const displayName = name || '萃萃';
+  const title = `${displayName}正在思考`;
   const copy = text || '正在尊重你的原话，整理表达，并发现可能被忽略的价值线索……';
 
   return (
