@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>创始人分身 · H5 移动端原型</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   创始人分身 · H5 移动端原型
+   聚焦员工侧：思想档案入口 + 对话
+   两套视觉：深色权威（金）+ 明亮商务（蓝）
+   ═══════════════════════════════════════════════════════════ */
+
+:root, [data-theme="dark"] {
+  --bg: #0a0d12; --surface: #0f141b; --surface-2: #141a23;
+  --card: rgba(20,26,35,0.88); --foreground: #e8edf3; --muted: #9aa5b1; --muted-2: #6b7683;
+  --border: #232b36; --border-strong: #2f3a48;
+  --accent: #c8a45c; --accent-strong: #e2b96f; --accent-soft: rgba(200,164,92,0.12); --accent-glow: rgba(200,164,92,0.28);
+  --gradient-primary: linear-gradient(135deg,#d4af6a 0%,#c8a45c 55%,#a8823e 100%);
+  --success:#3fb986; --warning:#d9a84e; --warning-bg: rgba(217,168,78,0.12); --danger:#e56b6b;
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.35); --shadow-md:0 8px 24px rgba(0,0,0,0.45); --shadow-lg:0 18px 48px rgba(0,0,0,0.55);
+  --shadow-glow:0 0 0 4px rgba(200,164,92,0.16),0 0 32px rgba(200,164,92,0.22);
+  --hero-grad: radial-gradient(circle at 50% 0%, rgba(200,164,92,0.16), transparent 55%), linear-gradient(180deg,#0b0f15 0%,#0f141b 100%);
+}
+[data-theme="light"] {
+  --bg: #ffffff; --surface: #f8fafc; --surface-2: #ffffff;
+  --card: rgba(255,255,255,0.95); --foreground: #1e293b; --muted: #64748b; --muted-2: #94a3b8;
+  --border: #e2e8f0; --border-strong: #cbd5e1;
+  --accent: #2563eb; --accent-strong: #1d4ed8; --accent-soft: rgba(37,99,235,0.08); --accent-glow: rgba(37,99,235,0.22);
+  --gradient-primary: linear-gradient(135deg,#06b6d4 0%,#3b82f6 100%);
+  --success:#16a34a; --warning:#d97706; --warning-bg: #fef3c7; --danger:#dc2626;
+  --shadow-sm:0 1px 2px rgba(15,23,42,0.06); --shadow-md:0 8px 20px rgba(15,23,42,0.08); --shadow-lg:0 18px 44px rgba(15,23,42,0.12);
+  --shadow-glow:0 0 0 4px rgba(37,99,235,0.14),0 0 30px rgba(59,130,246,0.22);
+  --hero-grad: radial-gradient(circle at 50% 0%, rgba(37,99,235,0.10), transparent 55%), linear-gradient(180deg,#f8fafc 0%,#ffffff 100%);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: radial-gradient(circle at 30% 20%, rgba(120,120,160,0.14), transparent 45%), #05070a;
+  color: var(--foreground); -webkit-font-smoothing: antialiased;
+  min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 28px 16px 40px;
+  transition: background 0.4s ease;
+}
+[data-theme="light"] body { background: radial-gradient(circle at 30% 20%, rgba(37,99,235,0.08), transparent 45%), #eef2f7; }
+
+/* 页面标题 */
+.page-head { text-align: center; margin-bottom: 20px; }
+.page-head .ph-title { font-size: 17px; font-weight: 800; color: var(--foreground); margin-bottom: 4px; }
+.page-head .ph-sub { font-size: 12.5px; color: var(--muted); }
+.theme-mini { display: inline-flex; gap: 4px; margin-top: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 99px; padding: 3px; }
+.theme-mini button { border: none; background: transparent; color: var(--muted); font-size: 11.5px; font-weight: 600; padding: 5px 14px; border-radius: 99px; cursor: pointer; font-family: inherit; }
+.theme-mini button.on { background: var(--accent); color: #0a0d12; font-weight: 700; }
+[data-theme="light"] .theme-mini button.on { color: #fff; }
+
+/* ═══ 手机壳 ═══ */
+.phone {
+  width: 375px; height: 780px; border-radius: 44px; position: relative; flex: none;
+  background: var(--bg); border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-lg), 0 0 0 8px #11151b, 0 0 0 9px #2a2f38;
+  overflow: hidden; display: flex; flex-direction: column;
+  transition: background 0.4s ease;
+}
+[data-theme="light"] .phone { box-shadow: var(--shadow-lg), 0 0 0 8px #d7dee8, 0 0 0 9px #e6ebf2; }
+
+/* 状态栏 */
+.statusbar { display: flex; justify-content: space-between; align-items: center; padding: 12px 22px 6px; font-size: 12px; font-weight: 600; color: var(--foreground); flex: none; }
+.statusbar .sb-right { display: flex; gap: 5px; align-items: center; color: var(--muted-2); }
+
+/* 视图 */
+.view { display: none; flex: 1; flex-direction: column; min-height: 0; overflow-y: auto; animation: viewIn 0.4s cubic-bezier(0.22,1,0.36,1); }
+.view.on { display: flex; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ═══ 动效 keyframes ═══ */
+@keyframes avRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes avShimmer { 0% { transform: translateX(-100%) rotate(25deg); } 100% { transform: translateX(200%) rotate(25deg); } }
+@keyframes avGlow { 0%,100% { opacity: 0.25; } 50% { opacity: 0.55; } }
+@keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.6; } 50% { transform: translate(2px,-3px) scale(1.3); opacity: 1; } }
+@keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.5; } 50% { transform: translate(-2px,3px) scale(1.2); opacity: 0.9; } }
+@keyframes float3 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.7; } 50% { transform: translate(3px,2px) scale(1.1); opacity: 1; } }
+@keyframes bars { 50% { height: 5px; opacity: 0.4; } }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes msgIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes barGrow { from { width: 0; } }
+.seg { opacity: 0; animation: fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+.seg-1 { animation-delay: 0.35s; } .seg-2 { animation-delay: 0.6s; } .seg-3 { animation-delay: 0.85s; }
+
+/* ═══ P1 思想档案（移动端）═══ */
+.archive-hero { position: relative; padding: 22px 20px 28px; background: var(--hero-grad); }
+.av-wrap { width: 72px; height: 72px; position: relative; margin: 0 auto 14px; }
+.av-halo { position: absolute; inset: -5px; border-radius: 50%; background: conic-gradient(from 0deg, var(--accent), var(--accent-strong), color-mix(in srgb, var(--accent) 40%, #818cf8), var(--accent)); opacity: 0.32; animation: avRotate 6s linear infinite; filter: blur(6px); }
+.av-glow { position: absolute; inset: -2px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, var(--accent-glow), transparent 70%); animation: avGlow 3s ease-in-out infinite; }
+.av-body { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(145deg, var(--accent) 0%, var(--accent-strong) 45%, color-mix(in srgb, var(--accent) 50%, #6b7280) 100%); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.av-body .shimmer { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.45) 47%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.45) 53%, transparent 60%); animation: avShimmer 3.5s ease-in-out infinite; }
+.av-body svg { width: 44%; height: 44%; position: relative; z-index: 2; }
+.av-spark { position: absolute; border-radius: 50%; background: #fff; z-index: 3; }
+.av-spark.s1 { top: 12%; left: 82%; width: 5px; height: 5px; animation: float1 3s ease-in-out infinite; }
+.av-spark.s2 { top: 78%; left: 8%; width: 4px; height: 4px; animation: float2 3s ease-in-out infinite 0.6s; }
+.av-spark.s3 { top: 80%; left: 84%; width: 4px; height: 4px; animation: float1 3s ease-in-out infinite 0.3s; }
+
+.archive-name { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 3px; }
+.archive-role { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 14px; }
+.archive-claim { font-size: 14.5px; font-weight: 600; color: var(--accent); line-height: 1.55; padding: 11px 16px; border-radius: 12px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); text-align: center; margin-bottom: 20px; }
+
+.sec-mini { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-2); margin-bottom: 10px; }
+.coverage { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 22px; }
+.cov-item .cov-name { font-size: 10.5px; color: var(--muted); margin-bottom: 5px; text-align: center; }
+.cov-track { height: 5px; background: color-mix(in srgb, var(--muted-2) 16%, transparent); border-radius: 99px; overflow: hidden; }
+.cov-fill { height: 100%; border-radius: 99px; background: var(--gradient-primary); animation: barGrow 1s cubic-bezier(0.22,1,0.36,1) forwards; transform-origin: left; }
+
+.views { display: flex; flex-direction: column; gap: 9px; }
+.view-item { display: flex; gap: 11px; align-items: flex-start; padding: 13px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.18s ease; }
+.view-item:hover { border-color: var(--accent); }
+.view-item .vi-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 6px; }
+.view-item .vi-title { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+.view-item .vi-desc { font-size: 11.5px; color: var(--muted); line-height: 1.55; }
+.view-item .vi-arrow { margin-left: auto; color: var(--muted-2); flex: none; }
+
+/* 底部输入 */
+.ask-bar { position: sticky; bottom: 0; padding: 12px 16px 14px; background: linear-gradient(180deg, transparent, var(--bg) 45%); }
+.ask-inner { display: flex; gap: 8px; }
+.ask-inner input { flex: 1; height: 46px; border-radius: 23px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 18px; font-size: 13.5px; color: var(--foreground); outline: none; font-family: inherit; }
+.ask-inner input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.ask-inner button { width: 46px; height: 46px; border-radius: 50%; border: none; cursor: pointer; flex: none; background: var(--gradient-primary); font-size: 16px; }
+[data-theme="dark"] .ask-inner button { color: #0a0d12; }
+[data-theme="light"] .ask-inner button { color: #fff; }
+
+/* ═══ P2 对话页（移动端）═══ */
+.chat-head { display: flex; align-items: center; gap: 10px; padding: 6px 16px 12px; border-bottom: 1px solid var(--border); flex: none; background: var(--surface); }
+.chat-head .ch-avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(145deg, var(--accent), var(--accent-strong)); flex: none; position: relative; overflow: hidden; }
+.chat-head .ch-avatar .shimmer { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.45) 47%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.45) 53%, transparent 60%); animation: avShimmer 3.5s ease-in-out infinite; }
+.chat-head .ch-name { font-size: 14px; font-weight: 700; }
+.chat-head .ch-status { font-size: 11px; color: var(--success); display: flex; align-items: center; gap: 4px; }
+.chat-head .ch-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+.chat-head .ch-back { color: var(--muted); font-size: 18px; cursor: pointer; }
+
+.chat-scroll { flex: 1; padding: 16px 16px 8px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; }
+.msg { display: flex; flex-direction: column; gap: 5px; animation: msgIn 0.4s cubic-bezier(0.22,1,0.36,1); }
+.msg-user { align-items: flex-end; }
+.msg-label { font-size: 10.5px; color: var(--muted-2); font-weight: 600; padding: 0 4px; }
+.msg-ai .msg-label { color: var(--accent); }
+.bubble { max-width: 84%; padding: 11px 14px; border-radius: 16px; font-size: 13.5px; line-height: 1.65; background: var(--surface-2); border: 1px solid var(--border); }
+.msg-user .bubble { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 26%, transparent); border-bottom-right-radius: 6px; }
+.msg-ai .bubble { border-bottom-left-radius: 6px; }
+
+.judgment { width: 90%; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.judgment-infer { border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.judgment-banner { display: flex; gap: 6px; padding: 9px 13px; font-size: 11.5px; font-weight: 600; background: var(--warning-bg); color: var(--warning); border-bottom: 1px solid color-mix(in srgb, var(--warning) 24%, transparent); }
+.judgment-body { padding: 14px 15px; display: flex; flex-direction: column; gap: 10px; }
+.jseg { display: flex; gap: 9px; }
+.jseg .jseg-tag { flex: none; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 6px; color: var(--accent); background: var(--accent-soft); margin-top: 2px; }
+.jseg .jseg-txt { font-size: 13px; line-height: 1.65; }
+.jseg .jseg-txt b { font-weight: 700; color: var(--accent); }
+.cite-bar { border-top: 1px solid var(--border); padding: 10px 15px; }
+.cite-toggle { font-size: 11.5px; color: var(--accent); cursor: pointer; font-weight: 600; }
+.cite-panel { margin-top: 8px; padding: 11px 13px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); font-size: 11.5px; line-height: 1.6; color: var(--muted); display: none; animation: fadeUp 0.3s ease; }
+.cite-panel.open { display: block; }
+.cite-panel .cite-src { color: var(--accent); font-weight: 600; margin-bottom: 3px; font-size: 11px; }
+.cite-panel .cite-quote { border-left: 2px solid var(--accent); padding-left: 9px; }
+
+.thinking { max-width: 86%; padding: 12px 15px; }
+.thinking-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 700; color: var(--accent); margin-bottom: 5px; }
+.thinking-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 14px; }
+.thinking-bars span { width: 3px; border-radius: 4px; background: var(--accent); display: inline-block; animation: bars 1s ease-in-out infinite; }
+.thinking-copy { font-size: 11.5px; color: var(--muted); margin-bottom: 7px; }
+.thinking-track { height: 3px; background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 99px; overflow: hidden; }
+.thinking-track span { display: block; width: 46%; height: 100%; border-radius: 99px; background: var(--gradient-primary); animation: slide 1.5s ease-in-out infinite; }
+
+.chat-composer { display: flex; gap: 8px; padding: 10px 14px 14px; flex: none; background: linear-gradient(180deg, transparent, var(--bg) 40%); }
+.chat-composer input { flex: 1; height: 44px; border-radius: 22px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 16px; font-size: 13.5px; color: var(--foreground); outline: none; font-family: inherit; }
+.chat-composer input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.chat-composer button { width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer; flex: none; background: var(--gradient-primary); font-size: 15px; }
+[data-theme="dark"] .chat-composer button { color: #0a0d12; }
+[data-theme="light"] .chat-composer button { color: #fff; }
+.chat-composer .voice { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+
+/* ═══ 角色切换条 ═══ */
+.rolebar { display: flex; gap: 4px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex: none; }
+.rolebar button { flex: 1; padding: 8px 0; border: none; border-radius: 9px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.18s ease; }
+.rolebar button.on { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
+/* ═══ 老板端：数据面板 ═══ */
+.boss-scroll { flex: 1; overflow-y: auto; padding: 16px; }
+.boss-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.boss-head .bh-avatar { width: 46px; height: 46px; border-radius: 50%; background: linear-gradient(145deg, var(--accent), var(--accent-strong)); flex: none; position: relative; overflow: hidden; }
+.boss-head .bh-avatar .shimmer { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.45) 47%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.45) 53%, transparent 60%); animation: avShimmer 3.5s ease-in-out infinite; }
+.boss-head .bh-title { font-size: 17px; font-weight: 800; }
+.boss-head .bh-sub { font-size: 12px; color: var(--muted); }
+
+/* 统计卡 */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.stat-card { padding: 14px 15px; border-radius: 13px; background: var(--card); border: 1px solid var(--border); }
+.stat-card .st-val { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat-card .st-val .unit { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.stat-card .st-lbl { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+.stat-card.hl { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 30%, transparent); }
+.stat-card.hl .st-val { color: var(--accent); }
+
+/* 板块 */
+.boss-sec { margin-bottom: 18px; }
+.boss-sec-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.boss-sec-title .cnt { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--accent); }
+
+/* 待办项 */
+.todo-item { display: flex; align-items: center; gap: 11px; padding: 13px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); margin-bottom: 9px; cursor: pointer; transition: all 0.18s ease; }
+.todo-item:hover { border-color: var(--accent); }
+.todo-item .ti-ico { font-size: 16px; flex: none; }
+.todo-item .ti-title { font-size: 13px; font-weight: 600; }
+.todo-item .ti-desc { font-size: 11.5px; color: var(--muted); }
+.todo-item .ti-arrow { margin-left: auto; color: var(--muted-2); }
+
+/* 效果条 */
+.effect-row { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); margin-bottom: 9px; }
+.effect-row .er-lbl { font-size: 12.5px; flex: 0 0 92px; color: var(--muted); }
+.effect-row .er-track { flex: 1; height: 6px; background: color-mix(in srgb, var(--muted-2) 16%, transparent); border-radius: 99px; overflow: hidden; }
+.effect-row .er-fill { height: 100%; border-radius: 99px; background: var(--gradient-primary); animation: barGrow 1s cubic-bezier(0.22,1,0.36,1) forwards; }
+.effect-row .er-num { flex: 0 0 40px; text-align: right; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ═══ 老板端：补充技能 ═══ */
+.add-switch { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 3px; margin-bottom: 16px; }
+.add-switch button { flex: 1; padding: 8px 0; border: none; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.18s ease; }
+.add-switch button.on { background: var(--accent); color: #fff; font-weight: 700; }
+[data-theme="dark"] .add-switch button.on { color: #0a0d12; }
+
+.add-one-liner textarea { width: 100%; min-height: 90px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); padding: 13px 15px; font-size: 13.5px; color: var(--foreground); outline: none; font-family: inherit; resize: none; line-height: 1.6; transition: all 0.2s ease; }
+.add-one-liner textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.add-one-liner .hint { font-size: 11.5px; color: var(--muted-2); margin: 8px 0 12px; line-height: 1.6; }
+.add-btn { width: 100%; height: 46px; border-radius: 12px; border: none; cursor: pointer; background: var(--gradient-primary); font-size: 14px; font-weight: 700; font-family: inherit; transition: all 0.18s ease; }
+[data-theme="dark"] .add-btn { color: #0a0d12; }
+[data-theme="light"] .add-btn { color: #fff; }
+.add-btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* AI 整理结果卡 */
+.ai-result { margin-top: 14px; border-radius: 13px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); background: var(--accent-soft); padding: 15px; animation: fadeUp 0.4s ease; }
+.ai-result .ar-head { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; margin-bottom: 10px; }
+.ai-result .ar-field { margin-bottom: 10px; }
+.ai-result .ar-field .af-lbl { font-size: 10.5px; font-weight: 700; color: var(--muted-2); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+.ai-result .ar-field .af-val { font-size: 13px; line-height: 1.6; }
+
+/* 结构化表单 */
+.form-field { margin-bottom: 14px; }
+.form-field label { display: block; font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+.form-field label .req { color: var(--danger); margin-left: 2px; }
+.form-field input, .form-field textarea { width: 100%; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); padding: 11px 13px; font-size: 13.5px; color: var(--foreground); outline: none; font-family: inherit; transition: all 0.2s ease; }
+.form-field textarea { min-height: 70px; resize: none; line-height: 1.6; }
+.form-field input:focus, .form-field textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+
+/* ═══ 对话三形态：代笔草稿 / 百科答案 / 反向追问 ═══ */
+.draft { width: 90%; border-radius: 14px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent); background: var(--card); }
+.draft-banner { display: flex; align-items: center; gap: 7px; padding: 9px 14px; font-size: 11.5px; font-weight: 600; background: var(--accent-soft); color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent); animation: fadeUp 0.4s ease; }
+.draft-body { padding: 14px 15px; font-size: 13.5px; line-height: 1.75; color: var(--foreground); white-space: pre-wrap; }
+
+.faq { width: 90%; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.faq-head { display: flex; align-items: center; gap: 7px; padding: 9px 14px; font-size: 11px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); }
+.faq-head .faq-ico { color: var(--accent); }
+.faq-body { padding: 14px 15px; font-size: 13.5px; line-height: 1.75; color: var(--foreground); }
+.faq-time { padding: 0 15px 12px; font-size: 10.5px; color: var(--muted-2); }
+
+.ask-more { width: 90%; border-radius: 14px; overflow: hidden; border: 1px solid var(--border); background: var(--card); }
+.ask-more-body { padding: 14px 15px; }
+.ask-more-body .am-title { font-size: 13px; font-weight: 700; color: var(--foreground); margin-bottom: 8px; line-height: 1.5; }
+.ask-more-body .am-list { display: flex; flex-direction: column; gap: 6px; }
+.ask-more-body .am-item { display: flex; gap: 7px; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.ask-more-body .am-item::before { content: '·'; color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="page-head">
+  <div class="ph-title">创始人分身 · H5 移动端</div>
+  <div class="ph-sub">员工视角 + 老板视角（手机壳演示）</div>
+  <div class="theme-mini" id="themeMini">
+    <button class="on" data-theme="dark">深色权威</button>
+    <button data-theme="light">明亮商务</button>
+  </div>
+</div>
+
+<div class="phone">
+  <div class="statusbar">
+    <span>9:41</span>
+    <span class="sb-right">▂▄▆ ▓ 100%</span>
+  </div>
+
+  <!-- 角色切换条 -->
+  <div class="rolebar" id="rolebar">
+    <button class="on" data-role="employee" onclick="setRole('employee')">员工视角</button>
+    <button data-role="boss" onclick="setRole('boss')">老板视角</button>
+  </div>
+
+  <!-- P1 思想档案 -->
+  <div class="view on" id="vArchive">
+    <div class="archive-hero">
+      <div class="av-wrap">
+        <div class="av-halo"></div><div class="av-glow"></div>
+        <div class="av-body">
+          <div class="shimmer"></div>
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="7.5" r="3.2" fill="rgba(255,255,255,0.92)"/><path d="M4.5 21c0-4.5 3.4-7.5 7.5-7.5s7.5 3 7.5 7.5" fill="rgba(255,255,255,0.92)"/></svg>
+        </div>
+        <div class="av-spark s1"></div><div class="av-spark s2"></div><div class="av-spark s3"></div>
+      </div>
+      <div class="archive-name">王建国</div>
+      <div class="archive-role">CEO · 明远科技</div>
+      <div class="archive-claim">「长期主义，拒绝短期套利」</div>
+
+      <div class="sec-mini">关注领域</div>
+      <div class="coverage" id="coverage"></div>
+
+      <div class="sec-mini">代表性观点</div>
+      <div class="views" id="views"></div>
+    </div>
+    <div class="ask-bar">
+      <div class="ask-inner">
+        <input placeholder="想请教老板？输入你的问题…" onkeydown="if(event.key==='Enter')ask()">
+        <button onclick="ask()">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2 对话 -->
+  <div class="view" id="vChat">
+    <div class="chat-head">
+      <span class="ch-back" onclick="goArchive()">‹</span>
+      <div class="ch-avatar"><div class="shimmer"></div></div>
+      <div>
+        <div class="ch-name">王建国 · 分身</div>
+        <div class="ch-status">在线 · 随时可问</div>
+      </div>
+    </div>
+    <div class="chat-scroll" id="chatScroll"></div>
+    <div class="chat-composer">
+      <button class="voice">🎙</button>
+      <input placeholder="输入你的问题…" onkeydown="if(event.key==='Enter')sendChat()">
+      <button onclick="sendChat()">➤</button>
+    </div>
+  </div>
+
+  <!-- 老板端：我的数据 -->
+  <div class="view" id="vBossData">
+    <div class="boss-scroll">
+      <div class="boss-head">
+        <div class="bh-avatar"><div class="shimmer"></div></div>
+        <div>
+          <div class="bh-title">王建国 · 我的分身</div>
+          <div class="bh-sub">发布于 2026-07-20 · 内部高管可见</div>
+        </div>
+      </div>
+
+      <div class="todo-item" onclick="goChecklist()" style="border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:var(--accent-soft)">
+        <div class="ti-ico">✎</div>
+        <div><div class="ti-title">回填清单 · 待完成</div><div class="ti-desc">人设锚点 + 资料清单 + 禁区 + 高频问题</div></div>
+        <div class="ti-arrow">填写 →</div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="stat-card hl">
+          <div class="st-val">328<span class="unit">次</span></div>
+          <div class="st-lbl">员工提问（近30天）</div>
+        </div>
+        <div class="stat-card">
+          <div class="st-val">92<span class="unit">%</span></div>
+          <div class="st-lbl">满意度</div>
+        </div>
+        <div class="stat-card">
+          <div class="st-val">15<span class="unit">条</span></div>
+          <div class="st-lbl">已确认原则</div>
+        </div>
+        <div class="stat-card">
+          <div class="st-val">12<span class="unit">份</span></div>
+          <div class="st-lbl">素材</div>
+        </div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">📌 待办 <span class="cnt">3 项</span></div>
+        <div class="todo-item" onclick="alert('跳转：候选原则审核')">
+          <div class="ti-ico">✍️</div>
+          <div><div class="ti-title">3 条候选原则待审核</div><div class="ti-desc">AI 从「董事会纪要-Q2」中提取</div></div>
+          <div class="ti-arrow">›</div>
+        </div>
+        <div class="todo-item" onclick="alert('跳转：领域覆盖度')">
+          <div class="ti-ico">⚠️</div>
+          <div><div class="ti-title">资本领域覆盖度仅 18%</div><div class="ti-desc">建议补充融资决策类素材</div></div>
+          <div class="ti-arrow">›</div>
+        </div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">📊 效果 · 节省的老板时间</div>
+        <div class="effect-row">
+          <div class="er-lbl">战略决策</div>
+          <div class="er-track"><div class="er-fill" style="width:78%"></div></div>
+          <div class="er-num">256</div>
+        </div>
+        <div class="effect-row">
+          <div class="er-lbl">组织管理</div>
+          <div class="er-track"><div class="er-fill" style="width:55%"></div></div>
+          <div class="er-num">142</div>
+        </div>
+        <div class="effect-row">
+          <div class="er-lbl">资本效率</div>
+          <div class="er-track"><div class="er-fill" style="width:18%"></div></div>
+          <div class="er-num">36</div>
+        </div>
+        <div class="todo-item" style="margin-top:12px">
+          <div class="ti-ico">⏱️</div>
+          <div><div class="ti-title">约节省 46 小时</div><div class="ti-desc">328 次提问 × 平均每次省 8 分钟</div></div>
+        </div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">🧭 知识缺口</div>
+        <div class="todo-item" onclick="goAddSkill()">
+          <div class="ti-ico">💰</div>
+          <div><div class="ti-title">资本 / 融资</div><div class="ti-desc">仅 1 条原则，缺战略级素材</div></div>
+          <div class="ti-arrow">补充 →</div>
+        </div>
+        <div class="todo-item" onclick="goAddSkill()">
+          <div class="ti-ico">🧭</div>
+          <div><div class="ti-title">产品方法论</div><div class="ti-desc">覆盖度 32%，缺产品取舍案例</div></div>
+          <div class="ti-arrow">补充 →</div>
+        </div>
+      </div>
+
+      <button class="add-btn" onclick="goAddSkill()" style="margin-bottom:12px">＋ 补充技能</button>
+    </div>
+  </div>
+
+  <!-- 老板端：补充技能 -->
+  <div class="view" id="vBossAdd">
+    <div class="boss-scroll">
+      <div style="font-size:17px;font-weight:800;margin-bottom:4px">补充技能</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">把老板的判断原则手动录入分身，两种方式任选</div>
+
+      <div class="add-switch" id="addSwitch">
+        <button class="on" data-mode="one" onclick="setAddMode('one')">一句话 · AI 整理</button>
+        <button data-mode="form" onclick="setAddMode('form')">结构化表单</button>
+      </div>
+
+      <div id="addOneLiner">
+        <div class="add-one-liner">
+          <textarea placeholder="说一句你的判断，例如：宁可慢一点，也要把单位经济模型打正…"></textarea>
+          <div class="hint">AI 会自动把它整理成完整原则：原则陈述 + 适用场景 + 边界反例，你确认后入原则库。</div>
+          <button class="add-btn" onclick="aiOrganize()">✨ AI 整理</button>
+          <div id="aiResult"></div>
+        </div>
+      </div>
+
+      <div id="addForm" style="display:none">
+        <div class="form-field">
+          <label>原则陈述<span class="req">*</span></label>
+          <textarea placeholder="一句话说清这条判断原则，例如：进入新市场前，先看有没有结构性优势…"></textarea>
+        </div>
+        <div class="form-field">
+          <label>适用场景</label>
+          <textarea placeholder="什么情况下启用这条原则？例如：新市场、新品类、新地域扩张…"></textarea>
+        </div>
+        <div class="form-field">
+          <label>边界与反例</label>
+          <textarea placeholder="什么情况下不适用？例如：防御性布局或关键人才并购除外…"></textarea>
+        </div>
+        <div class="form-field">
+          <label>来源依据（选填）</label>
+          <input placeholder="来自哪份素材 / 哪次会议（便于溯源）">
+        </div>
+        <button class="add-btn" onclick="alert('已提交，进入审核后入原则库（原型演示）')">提交原则</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 老板端：回填清单 -->
+  <div class="view" id="vChecklist">
+    <div class="boss-scroll">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <span onclick="setRole('boss');show('vBossData')" style="color:var(--muted);font-size:18px;cursor:pointer">‹</span>
+        <span style="font-size:17px;font-weight:800">回填清单</span>
+      </div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">照填空就行，不用写长文，约 10 分钟</div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">① 人设锚点</div>
+        <div class="form-field"><label>管理风格关键词（3~5 个）</label><input placeholder="数据驱动、先问背景再拍板、结果导向"></div>
+        <div class="form-field"><label>口头禅 / 常用表达</label><input placeholder="「这个事我得看三个数据」「先对齐目标」"></div>
+        <div class="form-field"><label>决策红线（绝对不碰的事）</label><input placeholder="低于成本价的单、不合规的报销"></div>
+        <div class="form-field"><label>最看重的 3 个决策要素</label><input placeholder="数据真实性、投入产出比、合规底线"></div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">② 可开放资料</div>
+        <div id="h5Checklist"></div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">③ 绝对禁区</div>
+        <div class="form-field"><label>涉密信息（系统脱敏）</label><input placeholder="涉密配方、在研项目细节、未公开融资条款"></div>
+        <div class="form-field"><label>其他禁区</label><input placeholder="具体员工薪酬、敏感人事变动"></div>
+      </div>
+
+      <div class="boss-sec">
+        <div class="boss-sec-title">④ 高频问题示例</div>
+        <div class="form-field"><label>判断类（跨部门 / 业务取舍）</label><textarea placeholder="采购和供应链怎么协调？这个新市场要不要进？"></textarea></div>
+        <div class="form-field"><label>代笔类（路演 / 融资 / 文章）</label><textarea placeholder="帮我写个路演口径？融资叙事怎么讲？"></textarea></div>
+        <div class="form-field"><label>百科类（制度 / 流程 / 参数）</label><textarea placeholder="报销流程是什么？合伙人怎么分工？"></textarea></div>
+      </div>
+
+      <button class="add-btn" onclick="alert('已提交回填清单（原型演示）')">提交清单</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FOUNDER = { name: '王建国' };
+const DOMAINS = [ {name:'战略',pct:78},{name:'组织',pct:55},{name:'产品',pct:32},{name:'资本',pct:18},{name:'文化',pct:61} ];
+const VIEW_POINTS = [
+  { title: '关于多元化扩张的判断', desc: '「多元化只有两种赢法：技术同源，或渠道复用。」' },
+  { title: '关于组织效率的思考', desc: '「组织的问题不是人不够，而是决策权离信息太远。」' },
+  { title: '关于资本效率的原则', desc: '「钱是最贵的资源，它会掩盖错误的商业模式。」' },
+];
+let chatMessages = [], chatStarted = false;
+let currentRole = 'employee';
+let addMode = 'one';
+
+/* 主题切换 */
+document.querySelectorAll('#themeMini button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-theme', b.dataset.theme);
+    document.querySelectorAll('#themeMini button').forEach(x => x.classList.toggle('on', x === b));
+  });
+});
+
+/* P1 渲染 */
+function renderArchive() {
+  document.getElementById('coverage').innerHTML = DOMAINS.map((d,i) => `
+    <div class="cov-item"><div class="cov-name">${d.name}</div><div class="cov-track"><div class="cov-fill" style="width:${d.pct}%;animation-delay:${i*0.1}s"></div></div></div>`).join('');
+  document.getElementById('views').innerHTML = VIEW_POINTS.map(v => `
+    <div class="view-item" onclick="goChat()">
+      <div class="vi-dot"></div>
+      <div><div class="vi-title">${v.title}</div><div class="vi-desc">${v.desc}</div></div>
+      <div class="vi-arrow">›</div>
+    </div>`).join('');
+}
+
+/* 视图切换 */
+function show(id) {
+  document.getElementById('vArchive').classList.toggle('on', id === 'vArchive');
+  document.getElementById('vChat').classList.toggle('on', id === 'vChat');
+  document.getElementById('vBossData').classList.toggle('on', id === 'vBossData');
+  document.getElementById('vBossAdd').classList.toggle('on', id === 'vBossAdd');
+  document.getElementById('vChecklist').classList.toggle('on', id === 'vChecklist');
+}
+function goChat() { show('vChat'); if (!chatStarted) initChat(); else renderChat(); }
+function goArchive() { show('vArchive'); }
+function ask() { const v = document.querySelector('#vArchive input').value.trim(); goChat(); if (v) { document.querySelector('#vChat .chat-composer input').value = v; sendChat(); } }
+
+/* 角色切换 */
+function setRole(role) {
+  currentRole = role;
+  document.querySelectorAll('#rolebar button').forEach(b => b.classList.toggle('on', b.dataset.role === role));
+  if (role === 'employee') show('vArchive');
+  else show('vBossData');
+}
+function goAddSkill() { setRole('boss'); show('vBossAdd'); }
+function goChecklist() { setRole('boss'); show('vChecklist'); initH5Checklist(); }
+
+/* H5 回填清单资料列表 */
+function initH5Checklist() {
+  const el = document.getElementById('h5Checklist');
+  if (!el) return;
+  const types = ['战略规划 / 年度战略','全员信 / 内部讲话','董事会 / 高管会纪要','对外演讲 / 访谈实录','决策复盘笔记','公司制度文档','其他判断逻辑材料'];
+  el.innerHTML = types.map((t,i) => `
+    <div class="todo-item" style="cursor:pointer" onclick="toggleH5Chk(this)">
+      <div class="chk-box ${i<4?'on':''}" style="width:18px;height:18px;border-radius:5px;border:1.5px solid var(--border-strong);flex:none;display:flex;align-items:center;justify-content:center;font-size:12px;color:#fff">${i<4?'✓':''}</div>
+      <div style="font-size:13px;font-weight:600">${t}</div>
+    </div>`).join('');
+}
+function toggleH5Chk(item) {
+  const box = item.querySelector('.chk-box');
+  const on = box.classList.contains('on') ? box.classList.remove('on') : box.classList.add('on');
+  box.textContent = box.classList.contains('on') ? '✓' : '';
+}
+
+/* 补充技能：模式切换 */
+function setAddMode(mode) {
+  addMode = mode;
+  document.querySelectorAll('#addSwitch button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  document.getElementById('addOneLiner').style.display = mode === 'one' ? 'block' : 'none';
+  document.getElementById('addForm').style.display = mode === 'form' ? 'block' : 'none';
+}
+
+/* 补充技能：一句话 AI 整理 */
+function aiOrganize() {
+  const textarea = document.querySelector('#addOneLiner textarea');
+  const t = (textarea.value || '').trim();
+  if (!t) { textarea.focus(); return; }
+  const r = document.getElementById('aiResult');
+  r.innerHTML = `
+    <div class="ai-result">
+      <div class="ar-head">✨ AI 已整理，请确认</div>
+      <div class="ar-field"><div class="af-lbl">原则陈述</div><div class="af-val">「${t}」</div></div>
+      <div class="ar-field"><div class="af-lbl">适用场景</div><div class="af-val">当面临「要速度还是要质量」「要规模还是要健康」的两难选择时启用。</div></div>
+      <div class="ar-field"><div class="af-lbl">边界反例</div><div class="af-val">战略卡位窗口期（如并购头部标的）可短期放宽，但需明确退出条件。</div></div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="add-btn" style="flex:1" onclick="alert('已确认，进入原则库（原型演示）');this.closest('.ai-result').innerHTML='<div style=padding:20px;text-align:center;color:var(--success);font-weight:700>✓ 已加入原则库</div>'">✓ 确认入库</button>
+        <button class="add-btn" style="flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--muted)" onclick="this.closest('.ai-result').remove()">✏️ 修改</button>
+      </div>
+    </div>`;
+}
+
+/* P2 对话 */
+function initChat() {
+  chatStarted = true;
+  chatMessages = [{ role:'ai', type:'intro', text:'你好，我是王建国的分身。做决策前可以先和我聊聊，我会用老板的判断逻辑帮你把问题想清楚。' }];
+  renderChat();
+}
+function renderChat() {
+  const sc = document.getElementById('chatScroll');
+  sc.innerHTML = chatMessages.map(m => {
+    if (m.role === 'user') return `<div class="msg msg-user"><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'intro') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'thinking') return `<div class="msg msg-ai"><div class="bubble thinking"><div class="thinking-row">${FOUNDER.name}正在思考<span class="thinking-bars"><span style="height:7px"></span><span style="height:13px;animation-delay:.15s"></span><span style="height:14px;animation-delay:.3s"></span><span style="height:9px;animation-delay:.45s"></span></span></div><div class="thinking-copy">正在检索老板的判断原则，组织表达…</div><div class="thinking-track"><span></span></div></div></div>`;
+    if (m.type === 'judgment') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="judgment ${m.infer?'judgment-infer':''}">${m.infer?'<div class="judgment-banner">⚠️ 此为推断，非老板原话</div>':''}<div class="judgment-body"><div class="jseg seg"><div class="jseg-tag">原则</div><div class="jseg-txt">${m.principle}</div></div><div class="jseg seg seg-1"><div class="jseg-tag">分析</div><div class="jseg-txt">${m.analysis}</div></div><div class="jseg seg seg-2"><div class="jseg-tag">结论</div><div class="jseg-txt">${m.conclusion}</div></div><div class="jseg seg seg-3"><div class="jseg-tag">边界</div><div class="jseg-txt">${m.boundary}</div></div></div><div class="cite-bar"><span class="cite-toggle" onclick="toggleCite(this)">📎 [1] ${m.source} ▾</span><div class="cite-panel"><div class="cite-src">来源：${m.source}</div><div class="cite-quote">${m.quote}</div></div></div></div></div>`;
+    if (m.type === 'draft') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="draft"><div class="draft-banner">✍️ AI 草稿 · 需本人润色后对外</div><div class="draft-body">${m.text}</div></div></div>`;
+    if (m.type === 'faq') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="faq"><div class="faq-head"><span class="faq-ico">📋</span> 公司百科 · 标准答案</div><div class="faq-body">${m.text}</div>${m.time?`<div class="faq-time">${m.time}</div>`:''}<div class="cite-bar"><span class="cite-toggle" onclick="toggleCite(this)">📎 ${m.source} ▾</span><div class="cite-panel"><div class="cite-src">来源：${m.source}</div><div class="cite-quote">${m.quote||''}</div></div></div></div></div>`;
+    if (m.type === 'ask-more') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="ask-more"><div class="ask-more-body"><div class="am-title">要判断这件事，我需要先知道几件事（老板的习惯是拿全信息再拍板）：</div><div class="am-list">${m.items.map(i=>`<div class="am-item">${i}</div>`).join('')}</div></div></div></div>`;
+    if (m.type === 'sensitive') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'empty') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    return '';
+  }).join('');
+  sc.scrollTop = sc.scrollHeight;
+}
+function toggleCite(el) { el.nextElementSibling.classList.toggle('open'); }
+function sendChat() {
+  const input = document.querySelector('#vChat .chat-composer input');
+  const q = (input.value || '').trim(); if (!q) return;
+  input.value = '';
+  chatMessages.push({ role:'user', text:q }); renderChat();
+  chatMessages.push({ role:'ai', type:'thinking' }); renderChat();
+  setTimeout(() => { chatMessages.pop(); chatMessages.push(...buildReply(q)); renderChat(); }, 1500);
+}
+function buildReply(q) {
+  // 敏感拦截
+  if (/薪酬|工资|薪资|谁离职|裁员|并购|收购|法律|诉讼/.test(q)) return [{ role:'ai', type:'sensitive', text:'这个问题涉及敏感信息，建议你直接问老板本人。' }];
+  // 代笔类
+  if (/帮我写|起草|生成|路演|融资叙事|融资口径|创赛|行业观点|演讲稿|写个/.test(q)) return [{ role:'ai', type:'draft', text:'我们是「XX 科技」，专注为 Tier1 车厂提供智能质检解决方案。\n\n核心价值：用视觉 AI 把产线质检误检率从行业平均 3% 降到 0.3%，单条产线每年为客户节省约 200 万返工成本。\n\n一句话融资叙事：我们不是在卖软件，是在把中国制造的质量成本打下来。' }];
+  // 百科类
+  if (/是什么|流程|报销|合伙人|分工|参数|制度|融资阶段|多少|在哪|怎么申请/.test(q)) return [{ role:'ai', type:'faq', text:'报销流程：① OA 系统提交报销单，附发票照片 → ② 直属上级审批 → ③ 财务复核 → ④ 打款到工资卡，通常 3 个工作日内到账。\n\n超过 5000 元的报销需提前在 OA 提交预算申请。', time:'⏱️ 截至 2026-08 公司制度 V3 版，以最新 OA 公示为准', source:'《报销管理制度》第 2 节', quote:'「单笔超过 5000 元的报销，需提前提交预算申请。」' }];
+  // 反向追问
+  if (/怎么协调|怎么定|怎么权衡/.test(q)) return [{ role:'ai', type:'ask-more', items:['这笔单子的成本和毛利是多少？低于成本价的单子我不碰。','采购周期和交付节点卡在哪个环节？是供应跟不上还是排期冲突？','这单是不是我们重点客户的战略需求？还是普通的补货单？'] }];
+  // 空态（出海）
+  if (/东南亚|出海|国际化/.test(q)) return [
+    { role:'ai', type:'empty', text:'老板未对这个问题明确表过态。不过关于「多元化扩张」，他有相邻原则可参考——' },
+    { role:'ai', type:'judgment', infer:true, principle:'多元化只有两种赢法：技术同源，或渠道复用。两头都不沾的，本质是投机。', analysis:'出海是地理扩张，本质要问：现有技术或渠道能否直接复用？能，就是结构性优势；不能，就是重新打一遍。', conclusion:'验证结构性优势前，不建议大举出海，可先做小规模试点。', boundary:'若海外有可单点突破的标杆客户，可破例，但不算系统性出海战略。', source:'2024 战略会纪要', quote:'「多元化只有两种赢法：技术同源，或渠道复用。」' }];
+  return [{ role:'ai', type:'judgment', infer:false, principle:'判断该不该进一个市场，先看天花板够不够大，再看我们有没有别人短期追不上的结构性优势。', analysis:'这个新市场天花板约 50 亿，但已挤进 6 家头部，竞争充分。我们没有独家渠道或技术壁垒，进场只能打价格战。', conclusion:'暂不进入，观察 6 个月。验证天花板是否扩大、能否通过合作拿到结构性位置。', boundary:'若能并购拿下头部位置，或拿到独家渠道，则另当别论。', source:'2024 战略会纪要', quote:'「与其在 500 亿市场当第 7 名，不如在 50 亿市场当第一名。」' }];
+}
+
+renderArchive();
+</script>
+</body>
+</html>

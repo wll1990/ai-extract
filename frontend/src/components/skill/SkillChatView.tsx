@@ -52,7 +52,6 @@ export function SkillChatView({
   onVoiceTranscription,
 }: SkillChatViewProps) {
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const [interimVoiceText, setInterimVoiceText] = useState('');
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,23 +81,17 @@ export function SkillChatView({
               {showVoice && (
                 <div className="absolute left-2 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
                   <VoiceRecorder
-                    onTranscription={(text) => {
-                      setInterimVoiceText('');
-                      onVoiceTranscription?.(text);
-                    }}
-                    onInterimText={(text) => setInterimVoiceText(text)}
+                    mode="click"
+                    onTranscription={(text) => onVoiceTranscription?.(text)}
                     disabled={isStreaming}
                   />
                 </div>
               )}
               <textarea
-                value={interimVoiceText || inputValue}
-                onChange={(e) => {
-                  setInterimVoiceText('');
-                  onInputChange(e.target.value);
-                }}
+                value={inputValue}
+                onChange={(e) => onInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={interimVoiceText ? '' : placeholder}
+                placeholder={placeholder}
                 disabled={isStreaming}
                 rows={1}
                 className="w-full resize-none rounded-xl border border-border bg-surface-2 py-3 text-sm text-foreground placeholder:text-muted-foreground-2 outline-none transition-all focus:border-foreground focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"

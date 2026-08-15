@@ -87,7 +87,7 @@ export default function PracticeChatSection({ skillId, initialSceneTag, setChatM
         isStreaming={practice.isStreaming}
         ownerName="客户"
         showVoice
-        onVoiceTranscription={(text) => setPracticeInput(prev => prev + text)}
+        onVoiceTranscription={(text) => setPracticeInput(text)}
         placeholder={practice.practiceData ? '输入你的回应...' : '描述你想练习的场景...'}
         disabled={!practice.practiceData}
       >

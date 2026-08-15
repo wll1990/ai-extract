@@ -93,8 +93,8 @@ export function useQaChat({
   const { conversations, currentConvId, setCurrentConvId, showHistory, setShowHistory,
     loadConversations, switchConversation, handleDeleteConversation } = useConversations(skillId, chatMode, msgSetter, authToken);
 
-  const handleQaSend = useCallback(() => {
-    const text = inputValue.trim();
+  const handleQaSend = useCallback((overrideText?: string) => {
+    const text = (overrideText ?? inputValue).trim();
     if (!text || isStreaming || !skillId) return;
 
     setSuggestedQuestions([]);  // 新消息 → 清掉上一轮的推荐

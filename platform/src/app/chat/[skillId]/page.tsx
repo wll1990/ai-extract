@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchSkillDetail, type SkillDetail } from '@/lib/api/skill';
-import { getUser } from '@/lib/storage';
+import { getUser, getToken, clearAuth } from '@/lib/storage';
+import { logout as logoutApi } from '@/lib/api/auth';
+import { createGuestBySkillId, setCAuth } from '@/lib/api/c';
 import { ChatView } from '@/components/chat/ChatView';
 
 export default function ChatPage() {
@@ -18,7 +20,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<{ name: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
 
   useEffect(() => {
     if (!skillId) return;
@@ -32,8 +34,32 @@ export default function ChatPage() {
   useEffect(() => {
     setMounted(true);
     const u = getUser();
-    if (u?.name) setUser({ name: u.name });
+    if (u?.name) setUser({ name: u.name, role: u.role as string });
   }, []);
+
+  const handleLogout = useCallback(async () => {
+    try { await logoutApi(); } catch { /* ignore */ }
+    clearAuth();
+    setUser(null);
+    router.push('/discover');
+  }, [router]);
+
+  // 未登录 → 静默领游客证（PC 聊天页游客也能聊，与分享页共用发证机制）
+  useEffect(() => {
+    if (!skillId) return;
+    if (getToken()) return;
+    createGuestBySkillId(skillId).then(resp => {
+      if (resp.token) {
+        setCAuth(resp.token, {
+          userId: resp.userId,
+          nickname: resp.nickname,
+          status: resp.status,
+          remaining: resp.remaining,
+          limit: resp.limit,
+        });
+      }
+    }).catch(() => { /* 静默失败：聊天接口会返回 401 提示登录 */ });
+  }, [skillId]);
 
   if (loading) {
     return (
@@ -78,16 +104,31 @@ export default function ChatPage() {
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {!mounted ? null : user ? (
-            <span style={{ fontSize: 12, fontWeight: 500, color: '#5b6886' }}>
-              {user.name}
-            </span>
+          {!mounted ? null : user && user.role !== 'guest' ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 500, color: '#5b6886' }}>
+                {user.name}
+              </span>
+              <button onClick={handleLogout} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 12, color: '#94a3b8', padding: '4px 6px',
+                borderRadius: 6, fontFamily: 'inherit',
+              }}>退出</button>
+            </div>
           ) : (
-            <Link href="/login" style={{
-              fontSize: 12, color: '#2147ff', textDecoration: 'none', fontWeight: 600,
-            }}>
-              登录
-            </Link>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Link href="/login" style={{
+                fontSize: 12, color: '#2147ff', textDecoration: 'none', fontWeight: 600,
+              }}>
+                登录
+              </Link>
+              <Link href="/register" style={{
+                fontSize: 12, color: '#2147ff', textDecoration: 'none', fontWeight: 600,
+                border: '1px solid #2147ff', borderRadius: 6, padding: '4px 12px',
+              }}>
+                注册
+              </Link>
+            </div>
           )}
         </div>
       </div>

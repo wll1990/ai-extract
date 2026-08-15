@@ -170,7 +170,7 @@ export default function LoginPage() {
                   密码
                 </label>
                 <input
-                  type="password" value={bPassword} onChange={(e) => setBPassword(e.target.value)}
+                  type="password" autoComplete="current-password" value={bPassword} onChange={(e) => setBPassword(e.target.value)}
                   placeholder="输入密码"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: 12,
@@ -214,7 +214,7 @@ export default function LoginPage() {
                   密码
                 </label>
                 <input
-                  type="password" value={cPassword} onChange={(e) => setCPassword(e.target.value)}
+                  type="password" autoComplete="current-password" value={cPassword} onChange={(e) => setCPassword(e.target.value)}
                   placeholder="输入密码"
                   style={{
                     width: '100%', padding: '10px 14px', borderRadius: 12,

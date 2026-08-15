@@ -8,6 +8,7 @@ import { fetchRecommendedQuestions, getOrCreateShare } from '@/lib/api/skill';
 import { getUser, getToken, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
 import { copyToClipboard } from '@/lib/clipboard';
+import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 
 const ORG_AVATAR_COLORS = ['#818cf8', '#a78bfa', '#c084fc', '#e879f9'];
 
@@ -472,23 +473,12 @@ export function SkillCardPage({ skill }: Props) {
 
   const currentPlaceholder = questions.length > 0 ? questions[placeholderIdx] : '试着问他一个问题吧…';
 
-  const doAction = useCallback(async (text?: string) => {
+  const doAction = useCallback((text?: string) => {
     const q = (text || inputValue.trim());
-    let code = skill.shareCode;
-    if (!code) {
-      // 自动生成分享码
-      try {
-        const result = await getOrCreateShare(skill.id);
-        code = result.shareCode;
-      } catch {
-        alert('网络异常，请稍后重试');
-        return;
-      }
-    }
-    const base = `/s/${code}`;
-    if (q) router.push(`${base}?q=${encodeURIComponent(q)}&mode=talk`);
-    else router.push(base);
-  }, [inputValue, skill, router]);
+    // 平台端内部对话走 PC 聊天页，不再走分享链接
+    if (q) router.push(`/chat/${skill.id}?q=${encodeURIComponent(q)}&mode=talk`);
+    else router.push(`/chat/${skill.id}`);
+  }, [inputValue, skill.id, router]);
 
   const [showShareModal, setShowShareModal] = useState(false);
   const [pubCode, setPubCode] = useState<string | null>(null);
@@ -558,7 +548,7 @@ export function SkillCardPage({ skill }: Props) {
           >← 发现</button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {!mounted ? <span style={{ width: 100, height: 34 }} /> : user ? (
+            {!mounted ? <span style={{ width: 100, height: 34 }} /> : user && user.role !== 'guest' ? (
               <>
                 <button onClick={handleShare} disabled={shareLoading} style={{
                   fontSize: 12, background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-secondary)',
@@ -936,6 +926,10 @@ export function SkillCardPage({ skill }: Props) {
           padding: '4px 4px 4px 18px',
           boxShadow: 'var(--sk-shadow-cta)',
         }}>
+          <VoiceRecorder
+            mode="click"
+            onTranscription={(text) => setInputValue(text)}
+          />
           <input
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}

@@ -82,6 +82,11 @@ public class InterviewSessionResponse {
     private String interviewType;
 
     /**
+     * 分身头像URL（从 skill.avatar_url 解析，用于前端顶栏和分享卡片展示）
+     */
+    private String avatarUrl;
+
+    /**
      * 阶段信息内部类
      */
     @Getter

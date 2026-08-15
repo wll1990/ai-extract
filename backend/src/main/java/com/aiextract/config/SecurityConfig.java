@@ -62,8 +62,8 @@ public class SecurityConfig {
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
 
-                        // ── WebSocket 语音识别 ──
-                        .requestMatchers("/ws/**").permitAll()
+                        // ── 语音识别（录音后一次性识别，任意有效 JWT）──
+                        .requestMatchers(HttpMethod.POST, "/stt/recognize").authenticated()
 
                         // ── IM 回调：无需 JWT ──
                         .requestMatchers("/im/*/callback").permitAll()

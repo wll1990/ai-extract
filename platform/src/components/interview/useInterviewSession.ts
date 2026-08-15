@@ -118,8 +118,8 @@ export function useInterviewSession(sessionId: string) {
   }, [state.messages]);
 
   // Send message
-  const handleSend = useCallback(async () => {
-    const text = inputValue.trim();
+  const handleSend = useCallback(async (overrideText?: string) => {
+    const text = (overrideText ?? inputValue).trim();
     if (!text || isStreaming || state.isCompleted) return;
 
     const userMsg: InterviewMessageData = {

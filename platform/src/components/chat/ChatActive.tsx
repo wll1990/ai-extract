@@ -27,7 +27,6 @@ export function ChatActive({
 }: ChatActiveProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const isStreaming = phase === 'streaming';
-  const [interimVoiceText, setInterimVoiceText] = useState('');
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -106,17 +105,16 @@ export function ChatActive({
           <div style={{ position: 'relative', flex: 1 }}>
             <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
               <VoiceRecorder
-                mode="longpress"
-                onTranscription={(text) => { setInterimVoiceText(''); onInputChange(inputValue + text); }}
-                onInterimText={setInterimVoiceText}
+                mode="click"
+                onTranscription={(text) => onInputChange(text)}
                 disabled={isStreaming}
               />
             </div>
             <textarea
-              value={interimVoiceText || inputValue}
-              onChange={(e) => { setInterimVoiceText(''); onInputChange(e.target.value); }}
+              value={inputValue}
+              onChange={(e) => onInputChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={interimVoiceText ? '' : placeholder}
+              placeholder={placeholder}
               disabled={isStreaming}
               rows={1}
               style={{
@@ -139,7 +137,7 @@ export function ChatActive({
           </div>
           <button
             onClick={onSend}
-            disabled={(!inputValue.trim() && !interimVoiceText) || isStreaming}
+            disabled={!inputValue.trim() || isStreaming}
             style={{
               width: 48, height: 48, borderRadius: 16, flexShrink: 0,
               background: inputValue.trim() && !isStreaming

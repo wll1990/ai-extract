@@ -7,7 +7,7 @@
  * @since 2026-07-20
  */
 
-import { getToken } from '@/lib/storage';
+import { clearAuth, getToken } from '@/lib/storage';
 
 function resolveBaseUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
@@ -68,6 +68,18 @@ export async function apiClient<T>(
 
   if (!res.ok) {
     if (res.status === 401 && typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      // C 端分享页：派发事件由页面弹注册/登录抽屉
+      if (path.startsWith('/s/')) {
+        window.dispatchEvent(new CustomEvent('guest:auth-required'));
+        throw new Error('AUTH_REQUIRED');
+      }
+      // H5 页面：不跳登录，只清凭证
+      if (path.startsWith('/h5/')) {
+        clearAuth();
+        throw new Error('请先登录');
+      }
+      clearAuth();
       window.location.href = '/login';
       throw new Error('登录已过期，请重新登录');
     }

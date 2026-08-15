@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { defAvatar } from '@aiextract/shared-ui';
 
 export interface SceneTag {
   tag: string;
@@ -12,6 +13,7 @@ export interface SkillOpeningViewProps {
   ownerName: string;
   ownerTitle?: string;
   ownerIntro?: string;
+  avatarUrl?: string;
   sceneTags?: SceneTag[];
   /** 选中场景后：开始问答 */
   onQaStart?: (sceneTag: string) => void;
@@ -41,6 +43,7 @@ export function SkillOpeningView({
   ownerName,
   ownerTitle,
   ownerIntro,
+  avatarUrl,
   sceneTags,
   onQaStart,
   onPracticeStart,
@@ -103,7 +106,12 @@ export function SkillOpeningView({
           <div className="flex items-start gap-4 mb-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-sm flex-shrink-0 overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/def-avatar.png" alt={ownerName || 'AI分身'} className="h-full w-full object-cover" />
+              <img
+                src={avatarUrl || defAvatar}
+                alt={ownerName || 'AI分身'}
+                className="h-full w-full object-cover"
+                onError={(e) => { (e.target as HTMLImageElement).src = defAvatar; }}
+              />
             </div>
             <div className="flex-1 min-w-0">
               <h2 className="text-lg font-bold text-foreground">

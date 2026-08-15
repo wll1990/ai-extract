@@ -37,7 +37,6 @@ export function ExpertInterviewChat() {
   const { state, dispatch } = h;
 
   const interviewType = state.session?.interviewType || 'sales';
-  const [interimVoiceText, setInterimVoiceText] = useState('');
 
   // Mark phase complete
   const markPhaseComplete = useCallback(() => {
@@ -189,25 +188,22 @@ export function ExpertInterviewChat() {
             <div className="relative flex-1">
               <div className="absolute left-2 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
                 <VoiceRecorder
-                  onTranscription={(text) => {
-                    setInterimVoiceText('');
-                    h.setInputValue(prev => prev + text);
-                  }}
-                  onInterimText={(text) => setInterimVoiceText(text)}
+                  mode="click"
+                  onTranscription={(text) => h.setInputValue(text)}
                   disabled={h.isStreaming}
                 />
               </div>
               <textarea ref={h.inputRef}
-                value={interimVoiceText || h.inputValue}
-                onChange={(e) => { setInterimVoiceText(''); h.setInputValue(e.target.value); }}
+                value={h.inputValue}
+                onChange={(e) => h.setInputValue(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder={interimVoiceText ? '' : (state.session?.currentPhase === 'opening' ? '输入你的案例故事...' : state.session?.currentPhase === 'storytelling' ? '继续讲述细节...' : state.session?.currentPhase === 'modeling' ? '总结你的核心步骤...' : '说说适用边界...')}
+                placeholder={(state.session?.currentPhase === 'opening' ? '输入你的案例故事...' : state.session?.currentPhase === 'storytelling' ? '继续讲述细节...' : state.session?.currentPhase === 'modeling' ? '总结你的核心步骤...' : '说说适用边界...')}
                 disabled={h.isStreaming} rows={1}
                 className="w-full resize-none rounded-xl border border-border bg-surface-2 py-3 text-sm text-foreground placeholder:text-muted-foreground-2 outline-none transition-all focus:border-foreground focus:ring-1 focus:ring-foreground/20 disabled:opacity-50"
                 style={{ minHeight: '52px', maxHeight: '120px', paddingLeft: '44px', paddingRight: '12px' }}
                 onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
             </div>
-            <button type="button" onClick={h.handleSend} disabled={(!h.inputValue.trim() && !interimVoiceText) || h.isStreaming} className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-foreground text-white transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" onClick={() => h.handleSend()} disabled={!h.inputValue.trim() || h.isStreaming} className="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-foreground text-white transition-all hover:bg-primary disabled:cursor-not-allowed disabled:opacity-40">
               {h.isStreaming ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>}
             </button>
           </div>

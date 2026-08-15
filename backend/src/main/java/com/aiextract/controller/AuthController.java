@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
@@ -16,7 +17,9 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -167,6 +170,14 @@ public class AuthController {
         clear.setMaxAge(0);
         response.addCookie(clear);
         return ApiResponse.success();
+    }
+
+    /** B端用户上传个人头像 */
+    @PostMapping(value = "/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<Map<String, String>> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        UUID userId = TokenContext.get();
+        String avatarUrl = authService.uploadAvatar(userId, file);
+        return ApiResponse.success(Map.of("avatarUrl", avatarUrl));
     }
 
     /** 设置 HttpOnly Cookie */

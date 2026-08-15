@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>创始人分身 · 交互原型</title>
+<style>
+/* ═══════════════════════════════════════════════════════════
+   创始人分身 · 交互原型
+   两套视觉：深色权威（金）+ 明亮商务（蓝）
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── 深色权威主题（默认）── */
+:root, [data-theme="dark"] {
+  --bg: #0a0d12;
+  --surface: #0f141b;
+  --surface-2: #141a23;
+  --card: rgba(20, 26, 35, 0.82);
+  --card-solid: #151c26;
+  --foreground: #e8edf3;
+  --muted: #9aa5b1;
+  --muted-2: #6b7683;
+  --border: #232b36;
+  --border-strong: #2f3a48;
+  --accent: #c8a45c;          /* 金 */
+  --accent-strong: #e2b96f;
+  --accent-soft: rgba(200, 164, 92, 0.12);
+  --accent-glow: rgba(200, 164, 92, 0.28);
+  --gradient-primary: linear-gradient(135deg, #d4af6a 0%, #c8a45c 55%, #a8823e 100%);
+  --success: #3fb986;
+  --success-bg: rgba(63, 185, 134, 0.12);
+  --warning: #d9a84e;
+  --warning-bg: rgba(217, 168, 78, 0.12);
+  --danger: #e56b6b;
+  --danger-bg: rgba(229, 107, 107, 0.12);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.45);
+  --shadow-lg: 0 18px 48px rgba(0,0,0,0.55);
+  --shadow-glow: 0 0 0 4px rgba(200,164,92,0.16), 0 0 32px rgba(200,164,92,0.22);
+  --hero-grad: radial-gradient(circle at 15% 20%, rgba(200,164,92,0.14), transparent 40%),
+              radial-gradient(circle at 85% 10%, rgba(100,140,180,0.10), transparent 35%),
+              linear-gradient(165deg, #0b0f15 0%, #0f141b 50%, #0c1017 100%);
+}
+
+/* ── 明亮商务主题 ── */
+[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --surface-2: #ffffff;
+  --card: rgba(255, 255, 255, 0.92);
+  --card-solid: #ffffff;
+  --foreground: #1e293b;
+  --muted: #64748b;
+  --muted-2: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --accent: #2563eb;          /* 蓝 */
+  --accent-strong: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-glow: rgba(37, 99, 235, 0.22);
+  --gradient-primary: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+  --success: #16a34a;
+  --success-bg: #dcfce7;
+  --warning: #d97706;
+  --warning-bg: #fef3c7;
+  --danger: #dc2626;
+  --danger-bg: #fef2f2;
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+  --shadow-md: 0 8px 20px rgba(15,23,42,0.08);
+  --shadow-lg: 0 18px 44px rgba(15,23,42,0.12);
+  --shadow-glow: 0 0 0 4px rgba(37,99,235,0.14), 0 0 30px rgba(59,130,246,0.22);
+  --hero-grad: radial-gradient(circle at 15% 20%, rgba(37,99,235,0.08), transparent 40%),
+              radial-gradient(circle at 85% 10%, rgba(6,182,212,0.06), transparent 35%),
+              linear-gradient(165deg, #f8fafc 0%, #ffffff 50%, #f1f5f9 100%);
+}
+
+/* ── 基础 ── */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "rlig" 1, "calt" 1;
+  transition: background 0.4s ease, color 0.4s ease;
+  overflow: hidden;
+}
+
+/* ── 应用骨架 ── */
+.app { display: flex; height: 100vh; }
+
+/* 左侧导航 */
+.sidebar {
+  width: 224px; flex: none; display: flex; flex-direction: column;
+  background: var(--surface); border-right: 1px solid var(--border);
+  transition: background 0.4s ease, border-color 0.4s ease;
+}
+.sidebar-logo {
+  padding: 22px 20px 16px; font-size: 15px; font-weight: 700; letter-spacing: 0.02em;
+  color: var(--foreground); display: flex; align-items: center; gap: 8px;
+}
+.sidebar-logo .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--gradient-primary); flex: none; }
+.sidebar-sub { padding: 0 20px 6px; font-size: 11px; color: var(--muted-2); letter-spacing: 0.08em; text-transform: uppercase; }
+.sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 12px; }
+.nav-item {
+  display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 10px;
+  font-size: 13.5px; color: var(--muted); cursor: pointer; transition: all 0.18s ease; margin-bottom: 2px;
+  border: 1px solid transparent;
+}
+.nav-item:hover { background: var(--surface-2); color: var(--foreground); }
+.nav-item.on {
+  background: var(--accent-soft); color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  font-weight: 600;
+}
+.nav-item .ico { font-size: 16px; width: 22px; text-align: center; flex: none; opacity: 0.9; }
+.nav-item .badge { margin-left: auto; font-size: 10px; font-weight: 700; background: var(--accent-soft); color: var(--accent); padding: 2px 7px; border-radius: 99px; }
+
+/* 主题切换区 */
+.sidebar-theme { padding: 14px 16px; border-top: 1px solid var(--border); }
+.theme-toggle {
+  display: flex; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 3px; gap: 3px;
+}
+.theme-btn {
+  flex: 1; padding: 7px 0; font-size: 12px; font-weight: 600; text-align: center;
+  border: none; border-radius: 8px; cursor: pointer; background: transparent; color: var(--muted);
+  font-family: inherit; transition: all 0.18s ease;
+}
+.theme-btn.on { background: var(--accent); color: #0a0d12; box-shadow: var(--shadow-sm); }
+[data-theme="light"] .theme-btn.on { color: #ffffff; }
+.theme-hint { font-size: 10.5px; color: var(--muted-2); text-align: center; margin-top: 8px; line-height: 1.5; }
+
+/* 主内容区 */
+.main { flex: 1; min-width: 0; overflow-y: auto; position: relative; }
+
+/* 视图容器 */
+.view { display: none; min-height: 100%; animation: viewIn 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+.view.on { display: block; }
+@keyframes viewIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── 顶部栏（每个视图内的局部 header）── */
+.viewbar {
+  position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 12px;
+  padding: 16px 32px; background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--border);
+}
+.viewbar .crumb { font-size: 13px; color: var(--muted-2); }
+.viewbar .crumb b { color: var(--foreground); font-weight: 600; }
+.viewbar .spacer { flex: 1; }
+.viewbar .btn { font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 9px; cursor: pointer; border: none; font-family: inherit; transition: all 0.18s ease; }
+.btn-accent { background: var(--gradient-primary); color: #fff; }
+[data-theme="dark"] .btn-accent { color: #0a0d12; font-weight: 700; }
+.btn-accent:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border) !important; }
+.btn-ghost:hover { color: var(--foreground); background: var(--surface-2); }
+
+/* 内容容器 */
+.content { padding: 28px 32px 64px; max-width: 1080px; margin: 0 auto; }
+
+/* ── 通用组件 ── */
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 24px; box-shadow: var(--shadow-sm); backdrop-filter: blur(10px);
+  transition: background 0.4s ease, border-color 0.4s ease;
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px;
+}
+.eyebrow::before { content: ''; width: 18px; height: 2px; background: var(--accent); border-radius: 1px; }
+.sec-title { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 6px; }
+.sec-desc { font-size: 13px; color: var(--muted); line-height: 1.7; }
+
+/* 标签 */
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 4px 11px; border-radius: 99px; border: 1px solid var(--border); color: var(--muted); background: var(--surface-2); }
+.pill-accent { border-color: color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); background: var(--accent-soft); }
+
+/* 徽标 */
+.badge-s { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 99px; letter-spacing: 0.03em; }
+.badge-s.s { background: var(--accent-soft); color: var(--accent); }
+.badge-s.a { background: var(--warning-bg); color: var(--warning); }
+.badge-s.c { background: var(--success-bg); color: var(--success); }
+.badge-s.d { background: color-mix(in srgb, var(--muted-2) 14%, transparent); color: var(--muted-2); }
+
+/* ── 动效 keyframes（复用 shared-ui 组件语义）── */
+@keyframes bars { 50% { height: 5px; opacity: 0.4; } }
+@keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+@keyframes avRotate { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes avShimmer { 0% { transform: translateX(-100%) rotate(25deg); } 100% { transform: translateX(200%) rotate(25deg); } }
+@keyframes avGlow { 0%,100% { opacity: 0.25; } 50% { opacity: 0.55; } }
+@keyframes float1 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.6; } 50% { transform: translate(2px,-3px) scale(1.3); opacity: 1; } }
+@keyframes float2 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.5; } 50% { transform: translate(-2px,3px) scale(1.2); opacity: 0.9; } }
+@keyframes float3 { 0%,100% { transform: translate(0,0) scale(1); opacity: 0.7; } 50% { transform: translate(3px,2px) scale(1.1); opacity: 1; } }
+@keyframes msgIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes radarSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes barGrow { from { width: 0; } }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* 分段渐入（判断卡片四段依次出现） */
+.seg { opacity: 0; animation: fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) forwards; }
+.seg-1 { animation-delay: 0.1s; } .seg-2 { animation-delay: 0.35s; }
+.seg-3 { animation-delay: 0.6s; } .seg-4 { animation-delay: 0.85s; }
+.seg-5 { animation-delay: 1.1s; }
+
+/* ═══════ P1 思想档案 ═══════ */
+.archive-hero {
+  position: relative; border-radius: 20px; overflow: hidden; padding: 48px 40px 44px;
+  background: var(--hero-grad); border: 1px solid var(--border);
+}
+.archive-hero-inner { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; text-align: center; }
+
+/* 头像光环（复用 DefaultAvatar）*/
+.av-wrap { width: 108px; height: 108px; position: relative; margin-bottom: 22px; }
+.av-halo { position: absolute; inset: -7px; border-radius: 50%; background: conic-gradient(from 0deg, var(--accent), var(--accent-strong), color-mix(in srgb, var(--accent) 40%, #818cf8), var(--accent)); opacity: 0.32; animation: avRotate 6s linear infinite; filter: blur(7px); }
+.av-glow { position: absolute; inset: -3px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, var(--accent-glow), transparent 70%); animation: avGlow 3s ease-in-out infinite; }
+.av-body { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(145deg, var(--accent) 0%, var(--accent-strong) 45%, color-mix(in srgb, var(--accent) 50%, #6b7280) 100%); overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.av-body .shimmer { position: absolute; inset: 0; background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.45) 47%, rgba(255,255,255,0.65) 50%, rgba(255,255,255,0.45) 53%, transparent 60%); animation: avShimmer 3.5s ease-in-out infinite; }
+.av-body svg { width: 44%; height: 44%; position: relative; z-index: 2; }
+.av-spark { position: absolute; border-radius: 50%; background: #fff; z-index: 3; }
+.av-spark.s1 { top: 12%; left: 82%; width: 6px; height: 6px; animation: float1 3s ease-in-out infinite; }
+.av-spark.s2 { top: 78%; left: 8%; width: 5px; height: 5px; animation: float2 3s ease-in-out infinite 0.6s; }
+.av-spark.s3 { top: 14%; left: 14%; width: 4px; height: 4px; animation: float3 3s ease-in-out infinite 1.2s; }
+.av-spark.s4 { top: 80%; left: 84%; width: 5px; height: 5px; animation: float1 3s ease-in-out infinite 0.3s; }
+
+.archive-name { font-size: 22px; font-weight: 800; letter-spacing: 0.01em; margin-bottom: 4px; }
+.archive-role { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.archive-claim {
+  font-size: 17px; font-weight: 600; color: var(--accent); line-height: 1.6;
+  padding: 12px 22px; border-radius: 12px; background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  max-width: 520px; margin: 0 auto 30px;
+}
+.archive-claim::before { content: '「'; opacity: 0.5; } .archive-claim::after { content: '」'; opacity: 0.5; }
+
+/* 覆盖度条 */
+.coverage-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; max-width: 760px; margin: 0 auto 30px; width: 100%; }
+.cov-item { text-align: left; }
+.cov-item .cov-name { font-size: 12px; color: var(--muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.cov-item .cov-name b { color: var(--foreground); font-weight: 700; }
+.cov-track { height: 6px; background: color-mix(in srgb, var(--muted-2) 16%, transparent); border-radius: 99px; overflow: hidden; }
+.cov-fill { height: 100%; border-radius: 99px; background: var(--gradient-primary); animation: barGrow 1s cubic-bezier(0.22,1,0.36,1) forwards; transform-origin: left; }
+
+/* 代表性观点 */
+.views-list { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 10px; text-align: left; }
+.view-item {
+  display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 12px;
+  background: var(--surface); border: 1px solid var(--border); cursor: pointer; transition: all 0.18s ease;
+}
+.view-item:hover { border-color: var(--accent); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.view-item .vi-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; margin-top: 6px; }
+.view-item .vi-title { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+.view-item .vi-desc { font-size: 12.5px; color: var(--muted); line-height: 1.6; }
+.view-item .vi-arrow { margin-left: auto; color: var(--muted-2); flex: none; margin-top: 2px; }
+
+/* 底部输入框 */
+.archive-ask { max-width: 680px; margin: 30px auto 0; display: flex; gap: 10px; }
+.archive-ask input {
+  flex: 1; height: 52px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2);
+  padding: 0 18px; font-size: 14px; color: var(--foreground); outline: none; font-family: inherit;
+  transition: all 0.2s ease;
+}
+.archive-ask input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.archive-ask button {
+  height: 52px; padding: 0 26px; border-radius: 14px; border: none; cursor: pointer;
+  background: var(--gradient-primary); font-size: 14px; font-weight: 700; font-family: inherit;
+  transition: all 0.18s ease;
+}
+[data-theme="dark"] .archive-ask button { color: #0a0d12; }
+[data-theme="light"] .archive-ask button { color: #fff; }
+.archive-ask button:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+
+/* ═══════ P2 对话页 ═══════ */
+.chat-wrap { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; min-height: calc(100vh - 130px); }
+.chat-scroll { flex: 1; padding: 20px 4px 8px; display: flex; flex-direction: column; gap: 18px; }
+
+.msg { display: flex; flex-direction: column; gap: 6px; animation: msgIn 0.4s cubic-bezier(0.22,1,0.36,1); }
+.msg-user { align-items: flex-end; }
+.msg-ai { align-items: flex-start; }
+
+.msg-label { font-size: 11px; color: var(--muted-2); font-weight: 600; padding: 0 4px; }
+.msg-ai .msg-label { color: var(--accent); }
+
+.bubble {
+  max-width: 86%; padding: 13px 16px; border-radius: 16px; font-size: 14px; line-height: 1.7;
+  background: var(--surface-2); border: 1px solid var(--border);
+}
+.msg-user .bubble { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 26%, transparent); border-bottom-right-radius: 6px; }
+.msg-ai .bubble { border-bottom-left-radius: 6px; }
+
+/* 判断卡片 */
+.judgment {
+  width: 92%; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.judgment-infer { border-color: color-mix(in srgb, var(--warning) 40%, transparent); }
+.judgment-banner {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 12.5px; font-weight: 600;
+  background: var(--warning-bg); color: var(--warning); border-bottom: 1px solid color-mix(in srgb, var(--warning) 24%, transparent);
+  animation: fadeUp 0.4s ease;
+}
+.judgment-body { padding: 18px 20px; display: flex; flex-direction: column; gap: 13px; }
+.jseg { display: flex; gap: 12px; }
+.jseg .jseg-tag {
+  flex: none; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 7px; height: fit-content;
+  color: var(--accent); background: var(--accent-soft); letter-spacing: 0.04em; margin-top: 1px;
+}
+.jseg .jseg-txt { font-size: 14px; line-height: 1.7; color: var(--foreground); }
+.jseg .jseg-txt b { font-weight: 700; color: var(--accent); }
+
+/* 溯源 */
+.cite-bar { border-top: 1px solid var(--border); padding: 12px 20px; }
+.cite-toggle { font-size: 12.5px; color: var(--accent); cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.cite-toggle:hover { opacity: 0.8; }
+.cite-panel {
+  margin-top: 10px; padding: 13px 15px; border-radius: 10px; background: var(--surface);
+  border: 1px solid var(--border); font-size: 12.5px; line-height: 1.7; color: var(--muted);
+  display: none; animation: fadeUp 0.3s ease;
+}
+.cite-panel.open { display: block; }
+.cite-panel .cite-src { color: var(--accent); font-weight: 600; margin-bottom: 4px; font-size: 11.5px; }
+.cite-panel .cite-quote { border-left: 2px solid var(--accent); padding-left: 10px; }
+
+/* 代笔草稿卡 */
+.draft {
+  width: 92%; border-radius: 16px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.draft-banner {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 12.5px; font-weight: 600;
+  background: var(--accent-soft); color: var(--accent); border-bottom: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  animation: fadeUp 0.4s ease;
+}
+.draft-body { padding: 18px 20px; font-size: 14px; line-height: 1.8; color: var(--foreground); white-space: pre-wrap; }
+
+/* 百科答案卡 */
+.faq {
+  width: 92%; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.faq-head { display: flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: 12px; font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border); }
+.faq-head .faq-ico { color: var(--accent); }
+.faq-body { padding: 16px 20px; font-size: 14px; line-height: 1.8; color: var(--foreground); }
+.faq-time { margin-top: 10px; font-size: 11.5px; color: var(--muted-2); }
+
+/* 反向追问卡 */
+.ask-more {
+  width: 92%; border-radius: 16px; overflow: hidden; border: 1px solid var(--border);
+  background: var(--card); box-shadow: var(--shadow-sm);
+}
+.ask-more-body { padding: 16px 20px; }
+.ask-more-body .am-title { font-size: 13.5px; font-weight: 700; color: var(--foreground); margin-bottom: 8px; }
+.ask-more-body .am-list { display: flex; flex-direction: column; gap: 6px; }
+.ask-more-body .am-item { display: flex; gap: 8px; font-size: 13.5px; line-height: 1.6; color: var(--muted); }
+.ask-more-body .am-item::before { content: '·'; color: var(--accent); font-weight: 700; }
+
+/* 思考动画卡 */
+.thinking { max-width: 88%; padding: 14px 18px; }
+.thinking-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--accent); margin-bottom: 6px; }
+.thinking-bars { display: inline-flex; align-items: flex-end; gap: 3px; height: 16px; }
+.thinking-bars span { width: 3px; border-radius: 4px; background: var(--accent); display: inline-block; animation: bars 1s ease-in-out infinite; }
+.thinking-copy { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.thinking-track { height: 3px; background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 99px; overflow: hidden; }
+.thinking-track span { display: block; width: 46%; height: 100%; border-radius: 99px; background: var(--gradient-primary); animation: slide 1.5s ease-in-out infinite; }
+
+/* 输入框 */
+.chat-composer {
+  position: sticky; bottom: 0; padding: 14px 4px 18px; display: flex; gap: 10px;
+  background: linear-gradient(180deg, transparent 0%, var(--bg) 40%);
+}
+.chat-composer input {
+  flex: 1; height: 54px; border-radius: 16px; border: 1px solid var(--border); background: var(--surface-2);
+  padding: 0 18px; font-size: 14px; color: var(--foreground); outline: none; font-family: inherit; transition: all 0.2s ease;
+}
+.chat-composer input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.chat-composer button {
+  width: 54px; height: 54px; border-radius: 16px; border: none; cursor: pointer; flex: none;
+  background: var(--gradient-primary); font-size: 18px; transition: all 0.18s ease;
+}
+[data-theme="dark"] .chat-composer button { color: #0a0d12; }
+[data-theme="light"] .chat-composer button { color: #fff; }
+.chat-composer button:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.chat-composer .voice-btn { background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+
+/* ═══════ P3 上传页 ═══════ */
+.upload-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; align-items: start; }
+.dropzone {
+  border: 2px dashed var(--border-strong); border-radius: 16px; padding: 48px 24px; text-align: center;
+  cursor: pointer; transition: all 0.22s ease; background: var(--surface);
+}
+.dropzone.drag { border-color: var(--accent); background: var(--accent-soft); }
+.dropzone .dz-ico { font-size: 36px; margin-bottom: 12px; }
+.dropzone .dz-title { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+.dropzone .dz-desc { font-size: 12.5px; color: var(--muted); }
+
+.file-list { margin-top: 16px; display: flex; flex-direction: column; gap: 10px; }
+.file-item {
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 12px;
+  background: var(--card); border: 1px solid var(--border); animation: msgIn 0.35s ease;
+}
+.file-item .fi-ico { font-size: 20px; flex: none; }
+.file-item .fi-name { font-size: 13.5px; font-weight: 600; }
+.file-item .fi-meta { font-size: 11.5px; color: var(--muted); }
+.file-item .fi-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+select.fi-select {
+  font-size: 12px; padding: 5px 9px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--foreground); font-family: inherit; outline: none;
+}
+.fi-progress { width: 120px; height: 5px; background: color-mix(in srgb, var(--muted-2) 16%, transparent); border-radius: 99px; overflow: hidden; }
+.fi-progress span { display: block; height: 100%; background: var(--gradient-primary); border-radius: 99px; animation: barGrow 1.2s ease forwards; }
+.fi-status { font-size: 11px; font-weight: 600; color: var(--success); white-space: nowrap; }
+
+/* 上传右侧规范 */
+.guide-section { margin-bottom: 18px; }
+.guide-section h4 { font-size: 13px; font-weight: 700; margin-bottom: 9px; display: flex; align-items: center; gap: 6px; }
+.guide-list { display: flex; flex-direction: column; gap: 6px; }
+.guide-item { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--muted); line-height: 1.55; }
+.guide-item .g-ok { color: var(--success); flex: none; } .guide-item .g-no { color: var(--danger); flex: none; }
+.guide-item b { color: var(--foreground); font-weight: 600; }
+
+/* ═══════ P4 审核页 ═══════ */
+.review-toolbar { display: flex; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+.review-filter { font-size: 12.5px; font-weight: 600; padding: 7px 16px; border-radius: 99px; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); cursor: pointer; transition: all 0.18s ease; font-family: inherit; }
+.review-filter.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+[data-theme="dark"] .review-filter.on { color: #0a0d12; }
+
+.principle-card {
+  border-radius: 14px; border: 1px solid var(--border); background: var(--card);
+  padding: 20px 22px; margin-bottom: 14px; transition: all 0.25s ease; overflow: hidden;
+}
+.principle-card:hover { box-shadow: var(--shadow-md); }
+.principle-card.done { opacity: 0.6; }
+.principle-card.rejected { opacity: 0.4; }
+.pc-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.pc-index { flex: none; width: 30px; height: 30px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-weight: 800; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.pc-title { font-size: 15px; font-weight: 700; line-height: 1.4; }
+.pc-status { margin-left: auto; flex: none; }
+.pc-fields { display: flex; flex-direction: column; gap: 8px; padding-left: 42px; }
+.pc-field { font-size: 13px; line-height: 1.65; }
+.pc-field .pf-label { font-size: 11px; font-weight: 700; color: var(--muted-2); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 2px; }
+.pc-field .pf-val { color: var(--foreground); }
+.pc-field .pf-quote { border-left: 2px solid var(--accent); padding-left: 10px; color: var(--muted); font-size: 12.5px; }
+.pc-actions { display: flex; gap: 8px; padding-left: 42px; margin-top: 14px; }
+.pc-actions button { font-size: 12.5px; font-weight: 600; padding: 8px 18px; border-radius: 9px; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--foreground); transition: all 0.18s ease; font-family: inherit; }
+.pc-actions .act-ok { background: var(--success); border-color: var(--success); color: #fff; }
+.pc-actions .act-ok:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.pc-actions .act-edit:hover { border-color: var(--accent); color: var(--accent); }
+.pc-actions .act-del:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ═══════ P5 覆盖度页 ═══════ */
+.coverage-overview { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; margin-bottom: 20px; }
+.radar-wrap { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; }
+.radar-dim { display: flex; align-items: center; gap: 8px; width: 100%; }
+.radar-dim .rd-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.radar-dim .rd-name { font-size: 12px; flex: 0 0 60px; }
+.radar-dim .rd-track { flex: 1; height: 5px; background: color-mix(in srgb, var(--muted-2) 16%, transparent); border-radius: 99px; overflow: hidden; }
+.radar-dim .rd-fill { height: 100%; border-radius: 99px; }
+.radar-dim .rd-num { font-size: 11px; flex: 0 0 36px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.gap-list { display: flex; flex-direction: column; gap: 12px; }
+.gap-item { display: flex; gap: 12px; align-items: flex-start; padding: 15px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); cursor: pointer; transition: all 0.18s ease; }
+.gap-item:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.gap-item .gi-ico { font-size: 18px; flex: none; margin-top: 2px; }
+.gap-item .gi-title { font-size: 13.5px; font-weight: 700; margin-bottom: 3px; }
+.gap-item .gi-desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.gap-item .gi-cta { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 600; flex: none; margin-top: 2px; }
+
+/* ═══════ P6 风格校准页 ═══════ */
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+.style-panel { display: flex; flex-direction: column; gap: 22px; }
+.style-row { display: flex; flex-direction: column; gap: 10px; }
+.style-row .sr-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+.style-row .sr-head b { font-weight: 700; }
+.style-row .sr-head span { font-size: 12px; color: var(--muted); }
+.slider { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 99px; background: color-mix(in srgb, var(--muted-2) 20%, transparent); outline: none; cursor: pointer; }
+.slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid var(--bg); box-shadow: var(--shadow-md); transition: transform 0.15s ease; }
+.slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.style-claim input { width: 100%; height: 48px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 15px; font-size: 14px; color: var(--foreground); outline: none; font-family: inherit; transition: all 0.2s ease; }
+.style-claim input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+
+.preview-panel { position: sticky; top: 80px; }
+.preview-chat { display: flex; flex-direction: column; gap: 12px; }
+.preview-label { font-size: 11px; color: var(--muted-2); font-weight: 600; }
+.preview-bubble { padding: 13px 16px; border-radius: 14px; font-size: 13.5px; line-height: 1.7; }
+.preview-user { background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent); align-self: flex-end; border-bottom-right-radius: 6px; }
+.preview-ai { background: var(--surface-2); border: 1px solid var(--border); align-self: flex-start; border-bottom-left-radius: 6px; }
+.preview-ai em { color: var(--accent); font-style: normal; font-weight: 600; }
+
+/* 回填清单 P9 + 补充技能表单 */
+.field-group { display: flex; flex-direction: column; gap: 14px; }
+.f-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.f-label .req { color: var(--danger); margin-left: 2px; }
+.f-input { width: 100%; height: 46px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 14px; font-size: 14px; color: var(--foreground); outline: none; font-family: inherit; transition: all 0.2s ease; }
+.f-input:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+.f-textarea { width: 100%; min-height: 72px; border-radius: 11px; border: 1px solid var(--border); background: var(--surface-2); padding: 12px 14px; font-size: 14px; color: var(--foreground); outline: none; font-family: inherit; resize: none; line-height: 1.6; transition: all 0.2s ease; }
+.f-textarea:focus { border-color: var(--accent); box-shadow: var(--shadow-glow); }
+
+.chk-list { display: flex; flex-direction: column; gap: 8px; }
+.chk-item { display: flex; align-items: flex-start; gap: 10px; padding: 11px 13px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; transition: all 0.15s ease; }
+.chk-item:hover { border-color: var(--accent); }
+.chk-item .chk-box { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border-strong); flex: none; margin-top: 1px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; transition: all 0.15s ease; }
+[data-theme="dark"] .chk-item .chk-box.on { background: var(--accent); border-color: var(--accent); color: #0a0d12; }
+[data-theme="light"] .chk-item .chk-box.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chk-item .chk-name { font-size: 13.5px; font-weight: 600; }
+.chk-item .chk-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+.add-switch { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--border); border-radius: 11px; padding: 3px; margin-bottom: 16px; }
+.add-switch button { flex: 1; padding: 9px 0; border: none; border-radius: 8px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; transition: all 0.18s ease; }
+.add-switch button.on { background: var(--accent); color: #fff; font-weight: 700; }
+[data-theme="dark"] .add-switch button.on { color: #0a0d12; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 左侧导航 -->
+  <aside class="sidebar">
+    <div class="sidebar-logo"><span class="dot"></span>创始人分身</div>
+    <div class="sidebar-sub">原型导航 · 6 页</div>
+    <nav class="sidebar-nav" id="nav"></nav>
+    <div class="sidebar-theme">
+      <div class="theme-toggle" id="themeToggle">
+        <button class="theme-btn on" data-theme="dark">深色权威</button>
+        <button class="theme-btn" data-theme="light">明亮商务</button>
+      </div>
+      <div class="theme-hint">切换对比两套视觉，供老板拍板</div>
+    </div>
+  </aside>
+
+  <!-- 主区域 -->
+  <main class="main" id="main"></main>
+</div>
+
+<script>
+/* ═══════════════ 视图配置 ═══════════════ */
+const VIEWS = [
+  { id: 'p1', label: '思想档案', ico: '◈', group: '员工端' },
+  { id: 'p2', label: '对话',      ico: '▤', group: '员工端' },
+  { id: 'p9', label: '回填清单',  ico: '✎', group: '老板端' },
+  { id: 'p7', label: '我的数据',  ico: '▦', group: '老板端' },
+  { id: 'p8', label: '补充技能',  ico: '＋', group: '老板端' },
+  { id: 'p3', label: '素材上传',  ico: '↑', group: '老板端' },
+  { id: 'p4', label: '原则审核',  ico: '✓', badge: '3', group: '老板端' },
+  { id: 'p5', label: '领域覆盖',  ico: '◎', group: '老板端' },
+  { id: 'p6', label: '风格校准',  ico: '◐', group: '老板端' },
+];
+
+const FOUNDER = { name: '王建国', role: 'CEO · 明远科技' };
+
+/* ═══════════════ 假数据 ═══════════════ */
+const DOMAINS = [
+  { name: '战略', pct: 78, color: 'var(--accent)' },
+  { name: '组织', pct: 55, color: 'var(--accent)' },
+  { name: '产品', pct: 32, color: 'var(--accent)' },
+  { name: '资本', pct: 18, color: 'var(--accent)' },
+  { name: '文化', pct: 61, color: 'var(--accent)' },
+];
+
+const VIEW_POINTS = [
+  { title: '关于多元化扩张的判断', desc: '「企业多元化只有两种赢法：要么技术同源，要么渠道复用。两头都不沾的多元化，本质是投机。」' },
+  { title: '关于组织效率的思考', desc: '「组织的问题从来不是人不够，而是决策权离信息太远。我要做的就是把决策权推到离客户最近的人手上。」' },
+  { title: '关于资本效率的原则', desc: '「钱是最贵的资源，因为它会掩盖错误的商业模式。我宁可慢一点，也要把单位经济模型先打正。」' },
+];
+
+const PRINCIPLES = [
+  {
+    title: '市场进入前，先看结构性优势',
+    fields: [
+      { label: '原则陈述', val: '判断该不该进一个市场，先看天花板够不够大，再看我们有没有别人短期追不上的结构性优势。两者缺一，就只是红海里的又一条船。' },
+      { label: '原文依据', quote: '「2024 战略会」第 3 节第 2 段：与其在一个 500 亿的市场里当第 7 名，不如在一个 50 亿的市场里当第一名，因为后者有定价权。' },
+      { label: '适用场景', val: '新市场、新品类、新地域扩张的决策节点。' },
+      { label: '边界与反例', val: '资源过剩的防御性布局、或为获取关键人才/技术的并购，不适用此原则。' },
+    ],
+    status: 'pending',
+  },
+  {
+    title: '判断组织的核心，是决策权离信息的距离',
+    fields: [
+      { label: '原则陈述', val: '组织效率的根因不是流程长短，而是决策权与信息之间的距离。距离越远，组织越慢。' },
+      { label: '原文依据', quote: '「2023 全员信」第 2 段：我们这几年最大的问题，是越来越多的人在替离客户最近的人做决定。' },
+      { label: '适用场景', val: '组织架构调整、授权机制设计、汇报线规划。' },
+      { label: '边界与反例', val: '涉及系统性风险（资金安全、合规）的决策，不适用授权原则。' },
+    ],
+    status: 'pending',
+  },
+  {
+    title: '资本要服务于商业模式的验证，而非掩盖错误',
+    fields: [
+      { label: '原则陈述', val: '融资不是目的，是手段。如果钱掩盖了一个不成立的单位经济模型，钱越多，死得越快。' },
+      { label: '原文依据', quote: '「2024 董事会纪要」第 5 节：这一轮我们要融，但每一分钱都要花在能验证模型的地方，而不是买增长。' },
+      { label: '适用场景', val: '融资决策、投入产出评估、增长与盈利的权衡。' },
+      { label: '边界与反例', val: '战略卡位的窗口期（如并购头部标的）可短期牺牲模型换取时间。' },
+    ],
+    status: 'pending',
+  },
+];
+
+const GAPS = [
+  { ico: '💰', title: '资本 / 融资', desc: '仅有 1 条已确认原则，缺乏战略级素材。建议补充融资决策记录、董事会融资讨论纪要。' },
+  { ico: '🧭', title: '产品方法论', desc: '产品领域覆盖度仅 32%，缺产品取舍的判断案例。建议补充产品复盘、路线图决策记录。' },
+  { ico: '🌏', title: '出海 / 国际化', desc: '暂无明确立场。若公司有出海规划，建议补充相关决策或表态。' },
+];
+
+/* ═══════════════ 视图模板 ═══════════════ */
+const TPL = {};
+
+/* ── P1 思想档案 ── */
+TPL.p1 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>思想档案</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-ghost" onclick="go('p2')">进入对话 →</button>
+</div>
+<div class="content">
+  <div class="archive-hero seg">
+    <div class="archive-hero-inner">
+      <div class="av-wrap">
+        <div class="av-halo"></div><div class="av-glow"></div>
+        <div class="av-body">
+          <div class="shimmer"></div>
+          <svg viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="7.5" r="3.2" fill="rgba(255,255,255,0.92)"/>
+            <path d="M4.5 21c0-4.5 3.4-7.5 7.5-7.5s7.5 3 7.5 7.5" fill="rgba(255,255,255,0.92)"/>
+          </svg>
+        </div>
+        <div class="av-spark s1"></div><div class="av-spark s2"></div>
+        <div class="av-spark s3"></div><div class="av-spark s4"></div>
+      </div>
+      <div class="archive-name">${FOUNDER.name}</div>
+      <div class="archive-role">${FOUNDER.role}</div>
+      <div class="archive-claim">长期主义，拒绝短期套利</div>
+
+      <div class="coverage-grid">
+        ${DOMAINS.map((d, i) => `
+          <div class="cov-item">
+            <div class="cov-name"><b>${d.name}</b><span>${d.pct}%</span></div>
+            <div class="cov-track"><div class="cov-fill" style="width:${d.pct}%;animation-delay:${i*0.1}s"></div></div>
+          </div>`).join('')}
+      </div>
+
+      <div class="views-list">
+        ${VIEW_POINTS.map(v => `
+          <div class="view-item" onclick="go('p2')">
+            <div class="vi-dot"></div>
+            <div>
+              <div class="vi-title">${v.title}</div>
+              <div class="vi-desc">${v.desc}</div>
+            </div>
+            <div class="vi-arrow">→</div>
+          </div>`).join('')}
+      </div>
+
+      <div class="archive-ask">
+        <input placeholder="想请教老板？输入你的问题，例如：这个新市场该不该进…" onkeydown="if(event.key==='Enter')ask()">
+        <button onclick="ask()">发送</button>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+/* ── P2 对话页 ── */
+TPL.p2 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>对话</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-ghost" onclick="resetChat()">重置演示</button>
+</div>
+<div class="content chat-wrap">
+  <div class="chat-scroll" id="chatScroll"></div>
+  <div class="chat-composer">
+    <button class="voice-btn" title="语音">🎙</button>
+    <input placeholder="输入你的问题…（试试：路演稿 / 报销流程 / 采购怎么协调 / 薪酬 / 出海）" onkeydown="if(event.key==='Enter')sendChat()">
+    <button onclick="sendChat()">➤</button>
+  </div>
+</div>`;
+
+/* ── P3 素材上传 ── */
+TPL.p3 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>素材上传</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-accent" onclick="startUpload()">开始上传</button>
+</div>
+<div class="content upload-grid">
+  <div>
+    <div class="dropzone" id="dropzone" onclick="addFile()" ondrop="dropFile(event)" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')">
+      <div class="dz-ico">📄</div>
+      <div class="dz-title">拖拽文件到这里，或点击选择</div>
+      <div class="dz-desc">支持 .pdf .docx .txt .md .mp3 .wav · 单个 ≤100MB</div>
+    </div>
+    <div class="file-list" id="fileList"></div>
+    <div class="card" style="margin-top:16px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px">🔒 敏感提示</div>
+      <div style="font-size:12.5px;color:var(--muted);line-height:1.6">若素材含薪酬、具体人事、未公开交易、法律风险等敏感内容，将自动标记「仅限高管可见」。不阻断上传，不影响萃取。</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="eyebrow">上传前必看</div>
+    <div class="guide-section">
+      <h4><span style="color:var(--success)">✓</span> 我们接收什么</h4>
+      <div class="guide-list">
+        <div class="guide-item"><span class="g-ok">✓</span><span><b>战略规划 / 决策记录</b> — 判断框架的核心来源</span></div>
+        <div class="guide-item"><span class="g-ok">✓</span><span><b>全员信 / 内部讲话</b> — 价值观与红线</span></div>
+        <div class="guide-item"><span class="g-ok">✓</span><span><b>董事会 / 高管会纪要</b> — 重大决策的理由</span></div>
+        <div class="guide-item"><span class="g-ok">✓</span><span><b>对外演讲 / 访谈实录</b> — 思维方式 + 风格</span></div>
+      </div>
+    </div>
+    <div class="guide-section">
+      <h4><span style="color:var(--danger)">✗</span> 不接收</h4>
+      <div class="guide-list">
+        <div class="guide-item"><span class="g-no">✗</span><span>纯信息罗列（日程、通知、流程文件）</span></div>
+        <div class="guide-item"><span class="g-no">✗</span><span>他人转述的老板观点（「我听老板说…」）</span></div>
+        <div class="guide-item"><span class="g-no">✗</span><span>未经老板确认的会议纪要</span></div>
+        <div class="guide-item"><span class="g-no">✗</span><span>纯英文素材、AI 生成内容</span></div>
+      </div>
+    </div>
+    <div class="guide-section">
+      <h4>⚙️ 硬性要求</h4>
+      <div class="guide-list">
+        <div class="guide-item"><span class="g-ok">✓</span><span>有明确判断立场（非纯描述）</span></div>
+        <div class="guide-item"><span class="g-ok">✓</span><span>有判断依据（因为 A 所以 B）</span></div>
+        <div class="guide-item"><span class="g-ok">✓</span><span>有效内容 ≥100 字符 · 中文 ≥70%</span></div>
+      </div>
+    </div>
+  </div>
+</div>`;
+
+/* ── P4 原则审核 ── */
+TPL.p4 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>候选原则审核</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-accent" onclick="go('p5')">查看覆盖度 →</button>
+</div>
+<div class="content">
+  <div class="review-toolbar">
+    <button class="review-filter on" data-f="all" onclick="setReviewFilter('all',this)">全部</button>
+    <button class="review-filter" data-f="pending" onclick="setReviewFilter('pending',this)">待审核 (3)</button>
+    <button class="review-filter" data-f="done" onclick="setReviewFilter('done',this)">已确认</button>
+  </div>
+  <div id="principleList"></div>
+</div>`;
+
+/* ── P5 覆盖度 ── */
+TPL.p5 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>领域覆盖度</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-ghost" onclick="go('p3')">＋ 补充素材</button>
+</div>
+<div class="content">
+  <div class="coverage-overview">
+    <div class="card">
+      <div class="eyebrow">知识覆盖度</div>
+      <div class="sec-title">老板的思考领域地图</div>
+      <div class="sec-desc" style="margin-bottom:18px">已覆盖领域 5 个 · 原则 12 条 · 立场 3 项</div>
+      <div class="radar-wrap" id="radarWrap"></div>
+    </div>
+    <div>
+      <div class="eyebrow">建议补充</div>
+      <div class="sec-title" style="margin-bottom:14px">以下领域素材不足</div>
+      <div class="gap-list">
+        ${GAPS.map(g => `
+          <div class="gap-item" onclick="go('p3')">
+            <div class="gi-ico">${g.ico}</div>
+            <div>
+              <div class="gi-title">${g.title}</div>
+              <div class="gi-desc">${g.desc}</div>
+            </div>
+            <div class="gi-cta">补充 →</div>
+          </div>`).join('')}
+      </div>
+    </div>
+  </div>
+</div>`;
+
+/* ── P6 风格校准 ── */
+TPL.p6 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>风格校准</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-accent" onclick="saveStyle()">保存配置</button>
+</div>
+<div class="content style-grid">
+  <div class="card style-panel">
+    <div>
+      <div class="eyebrow">表达风格</div>
+      <div class="sec-title">调节分身的表达方式</div>
+      <div class="sec-desc" style="margin-bottom:8px">不追求 100% 模仿，只求「像」。拖动滑杆实时预览。</div>
+    </div>
+    <div class="style-row">
+      <div class="sr-head"><b>正式度</b><span id="vFormality">4 / 5 · 偏书面</span></div>
+      <input type="range" class="slider" min="1" max="5" value="4" oninput="updateStyle(this)">
+    </div>
+    <div class="style-row">
+      <div class="sr-head"><b>简洁度</b><span id="vConciseness">2 / 5 · 偏精炼</span></div>
+      <input type="range" class="slider" min="1" max="5" value="2" oninput="updateStyle(this)">
+    </div>
+    <div class="style-row">
+      <div class="sr-head"><b>反问倾向</b><span id="vCounter">3 / 5 · 平衡</span></div>
+      <input type="range" class="slider" min="1" max="5" value="3" oninput="updateStyle(this)">
+    </div>
+    <div class="style-claim">
+      <div class="sr-head" style="margin-bottom:8px"><b>一句话核心主张</b><span>必填</span></div>
+      <input value="长期主义，拒绝短期套利">
+    </div>
+  </div>
+  <div class="card preview-panel">
+    <div class="eyebrow">试聊预览</div>
+    <div class="sec-title" style="font-size:17px;margin-bottom:14px">实时预览分身风格</div>
+    <div class="preview-chat">
+      <div class="preview-label">你</div>
+      <div class="preview-bubble preview-user">我们该不该接受这笔战投？</div>
+      <div class="preview-label">${FOUNDER.name} · 分身</div>
+      <div class="preview-bubble preview-ai" id="previewReply"></div>
+    </div>
+  </div>
+</div>`;
+
+/* ── P7 我的数据 ── */
+TPL.p7 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>我的数据</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-accent" onclick="go('p8')">＋ 补充技能</button>
+</div>
+<div class="content">
+  <div class="card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div style="width:52px;height:52px;border-radius:50%;background:linear-gradient(145deg,var(--accent),var(--accent-strong));flex:none;position:relative;overflow:hidden">
+        <div style="position:absolute;inset:0;background:linear-gradient(105deg,transparent 40%,rgba(255,255,255,0.45) 47%,rgba(255,255,255,0.65) 50%,rgba(255,255,255,0.45) 53%,transparent 60%);animation:avShimmer 3.5s ease-in-out infinite"></div>
+      </div>
+      <div>
+        <div style="font-size:18px;font-weight:800">${FOUNDER.name} · 我的分身</div>
+        <div style="font-size:13px;color:var(--muted)">发布于 2026-07-20 · 内部高管可见</div>
+      </div>
+      <span class="pill pill-accent" style="margin-left:auto">运行中</span>
+    </div>
+  </div>
+
+  <div class="grid3" style="margin-bottom:20px">
+    <div class="card" style="text-align:center;padding:28px 16px">
+      <div style="font-size:34px;font-weight:800;color:var(--accent);letter-spacing:-0.02em">328</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">员工提问（近30天）</div>
+    </div>
+    <div class="card" style="text-align:center;padding:28px 16px">
+      <div style="font-size:34px;font-weight:800;letter-spacing:-0.02em">92%</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">满意度</div>
+    </div>
+    <div class="card" style="text-align:center;padding:28px 16px">
+      <div style="font-size:34px;font-weight:800;letter-spacing:-0.02em">15</div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">已确认原则</div>
+    </div>
+    <div class="card" style="text-align:center;padding:28px 16px">
+      <div style="font-size:34px;font-weight:800;letter-spacing:-0.02em">46<span style="font-size:15px;color:var(--muted);font-weight:600"> 小时</span></div>
+      <div style="font-size:13px;color:var(--muted);margin-top:4px">估算节省的老板时间</div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-bottom:20px">
+    <div class="card">
+      <div class="eyebrow">待办</div>
+      <div class="card-sm" style="cursor:pointer;margin-bottom:10px" onclick="go('p4')">
+        <div style="font-weight:700;font-size:14px">3 条候选原则待审核</div>
+        <div style="font-size:12px;color:var(--muted)">AI 从「董事会纪要-Q2」中提取</div>
+      </div>
+      <div class="card-sm" style="cursor:pointer" onclick="go('p5')">
+        <div style="font-weight:700;font-size:14px">资本领域覆盖度仅 18%</div>
+        <div style="font-size:12px;color:var(--muted)">建议补充融资决策类素材</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="eyebrow">效果 · 分领域提问数</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:10px"><span style="flex:0 0 70px;font-size:12px;color:var(--muted)">战略决策</span><div style="flex:1;height:6px;background:color-mix(in srgb,var(--muted-2) 16%,transparent);border-radius:99px;overflow:hidden"><div style="height:100%;background:var(--gradient-primary);width:78%;animation:barGrow 1s ease forwards"></div></div><span style="flex:0 0 40px;text-align:right;font-size:12px;font-weight:700">256</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span style="flex:0 0 70px;font-size:12px;color:var(--muted)">组织管理</span><div style="flex:1;height:6px;background:color-mix(in srgb,var(--muted-2) 16%,transparent);border-radius:99px;overflow:hidden"><div style="height:100%;background:var(--gradient-primary);width:55%;animation:barGrow 1s 0.1s ease forwards"></div></div><span style="flex:0 0 40px;text-align:right;font-size:12px;font-weight:700">142</span></div>
+        <div style="display:flex;align-items:center;gap:10px"><span style="flex:0 0 70px;font-size:12px;color:var(--muted)">资本效率</span><div style="flex:1;height:6px;background:color-mix(in srgb,var(--muted-2) 16%,transparent);border-radius:99px;overflow:hidden"><div style="height:100%;background:var(--gradient-primary);width:18%;animation:barGrow 1s 0.2s ease forwards"></div></div><span style="flex:0 0 40px;text-align:right;font-size:12px;font-weight:700">36</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">知识缺口</div>
+    <div class="grid3">
+      <div class="card-sm" style="cursor:pointer" onclick="go('p8')"><div style="font-weight:700;font-size:14px">💰 资本 / 融资</div><div style="font-size:12px;color:var(--muted)">仅 1 条原则，缺战略级素材</div></div>
+      <div class="card-sm" style="cursor:pointer" onclick="go('p8')"><div style="font-weight:700;font-size:14px">🧭 产品方法论</div><div style="font-size:12px;color:var(--muted)">覆盖度 32%，缺产品取舍案例</div></div>
+      <div class="card-sm" style="cursor:pointer" onclick="go('p8')"><div style="font-weight:700;font-size:14px">🌏 出海 / 国际化</div><div style="font-size:12px;color:var(--muted)">暂无明确立场</div></div>
+    </div>
+  </div>
+</div>`;
+
+/* ── P8 补充技能 ── */
+TPL.p8 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>补充技能</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-ghost" onclick="go('p7')">← 我的数据</button>
+</div>
+<div class="content" style="max-width:760px">
+  <div class="eyebrow">补充技能</div>
+  <div class="sec-title" style="margin-bottom:6px">把老板的判断原则录入分身</div>
+  <div class="sec-desc" style="margin-bottom:18px">两种方式任选：一句话让 AI 整理，或手动填结构化表单。</div>
+
+  <div class="add-switch" id="addSwitch">
+    <button class="on" data-mode="one" onclick="setAddMode('one')">一句话 · AI 整理</button>
+    <button data-mode="form" onclick="setAddMode('form')">结构化表单</button>
+  </div>
+
+  <div id="addOneLiner">
+    <textarea style="width:100%;min-height:90px;border-radius:12px;border:1px solid var(--border);background:var(--surface-2);padding:13px 15px;font-size:14px;color:var(--foreground);outline:none;font-family:inherit;resize:none;line-height:1.6" placeholder="说一句你的判断，例如：宁可慢一点，也要把单位经济模型打正…"></textarea>
+    <div style="font-size:12px;color:var(--muted-2);margin:8px 0 14px">AI 会自动把它整理成完整原则：原则陈述 + 适用场景 + 边界反例，你确认后入原则库。</div>
+    <button class="btn btn-accent" onclick="aiOrganize()">✨ AI 整理</button>
+    <div id="aiResult" style="margin-top:14px"></div>
+  </div>
+
+  <div id="addForm" style="display:none">
+    <div style="margin-bottom:14px"><label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">原则陈述 <span style="color:var(--danger)">*</span></label><textarea style="width:100%;min-height:70px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);padding:11px 13px;font-size:14px;color:var(--foreground);outline:none;font-family:inherit;resize:none;line-height:1.6" placeholder="一句话说清这条判断原则…"></textarea></div>
+    <div style="margin-bottom:14px"><label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">适用场景</label><textarea style="width:100%;min-height:70px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);padding:11px 13px;font-size:14px;color:var(--foreground);outline:none;font-family:inherit;resize:none;line-height:1.6" placeholder="什么情况下启用这条原则…"></textarea></div>
+    <div style="margin-bottom:14px"><label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">边界与反例</label><textarea style="width:100%;min-height:70px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);padding:11px 13px;font-size:14px;color:var(--foreground);outline:none;font-family:inherit;resize:none;line-height:1.6" placeholder="什么情况下不适用…"></textarea></div>
+    <div style="margin-bottom:16px"><label style="display:block;font-size:13px;font-weight:700;margin-bottom:6px">来源依据（选填）</label><input style="width:100%;height:44px;border-radius:11px;border:1px solid var(--border);background:var(--surface-2);padding:0 13px;font-size:14px;color:var(--foreground);outline:none;font-family:inherit" placeholder="来自哪份素材 / 哪次会议（便于溯源）"></div>
+    <button class="btn btn-accent" onclick="alert('已提交，进入审核后入原则库（原型演示）')">提交原则</button>
+  </div>
+</div>`;
+
+/* ── P9 回填清单 ── */
+TPL.p9 = () => `
+<div class="viewbar">
+  <span class="crumb">创始人分身 / <b>回填清单</b></span>
+  <span class="spacer"></span>
+  <button class="btn btn-accent" onclick="alert('已提交回填清单（原型演示）')">提交清单</button>
+</div>
+<div class="content" style="max-width:760px">
+  <div class="eyebrow">回填清单</div>
+  <div class="sec-title" style="margin-bottom:6px">照填空就行，不用写长文</div>
+  <div class="sec-desc" style="margin-bottom:20px">填完发给我们，立刻出技术实现计划。约 10 分钟。</div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="eyebrow">① 人设锚点</div>
+    <div class="field-group">
+      <div><label class="f-label">管理风格关键词（3~5 个）</label><input class="f-input" placeholder="例：数据驱动、先问背景再拍板、结果导向"></div>
+      <div><label class="f-label">口头禅 / 常用表达</label><input class="f-input" placeholder="例：「这个事我得看三个数据」「先对齐目标」"></div>
+      <div><label class="f-label">决策红线（绝对不碰的事）</label><input class="f-input" placeholder="例：低于成本价的单、不合规的报销"></div>
+      <div><label class="f-label">最看重的 3 个决策要素</label><input class="f-input" placeholder="例：数据真实性、投入产出比、合规底线"></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="eyebrow">② 可开放资料清单</div>
+    <div class="chk-list" id="materialChecklist"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="eyebrow">③ 绝对禁区清单</div>
+    <div class="field-group">
+      <div><label class="f-label">涉密信息（系统做脱敏）</label><input class="f-input" placeholder="例：涉密配方、在研项目细节、未公开融资条款"></div>
+      <div><label class="f-label">其他禁区</label><input class="f-input" placeholder="例：具体员工薪酬、敏感人事变动"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="eyebrow">④ 高频问题示例（每类 2~3 条）</div>
+    <div class="field-group">
+      <div><label class="f-label">判断类（跨部门 / 业务取舍）</label><textarea class="f-textarea" placeholder="例：采购和供应链怎么协调？这个新市场要不要进？"></textarea></div>
+      <div><label class="f-label">代笔类（路演 / 融资 / 文章）</label><textarea class="f-textarea" placeholder="例：帮我写个路演口径？融资叙事怎么讲？"></textarea></div>
+      <div><label class="f-label">百科类（制度 / 流程 / 参数）</label><textarea class="f-textarea" placeholder="例：报销流程是什么？合伙人怎么分工？"></textarea></div>
+    </div>
+  </div>
+</div>`;
+
+/* ═══════════════ 交互状态 ═══════════════ */
+let currentView = 'p1';
+let reviewFilter = 'all';
+let principleStates = PRINCIPLES.map(() => 'pending'); // pending | done | rejected
+let chatMessages = [];
+let chatStarted = false;
+let uploadedFiles = [];
+let uploadStarted = false;
+
+/* ═══════════════ 导航渲染 ═══════════════ */
+function renderNav() {
+  const nav = document.getElementById('nav');
+  let html = '';
+  let lastGroup = '';
+  VIEWS.forEach(v => {
+    if (v.group !== lastGroup) {
+      html += `<div class="sidebar-sub" style="margin-top:${lastGroup ? '8px' : '0'}">${v.group}</div>`;
+      lastGroup = v.group;
+    }
+    html += `
+    <div class="nav-item ${currentView === v.id ? 'on' : ''}" onclick="go('${v.id}')">
+      <span class="ico">${v.ico}</span>${v.label}
+      ${v.badge ? `<span class="badge">${v.badge}</span>` : ''}
+    </div>`;
+  });
+  nav.innerHTML = html;
+}
+
+function go(id) {
+  currentView = id;
+  renderNav();
+  document.getElementById('main').innerHTML = TPL[id]();
+  // 视图挂载后初始化
+  if (id === 'p2') initChat();
+  if (id === 'p3') initUpload();
+  if (id === 'p4') initReview();
+  if (id === 'p5') initRadar();
+  if (id === 'p6') updateStyle();
+  if (id === 'p8') setAddMode('one');
+  if (id === 'p9') initChecklist();
+}
+
+/* ── P9 资料清单 ── */
+const MATERIAL_TYPES = [
+  { name: '战略规划 / 年度战略', desc: '判断框架的核心来源' },
+  { name: '全员信 / 内部讲话', desc: '价值观与红线' },
+  { name: '董事会 / 高管会纪要', desc: '重大决策的理由' },
+  { name: '对外演讲 / 访谈实录', desc: '思维方式 + 表达风格' },
+  { name: '决策复盘笔记', desc: '某次重大决策的全过程记录' },
+  { name: '公司制度文档', desc: '报销、人事、合伙人分工（对应百科）' },
+  { name: '其他判断逻辑材料', desc: '任何能体现判断逻辑的材料' },
+];
+function initChecklist() {
+  const el = document.getElementById('materialChecklist');
+  if (!el) return;
+  el.innerHTML = MATERIAL_TYPES.map((m, i) => `
+    <div class="chk-item" onclick="toggleChk(this, ${i})">
+      <div class="chk-box ${i < 4 ? 'on' : ''}">${i < 4 ? '✓' : ''}</div>
+      <div><div class="chk-name">${m.name}</div><div class="chk-desc">${m.desc}</div></div>
+    </div>`).join('');
+}
+function toggleChk(item) {
+  const box = item.querySelector('.chk-box');
+  const on = box.classList.toggle('on');
+  box.textContent = on ? '✓' : '';
+}
+
+/* ═══════════════ 主题切换 ═══════════════ */
+function initTheme() {
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.documentElement.setAttribute('data-theme', btn.dataset.theme);
+      document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('on', b === btn));
+    });
+  });
+}
+
+/* ═══════════════ P1 交互 ═══════════════ */
+function ask() {
+  go('p2');
+  // 预置问题
+  const input = document.querySelector('.chat-composer input');
+  if (input) { input.value = '这个新市场该不该进？'; sendChat(); }
+}
+
+/* ═══════════════ P2 对话交互 ═══════════════ */
+function initChat() {
+  if (chatStarted) { renderChat(); return; }
+  chatStarted = true;
+  // 首条欢迎消息
+  chatMessages = [{ role: 'ai', type: 'intro', text: `你好，我是 ${FOUNDER.name} 的分身。员工在做决策前，可以先和我聊聊，我会用老板的判断逻辑帮你把问题想清楚。` }];
+  renderChat();
+}
+
+function renderChat() {
+  const sc = document.getElementById('chatScroll');
+  if (!sc) return;
+  sc.innerHTML = chatMessages.map(m => {
+    if (m.role === 'user') return `<div class="msg msg-user"><div class="msg-label">你</div><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'intro') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'thinking') return `
+      <div class="msg msg-ai">
+        <div class="bubble thinking">
+          <div class="thinking-row">${FOUNDER.name}正在思考
+            <span class="thinking-bars"><span style="height:7px"></span><span style="height:13px;animation-delay:.15s"></span><span style="height:16px;animation-delay:.3s"></span><span style="height:10px;animation-delay:.45s"></span></span>
+          </div>
+          <div class="thinking-copy">正在检索老板的判断原则，组织表达…</div>
+          <div class="thinking-track"><span></span></div>
+        </div>
+      </div>`;
+    if (m.type === 'judgment') return `
+      <div class="msg msg-ai">
+        <div class="msg-label">${FOUNDER.name} · 分身</div>
+        <div class="judgment ${m.infer ? 'judgment-infer' : ''}">
+          ${m.infer ? `<div class="judgment-banner">⚠️ 此为推断，非老板原话</div>` : ''}
+          <div class="judgment-body">
+            <div class="jseg seg"><div class="jseg-tag">原则</div><div class="jseg-txt">${m.principle}</div></div>
+            <div class="jseg seg seg-1"><div class="jseg-tag">分析</div><div class="jseg-txt">${m.analysis}</div></div>
+            <div class="jseg seg seg-2"><div class="jseg-tag">结论</div><div class="jseg-txt">${m.conclusion}</div></div>
+            <div class="jseg seg seg-3"><div class="jseg-tag">边界</div><div class="jseg-txt">${m.boundary}</div></div>
+          </div>
+          <div class="cite-bar">
+            <span class="cite-toggle" onclick="toggleCite(this)">📎 [1] ${m.source}  ▾</span>
+            <div class="cite-panel">
+              <div class="cite-src">来源：${m.source}</div>
+              <div class="cite-quote">${m.quote}</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    if (m.type === 'draft') return `
+      <div class="msg msg-ai">
+        <div class="msg-label">${FOUNDER.name} · 分身</div>
+        <div class="draft">
+          <div class="draft-banner">✍️ AI 草稿 · 需本人润色后对外</div>
+          <div class="draft-body">${m.text}</div>
+        </div>
+      </div>`;
+    if (m.type === 'faq') return `
+      <div class="msg msg-ai">
+        <div class="msg-label">${FOUNDER.name} · 分身</div>
+        <div class="faq">
+          <div class="faq-head"><span class="faq-ico">📋</span> 公司百科 · 标准答案</div>
+          <div class="faq-body">${m.text}</div>
+          ${m.time ? `<div class="faq-time">${m.time}</div>` : ''}
+          <div class="cite-bar">
+            <span class="cite-toggle" onclick="toggleCite(this)">📎 ${m.source}  ▾</span>
+            <div class="cite-panel"><div class="cite-src">来源：${m.source}</div><div class="cite-quote">${m.quote || ''}</div></div>
+          </div>
+        </div>
+      </div>`;
+    if (m.type === 'ask-more') return `
+      <div class="msg msg-ai">
+        <div class="msg-label">${FOUNDER.name} · 分身</div>
+        <div class="ask-more">
+          <div class="ask-more-body">
+            <div class="am-title">要判断这件事，我还需要先知道几件事（老板的习惯是拿全信息再拍板）：</div>
+            <div class="am-list">${m.items.map(i => `<div class="am-item">${i}</div>`).join('')}</div>
+          </div>
+        </div>
+      </div>`;
+    if (m.type === 'sensitive') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    if (m.type === 'empty') return `<div class="msg msg-ai"><div class="msg-label">${FOUNDER.name} · 分身</div><div class="bubble">${m.text}</div></div>`;
+    return '';
+  }).join('');
+  sc.scrollTop = sc.scrollHeight;
+}
+
+function toggleCite(el) {
+  el.nextElementSibling.classList.toggle('open');
+}
+
+function sendChat() {
+  const input = document.querySelector('.chat-composer input');
+  const q = (input.value || '').trim();
+  if (!q) return;
+  input.value = '';
+  chatMessages.push({ role: 'user', text: q });
+  renderChat();
+  // 思考动画
+  chatMessages.push({ role: 'ai', type: 'thinking' });
+  renderChat();
+  // 根据问题类型生成回复
+  setTimeout(() => {
+    chatMessages.pop(); // 移除 thinking
+    const reply = buildReply(q);
+    chatMessages.push(...reply);
+    renderChat();
+  }, 1600);
+}
+
+function buildReply(q) {
+  // 敏感拦截（最高优先级）
+  if (/薪酬|工资|薪资|谁离职|裁员|并购|收购|法律|诉讼/.test(q)) {
+    return [{ role: 'ai', type: 'sensitive', text: '这个问题涉及敏感信息，我建议你直接问老板本人。' }];
+  }
+  // 代笔类（帮我写/起草/生成 + 路演/融资/文章）
+  if (/帮我写|起草|生成|路演|融资叙事|融资口径|创赛|行业观点|演讲稿|写个/.test(q)) {
+    return [{ role: 'ai', type: 'draft', text: '我们是「XX 科技」，专注为 Tier1 车厂提供智能质检解决方案。\n\n我们的核心价值：用视觉 AI 把产线质检误检率从行业平均 3% 降到 0.3%，单条产线每年为客户节省约 200 万返工成本。\n\n一句话融资叙事：我们不是在卖软件，是在把中国制造的质量成本打下来。' }];
+  }
+  // 百科类（是什么/流程/参数/分工/报销）
+  if (/是什么|流程|报销|合伙人|分工|参数|制度|融资阶段|多少|在哪|怎么申请/.test(q)) {
+    return [{ role: 'ai', type: 'faq', text: '报销流程：① 在 OA 系统提交报销单，附发票照片 → ② 直属上级审批 → ③ 财务复核 → ④ 打款到工资卡，通常 3 个工作日内到账。\n\n超过 5000 元的报销需提前在 OA 提交预算申请。', time: '⏱️ 截至 2026-08 公司制度 V3 版，以最新 OA 公示为准', source: '《报销管理制度》第 2 节', quote: '「单笔超过 5000 元的报销，需提前提交预算申请，经部门负责人审批后方可执行。」' }];
+  }
+  // 反向追问（信息不足，无法判断）
+  if (/怎么协调|怎么定|怎么权衡|要不要跟|该不该进.*(但|呢)$/.test(q) && /怎么协调|怎么定/.test(q)) {
+    return [{ role: 'ai', type: 'ask-more', items: ['这笔单子的成本和毛利是多少？低于成本价的单子我不碰。', '采购周期和交付节点卡在哪个环节？是供应跟不上还是排期冲突？', '这单是不是我们重点客户的战略需求？还是普通的补货单？'] }];
+  }
+  // 空态（出海/东南亚）
+  if (/东南亚|出海|国际化/.test(q)) {
+    return [{ role: 'ai', type: 'empty', text: '老板未对这个问题明确表过态。不过关于「多元化扩张」，他有相邻原则可以给你参考——' },
+            { role: 'ai', type: 'judgment', infer: true, principle: '企业多元化只有两种赢法：技术同源，或渠道复用。两头都不沾的，本质是投机。', analysis: '出海属于地理维度的扩张，本质要问的是：我们现有的技术或渠道，能不能直接复用到海外市场？如果能，就是结构性优势；如果不能，就是重新打一遍。', conclusion: '在没有验证结构性优势前，不建议大举出海，可以先做小规模试点。', boundary: '若海外存在我们单点可突破的标杆客户，可以为其破例，但不算系统性的出海战略。', source: '2024 战略会纪要', quote: '「多元化只有两种赢法：技术同源，或渠道复用。两头都不沾的多元化，本质是投机。」' }];
+  }
+  // 默认：判断一致（市场进入）
+  return [{ role: 'ai', type: 'judgment', infer: false, principle: '判断该不该进一个市场，先看天花板够不够大，再看我们有没有别人短期追不上的结构性优势。', analysis: '这个新市场的天花板约 50 亿，但已经挤进了 6 家头部玩家，竞争充分。而我们目前没有独家渠道或技术壁垒，进场只能打价格战。', conclusion: '暂不进入，观察 6 个月。这期间验证两件事：天花板是否还在扩大、我们能否通过合作拿到结构性位置。', boundary: '如果我们能并购拿下头部位置，或拿到独家渠道，则另当别论。', source: '2024 战略会纪要', quote: '「与其在一个 500 亿的市场里当第 7 名，不如在一个 50 亿的市场里当第一名，因为后者有定价权。」' }];
+}
+
+function resetChat() {
+  chatStarted = false;
+  chatMessages = [];
+  initChat();
+}
+
+/* ═══════════════ P3 上传交互 ═══════════════ */
+const SAMPLE_FILES = [
+  { name: '2026 战略规划.docx', type: 'strategy', level: 'S' },
+  { name: '全员信-价值观.md', type: 'all_hands', level: 'A' },
+  { name: '董事会纪要-Q2.pdf', type: 'stance', level: 'B' },
+];
+function initUpload() {
+  if (uploadedFiles.length === 0 && !uploadStarted) {
+    uploadedFiles = SAMPLE_FILES.map(f => ({ ...f, status: 'ready' }));
+  }
+  renderFiles();
+}
+function addFile() {
+  const pool = ['某次对外演讲实录.pdf', '高管会复盘纪要.docx', '融资决策记录.md'];
+  const name = pool[Math.floor(Math.random() * pool.length)];
+  uploadedFiles.push({ name, type: 'story', level: 'C', status: 'ready' });
+  renderFiles();
+}
+function dropFile(e) {
+  e.preventDefault();
+  e.target.classList.remove('drag');
+  addFile();
+}
+function renderFiles() {
+  const list = document.getElementById('fileList');
+  if (!list) return;
+  list.innerHTML = uploadedFiles.map((f, i) => `
+    <div class="file-item">
+      <span class="fi-ico">📄</span>
+      <div>
+        <div class="fi-name">${f.name}</div>
+        <div class="fi-meta">${f.status === 'done' ? '已上传 · 清洗完成' : '待上传'}</div>
+      </div>
+      <div class="fi-right">
+        <select class="fi-select" onchange="uploadedFiles[${i}].type=this.value">
+          ${['strategy','all_hands','stance','story','speech','style'].map(t => `<option value="${t}" ${f.type===t?'selected':''}>${TYPE_LABEL[t]}</option>`).join('')}
+        </select>
+        <select class="fi-select" onchange="uploadedFiles[${i}].level=this.value">
+          ${['S','A','B','C','D'].map(l => `<option value="${l}" ${f.level===l?'selected':''}>${l}级</option>`).join('')}
+        </select>
+        ${f.status === 'uploading' ? `<div class="fi-progress"><span style="width:${f.progress||30}%"></span></div><span class="fi-status">上传中</span>` :
+          f.status === 'done' ? `<span class="fi-status">✓ 完成</span>` : `<button class="btn btn-ghost" onclick="uploadedFiles.splice(${i},1);renderFiles()">删除</button>`}
+      </div>
+    </div>`).join('');
+}
+const TYPE_LABEL = { strategy:'战略文档', all_hands:'全员信', stance:'议题立场', story:'经历故事', speech:'对外演讲', style:'风格素材' };
+function startUpload() {
+  if (uploadStarted) return;
+  uploadStarted = true;
+  uploadedFiles.forEach(f => { if (f.status === 'ready') f.status = 'uploading'; });
+  renderFiles();
+  // 模拟进度
+  let prog = 0;
+  const timer = setInterval(() => {
+    prog += 25;
+    uploadedFiles.forEach(f => { if (f.status === 'uploading') f.progress = prog; });
+    if (prog >= 100) {
+      clearInterval(timer);
+      uploadedFiles.forEach(f => { if (f.status === 'uploading') f.status = 'done'; });
+    }
+    renderFiles();
+  }, 500);
+}
+
+/* ═══════════════ P4 审核交互 ═══════════════ */
+function initReview() { renderReview(); }
+function setReviewFilter(f, el) {
+  reviewFilter = f;
+  document.querySelectorAll('.review-filter').forEach(b => b.classList.toggle('on', b === el));
+  renderReview();
+}
+function renderReview() {
+  const list = document.getElementById('principleList');
+  if (!list) return;
+  const filtered = PRINCIPLES.map((p, i) => ({ ...p, state: principleStates[i], idx: i }))
+    .filter(p => reviewFilter === 'all' || (reviewFilter === 'pending' && p.state === 'pending') || (reviewFilter === 'done' && p.state === 'done'));
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="card" style="text-align:center;padding:60px 20px;color:var(--muted)">没有符合条件的候选原则</div>`;
+    return;
+  }
+  list.innerHTML = filtered.map(p => `
+    <div class="principle-card ${p.state === 'done' ? 'done' : p.state === 'rejected' ? 'rejected' : ''}">
+      <div class="pc-top">
+        <div class="pc-index">${p.idx + 1}</div>
+        <div class="pc-title">${p.title}</div>
+        <div class="pc-status">${p.state === 'done' ? '<span class="badge-s s">✓ 已确认</span>' : p.state === 'rejected' ? '<span class="badge-s d">已删除</span>' : '<span class="badge-s a">待审核</span>'}</div>
+      </div>
+      <div class="pc-fields">
+        ${p.fields.map(f => `
+          <div class="pc-field">
+            <div class="pf-label">${f.label}</div>
+            ${f.quote ? `<div class="pf-quote">${f.quote}</div>` : `<div class="pf-val">${f.val}</div>`}
+          </div>`).join('')}
+      </div>
+      <div class="pc-actions">
+        ${p.state === 'pending' ? `
+          <button class="act-ok" onclick="approvePrinciple(${p.idx})">✓ 确认</button>
+          <button class="act-edit" onclick="editPrinciple(${p.idx})">✏️ 修改</button>
+          <button class="act-del" onclick="rejectPrinciple(${p.idx})">✗ 删除</button>
+        ` : `<button class="act-edit" onclick="resetPrinciple(${p.idx})">↩ 撤销</button>`}
+      </div>
+    </div>`).join('');
+}
+function approvePrinciple(i) { principleStates[i] = 'done'; renderReview(); }
+function rejectPrinciple(i) { principleStates[i] = 'rejected'; renderReview(); }
+function resetPrinciple(i) { principleStates[i] = 'pending'; renderReview(); }
+function editPrinciple(i) { alert(`模拟编辑原则「${PRINCIPLES[i].title}」\n（原型中此操作弹出编辑表单）`); }
+
+/* ═══════════════ P5 覆盖度雷达 ═══════════════ */
+function initRadar() {
+  const wrap = document.getElementById('radarWrap');
+  if (!wrap) return;
+  const dims = DOMAINS.map((d, i) => ({
+    name: d.name, pct: d.pct, color: ['#c8a45c','#7aa5d9','#8fb98f','#d9a84e','#b48bd9'][i],
+  }));
+  wrap.innerHTML = `
+    <svg width="200" height="200" viewBox="0 0 200 200" style="margin-bottom:6px">
+      <g transform="translate(100,100)">
+        ${[30,60,90].map(r => `<circle r="${r}" fill="none" stroke="var(--border)" stroke-width="1" opacity="0.5"/>`).join('')}
+        ${dims.map((d, i) => {
+          const ang = (i / dims.length) * Math.PI * 2 - Math.PI / 2;
+          const x = 90 * Math.cos(ang), y = 90 * Math.sin(ang);
+          const px = (d.pct/100) * 90 * Math.cos(ang), py = (d.pct/100) * 90 * Math.sin(ang);
+          return `<line x1="0" y1="0" x2="${x}" y2="${y}" stroke="var(--border)" stroke-width="1" opacity="0.5"/>
+                  <circle cx="${px}" cy="${py}" r="4" fill="${d.color}">
+                    <animate attributeName="r" from="0" to="4" dur="0.6s" begin="${i*0.15}s" fill="freeze"/>
+                  </circle>
+                  <text x="${x*1.15}" y="${y*1.15}" font-size="11" fill="var(--muted)" text-anchor="middle" dominant-baseline="middle">${d.name}</text>`;
+        }).join('')}
+        <polygon points="${dims.map((d,i) => { const ang=(i/dims.length)*Math.PI*2-Math.PI/2; const px=(d.pct/100)*90*Math.cos(ang), py=(d.pct/100)*90*Math.sin(ang); return `${px},${py}`; }).join(' ')}" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5">
+          <animate attributeName="opacity" from="0" to="1" dur="0.8s" fill="freeze"/>
+        </polygon>
+      </g>
+    </svg>
+    ${dims.map((d, i) => `
+      <div class="radar-dim">
+        <div class="rd-dot" style="background:${d.color}"></div>
+        <div class="rd-name">${d.name}</div>
+        <div class="rd-track"><div class="rd-fill" style="width:${d.pct}%;background:${d.color};animation:barGrow 1s ${i*0.1}s cubic-bezier(0.22,1,0.36,1) forwards"></div></div>
+        <div class="rd-num">${d.pct}%</div>
+      </div>`).join('')}
+  `;
+}
+
+/* ═══════════════ P6 风格预览 ═══════════════ */
+const FORMALITY = { 1:'口语化', 2:'偏口语', 3:'中性', 4:'偏书面', 5:'正式书面' };
+const CONCISE = { 1:'充分展开', 2:'偏精炼', 3:'平衡', 4:'偏简练', 5:'极简' };
+const COUNTER = { 1:'几乎不反问', 2:'少反问', 3:'平衡', 4:'多反问', 5:'频繁反问' };
+function updateStyle(slider) {
+  const sliders = document.querySelectorAll('.slider');
+  const v = [...sliders].map(s => +s.value);
+  if (slider) {
+    // 更新对应 label
+  }
+  const f = sliders[0].value, c = sliders[1].value, ct = sliders[2].value;
+  document.getElementById('vFormality').textContent = `${f} / 5 · ${FORMALITY[f]}`;
+  document.getElementById('vConciseness').textContent = `${c} / 5 · ${CONCISE[c]}`;
+  document.getElementById('vCounter').textContent = `${ct} / 5 · ${COUNTER[ct]}`;
+  // 预览回复
+  const reply = document.getElementById('previewReply');
+  if (reply) {
+    const openers = ['先看这笔钱带着什么条件。', '战投的钱，从来不是白拿的。', '我们要先问一句：他为什么要投。'];
+    const bodies = [
+      '如果条件是排他或对赌，那本质是拿未来的自由度换今天的钱，这个代价要算清楚。',
+      '战投的价值在于业务协同，如果只有钱没有协同，那和财务投资无异，反而多了站队风险。',
+      '我的判断是：先看钱背后的战略意图，再看我们缺不缺这笔钱，最后才看估值。',
+    ];
+    const short = ct >= 4 ? '你反过来想：如果他投你，对他意味着什么？' : '';
+    reply.innerHTML = `${openers[ct % 3]}<br><br>${bodies[c % 3]}${short ? `<br><br><em>${short}</em>` : ''}`;
+  }
+}
+function saveStyle() { alert('已保存风格配置（原型演示）'); }
+
+/* ── P8 补充技能交互 ── */
+function setAddMode(mode) {
+  const sw = document.getElementById('addSwitch');
+  if (!sw) return;
+  sw.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  const one = document.getElementById('addOneLiner');
+  const form = document.getElementById('addForm');
+  if (one) one.style.display = mode === 'one' ? 'block' : 'none';
+  if (form) form.style.display = mode === 'form' ? 'block' : 'none';
+}
+function aiOrganize() {
+  const ta = document.querySelector('#addOneLiner textarea');
+  const t = (ta.value || '').trim();
+  if (!t) { ta.focus(); return; }
+  const r = document.getElementById('aiResult');
+  r.innerHTML = `
+    <div class="card" style="border-color:color-mix(in srgb,var(--accent) 30%,transparent);background:var(--accent-soft)">
+      <div style="font-size:11px;font-weight:700;color:var(--accent);letter-spacing:0.05em;margin-bottom:10px">✨ AI 已整理，请确认</div>
+      <div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;margin-bottom:3px">原则陈述</div><div style="font-size:14px;line-height:1.6">「${t}」</div></div>
+      <div style="margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;margin-bottom:3px">适用场景</div><div style="font-size:14px;line-height:1.6">当面临「要速度还是要质量」「要规模还是要健康」的两难选择时启用。</div></div>
+      <div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:var(--muted-2);text-transform:uppercase;margin-bottom:3px">边界反例</div><div style="font-size:14px;line-height:1.6">战略卡位窗口期（如并购头部标的）可短期放宽，但需明确退出条件。</div></div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-accent" style="flex:1" onclick="this.closest('.card').innerHTML='<div style=padding:20px;text-align:center;color:var(--success);font-weight:700>✓ 已加入原则库</div>'">✓ 确认入库</button>
+        <button class="btn btn-ghost" style="flex:1" onclick="this.closest('.card').remove()">✏️ 修改</button>
+      </div>
+    </div>`;
+}
+
+/* ═══════════════ 启动 ═══════════════ */
+initTheme();
+go('p1');
+</script>
+</body>
+</html>

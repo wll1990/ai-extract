@@ -226,7 +226,7 @@ export default function SkillChatPage() {
               </div>
 
               {/* ③ 场景选择 */}
-              <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} sceneTags={qa.sceneTags}
+              <SkillOpeningView ownerName={ownerName} ownerTitle={ownerTitle} ownerIntro={ownerTitle} avatarUrl={avatarUrl || undefined} sceneTags={qa.sceneTags}
                 defaultMode="practice" onPracticeStart={(tag) => startPracticeWithScene(tag)} />
             </div>
           )}
@@ -241,7 +241,7 @@ export default function SkillChatPage() {
             <SkillChatView inputValue={qa.inputValue} onInputChange={qa.setInputValue} onSend={qa.handleQaSend}
               isStreaming={qa.isStreaming} streamText={qa.qaStreamText} ownerName={ownerName}
               showVoice
-              onVoiceTranscription={(text) => qa.setInputValue(prev => prev + text)}
+              onVoiceTranscription={(text) => qa.setInputValue(text)}
               placeholder={chatMode === 'talk' ? '聊聊你的想法...' : '问我任何销售问题...'}
               footer={
                 <div className="flex items-center justify-center gap-2">

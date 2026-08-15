@@ -6,7 +6,8 @@ import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * 静态资源映射 — 上传的头像等文件通过 HTTP 访问。
+ * 静态资源映射 — 本地文件兜底。
+ * 头像已切 OSS，此处仅供素材/文档等本地文件访问。
  */
 @Configuration
 public class WebMvcConfig implements WebMvcConfigurer {

@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
+    private final OssService ossService;
 
     /**
      * 用户登录
@@ -209,6 +211,30 @@ public class AuthService {
 
         log.debug("获取当前用户信息, userId: {}", userId);
         return buildUserInfoResponse(user, companyName);
+    }
+
+    /**
+     * B端用户上传个人头像到 OSS。
+     *
+     * @param userId 当前登录用户 ID
+     * @param file   头像文件
+     * @return OSS 预签名 URL
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String uploadAvatar(UUID userId, MultipartFile file) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.USER_NOT_FOUND));
+
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
+        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+        String objectKey = "avatars/users/" + userId + "/" + safeName;
+        String avatarUrl = ossService.upload(objectKey, file);
+
+        user.setAvatarUrl(avatarUrl);
+        userRepository.save(user);
+
+        log.info("B端用户头像已更新 userId={}", userId);
+        return avatarUrl;
     }
 
     /**

@@ -183,7 +183,7 @@ export default function InternalSharePage() {
               </div>
               <div>
                 <label className="block text-sm text-[#747f9e] mb-1">密码</label>
-                <input type="password" value={bPassword} onChange={(e) => setBPassword(e.target.value)} placeholder="密码" required minLength={6} className="w-full px-4 py-3 rounded-xl border border-[#dfe6ff] bg-white text-sm focus:outline-none focus:border-[#2147ff]" />
+                <input type="password" autoComplete="current-password" value={bPassword} onChange={(e) => setBPassword(e.target.value)} placeholder="密码" required minLength={6} className="w-full px-4 py-3 rounded-xl border border-[#dfe6ff] bg-white text-sm focus:outline-none focus:border-[#2147ff]" />
               </div>
               {authError && <div className="px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{authError}</div>}
               <button type="submit" disabled={authLoading} className="w-full py-3 rounded-full bg-[#2147ff] text-white text-sm font-medium disabled:opacity-40">
@@ -209,7 +209,7 @@ export default function InternalSharePage() {
               </div>
               <div>
                 <label className="block text-sm text-[#747f9e] mb-1">密码</label>
-                <input type="password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="至少 6 位密码" required minLength={6} className="w-full px-4 py-3 rounded-xl border border-[#dfe6ff] bg-white text-sm focus:outline-none focus:border-[#2147ff]" />
+                <input type="password" autoComplete="new-password" value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="至少 6 位密码" required minLength={6} className="w-full px-4 py-3 rounded-xl border border-[#dfe6ff] bg-white text-sm focus:outline-none focus:border-[#2147ff]" />
               </div>
               {authError && <div className="px-4 py-2.5 rounded-xl bg-red-50 border border-red-200 text-sm text-red-600">{authError}</div>}
               <button type="submit" disabled={authLoading} className="w-full py-3 rounded-full bg-[#2147ff] text-white text-sm font-medium disabled:opacity-40">

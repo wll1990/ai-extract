@@ -39,17 +39,17 @@ export default function LoginPage() {
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">企业注册码</label>
               <input type="text" value={companyCode} onChange={e => setCompanyCode(e.target.value)}
-                placeholder="请输入企业注册码"
+                placeholder="请输入企业注册码" autoComplete="organization"
                 className={`w-full rounded-lg border px-4 py-3 text-sm outline-none transition-colors ${error ? 'border-danger' : 'border-border-strong focus:border-foreground'}`} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">账号</label>
-              <input type="text" value={account} onChange={e => setAccount(e.target.value)} placeholder="请输入账号"
+              <input type="text" value={account} onChange={e => setAccount(e.target.value)} placeholder="请输入账号" autoComplete="username"
                 className={`w-full rounded-lg border px-4 py-3 text-sm outline-none transition-colors ${error ? 'border-danger' : 'border-border-strong focus:border-foreground'}`} />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium text-foreground">密码</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码"
+              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="请输入密码" autoComplete="current-password"
                 className={`w-full rounded-lg border px-4 py-3 text-sm outline-none transition-colors ${error ? 'border-danger' : 'border-border-strong focus:border-foreground'}`} />
             </div>
             {error && <p className="text-sm text-danger">{error}</p>}

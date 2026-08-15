@@ -2,17 +2,25 @@ package com.aiextract.service;
 
 import com.alibaba.dashscope.audio.asr.recognition.Recognition;
 import com.alibaba.dashscope.audio.asr.recognition.RecognitionParam;
-import com.alibaba.dashscope.audio.asr.recognition.RecognitionResult;
-import com.alibaba.dashscope.common.ResultCallback;
 import com.alibaba.dashscope.utils.Constants;
+import com.aiextract.util.WavUtil;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.nio.ByteBuffer;
+import java.io.File;
+import java.nio.file.Files;
 
 /**
- * DashScope Paraformer 实时语音识别 — 使用官方 SDK。
+ * 语音识别 — 录音后一次性识别（one-shot）。
+ *
+ * <p>前端录完整句后上传 WAV，本服务解析为 PCM，调用 DashScope SDK 的
+ * {@link Recognition#call(RecognitionParam, File)} 一次性返回全部文本。</p>
+ *
+ * @author AI Extract Team
+ * @since 2026-08-15
  */
 @Slf4j
 @Service
@@ -32,88 +40,62 @@ public class SttService {
     @Value("${ai.dashscope.stt.sample-rate}")
     private int sampleRate;
 
-    public SttSession createSession(Listener listener) {
-        Recognition recognizer = new Recognition();
-        RecognitionParam param = RecognitionParam.builder()
-                .model(model)
-                .format(format)
-                .sampleRate(sampleRate)
-                .build();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
-        ResultCallback<RecognitionResult> callback = new ResultCallback<>() {
-            @Override
-            public void onEvent(RecognitionResult result) {
-                if (result.getSentence() != null && result.getSentence().getText() != null) {
-                    listener.onTranscription(result.getSentence().getText(), result.isSentenceEnd());
+    /**
+     * 一次性识别 WAV 音频为文本。
+     *
+     * @param wavBytes 前端上传的 WAV 字节
+     * @return 识别出的完整文本（多句拼接，无分隔符）
+     */
+    public String recognize(byte[] wavBytes) {
+        byte[] pcm = WavUtil.toPcm(wavBytes);
+
+        File tmp = null;
+        try {
+            tmp = File.createTempFile("stt-", ".pcm");
+            Files.write(tmp.toPath(), pcm);
+
+            Recognition recognizer = new Recognition();
+            RecognitionParam param = RecognitionParam.builder()
+                    .model(model)
+                    .format(format)
+                    .sampleRate(sampleRate)
+                    .build();
+
+            String json = recognizer.call(param, tmp);
+            log.info("SDK STT 一次性识别完成, model={}", model);
+            return joinSentences(json);
+        } catch (Exception e) {
+            log.error("SDK STT 一次性识别失败: {}", e.getMessage(), e);
+            throw new RuntimeException("语音识别失败: " + e.getMessage(), e);
+        } finally {
+            if (tmp != null && tmp.exists()) {
+                tmp.delete();
+            }
+        }
+    }
+
+    /**
+     * 解析 SDK 返回的 {@code {"sentences":[{"text":...},...]}} 并拼接所有句子文本。
+     */
+    private String joinSentences(String json) {
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            StringBuilder sb = new StringBuilder();
+            JsonNode sentences = root.path("sentences");
+            if (sentences.isArray()) {
+                for (JsonNode s : sentences) {
+                    String text = s.path("text").asText();
+                    if (text != null && !text.isEmpty()) {
+                        sb.append(text);
+                    }
                 }
             }
-
-            @Override
-            public void onComplete() {
-                log.info("SDK STT 识别完成");
-                listener.onClosed();
-            }
-
-            @Override
-            public void onError(Exception e) {
-                log.error("SDK STT 异常: {}", e.getMessage());
-                listener.onError(e.getMessage());
-            }
-        };
-
-        recognizer.call(param, callback);
-        log.info("SDK STT 识别已启动 model={}", model);
-        return new SttSessionImpl(recognizer);
-    }
-
-    public interface Listener {
-        void onTranscription(String text, boolean isFinal);
-        void onError(String message);
-        void onClosed();
-    }
-
-    public interface SttSession {
-        void sendAudio(byte[] pcmData);
-        void finish();
-        void close();
-    }
-
-    private static class SttSessionImpl implements SttSession {
-        private final Recognition recognizer;
-        private volatile boolean finished;
-
-        SttSessionImpl(Recognition recognizer) {
-            this.recognizer = recognizer;
-        }
-
-        @Override
-        public void sendAudio(byte[] pcmData) {
-            if (finished) return;
-            try {
-                recognizer.sendAudioFrame(ByteBuffer.wrap(pcmData));
-            } catch (Exception e) {
-                log.warn("SDK sendAudioFrame 失败: {}", e.getMessage());
-            }
-        }
-
-        @Override
-        public void finish() {
-            if (finished) return;
-            finished = true;
-            try {
-                recognizer.stop();
-            } catch (Exception e) {
-                log.warn("SDK stop 失败: {}", e.getMessage());
-            }
-        }
-
-        @Override
-        public void close() {
-            finish();
-            try {
-                recognizer.getDuplexApi().close(1000, "bye");
-            } catch (Exception ignored) {
-            }
+            return sb.toString();
+        } catch (Exception e) {
+            log.warn("解析 STT 结果 JSON 失败: {}", e.getMessage());
+            return "";
         }
     }
 }

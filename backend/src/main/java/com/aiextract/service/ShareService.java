@@ -321,7 +321,27 @@ public class ShareService {
     public GuestSessionResponse createGuestSession(String shareCode, String clientIp, UUID currentUserIdOrNull) {
         SkillShare share = requireEnabledShare(shareCode);
         requirePublishedTarget(share);
+        return issueGuestSession(share, clientIp, currentUserIdOrNull, shareCode);
+    }
 
+    /**
+     * 按 skillId 创建/续期游客会话（平台端 PC 聊天页入口，无需分享码）。
+     *
+     * <p>与 {@link #createGuestSession} 共用核心发证逻辑，仅入口不同：
+     * 分享页带 shareCode，PC 聊天页直接 skillId（内部取/建 public share 作溯源关联）。</p>
+     */
+    public GuestSessionResponse createGuestSessionBySkillId(UUID skillId, String clientIp, UUID currentUserIdOrNull) {
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        if (!"published".equals(skill.getStatus())) {
+            throw new BusinessException(404, "分身未发布");
+        }
+        SkillShare share = getOrCreateShare(skillId, skill.getCreatedBy(), SkillShare.CHANNEL_PUBLIC);
+        return issueGuestSession(share, clientIp, currentUserIdOrNull, share.getShareCode());
+    }
+
+    /** 游客发证核心逻辑（两个入口共用）：滑动续期 → IP 限流 → 新建游客 */
+    private GuestSessionResponse issueGuestSession(SkillShare share, String clientIp, UUID currentUserIdOrNull, String shareCode) {
         LocalDateTime now = LocalDateTime.now();
 
         // 已有 C 端身份：滑动续期

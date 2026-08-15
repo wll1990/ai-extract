@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { defAvatar } from '../defAvatar';
 
 /* ── 星星浮动 keyframes ── */
 const STYLE_ID = 'portrait-card-styles';
@@ -29,7 +30,7 @@ interface PortraitCardProps {
 export function PortraitCard({ src, alt }: PortraitCardProps) {
   const [imgError, setImgError] = useState(false);
   // 优先用自定义 src，失败或没有时用 def-avatar.png
-  const imgSrc = (src && !imgError) ? src : '/def-avatar.png';
+  const imgSrc = (src && !imgError) ? src : defAvatar;
 
   return (
     <div style={{

@@ -173,6 +173,7 @@ export default function AdminImPage() {
               <span className="text-sm font-medium text-foreground">App Secret</span>
               <input
                 type="password"
+                autoComplete="off"
                 value={h.form.appSecret}
                 onChange={(e) => h.setForm(f => ({ ...f, appSecret: e.target.value }))}
                 placeholder="••••••••"

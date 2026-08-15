@@ -56,6 +56,16 @@ public class PublicShareController {
     }
 
     /**
+     * 按 skillId 创建/续期游客会话（平台端 PC 聊天页入口，无需分享码）。
+     */
+    @PostMapping("/skills/{skillId}/guest")
+    public ApiResponse<GuestSessionResponse> createGuestBySkillId(
+            @PathVariable UUID skillId, HttpServletRequest request) {
+        return ApiResponse.success(
+                shareService.createGuestSessionBySkillId(skillId, clientIp(request), currentUserIdOrNull()));
+    }
+
+    /**
      * permitAll 路径下认证可有可无：携带有效 token 则解出 userId，否则按匿名处理。
      * 匿名请求的 credentials 非 JWT（AnonymousAuthenticationToken），解析失败即返回 null。
      */

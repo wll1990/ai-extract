@@ -5,6 +5,7 @@ export { DefaultAvatar } from './components/DefaultAvatar';
 export { PortraitCard } from './components/PortraitCard';
 export { ChatAvatar } from './components/ChatAvatar';
 export { StatBadge, type StatBadgeProps } from './components/StatBadge';
+export { defAvatar } from './defAvatar';
 export { ChatComposer, type ChatComposerProps } from './chat/ChatComposer';
 export { ThinkingCard, type ThinkingCardProps } from './chat/ThinkingCard';
 export { QuickReplies, type QuickRepliesProps } from './chat/QuickReplies';

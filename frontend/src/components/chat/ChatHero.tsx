@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { defAvatar } from '@aiextract/shared-ui';
 
 export interface ChatHeroProps {
   /** AI 名称 */
@@ -26,7 +27,7 @@ export const ChatHero: React.FC<ChatHeroProps> = ({ name, avatar, intro, traits,
       {avatar ? (
         <img src={avatar} alt={name} className="h-12 w-12 rounded-full object-cover shadow-sm" />
       ) : (
-        <img src="/def-avatar.png" alt={name} className="h-12 w-12 rounded-full object-cover shadow-sm" />
+        <img src={defAvatar} alt={name} className="h-12 w-12 rounded-full object-cover shadow-sm" />
       )}
       <div>
         <h2 className="text-lg font-bold text-foreground">{name}</h2>

@@ -13,6 +13,7 @@
 'use client';
 
 import type { ShareInfo } from '@/lib/api/c';
+import { defAvatar } from '@aiextract/shared-ui';
 
 interface Props {
   info: ShareInfo;
@@ -100,14 +101,14 @@ export default function ShareLanding({ info, starting, onStart, onLogin }: Props
                   </div>
                 )}
               </div>
-            ) : info.avatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={info.avatarUrl} alt={name}
-                className="h-[88px] w-[88px] rounded-full border-[3px] border-white/95 object-cover shadow-float" />
             ) : (
-              <div className="flex h-[88px] w-[88px] items-center justify-center rounded-full border-[3px] border-white/95 bg-gradient-to-br from-blue-100 to-blue-300 text-3xl font-semibold text-primary shadow-float">
-                {name.charAt(0)}
-              </div>
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={info.avatarUrl || defAvatar}
+                alt={name}
+                className="h-[88px] w-[88px] rounded-full border-[3px] border-white/95 object-cover shadow-float"
+                onError={(e) => { (e.target as HTMLImageElement).src = defAvatar; }}
+              />
             )}
             {/* 金色销冠徽标 */}
             <div className="absolute -bottom-0.5 -right-1 flex h-[30px] w-[30px] items-center justify-center rounded-full border-[2.5px] border-white bg-gold shadow-card" title="销冠">

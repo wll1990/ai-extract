@@ -1261,6 +1261,8 @@ public class InterviewService {
                         org.springframework.data.domain.PageRequest.of(0, 1))
                     .stream().findFirst().map(r -> r.getId().toString()).orElse(null))
                 .interviewType(session.getInterviewType())
+                .avatarUrl(skillRepository.findBySpaceId(session.getSpaceId())
+                        .map(com.aiextract.model.Skill::getAvatarUrl).orElse(null))
                 .build();
     }
 

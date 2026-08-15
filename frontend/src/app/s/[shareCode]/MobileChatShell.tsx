@@ -20,6 +20,7 @@ import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 import { TrustBadge, PortraitCard, ChatAvatar, StatBadge, MODE_GUIDE, TALK_NAME_CARD, ThinkingCard } from '@aiextract/shared-ui';
 import { fetchRecommendedQuestions } from '@/lib/api/skill';
+import { useIsMobile } from '@/lib/device';
 
 type ChatMode = 'qa' | 'talk' | 'practice';
 type QaHook = ReturnType<typeof useQaChat>;
@@ -88,7 +89,8 @@ export default function MobileChatShell({
   const [traceAvgSim, setTraceAvgSim] = useState<number>(0);
   // Talk 模式主动加载推荐问题
   const [talkQuestions, setTalkQuestions] = useState<string[]>([]);
-  const [interimVoiceText, setInterimVoiceText] = useState('');
+  const [voiceMode, setVoiceMode] = useState(false);
+  const mobile = useIsMobile();
   useEffect(() => {
     if (mode === 'talk' && info?.skillId) {
       fetchRecommendedQuestions(info.skillId)
@@ -556,31 +558,70 @@ export default function MobileChatShell({
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <div className="relative flex-1">
-                  <div className="absolute left-3 z-10" style={{ top: '50%', transform: 'translateY(-50%)' }}>
+              mobile ? (
+                voiceMode ? (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setVoiceMode(false)} aria-label="切换到键盘输入"
+                      className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-[#5b6886] hover:bg-[#eef2ff] transition-colors">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></svg>
+                    </button>
                     <VoiceRecorder
                       mode="longpress"
-                      onTranscription={(text) => { setInterimVoiceText(''); qa.setInputValue(prev => prev + text); }}
-                      onInterimText={setInterimVoiceText}
+                      variant="bar"
+                      authToken={authToken}
+                      onSend={(text) => { qa.handleQaSend(text); onAfterSend(); setVoiceMode(false); }}
+                      onCancel={() => setVoiceMode(false)}
                       disabled={qa.isStreaming}
                     />
                   </div>
-                  <input
-                    value={interimVoiceText || qa.inputValue}
-                    onChange={e => { setInterimVoiceText(''); qa.setInputValue(e.target.value); }}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
-                    placeholder={interimVoiceText ? '' : '输入消息…'}
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setVoiceMode(true)} aria-label="切换到语音输入"
+                      className="flex h-11 w-11 flex-none items-center justify-center rounded-full text-[#5b6886] hover:bg-[#eef2ff] transition-colors">
+                      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.54 8.46a5 5 0 010 7.07" /><path d="M19.07 4.93a10 10 0 010 14.14" /></svg>
+                    </button>
+                    <div className="relative flex-1">
+                      <input
+                        value={qa.inputValue}
+                        onChange={e => qa.setInputValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+                        placeholder="输入消息…"
+                        disabled={qa.isStreaming}
+                        className="h-[44px] w-full rounded-full border border-[#dfe6ff] bg-[#f7f9ff] text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
+                        style={{ paddingLeft: '20px', paddingRight: '20px' }}
+                      />
+                    </div>
+                    <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
+                      className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
+                      <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div className="flex items-center gap-2">
+                  <VoiceRecorder
+                    mode="click"
+                    authToken={authToken}
+                    onTranscription={(text) => qa.setInputValue(text)}
                     disabled={qa.isStreaming}
-                    className="h-[44px] w-full rounded-full border border-[#dfe6ff] bg-[#f7f9ff] text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
-                    style={{ paddingLeft: '44px', paddingRight: '20px' }}
                   />
+                  <div className="relative flex-1">
+                    <input
+                      value={qa.inputValue}
+                      onChange={e => qa.setInputValue(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+                      placeholder="输入消息…"
+                      disabled={qa.isStreaming}
+                      className="h-[44px] w-full rounded-full border border-[#dfe6ff] bg-[#f7f9ff] text-[14px] text-foreground outline-none placeholder:text-muted-foreground-2 focus:border-[#2147ff] focus:ring-2 focus:ring-[#2147ff]/10 disabled:opacity-60"
+                      style={{ paddingLeft: '20px', paddingRight: '20px' }}
+                    />
+                  </div>
+                  <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
+                    className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
+                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>
+                  </button>
                 </div>
-                <button onClick={send} disabled={qa.isStreaming || !qa.inputValue.trim()} aria-label="发送"
-                  className="flex h-11 w-11 flex-none items-center justify-center rounded-full bg-gradient-to-br from-[#2147ff] to-[#345dff] shadow-md transition-transform active:scale-90 disabled:opacity-50">
-                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px] fill-white"><path d="M3.4 20.4l17.8-8.4L3.4 3.6l-.01 6.53L15 12 3.39 13.87z" /></svg>
-                </button>
-              </div>
+              )
             )}
           </div>
         </>

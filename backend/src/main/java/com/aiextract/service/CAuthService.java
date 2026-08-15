@@ -56,8 +56,7 @@ public class CAuthService {
     @Value("${app.share.c-user-token-ttl-days:30}")
     private int cUserTokenTtlDays;
 
-    @Value("${app.storage.base-path:data/files}")
-    private String storageBasePath;
+    private final OssService ossService;
 
     @Value("${app.share.guest-token-ttl-days:7}")
     private int guestTokenTtlDays;
@@ -163,24 +162,12 @@ public class CAuthService {
         return buildSession(user, issueToken(user));
     }
 
-    /** 保存用户头像文件，返回相对路径 URL */
+    /** 上传用户头像到 OSS，返回公开访问 URL */
     private String saveUserAvatar(UUID userId, MultipartFile file) {
-        String dir = storageBasePath + "/avatars/users/" + userId + "/";
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
         String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
-
-        java.io.File destDir = new java.io.File(dir).getAbsoluteFile();
-        if (!destDir.exists()) destDir.mkdirs();
-        java.io.File dest = new java.io.File(destDir, safeName);
-
-        try {
-            file.transferTo(dest);
-        } catch (Exception e) {
-            log.error("用户头像保存失败 userId={} path={}", userId, dest.getAbsolutePath(), e);
-            throw new RuntimeException("头像保存失败: " + e.getMessage());
-        }
-
-        return "/files/avatars/users/" + userId + "/" + safeName;
+        String objectKey = "avatars/users/" + userId + "/" + safeName;
+        return ossService.upload(objectKey, file);
     }
 
     /**

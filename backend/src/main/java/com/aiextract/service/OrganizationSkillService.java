@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ public class OrganizationSkillService {
     private final ObjectMapper objectMapper;
     private final PracticeDemoService practiceDemoService;
     private final ChatStreamAdapter chatStreamAdapter;
+    private final OssService ossService;
 
     // ============================================================
     // CRUD
@@ -82,6 +84,23 @@ public class OrganizationSkillService {
         Skill updated = skillRepository.save(org);
         log.info("组织分身已更新 id={} name={}", updated.getId(), updated.getDisplayName());
         return updated;
+    }
+
+    /** 组织分身头像上传到 OSS */
+    @Transactional(rollbackFor = Exception.class)
+    public String uploadAvatar(UUID orgSkillId, MultipartFile file) {
+        Skill org = skillRepository.findById(orgSkillId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
+
+        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
+        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+        String objectKey = "avatars/skills/" + orgSkillId + "/" + safeName;
+        String avatarUrl = ossService.upload(objectKey, file);
+
+        org.setAvatarUrl(avatarUrl);
+        skillRepository.save(org);
+        log.info("组织分身头像已更新 orgSkillId={}", orgSkillId);
+        return avatarUrl;
     }
 
     @Transactional(rollbackFor = Exception.class)

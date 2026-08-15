@@ -22,12 +22,12 @@ const C = {
 
 export default function PlatformTopBar({ backTo, backLabel, title }: Props) {
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; avatarUrl?: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const u = getUser();
-    if (u?.name) setUser({ name: u.name, avatarUrl: u.avatarUrl as string | undefined });
+    if (u?.name) setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined });
     setMounted(true);
   }, []);
 
@@ -81,7 +81,7 @@ export default function PlatformTopBar({ backTo, backLabel, title }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 120 }}>
         {!mounted ? (
           <span style={{ width: 32, height: 32 }} />
-        ) : user ? (
+        ) : user && user.role !== 'guest' ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,
@@ -114,16 +114,28 @@ export default function PlatformTopBar({ backTo, backLabel, title }: Props) {
             </button>
           </div>
         ) : (
-          <button
-            onClick={() => router.push('/login')}
-            style={{
-              padding: '5px 14px', borderRadius: 100, cursor: 'pointer',
-              border: 'none', background: C.accent, color: '#fff',
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-            }}
-          >
-            登录
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => router.push('/login')}
+              style={{
+                padding: '5px 14px', borderRadius: 100, cursor: 'pointer',
+                border: 'none', background: C.accent, color: '#fff',
+                fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+              }}
+            >
+              登录
+            </button>
+            <button
+              onClick={() => router.push('/register')}
+              style={{
+                padding: '5px 14px', borderRadius: 100, cursor: 'pointer',
+                border: `1px solid ${C.border}`, background: '#fff', color: C.textMid,
+                fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+              }}
+            >
+              注册
+            </button>
+          </div>
         )}
       </div>
     </div>

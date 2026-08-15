@@ -1,16 +1,16 @@
-# Graph Report - ai-extract  (2026-08-09)
+# Graph Report - ai-extract  (2026-08-14)
 
 ## Corpus Check
-- 1088 files · ~1,775,171 words
+- 1093 files · ~1,788,682 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 35676 nodes · 90182 edges · 1230 communities (1017 shown, 213 thin omitted)
-- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 10456 edges (avg confidence: 0.55)
+- 35717 nodes · 90232 edges · 1229 communities (1016 shown, 213 thin omitted)
+- Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 10462 edges (avg confidence: 0.55)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8b2be5f3`
+- Built from commit: `990dd9d6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -1105,7 +1105,6 @@
 - Layer 7 — 题域市场与商业引擎（Domain Marketplace & Commerce）
 - 六、实施路线图
 - 一、系统流程梳理
-- 三、运营策略建议
 - graphify reference: add a URL and watch a folder
 - graphify reference: commit hook and native CLAUDE.md integration
 - graphify reference: incremental update and cluster-only
@@ -1120,7 +1119,6 @@
 - 三、四端差异对比
 - 4.1 QA 模式（经验请教）
 - 变量: {material_content}
-- 七、关键设计决策与争议点
 - StatusConstants
 - graphify reference: GitHub clone and cross-repo merge
 - graphify reference: transcribe video and audio
@@ -1168,11 +1166,11 @@
 - stop-all.sh
 
 ## God Nodes (most connected - your core abstractions)
-1. `ApiResponse` - 235 edges
+1. `ApiResponse` - 238 edges
 2. `ie()` - 193 edges
 3. `ie()` - 193 edges
 4. `ie()` - 193 edges
-5. `BusinessException` - 156 edges
+5. `BusinessException` - 159 edges
 6. `apiClient()` - 146 edges
 7. `eC` - 108 edges
 8. `eC` - 108 edges
@@ -1209,119 +1207,119 @@
 - **Profile avatar images for the Discover page ranked-profile gallery** — docs_discover_files_balajis, docs_discover_files_bengreenfield, docs_discover_files_bhalligan, docs_discover_files_drcelinegounder, docs_discover_files_drmarkhyman, docs_discover_files_emonthebrain, docs_discover_files_mosesmoody, docs_discover_files_vanessa [EXTRACTED 1.00]
 - **Components using def-avatar.png as avatar fallback** — frontend_public_def_avatar_default_avatar [INFERRED 0.85]
 
-## Communities (1230 total, 213 thin omitted)
+## Communities (1229 total, 213 thin omitted)
 
 ### Community 0 - "talk_files/45cbrjgbvzifi.js / mount()"
 Cohesion: 0.01
-Nodes (150): af(), ag(), am(), ap(), b2(), ba(), bB(), bE() (+142 more)
+Nodes (156): af(), ag(), am(), ap(), attachTimeline(), b2(), ba(), bE() (+148 more)
 
 ### Community 1 - "PreCheckConfig / DomainConfigLoader"
-Cohesion: 0.03
-Nodes (23): ChatConfig, DomainConfig, DomainInfo, PipelineConfig, DomainConfigLoader, Component, ObjectMapper, PostConstruct (+15 more)
+Cohesion: 0.02
+Nodes (67): ChatConfig, DomainConfig, DomainInfo, PipelineConfig, DomainConfigLoader, Component, ObjectMapper, PostConstruct (+59 more)
 
 ### Community 2 - "talk2_files/45cbrjgbvzifi.js / mount()"
 Cohesion: 0.01
-Nodes (169): af(), ag(), am(), ap(), appendParams(), b2(), ba(), bE() (+161 more)
+Nodes (172): af(), ag(), ajax(), am(), ap(), appendParams(), b2(), ba() (+164 more)
 
 ### Community 3 - "Discover_files/45cbrjgbvzif... / mount()"
 Cohesion: 0.01
-Nodes (166): af(), ag(), am(), ap(), appendParams(), b2(), ba(), bB() (+158 more)
+Nodes (152): af(), ag(), am(), ap(), b2(), ba(), bE(), bI() (+144 more)
 
 ### Community 4 - "JpaRepository / JwtUtil"
-Cohesion: 0.02
-Nodes (112): BaseController, Component, HttpServletRequest, HttpServletResponse, Override, RequiredArgsConstructor, Slf4j, JwtAuthFilter (+104 more)
+Cohesion: 0.03
+Nodes (91): AnalyticsController, PostMapping, RequiredArgsConstructor, ResponseEntity, RestController, Slf4j, CAuthController, GetMapping (+83 more)
 
 ### Community 5 - "ApiResponse / .success()"
 Cohesion: 0.02
-Nodes (124): ApiResponse, AllArgsConstructor, Builder, Getter, NoArgsConstructor, Setter, Page, PageResponse (+116 more)
+Nodes (137): ApiResponse, AllArgsConstructor, Builder, Getter, NoArgsConstructor, Setter, BaseController, Page (+129 more)
 
 ### Community 6 - "Discover_files/2_1rsjkye0vb... / constructor()"
 Cohesion: 0.02
-Nodes (101): a0(), a1(), a2(), aa(), ab(), aC(), addInputTranscriptionMessage(), addToolOutput() (+93 more)
+Nodes (117): a0(), a1(), a2(), ab(), aC(), aD(), addInputTranscriptionMessage(), addToolOutput() (+109 more)
 
 ### Community 7 - "talk_files/2_1rsjkye0vb0.js / constructor()"
 Cohesion: 0.02
-Nodes (101): a0(), a1(), a2(), aa(), ab(), aC(), addInputTranscriptionMessage(), addToolOutput() (+93 more)
+Nodes (105): a0(), a1(), a2(), aa(), ab(), aC(), addInputTranscriptionMessage(), addToolOutput() (+97 more)
 
 ### Community 8 - "talk2_files/2_1rsjkye0vb0.js / constructor()"
 Cohesion: 0.02
-Nodes (117): a0(), a1(), a2(), ab(), aC(), aD(), addInputTranscriptionMessage(), addToolOutput() (+109 more)
+Nodes (101): a0(), a1(), a2(), aa(), ab(), aC(), addInputTranscriptionMessage(), addToolOutput() (+93 more)
 
 ### Community 9 - "MaterialCleaningService / PracticeDemoService"
-Cohesion: 0.04
-Nodes (47): GrainController, PutMapping, RequestMapping, RequiredArgsConstructor, RestController, Slf4j, ExtractionDropLog, AllArgsConstructor (+39 more)
+Cohesion: 0.05
+Nodes (36): GetMapping, RequiredArgsConstructor, RestController, WorkbenchController, ConversationStats, AllArgsConstructor, Builder, Entity (+28 more)
 
 ### Community 10 - "ie() / sr"
-Cohesion: 0.03
-Nodes (22): aa(), ah(), al(), as(), I(), i6(), ie(), ii() (+14 more)
+Cohesion: 0.02
+Nodes (38): a7(), aa(), ad(), al(), am(), au(), d8(), i5() (+30 more)
 
 ### Community 11 - "BusinessException / InterviewService"
-Cohesion: 0.03
-Nodes (86): Flux, Slf4j, SseEmitter, SseAdapter, InterviewController, GetMapping, PostMapping, RequestMapping (+78 more)
+Cohesion: 0.04
+Nodes (73): InterviewController, GetMapping, PostMapping, RequestMapping, RequiredArgsConstructor, RestController, Slf4j, SseEmitter (+65 more)
 
 ### Community 12 - "talk2_files/02wwszxvt_qeb.js / dn()"
 Cohesion: 0.03
-Nodes (104): ab(), ay(), D(), d0(), d1(), d3(), d4(), d5() (+96 more)
+Nodes (139): ab(), ay(), b(), clone(), D(), d0(), d1(), d2() (+131 more)
 
 ### Community 13 - "talk_files/0c97dea774dw-.js / s()"
 Cohesion: 0.03
-Nodes (121): a1(), a2(), a6(), a7(), a9(), aa(), ae(), aF() (+113 more)
+Nodes (94): a1(), a2(), a7(), a9(), aa(), aG(), aI(), aM() (+86 more)
 
 ### Community 14 - "ExpertService / ExpertController"
 Cohesion: 0.03
 Nodes (81): ExpertAvailableResponse, AllArgsConstructor, Builder, Getter, NoArgsConstructor, Setter, ExpertCompositeResponse, AllArgsConstructor (+73 more)
 
 ### Community 15 - "ie() / sr"
-Cohesion: 0.02
-Nodes (38): a7(), a8, aa(), ad(), al(), am(), au(), d8() (+30 more)
+Cohesion: 0.03
+Nodes (22): a7(), a8, ad(), am(), ap(), au(), ib(), og (+14 more)
 
 ### Community 16 - "gtm.js / mt()"
 Cohesion: 0.02
-Nodes (116): ar(), aT(), bg(), br(), bT(), bu(), cc(), cd() (+108 more)
+Nodes (115): ar(), aT(), bg(), br(), bT(), Bz(), cg(), CJ() (+107 more)
 
 ### Community 17 - ".emit() / .constructor()"
 Cohesion: 0.03
-Nodes (14): ad(), af(), ag(), am(), ap(), au(), d2(), of (+6 more)
+Nodes (10): af(), ag(), d9(), of, ok, on, ot, oy (+2 more)
 
 ### Community 18 - "Discover_files/02wwszxvt_qe... / dn()"
 Cohesion: 0.03
-Nodes (109): ab(), ay(), D(), d0(), d1(), d3(), d4(), d5() (+101 more)
+Nodes (113): ab(), ay(), D(), d0(), d1(), d2(), d3(), d4() (+105 more)
 
 ### Community 19 - "fbevents.js / b()"
 Cohesion: 0.06
-Nodes (126): Ne(), A(), ae(), An(), Ao(), Ar(), at(), b() (+118 more)
+Nodes (127): Ne(), A(), ae(), An(), Ao(), Ar(), at(), b() (+119 more)
 
 ### Community 20 - ".emit() / .constructor()"
 Cohesion: 0.03
-Nodes (13): af(), ag(), d2(), dj(), of, ok, on, oR (+5 more)
+Nodes (7): as(), of, ok, on, ot, sj(), sr
 
 ### Community 21 - "Discover_files/0c97dea774dw... / lu()"
-Cohesion: 0.05
-Nodes (75): ac(), aM(), cb(), cf(), cG(), cH(), clear(), co() (+67 more)
+Cohesion: 0.03
+Nodes (140): a1(), a2(), a3(), a6(), a7(), a9(), aa(), ae() (+132 more)
 
 ### Community 22 - "talk_files/02wwszxvt_qeb.js / error()"
 Cohesion: 0.03
-Nodes (139): ab(), ay(), b(), clone(), D(), d0(), d1(), d2() (+131 more)
+Nodes (110): ab(), ay(), D(), d0(), d1(), d3(), d4(), d5() (+102 more)
 
 ### Community 23 - "f / o()"
 Cohesion: 0.03
-Nodes (59): b(), C(), clone(), constructor(), dec(), discardUnknownFields(), E(), ea() (+51 more)
+Nodes (55): b(), clone(), constructor(), dec(), discardUnknownFields(), dj(), E(), ea() (+47 more)
 
 ### Community 24 - "f / o()"
-Cohesion: 0.06
-Nodes (16): constructor(), ef(), eg(), em(), ep(), ev(), f, j (+8 more)
+Cohesion: 0.03
+Nodes (62): b(), C(), clone(), constructor(), dec(), discardUnknownFields(), dj(), E() (+54 more)
 
 ### Community 25 - "array.js / warn()"
 Cohesion: 0.03
-Nodes (68): addFeatureFlagsHandler(), ao(), At(), be(), cancelPendingSurvey(), canRenderSurvey(), canRenderSurveyAsync(), captureLog() (+60 more)
+Nodes (78): addFeatureFlagsHandler(), ao(), as(), At(), be(), cancelPendingSurvey(), canRenderSurvey(), canRenderSurveyAsync() (+70 more)
 
 ### Community 26 - "talk2_files/0qarsqs7zbpnc.js / warn()"
 Cohesion: 0.03
-Nodes (65): addFeatureFlagsHandler(), Ca(), cancelPendingSurvey(), canRenderSurvey(), canRenderSurveyAsync(), captureException(), displaySurvey(), Ds() (+57 more)
+Nodes (74): aa(), addFeatureFlagsHandler(), At(), Ca(), canRenderSurvey(), captureException(), debug(), displaySurvey() (+66 more)
 
 ### Community 27 - ".emit() / .constructor()"
 Cohesion: 0.03
-Nodes (10): af(), ag(), d9(), of, ok, on, ot, oy (+2 more)
+Nodes (11): af(), ag(), d2(), d9(), of, ok, on, ot (+3 more)
 
 ### Community 28 - "Discover_files/06t__alijfto... / c"
 Cohesion: 0.06
@@ -1336,8 +1334,8 @@ Cohesion: 0.06
 Nodes (64): a(), b(), c, D(), e(), ea(), ed(), ee() (+56 more)
 
 ### Community 31 - "f / o()"
-Cohesion: 0.03
-Nodes (64): b(), C(), clone(), constructor(), dec(), discardUnknownFields(), dj(), E() (+56 more)
+Cohesion: 0.06
+Nodes (16): constructor(), ef(), eg(), em(), ep(), ev(), f, j (+8 more)
 
 ### Community 32 - "ExperienceGrain / ExperienceGrainRepository"
 Cohesion: 0.03
@@ -1348,20 +1346,20 @@ Cohesion: 0.02
 Nodes (36): addPendingEvent(), allPendingEventsSize(), buildUploadURL(), clear(), clearSentPendingEvents(), cookieName(), fetchRelay(), getCookieAttributes() (+28 more)
 
 ### Community 34 - "AdminInsightController / KnowledgeGapRepository"
-Cohesion: 0.03
-Nodes (75): CompanyScopeService, RequiredArgsConstructor, Service, AdminNotificationController, RequestMapping, RequiredArgsConstructor, RestController, Slf4j (+67 more)
+Cohesion: 0.06
+Nodes (27): AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, PreUpdate, Setter, Table (+19 more)
 
 ### Community 35 - "Discover_files/0qarsqs7zbpn... / warn()"
 Cohesion: 0.03
-Nodes (73): ih(), aa(), addFeatureFlagsHandler(), At(), Ca(), canRenderSurvey(), canRenderSurveyAsync(), captureException() (+65 more)
+Nodes (73): aa(), addFeatureFlagsHandler(), At(), Ca(), canRenderSurvey(), canRenderSurveyAsync(), captureException(), debug() (+65 more)
 
 ### Community 36 - "talk_files/0qarsqs7zbpnc.js / warn()"
 Cohesion: 0.03
-Nodes (75): aa(), addFeatureFlagsHandler(), At(), Ca(), canRenderSurvey(), canRenderSurveyAsync(), captureException(), debug() (+67 more)
+Nodes (73): aa(), addFeatureFlagsHandler(), At(), Ca(), cancelPendingSurvey(), canRenderSurvey(), canRenderSurveyAsync(), debug() (+65 more)
 
 ### Community 37 - "ChatChunk / ChatStreamService"
-Cohesion: 0.03
-Nodes (75): TraceContext, Permission, Component, Data, QueryGateConfig, RateLimit, SensitivePatterns, GetMapping (+67 more)
+Cohesion: 0.02
+Nodes (85): Permission, Component, ConfigurationProperties, Data, QueryGateConfig, RateLimit, SensitivePatterns, Flux (+77 more)
 
 ### Community 39 - "Discover_files/3fkyg9dvzyqj... / io()"
 Cohesion: 0.06
@@ -1369,7 +1367,7 @@ Nodes (104): c(), d(), e$(), e2(), e3(), e4(), e5(), eA() (+96 more)
 
 ### Community 41 - "talk2_files/3fkyg9dvzyqja.js / io()"
 Cohesion: 0.06
-Nodes (104): c(), d(), e$(), e2(), e3(), e4(), e5(), eA() (+96 more)
+Nodes (103): c(), d(), e$(), e2(), e3(), e4(), e5(), eA() (+95 more)
 
 ### Community 43 - "talk_files/3fkyg9dvzyqja.js / io()"
 Cohesion: 0.06
@@ -1377,27 +1375,23 @@ Nodes (104): c(), d(), e$(), e2(), e3(), e4(), e5(), eA() (+96 more)
 
 ### Community 44 - "n() / I()"
 Cohesion: 0.05
-Nodes (88): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+80 more)
-
-### Community 45 - "ie() / sr"
-Cohesion: 0.06
-Nodes (3): a9, n6(), oh
+Nodes (87): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+79 more)
 
 ### Community 46 - "og / .publish()"
-Cohesion: 0.06
-Nodes (12): C(), eC(), r1(), r2(), S(), s0, s1, sg() (+4 more)
+Cohesion: 0.08
+Nodes (30): Component, HttpServletRequest, HttpServletResponse, Override, RequiredArgsConstructor, Slf4j, JwtAuthFilter, GetMapping (+22 more)
 
 ### Community 47 - "n() / push()"
 Cohesion: 0.05
-Nodes (83): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+75 more)
+Nodes (87): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+79 more)
 
 ### Community 48 - "tg() / ._processInputParams()"
-Cohesion: 0.03
-Nodes (24): AbsenceFunction(), ra, rc, rd, re, rl, ro, rp (+16 more)
+Cohesion: 0.04
+Nodes (14): AbsenceFunction(), ra, rd, re, rl, ro, t0, t1 (+6 more)
 
 ### Community 49 - "sa / .constructor()"
-Cohesion: 0.04
-Nodes (17): aa(), ah(), ie(), ii(), n7(), om(), re, rI() (+9 more)
+Cohesion: 0.02
+Nodes (30): a7(), a8, aa(), ad(), ah(), al(), am(), ap() (+22 more)
 
 ### Community 50 - "Discover_files/surveys.js / .constructor()"
 Cohesion: 0.06
@@ -1405,11 +1399,11 @@ Nodes (72): Wt, A(), ae(), an(), At(), B(), be(), C() (+64 more)
 
 ### Community 51 - "talk_files/surveys.js / .constructor()"
 Cohesion: 0.06
-Nodes (72): Wt, A(), ae(), an(), At(), B(), be(), C() (+64 more)
+Nodes (74): Yt(), en(), A(), ae(), an(), At(), B(), be() (+66 more)
 
 ### Community 52 - "c() / b()"
 Cohesion: 0.05
-Nodes (89): aa(), a(), as(), b(), Bb(), bs(), c(), cn() (+81 more)
+Nodes (87): aa(), a(), as(), b(), Bb(), bs(), c(), cc() (+79 more)
 
 ### Community 53 - "e3 / tp()"
 Cohesion: 0.06
@@ -1417,19 +1411,19 @@ Nodes (31): detachNode(), e0(), e3, e6(), e7(), e8(), e9(), eJ() (+23 more)
 
 ### Community 54 - "n() / I()"
 Cohesion: 0.06
-Nodes (77): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+69 more)
+Nodes (83): A(), B(), b1(), build(), C(), C3(), c6(), c7() (+75 more)
 
 ### Community 55 - "t() / r"
-Cohesion: 0.12
-Nodes (74): a(), au(), B(), c(), ca(), ci(), cM(), cr() (+66 more)
+Cohesion: 0.13
+Nodes (65): a(), au(), B(), c(), ca(), ci(), cM(), cr() (+57 more)
 
 ### Community 56 - "e3 / tp()"
 Cohesion: 0.06
 Nodes (31): detachNode(), e0(), e3, e6(), e7(), e8(), e9(), eJ() (+23 more)
 
 ### Community 57 - "talk2_files/surveys.js / .constructor()"
-Cohesion: 0.05
-Nodes (74): Yt(), en(), Wt, A(), ae(), an(), At(), B() (+66 more)
+Cohesion: 0.06
+Nodes (71): A(), ae(), an(), At(), B(), be(), C(), ce() (+63 more)
 
 ### Community 58 - "e3 / tp()"
 Cohesion: 0.06
@@ -1437,11 +1431,11 @@ Nodes (31): detachNode(), e0(), e3, e6(), e7(), e8(), e9(), eJ() (+23 more)
 
 ### Community 59 - "Report / ReportRepository"
 Cohesion: 0.04
-Nodes (63): ErrorMessages, GetMapping, RequiredArgsConstructor, ResponseEntity, RestController, Slf4j, PublicReportController, GetMapping (+55 more)
+Nodes (57): ErrorMessages, GetMapping, RequiredArgsConstructor, ResponseEntity, RestController, Slf4j, PublicReportController, GetMapping (+49 more)
 
 ### Community 60 - "talk2_files/posthog-recorde... / Dn"
 Cohesion: 0.05
-Nodes (91): A(), Ai(), an(), Ar(), B(), be(), bi(), bt() (+83 more)
+Nodes (88): A(), Ai(), an(), Ar(), B(), bi(), bt(), C() (+80 more)
 
 ### Community 61 - "tg() / ._processInputParams()"
 Cohesion: 0.04
@@ -1449,7 +1443,7 @@ Nodes (19): AbsenceFunction(), ra, rd, re, rl, ro, rp, rs (+11 more)
 
 ### Community 62 - "tg() / ._processInputParams()"
 Cohesion: 0.04
-Nodes (19): AbsenceFunction(), ra, rd, re, rl, ro, rp, rs (+11 more)
+Nodes (23): AbsenceFunction(), Assertion(), Backreference(), CharacterClass(), r3(), ra, rd, re (+15 more)
 
 ### Community 63 - "Discover_files/28avrw77i069... / .replace()"
 Cohesion: 0.04
@@ -1473,7 +1467,7 @@ Nodes (76): a(), b(), c(), d(), E(), e1(), e2(), e3() (+68 more)
 
 ### Community 68 - ".constructor() / update()"
 Cohesion: 0.05
-Nodes (85): lN(), lP(), addValue(), attachTimeline(), bindToMotionValue(), bl(), bn(), bo() (+77 more)
+Nodes (91): addValue(), attachTimeline(), bindToMotionValue(), bl(), bn(), bo(), clearAnimation(), clearListeners() (+83 more)
 
 ### Community 69 - "r() / n()"
 Cohesion: 0.09
@@ -1484,28 +1478,28 @@ Cohesion: 0.09
 Nodes (68): A(), addEventListener(), ae(), aG(), aI(), as(), at(), b() (+60 more)
 
 ### Community 71 - "Discover_files/posthog-reco... / e()"
-Cohesion: 0.04
-Nodes (67): yt(), A(), an(), Ar(), At(), B(), bi(), C() (+59 more)
+Cohesion: 0.05
+Nodes (87): yt(), A(), Ai(), an(), Ar(), B(), be(), bi() (+79 more)
 
 ### Community 72 - "r() / n()"
 Cohesion: 0.09
-Nodes (68): A(), addEventListener(), ae(), aG(), aI(), as(), at(), b() (+60 more)
+Nodes (66): A(), addEventListener(), ae(), aG(), aI(), as(), at(), b() (+58 more)
 
 ### Community 73 - "talk_files/posthog-recorder.js / e()"
 Cohesion: 0.06
-Nodes (71): yt(), Ai(), an(), Ar(), bi(), bt(), critical(), Cs() (+63 more)
+Nodes (74): yt(), Ai(), an(), Ar(), bi(), bt(), Cr(), critical() (+66 more)
 
 ### Community 74 - "talk2_files/0c97dea774dw-.js / si()"
-Cohesion: 0.09
-Nodes (45): ac(), cb(), cw(), cz(), d0(), dd(), du(), e0() (+37 more)
+Cohesion: 0.04
+Nodes (95): sB(), a3(), ac(), aM(), cb(), cE(), cf(), cG() (+87 more)
 
 ### Community 75 - "og / .publish()"
-Cohesion: 0.05
-Nodes (7): a7(), a8, og, op, s7, se(), uc()
+Cohesion: 0.07
+Nodes (6): a8, as(), I(), R(), re, sr
 
 ### Community 76 - ".forEach() / .push()"
-Cohesion: 0.04
-Nodes (30): ap(), av(), dj(), i1(), i2(), i3(), i4(), iA() (+22 more)
+Cohesion: 0.05
+Nodes (23): a0(), a1(), av(), ax, aZ(), i4(), iA(), ic() (+15 more)
 
 ### Community 77 - ".forEach() / .push()"
 Cohesion: 0.04
@@ -1517,11 +1511,11 @@ Nodes (66): adoptAttributes(), appendChild(), blockTokens(), br(), checkbox(), c
 
 ### Community 79 - "t() / r"
 Cohesion: 0.10
-Nodes (85): a(), au(), c(), ca(), ci(), co(), cr(), d() (+77 more)
+Nodes (87): a(), aj(), au(), B(), c(), ca(), ci(), cM() (+79 more)
 
 ### Community 80 - "AuthService.java / User"
 Cohesion: 0.03
-Nodes (116): RolePermissions, RequiredArgsConstructor, SecureRandom, AuthController, GetMapping, HttpServletRequest, HttpServletResponse, PostMapping (+108 more)
+Nodes (88): ConfigurationProperties, OssConfig, RolePermissions, AuthController, GetMapping, HttpServletRequest, HttpServletResponse, MultipartFile (+80 more)
 
 ### Community 81 - "ImGatewayService / ImChannel"
 Cohesion: 0.05
@@ -1529,15 +1523,15 @@ Nodes (47): ImController, DeleteMapping, GetMapping, PutMapping, RequestMapping,
 
 ### Community 82 - "Ea / .capture()"
 Cohesion: 0.04
-Nodes (20): clearCache(), critical(), destroy(), _e(), Ea, En(), ga(), kn() (+12 more)
+Nodes (25): clearCache(), critical(), destroy(), Ea, En(), ga(), getEarlyAccessFeatures(), initialize() (+17 more)
 
 ### Community 83 - "MaterialCleaningScheduler / SkillMaterialRepository"
-Cohesion: 0.05
-Nodes (35): GetMapping, MultipartFile, ObjectMapper, Page, PostMapping, RequiredArgsConstructor, RestController, Slf4j (+27 more)
+Cohesion: 0.04
+Nodes (43): TraceContext, AllArgsConstructor, Builder, Data, Entity, NoArgsConstructor, PreUpdate, Table (+35 more)
 
 ### Community 84 - "frontend/src/lib/api/skill.ts / skill/[skillId]/page.tsx"
-Cohesion: 0.04
-Nodes (76): C-end Share Page Bearer Auth Pattern, AdminGrainsPage(), AdminSkillsPage(), AdminTuningPage(), InternalShareInfo, InternalSharePage(), LoginMode, MODE_TAGS (+68 more)
+Cohesion: 0.06
+Nodes (60): C-end Share Page Bearer Auth Pattern, InternalShareInfo, InternalSharePage(), LoginMode, MODE_TAGS, Props, MobileChatShell(), usePracticeFlow (+52 more)
 
 ### Community 85 - "Discover_files/33s9mu1t2d1s... / eB()"
 Cohesion: 0.06
@@ -1552,8 +1546,8 @@ Cohesion: 0.06
 Nodes (67): a(), c(), e$(), e0(), e1(), e2(), e3(), e4() (+59 more)
 
 ### Community 88 - "og / .publish()"
-Cohesion: 0.03
-Nodes (19): a7(), a8, ad(), am(), ap(), au(), og, op (+11 more)
+Cohesion: 0.05
+Nodes (6): ib(), n6(), oh, re, ru, sO
 
 ### Community 89 - "tV / ._addCheck()"
 Cohesion: 0.04
@@ -1561,19 +1555,19 @@ Nodes (5): NamedCallout(), s2(), th, tV, tW
 
 ### Community 90 - "tV / ._addCheck()"
 Cohesion: 0.04
-Nodes (5): NamedCallout(), s2(), th, tV, tW
+Nodes (3): th, tV, tW
 
 ### Community 91 - "ct() / ie()"
-Cohesion: 0.18
-Nodes (3): Gn, re(), ue
+Cohesion: 0.10
+Nodes (4): ae, Lt, re(), ue
 
 ### Community 92 - ".constructor() / update()"
-Cohesion: 0.05
-Nodes (91): addValue(), attachTimeline(), bindToMotionValue(), bl(), bn(), bo(), clearAnimation(), clearListeners() (+83 more)
+Cohesion: 0.06
+Nodes (76): lP(), addValue(), bl(), bn(), bo(), dirty(), fh(), finish() (+68 more)
 
 ### Community 93 - "error() / e()"
 Cohesion: 0.06
-Nodes (41): A(), constructor(), e(), ensureFlagsLoaded(), error(), fa(), getActiveProductTours(), Go() (+33 more)
+Nodes (39): A(), critical(), e(), ensureFlagsLoaded(), error(), getActiveProductTours(), getSurveys(), ha() (+31 more)
 
 ### Community 94 - "Discover_files/1ox7zn2_-qyv... / tn()"
 Cohesion: 0.05
@@ -1584,20 +1578,20 @@ Cohesion: 0.05
 Nodes (44): E(), e3, e4(), e5, e6(), e7, e8(), e9() (+36 more)
 
 ### Community 96 - "error() / e()"
-Cohesion: 0.06
-Nodes (41): A(), constructor(), e(), ensureFlagsLoaded(), error(), fa(), getActiveProductTours(), getSurveys() (+33 more)
+Cohesion: 0.05
+Nodes (44): sL, A(), bo(), constructor(), critical(), e(), ensureFlagsLoaded(), error() (+36 more)
 
 ### Community 97 - "talk_files/1ox7zn2_-qyv_.js / tn()"
 Cohesion: 0.05
 Nodes (44): E(), e3, e4(), e5, e6(), e7, e8(), e9() (+36 more)
 
 ### Community 98 - "error() / e()"
-Cohesion: 0.05
-Nodes (46): A(), At(), constructor(), debug(), e(), ensureFlagsLoaded(), error(), fa() (+38 more)
+Cohesion: 0.06
+Nodes (41): A(), constructor(), e(), ensureFlagsLoaded(), error(), fa(), getActiveProductTours(), getSurveys() (+33 more)
 
 ### Community 99 - "test() / .has()"
-Cohesion: 0.07
-Nodes (41): bC(), CV(), dn(), EE(), Ep(), exec(), fI(), hK() (+33 more)
+Cohesion: 0.05
+Nodes (58): b6(), b9(), bC(), bp(), c1(), cM(), cR(), CV() (+50 more)
 
 ### Community 100 - "LogRocket.min.js / r()"
 Cohesion: 0.06
@@ -1608,8 +1602,8 @@ Cohesion: 0.03
 Nodes (18): ef(), el(), l2(), l3(), lG(), lH(), lt(), o_() (+10 more)
 
 ### Community 102 - ".log() / R()"
-Cohesion: 0.07
-Nodes (37): clearHeartbeats(), connect(), connectionState(), connectWithFallback(), disconnect(), flushSendBuffer(), getSession(), hasLogger() (+29 more)
+Cohesion: 0.04
+Nodes (53): cancelRefEvent(), cancelTimeout(), canPush(), clearHeartbeats(), connect(), connectionState(), connectWithFallback(), disconnect() (+45 more)
 
 ### Community 103 - "admin-insights.ts / insights/[skillId]/page.tsx"
 Cohesion: 0.05
@@ -1621,15 +1615,15 @@ Nodes (73): A(), b(), E(), e0(), e1(), e2(), e6(), e7() (+65 more)
 
 ### Community 105 - ".evaluate() / .get()"
 Cohesion: 0.04
-Nodes (49): ae(), af(), bd(), be(), bf(), Cb(), ce(), cf() (+41 more)
+Nodes (47): ae(), af(), bd(), be(), bf(), Cb(), ce(), cf() (+39 more)
 
 ### Community 106 - "insight.old.min.js / Re()"
 Cohesion: 0.06
-Nodes (72): ae(), at(), B(), be(), br(), bt(), Ce(), ct() (+64 more)
+Nodes (73): ae(), at(), B(), be(), br(), bt(), Ce(), cr() (+65 more)
 
 ### Community 107 - "error() / .constructor()"
-Cohesion: 0.05
-Nodes (8): error(), lossyIntoFrame(), oa, oe, s3, s6, sD, sj()
+Cohesion: 0.04
+Nodes (9): error(), lossyIntoFrame(), oa, oe, s3, s6, s7, sD (+1 more)
 
 ### Community 108 - "talk2_files/05mgrz012ql4r.js / tf()"
 Cohesion: 0.07
@@ -1640,8 +1634,8 @@ Cohesion: 0.07
 Nodes (73): A(), b(), E(), e0(), e1(), e2(), e6(), e7() (+65 more)
 
 ### Community 110 - "SkillRepository / SkillService"
-Cohesion: 0.03
-Nodes (62): CacheEntry, Component, PostConstruct, Slf4j, StringRedisTemplate, PromptLoader, RequiredArgsConstructor, RestController (+54 more)
+Cohesion: 0.07
+Nodes (23): CompaniesPage(), Company, EMPTY_FORM, RegisterCode, ConversationsPage(), GrainEditPage(), FeedbackItem, GrainDetailPage() (+15 more)
 
 ### Community 111 - "talk2_files/23aitylvsl24f.js / fetch()"
 Cohesion: 0.07
@@ -1652,36 +1646,36 @@ Cohesion: 0.07
 Nodes (66): a(), addObserver(), #b(), bindMethods(), c(), cancel(), clearGcTimeout(), clearInterval() (+58 more)
 
 ### Community 113 - "J / eb"
-Cohesion: 0.05
-Nodes (17): B(), e1(), e2(), eb, eE(), eF, eg(), eh() (+9 more)
+Cohesion: 0.06
+Nodes (12): eb, eE(), eg(), eh(), ek(), eS(), J, K() (+4 more)
 
 ### Community 114 - ".push() / ru"
-Cohesion: 0.10
-Nodes (4): ai, ar(), s8, s9
+Cohesion: 0.06
+Nodes (10): a0(), a1(), ai, ar(), ax, aZ(), eb(), parse() (+2 more)
 
 ### Community 115 - "t() / r"
-Cohesion: 0.09
-Nodes (86): a(), ad(), ar(), au(), c(), ca(), ci(), cM() (+78 more)
+Cohesion: 0.13
+Nodes (66): a(), au(), B(), c(), ca(), cc(), cd(), ci() (+58 more)
 
 ### Community 116 - "Q() / yk()"
-Cohesion: 0.05
-Nodes (68): ak(), AM(), BA(), bk(), bq(), ck(), cq(), DA() (+60 more)
+Cohesion: 0.07
+Nodes (45): ak(), AM(), BA(), bk(), cq(), DA(), eA(), ek() (+37 more)
 
 ### Community 117 - "Space / SpaceController"
 Cohesion: 0.16
 Nodes (16): GetMapping, RequestMapping, RequiredArgsConstructor, RestController, Slf4j, ToolController, AllArgsConstructor, Builder (+8 more)
 
 ### Community 118 - "sd() / vm()"
-Cohesion: 0.05
-Nodes (25): ao(), bo(), co(), fo(), go(), hf(), Ju(), Lu() (+17 more)
+Cohesion: 0.04
+Nodes (22): au(), bp(), bq(), cm(), hf(), Iu(), Ju(), Ku() (+14 more)
 
 ### Community 119 - "index_files/posthog-recorde... / r()"
 Cohesion: 0.05
-Nodes (50): yt(), an(), Ar(), as(), bi(), Cr(), critical(), Cs() (+42 more)
+Nodes (61): yt(), Ai(), an(), Ar(), as(), bi(), critical(), Cs() (+53 more)
 
 ### Community 120 - "nA / .register()"
-Cohesion: 0.05
-Nodes (13): clearCache(), critical(), Dn(), eo(), getEarlyAccessFeatures(), handlePageUnload(), nA, nn() (+5 more)
+Cohesion: 0.06
+Nodes (18): canRenderSurveyAsync(), clearCache(), critical(), D(), iD(), iN(), isBrowserSupported(), iW() (+10 more)
 
 ### Community 121 - "Discover_files/29c-blcfyetc... / .constructor()"
 Cohesion: 0.06
@@ -1700,36 +1694,40 @@ Cohesion: 0.30
 Nodes (9): MaterialDetailPage(), MaterialsPage(), STATUS_COLORS, STATUS_LABELS, deleteMaterial(), GrainItem, listMaterials(), MaterialItem (+1 more)
 
 ### Community 125 - "useDemoFlow.ts / audit.ts"
-Cohesion: 0.05
-Nodes (50): AuditPage(), downloadReport(), Step, STEPS, Props, jsonToText(), ProductStep(), Props (+42 more)
+Cohesion: 0.04
+Nodes (59): AuditPage(), downloadReport(), Step, STEPS, PROGRESS_STEPS, ReportSessionPage(), Props, jsonToText() (+51 more)
+
+### Community 126 - ".constructor() / onKeyframesResolved()"
+Cohesion: 0.25
+Nodes (5): bF(), fX(), tD(), tz, updateAnimationControlsSubscription()
 
 ### Community 127 - "tV / ._addCheck()"
 Cohesion: 0.04
-Nodes (4): NamedCallout(), s2(), th, tV
+Nodes (3): th, tV, tW
 
 ### Community 128 - "Discover_files/2v-hfs1kpika... / tA"
 Cohesion: 0.05
 Nodes (40): tI(), constructor(), createPanHandlers(), E, G(), L(), mount(), N() (+32 more)
 
 ### Community 129 - "nA / .init()"
-Cohesion: 0.06
-Nodes (13): clearCache(), critical(), Dn(), handlePageUnload(), nA, nn(), reset(), resetPersonPropertiesForFlags() (+5 more)
+Cohesion: 0.05
+Nodes (17): clearCache(), Dn(), eo(), getEarlyAccessFeatures(), io(), nA, nn(), overrideLinkedFlag() (+9 more)
 
 ### Community 130 - "nA / .init()"
 Cohesion: 0.05
-Nodes (20): clearCache(), critical(), D(), iD(), iN(), isBrowserSupported(), iW(), N() (+12 more)
+Nodes (16): addExceptionStep(), clearCache(), Dn(), eo(), f(), getEarlyAccessFeatures(), method(), nA (+8 more)
 
 ### Community 131 - "J / eb"
-Cohesion: 0.10
-Nodes (8): eb, eE(), eF, eg(), ek(), eS(), ra(), start()
+Cohesion: 0.05
+Nodes (16): eb, eE(), eF, eg(), eh(), ek(), eP(), eS() (+8 more)
 
 ### Community 132 - ".log() / R()"
-Cohesion: 0.06
+Cohesion: 0.07
 Nodes (37): clearHeartbeats(), connect(), connectionState(), connectWithFallback(), disconnect(), flushSendBuffer(), getSession(), hasLogger() (+29 more)
 
 ### Community 133 - "error() / s6"
-Cohesion: 0.04
-Nodes (9): error(), lossyIntoFrame(), oa, oe, s3, s6, s7, sD (+1 more)
+Cohesion: 0.08
+Nodes (3): oa, oe, s6
 
 ### Community 134 - "Discover_files/2cunis2rad-h... / S()"
 Cohesion: 0.08
@@ -1740,12 +1738,12 @@ Cohesion: 0.05
 Nodes (45): canPush(), clearHeartbeats(), connect(), connectionState(), connectWithFallback(), disconnect(), flushSendBuffer(), getSession() (+37 more)
 
 ### Community 136 - "oh() / L()"
-Cohesion: 0.09
-Nodes (36): Bh(), fh(), gh(), gs(), $h(), hp(), Ih(), IO() (+28 more)
+Cohesion: 0.07
+Nodes (45): Bh(), ck(), dk(), dl(), fh(), gh(), gs(), $h() (+37 more)
 
 ### Community 137 - "talk2_files/0osuvab2a1fk7.js / ai()"
 Cohesion: 0.07
-Nodes (52): cx(), cy(), ac(), aD(), ai(), ao(), ar(), au() (+44 more)
+Nodes (52): cy(), aA(), ac(), aD(), ai(), ao(), ar(), au() (+44 more)
 
 ### Community 138 - "talk2_files/0h0stx9noijub.js / catch()"
 Cohesion: 0.03
@@ -1760,8 +1758,8 @@ Cohesion: 0.03
 Nodes (6): catch(), Q(), readonly(), t7(), tY(), Y()
 
 ### Community 141 - "aj / .connect()"
-Cohesion: 0.07
-Nodes (4): aj, ak(), rc, rq()
+Cohesion: 0.06
+Nodes (7): aj, ak(), al(), rc, rI(), rq(), sU
 
 ### Community 142 - "talk_files/0h0stx9noijub.js / catch()"
 Cohesion: 0.03
@@ -1808,20 +1806,20 @@ Cohesion: 0.15
 Nodes (42): a(), b(), blockquote(), c(), d(), def(), del(), e_() (+34 more)
 
 ### Community 153 - "f() / D()"
-Cohesion: 0.07
-Nodes (15): aa(), addExceptionStep(), ci(), f(), getAndClearBuffer(), globalsForEvent(), ha(), m() (+7 more)
+Cohesion: 0.05
+Nodes (22): addExceptionStep(), Ba(), captureLog(), ci(), f(), flushLogs(), getAndClearBuffer(), handlePageUnload() (+14 more)
 
 ### Community 154 - "n() / r()"
 Cohesion: 0.15
 Nodes (42): a(), b(), blockquote(), c(), d(), def(), del(), e_() (+34 more)
 
 ### Community 155 - "forEach() / add()"
-Cohesion: 0.08
+Cohesion: 0.07
 Nodes (49): add(), addVariantChild(), AL(), animation(), cancel(), complete(), fo(), forEach() (+41 more)
 
 ### Community 156 - "Ma() / Xa"
-Cohesion: 0.08
-Nodes (20): A(), Aa(), Ca(), d(), ds(), f(), fa(), getElementSelectors() (+12 more)
+Cohesion: 0.09
+Nodes (16): Ca(), d(), ds(), fs(), getElementSelectors(), hs(), Ma(), Mr() (+8 more)
 
 ### Community 157 - "is / Ye"
 Cohesion: 0.12
@@ -1837,7 +1835,7 @@ Nodes (59): b(), c(), d(), E(), e0(), e1(), e2(), e3() (+51 more)
 
 ### Community 160 - "Ls / .start()"
 Cohesion: 0.08
-Nodes (12): Cr(), fi(), fs(), gr(), info(), Ji, Ls, on() (+4 more)
+Nodes (14): Cr(), fi(), fs(), gr(), hi(), info(), Ji, Ls (+6 more)
 
 ### Community 161 - "talk2_files/0as6mpzh3gnin.js / e9()"
 Cohesion: 0.12
@@ -1848,32 +1846,32 @@ Cohesion: 0.12
 Nodes (59): b(), c(), d(), E(), e0(), e1(), e2(), e3() (+51 more)
 
 ### Community 163 - "Ls / .start()"
-Cohesion: 0.08
-Nodes (11): Cr(), fi(), fs(), gr(), info(), Ji, Ls, resetMaxDepthState() (+3 more)
+Cohesion: 0.05
+Nodes (17): as(), es(), fs(), gr(), info(), Ji, Kn(), ln() (+9 more)
 
 ### Community 164 - "aj / .connect()"
-Cohesion: 0.05
-Nodes (7): aj, ak(), al(), as(), rc, rq(), sU
+Cohesion: 0.07
+Nodes (4): aj, ak(), rc, rq()
 
 ### Community 165 - "ho() / sh()"
-Cohesion: 0.08
-Nodes (22): sL, bo(), C(), Co(), getElementSelectors(), ho(), iH(), Mo() (+14 more)
+Cohesion: 0.07
+Nodes (18): C(), g(), getElementSelectors(), ho(), iH(), Mo(), r4, sc() (+10 more)
 
 ### Community 167 - "forEach() / get()"
 Cohesion: 0.08
 Nodes (49): add(), addVariantChild(), AL(), animation(), cancel(), complete(), fo(), forEach() (+41 more)
 
 ### Community 168 - "ho() / sh()"
-Cohesion: 0.08
-Nodes (24): bo(), C(), Co(), g(), getElementSelectors(), ho(), iH(), Mo() (+16 more)
+Cohesion: 0.06
+Nodes (24): C(), Co(), g(), getElementSelectors(), ho(), iH(), Mo(), Mt() (+16 more)
 
 ### Community 169 - "ct() / .constructor()"
 Cohesion: 0.05
-Nodes (22): A(), ae, At(), B(), C(), ct(), et(), ft (+14 more)
+Nodes (25): A(), ae, At(), B(), C(), ct(), Dt(), ee() (+17 more)
 
 ### Community 170 - ".forEach() / ax"
-Cohesion: 0.04
-Nodes (30): a0(), a1(), av(), ax, aZ(), i1(), i2(), i3() (+22 more)
+Cohesion: 0.05
+Nodes (28): ap(), av(), dj(), i1(), i2(), i3(), i4(), iA() (+20 more)
 
 ### Community 171 - "Discover_files/0qvo3b3em6p4... / tu()"
 Cohesion: 0.08
@@ -1881,11 +1879,11 @@ Nodes (53): e_(), e2(), e3(), e4(), e5(), e6(), ea(), ec() (+45 more)
 
 ### Community 172 - "Ls / .start()"
 Cohesion: 0.09
-Nodes (9): fs(), gr(), info(), Ji, Ls, vs(), warn(), wr() (+1 more)
+Nodes (10): Dr(), Cr(), fs(), gr(), info(), Ls, resetMaxDepthState(), vs() (+2 more)
 
 ### Community 173 - "s() / nz()"
-Cohesion: 0.06
-Nodes (44): aa(), aI(), aj(), ak(), an(), ar(), i0(), i2() (+36 more)
+Cohesion: 0.07
+Nodes (45): aa(), aI(), aj(), ak(), an(), ar(), i0(), i2() (+37 more)
 
 ### Community 174 - "talk2_files/0qvo3b3em6p4r.js / tu()"
 Cohesion: 0.08
@@ -1896,20 +1894,20 @@ Cohesion: 0.08
 Nodes (53): e_(), e2(), e3(), e4(), e5(), e6(), ea(), ec() (+45 more)
 
 ### Community 176 - "tC / ri"
-Cohesion: 0.05
-Nodes (9): fromText(), rf, ri, rt, t4(), t5, t9, tC (+1 more)
+Cohesion: 0.06
+Nodes (8): fromText(), rf, rt, t4(), t5, t9, tC, tS()
 
 ### Community 177 - "Discover_files/2nwszbiayeu8... / u()"
 Cohesion: 0.06
 Nodes (28): a, b(), c(), d(), E(), ea(), ee(), en() (+20 more)
 
 ### Community 178 - "update() / then()"
-Cohesion: 0.05
-Nodes (89): addValue(), bl(), bn(), bo(), ch(), dirty(), fh(), finish() (+81 more)
+Cohesion: 0.06
+Nodes (62): bB(), bl(), bW(), bz(), ch(), dirty(), f0(), fG() (+54 more)
 
 ### Community 179 - "error() / info()"
 Cohesion: 0.06
-Nodes (38): ba(), captureException(), co(), constructor(), da, debug(), el(), error() (+30 more)
+Nodes (41): ba(), captureException(), co(), constructor(), da, _e(), el(), error() (+33 more)
 
 ### Community 180 - "talk2_files/2nwszbiayeu8e.js / u()"
 Cohesion: 0.06
@@ -1920,20 +1918,16 @@ Cohesion: 0.06
 Nodes (28): a, b(), c(), d(), E(), ea(), ee(), en() (+20 more)
 
 ### Community 182 - "Ls / .start()"
-Cohesion: 0.05
-Nodes (19): Dr(), as(), es(), fs(), gr(), info(), Ji, Kn() (+11 more)
+Cohesion: 0.07
+Nodes (11): Cr(), fs(), info(), Ji, ln(), Ls, on(), resetMaxDepthState() (+3 more)
 
 ### Community 183 - ".push() / .R()"
 Cohesion: 0.05
-Nodes (30): ac(), Ah(), an(), aq(), au(), bc(), bp(), dn() (+22 more)
+Nodes (38): ac(), ad(), Ah(), Ai(), an(), ap(), aq(), bc() (+30 more)
 
 ### Community 184 - "identify_b8133453.js / r()"
 Cohesion: 0.07
 Nodes (45): d(), da(), dc(), dn(), dr(), du(), e(), e0() (+37 more)
-
-### Community 185 - "ct() / e()"
-Cohesion: 0.06
-Nodes (21): A(), ae, At(), B(), C(), ct(), ee(), et() (+13 more)
 
 ### Community 186 - "Discover_files/1zgwat6jywjb... / fetch()"
 Cohesion: 0.07
@@ -1968,27 +1962,27 @@ Cohesion: 0.08
 Nodes (8): nE(), nA, nD, nj, nO(), nP, nR, re()
 
 ### Community 194 - "forEach() / get()"
-Cohesion: 0.06
-Nodes (63): add(), addVariantChild(), AL(), animation(), attachTimeline(), bindToMotionValue(), cancel(), clearAnimation() (+55 more)
+Cohesion: 0.05
+Nodes (96): add(), addValue(), addVariantChild(), AL(), animation(), attachTimeline(), bindToMotionValue(), bn() (+88 more)
 
 ### Community 195 - "aj / .connect()"
 Cohesion: 0.07
-Nodes (3): aj, ak(), rc
+Nodes (4): aj, ak(), rc, rq()
 
 ### Community 196 - "tC / .create()"
-Cohesion: 0.06
-Nodes (8): fromText(), rf, rt, t4(), t5, t9, tC, tS()
+Cohesion: 0.04
+Nodes (11): fromText(), rf, rg, rn(), rt, t2, t4(), t5 (+3 more)
 
 ### Community 197 - ".makeRequest() / .handleResponse()"
 Cohesion: 0.08
 Nodes (8): nE(), nA, nD, nj, nO(), nP, nR, re()
 
 ### Community 198 - "ue() / um()"
-Cohesion: 0.09
-Nodes (45): dz(), aG(), aq(), aW(), dg(), di(), dk(), dq() (+37 more)
+Cohesion: 0.13
+Nodes (30): dz(), uB(), uz(), ak(), dg(), di(), dk(), dq() (+22 more)
 
 ### Community 199 - ".makeRequest() / .handleResponse()"
-Cohesion: 0.08
+Cohesion: 0.10
 Nodes (8): nE(), nA, nD, nj, nO(), nP, nR, re()
 
 ### Community 200 - "frontend/src/lib/storage.ts / report.ts"
@@ -2008,8 +2002,8 @@ Cohesion: 0.05
 Nodes (23): acceptOverwrite(), add(), b(), _buildAnchorCache(), clone(), cloneArr(), dispose(), _disposeCaches() (+15 more)
 
 ### Community 204 - "s() / ue()"
-Cohesion: 0.08
-Nodes (54): dz(), a3(), aq(), cn(), ct(), dg(), di(), dk() (+46 more)
+Cohesion: 0.11
+Nodes (30): eF, eL(), eP(), eT(), eU(), ev(), ew(), ex() (+22 more)
 
 ### Community 205 - "Discover_files/19dk_olqrcyq... / l()"
 Cohesion: 0.24
@@ -2020,104 +2014,104 @@ Cohesion: 0.24
 Nodes (47): a(), b(), c(), d(), E, ea(), eb(), ec() (+39 more)
 
 ### Community 207 - "ar() / ai"
-Cohesion: 0.06
-Nodes (10): a0(), a1(), ai, ar(), ax, aZ(), eb(), parse() (+2 more)
+Cohesion: 0.05
+Nodes (8): ai, ar(), s8, s9, sH, sq, sW, sx()
 
 ### Community 208 - "talk_files/19dk_olqrcyqf.js / l()"
 Cohesion: 0.24
 Nodes (47): a(), b(), c(), d(), E, ea(), eb(), ec() (+39 more)
 
 ### Community 209 - "ar() / ai"
-Cohesion: 0.09
-Nodes (5): ai, ar(), eb(), s8, s9
+Cohesion: 0.10
+Nodes (4): ai, ar(), s8, s9
 
 ### Community 210 - "push() / test()"
 Cohesion: 0.06
 Nodes (49): bC(), CV(), dn(), EE(), Ep(), exec(), fI(), hasCustomName() (+41 more)
 
 ### Community 211 - "test() / rb()"
-Cohesion: 0.05
-Nodes (58): b6(), b9(), bC(), bp(), c1(), cM(), cR(), CV() (+50 more)
+Cohesion: 0.07
+Nodes (40): bC(), CV(), dn(), EE(), Ep(), exec(), fI(), hK() (+32 more)
 
 ### Community 212 - "dependencies / devDependencies"
 Cohesion: 0.12
 Nodes (17): devDependencies, autoprefixer, eslint, eslint-config-next, tailwindcss, @types/node, @types/qrcode, @types/react (+9 more)
 
 ### Community 213 - "Tn / .Rr()"
-Cohesion: 0.09
-Nodes (9): flushLogs(), gn(), handlePageUnload(), pn(), Tn, xn(), Xo(), Pn() (+1 more)
+Cohesion: 0.08
+Nodes (11): flushLogs(), gn(), handlePageUnload(), pn(), Tn, wn(), xn(), Xo() (+3 more)
 
 ### Community 214 - "lu() / o5()"
 Cohesion: 0.08
-Nodes (49): a5(), a6(), ae(), aF(), aH(), at(), aX(), cG() (+41 more)
+Nodes (47): a1(), a2(), a6(), a7(), a9(), ae(), aF(), aG() (+39 more)
 
 ### Community 215 - "ho() / sh()"
-Cohesion: 0.12
-Nodes (10): sL, bo(), Co(), iW(), Mo(), Mt(), nJ(), r4 (+2 more)
+Cohesion: 0.08
+Nodes (24): bo(), C(), Co(), g(), getElementSelectors(), ho(), iH(), Mo() (+16 more)
 
 ### Community 216 - "ns / is"
-Cohesion: 0.10
-Nodes (4): is, nn(), Qi, sn()
+Cohesion: 0.06
+Nodes (10): as(), es(), is, Kn(), nn(), ns, Os(), Qi (+2 more)
 
 ### Community 217 - "Meta-Extraction System (Cor... / Spring Boot 3 Backend (J..."
 Cohesion: 0.05
 Nodes (47): API Interface Documentation (56+ Endpoints, V1.0), @Async Processing Pattern (AI Calls, File Parsing, Report Gen), BEI (Behavioral Event Interview) Methodology, ChatStreamAdapter (LLM Unified Exit Point), ChatStreamService (Protocol-Agnostic Flux<ChatChunk> Core), Code Quality Redlines (Performance, Anti-Patterns, CR Rejection Rules), Cognitive Task Analysis Theory, Composite Skill (综合多位萃取师) (+39 more)
 
 ### Community 218 - "ns / is"
-Cohesion: 0.05
-Nodes (14): as(), es(), is, Kn(), ln(), nn(), ns, Os() (+6 more)
+Cohesion: 0.04
+Nodes (15): as(), es(), _i(), is, Kn(), ln(), nn(), ns (+7 more)
 
 ### Community 219 - ".register() / zs()"
-Cohesion: 0.07
-Nodes (35): b(), Bs(), g(), getAllFeatureFlags(), getEarlyAccessFeatures(), getFeatureFlag(), getFeatureFlagDetails(), getFeatureFlagPayload() (+27 more)
+Cohesion: 0.09
+Nodes (25): b(), Bs(), getAllFeatureFlags(), getFeatureFlag(), getFeatureFlagDetails(), getFeatureFlagPayload(), getFeatureFlagResult(), getFlagPayloads() (+17 more)
 
 ### Community 220 - "J / um()"
 Cohesion: 0.08
-Nodes (20): sB(), a3(), cE(), cj(), cn(), cP(), ct(), cu() (+12 more)
+Nodes (32): AdminGrainsPage(), AdminSkillsPage(), fmt(), SummaryCard(), TokenUsagePage(), AdminTuningPage(), MainTab, SkillsGalleryPage() (+24 more)
 
 ### Community 221 - "eb / ._processEvent()"
-Cohesion: 0.08
-Nodes (10): eb, eE(), eg(), eh(), ek(), eS(), ra(), start() (+2 more)
+Cohesion: 0.05
+Nodes (16): eb, eE(), eF, eg(), eh(), ek(), eP(), eS() (+8 more)
 
 ### Community 222 - "rn / .save()"
 Cohesion: 0.10
 Nodes (5): Ns(), rn, s7(), s9(), transformToEventProperties()
 
 ### Community 223 - "ns / is"
-Cohesion: 0.06
-Nodes (12): as(), es(), is, Kn(), ln(), nn(), ns, Os() (+4 more)
+Cohesion: 0.10
+Nodes (4): is, nn(), Qi, sn()
 
 ### Community 224 - "SalesInterviewChat.tsx / ExpertInterviewChat.tsx"
-Cohesion: 0.04
-Nodes (85): GrainEditPage(), NewGrainPage(), FeedbackItem, FeedbackReviewPage(), Message, SourceInfo, TestConversationPage(), FeedbackTab() (+77 more)
+Cohesion: 0.05
+Nodes (72): ConversationReplayPage(), Message, SourceInfo, TestConversationPage(), ProfilePage(), H5InterviewChatPage(), H5InviteEntryContent(), InviteInfo (+64 more)
 
 ### Community 225 - "interview.ts / useInterviewSession.ts"
-Cohesion: 0.13
-Nodes (23): qrcode, EXPERT_TOPICS, ExpertInterviewPage(), ExpertOption, CreateInterviewPage(), PRESET_TOPICS, ExpertOption, SpaceOption (+15 more)
+Cohesion: 0.05
+Nodes (37): 1.1 候选领域及其本质差异, 1.2 这些差异带来的架构挑战, 2.1 三种架构方案, 2.2 方案B的完整架构, 3.1 效果度量体系, 3.2 质量保障流程, 3.3 质量回归防护, 4.1 方案B如何构建壁垒 (+29 more)
 
 ### Community 226 - "l() / si()"
-Cohesion: 0.07
-Nodes (48): a1(), a2(), a5(), a6(), a7(), a9(), ae(), aF() (+40 more)
+Cohesion: 0.05
+Nodes (37): 1.1 当前热加载能力矩阵, 1.2 关键瓶颈, 2.0 整体架构, 2.1 第一层：DomainConfigLoader 热加载改造, 2.2 第二层：ConfigHub 统一配置管理, 2.3 第二层补充：DB驱动的领域注册, 2.4 第二层补充：Redis Pub/Sub 多实例通知, 2.5 第三层：配置管理前端界面 (+29 more)
 
 ### Community 227 - "f() / tr"
-Cohesion: 0.14
-Nodes (6): addExceptionStep(), f(), reloadFeatureFlags(), resetGroupPropertiesForFlags(), setGroupPropertiesForFlags(), tr
+Cohesion: 0.12
+Nodes (20): AdminConversationController, GetMapping, RequiredArgsConstructor, RestController, AllArgsConstructor, Builder, Entity, Getter (+12 more)
 
 ### Community 228 - "vl() / Ht()"
-Cohesion: 0.06
-Nodes (28): ad(), Ai(), ap(), Bi(), bl(), cp(), di(), EG() (+20 more)
+Cohesion: 0.07
+Nodes (31): bu(), cd(), cu(), dd(), du(), EG(), en(), fl() (+23 more)
 
 ### Community 229 - "ue() / uh()"
-Cohesion: 0.08
-Nodes (51): dz(), uB(), uz(), aG(), aq(), aW(), dg(), di() (+43 more)
+Cohesion: 0.09
+Nodes (47): dz(), aq(), dg(), di(), dk(), dq(), dx(), dY() (+39 more)
 
 ### Community 230 - "si() / uk()"
 Cohesion: 0.09
-Nodes (45): ac(), cb(), cw(), cx(), cz(), d0(), dd(), ds() (+37 more)
+Nodes (45): ac(), cb(), cw(), cx(), cz(), d0(), dd(), du() (+37 more)
 
 ### Community 231 - "f() / tr"
-Cohesion: 0.06
-Nodes (18): addExceptionStep(), Ba(), captureLog(), ci(), f(), flushLogs(), getAndClearBuffer(), handlePageUnload() (+10 more)
+Cohesion: 0.07
+Nodes (13): Ba(), captureLog(), flushLogs(), getProductTours(), ja(), logger(), nd, sl() (+5 more)
 
 ### Community 232 - "SkillConversation / SkillMessage"
 Cohesion: 0.02
@@ -2125,19 +2119,19 @@ Nodes (50): C1 · Outlined chip, C2 · Inline form-as-CTA, C3 · Typographic lin
 
 ### Community 233 - "afterAllSetup() / get()"
 Cohesion: 0.07
-Nodes (47): afterAllSetup(), c2(), c5(), c6(), c7(), c8(), c9(), da() (+39 more)
+Nodes (47): dz(), sU, aG(), aq(), aW(), c2(), c5(), c6() (+39 more)
 
 ### Community 234 - "rn / .save()"
 Cohesion: 0.07
-Nodes (11): iN(), method(), r9, re(), rn, s3(), s5(), s7() (+3 more)
+Nodes (11): iN(), Ns(), r9, re(), rn, s3(), s5(), s7() (+3 more)
 
 ### Community 235 - "Discover_files/1r1zguh55-oq... / entryAt()"
 Cohesion: 0.08
 Nodes (30): a(), after(), at(), before(), d(), delete(), deleteAt(), entryAt() (+22 more)
 
 ### Community 236 - "talk2_files/09z-73jxnw6sk.js / et()"
-Cohesion: 0.09
-Nodes (33): a(), c(), D(), ea(), eg(), ei(), em(), en() (+25 more)
+Cohesion: 0.10
+Nodes (22): eg(), ei(), em(), en(), eo(), ep(), es(), et() (+14 more)
 
 ### Community 237 - "talk2_files/0bv14m97k1byw.js / t"
 Cohesion: 0.08
@@ -2156,7 +2150,7 @@ Cohesion: 0.08
 Nodes (16): A(), E(), F(), g(), h(), i, L, M() (+8 more)
 
 ### Community 241 - "rn / .save()"
-Cohesion: 0.10
+Cohesion: 0.09
 Nodes (5): Ns(), rn, s7(), s9(), transformToEventProperties()
 
 ### Community 242 - "talk_files/1r1zguh55-oqj.js / entryAt()"
@@ -2164,28 +2158,28 @@ Cohesion: 0.08
 Nodes (30): a(), after(), at(), before(), d(), delete(), deleteAt(), entryAt() (+22 more)
 
 ### Community 243 - ".push() / u4()"
+Cohesion: 0.07
+Nodes (38): ad(), e3(), nA(), nb(), nC(), nD(), ne, nf (+30 more)
+
+### Community 244 - "sg() / .fromBinary()"
+Cohesion: 0.06
+Nodes (12): C(), eC(), r1(), r2(), S(), s0, s1, sg() (+4 more)
+
+### Community 245 - ".push() / u4()"
 Cohesion: 0.22
 Nodes (4): nf, nR(), onHidden(), t7()
 
-### Community 244 - "sg() / .fromBinary()"
-Cohesion: 0.04
-Nodes (18): a_(), ao(), fromNumber(), r3(), rg, rj(), rK(), rn() (+10 more)
-
-### Community 245 - ".push() / u4()"
-Cohesion: 0.09
-Nodes (19): ad(), cc(), cd(), ea(), nb(), nC(), nf, nQ() (+11 more)
-
 ### Community 246 - "oc / oo"
-Cohesion: 0.07
-Nodes (6): oc, od(), ol, oo, ou(), rW()
+Cohesion: 0.08
+Nodes (8): oc, od(), ol, oo, ou(), r5(), rW(), st()
 
 ### Community 247 - "r() / u()"
 Cohesion: 0.17
 Nodes (29): a(), addEvent(), b(), c(), d(), _divineAnonymousId(), doWorkGenerator(), _e() (+21 more)
 
 ### Community 248 - "get() / dn()"
-Cohesion: 0.18
-Nodes (19): c2(), c5(), c6(), c7(), c8(), c9(), da(), de() (+11 more)
+Cohesion: 0.11
+Nodes (5): af(), ag(), oR, ow(), oy
 
 ### Community 249 - "z() / EA()"
 Cohesion: 0.12
@@ -2209,7 +2203,7 @@ Nodes (6): e4(), eF, eG, eh(), tm(), tQ()
 
 ### Community 254 - "ns / .setupEventTriggerListeners()"
 Cohesion: 0.06
-Nodes (9): is, Kn(), ln(), nn(), ns, Qi, rn, sn() (+1 more)
+Nodes (10): is, Kn(), ln(), nn(), ns, Qi, rn, sn() (+2 more)
 
 ### Community 255 - "talk2_files/08v1499k00tt_.js / fn()"
 Cohesion: 0.15
@@ -2252,8 +2246,8 @@ Cohesion: 0.09
 Nodes (12): A(), b(), C(), D(), e, i, k, n() (+4 more)
 
 ### Community 265 - "Ab() / FA()"
-Cohesion: 0.04
-Nodes (38): Ab(), Bz(), cl(), Cz(), Dz(), Eb(), ed(), eU() (+30 more)
+Cohesion: 0.07
+Nodes (24): ao(), bo(), cl(), co(), Eb(), eU(), fo(), fu() (+16 more)
 
 ### Community 266 - "constructor() / init()"
 Cohesion: 0.07
@@ -2296,16 +2290,16 @@ Cohesion: 0.06
 Nodes (64): apiClient(), ApiConfig, _config, configureApi(), getApiBaseUrl(), chat(), ConversationItem, ConversationMessage (+56 more)
 
 ### Community 276 - "expert.ts / experts/page.tsx"
-Cohesion: 0.04
-Nodes (64): CompaniesPage(), Company, EMPTY_FORM, RegisterCode, ConversationReplayPage(), ConversationsPage(), AdminExpertsPage(), SOURCE_LABELS (+56 more)
+Cohesion: 0.06
+Nodes (58): EXPERT_TOPICS, ExpertInterviewPage(), ExpertOption, AdminExpertsPage(), SOURCE_LABELS, STATUS_CONFIG, useExperts(), HttpOnly Cookie Authentication Pattern (+50 more)
 
 ### Community 277 - "Discover_files/3dn4conoyouy... / createResult()"
 Cohesion: 0.12
 Nodes (35): a(), #b(), bindMethods(), c(), constructor(), createResult(), d(), destroy() (+27 more)
 
 ### Community 278 - "oc / oo"
-Cohesion: 0.08
-Nodes (8): oc, od(), ol, oo, ou(), r5(), rW(), st()
+Cohesion: 0.09
+Nodes (7): oc, od(), ol, oo, ou(), r5(), st()
 
 ### Community 279 - "talk2_files/3dn4conoyouya.js / createResult()"
 Cohesion: 0.12
@@ -2324,8 +2318,8 @@ Cohesion: 0.07
 Nodes (27): aM(), aN(), aO(), aP(), ar(), data(), e_(), ec() (+19 more)
 
 ### Community 283 - ".push() / Go"
-Cohesion: 0.09
-Nodes (14): addExceptionStep(), as(), buildProperties(), getAndClearBuffer(), Go, isBrowserSupported(), mo(), monitorHistoryChanges() (+6 more)
+Cohesion: 0.10
+Nodes (11): A(), Aa(), buildProperties(), f(), fa(), getAndClearBuffer(), Go, N() (+3 more)
 
 ### Community 284 - "e() / r()"
 Cohesion: 0.13
@@ -2356,8 +2350,8 @@ Cohesion: 0.12
 Nodes (5): addObserver(), ae(), completeInit(), _getTransactionCallbacks(), s()
 
 ### Community 291 - "a9 / n6()"
-Cohesion: 0.04
-Nodes (4): a9, n6(), oh, ru
+Cohesion: 0.05
+Nodes (3): a9, n6(), ru
 
 ### Community 292 - "talk2_files/299f11ph9ejr_.js / es()"
 Cohesion: 0.13
@@ -2380,20 +2374,20 @@ Cohesion: 0.05
 Nodes (23): 01 · Bento Grid, 02 · Long Document, 03 · Marquee Hero, 04 · Stat-Led, 05 · Workbench, 06 · Conversational FAQ, 07 · Manifesto, 08 · Photographic (+15 more)
 
 ### Community 297 - ".register() / n3"
-Cohesion: 0.09
-Nodes (11): cancelPendingSurvey(), eo(), getSurveys(), io(), n3, n5, overrideLinkedFlag(), overrideSampling() (+3 more)
+Cohesion: 0.12
+Nodes (5): cancelPendingSurvey(), n3, n5, ra(), ro()
 
 ### Community 298 - ".setAttribute() / t"
-Cohesion: 0.08
-Nodes (7): C, G, t, tb, ty, W, _
+Cohesion: 0.09
+Nodes (7): C, t, tb, tM(), ty, W, _
 
 ### Community 299 - "Discover_files/3c9toocjxu0x... / e()"
 Cohesion: 0.08
 Nodes (13): A(), e(), ec(), eo(), ep(), eu(), i(), k() (+5 more)
 
 ### Community 300 - "t() / Le()"
-Cohesion: 0.11
-Nodes (14): extractLocation(), gt(), hi(), Le(), oe, parse(), parseFFOrSafari(), parseOpera() (+6 more)
+Cohesion: 0.14
+Nodes (6): gt(), Le(), mt(), oe, vt(), Z()
 
 ### Community 301 - ".setAttribute() / t"
 Cohesion: 0.08
@@ -2413,7 +2407,7 @@ Nodes (13): A(), e(), ec(), eo(), ep(), eu(), i(), k() (+5 more)
 
 ### Community 305 - ".register() / n3"
 Cohesion: 0.10
-Nodes (10): cancelPendingSurvey(), eo(), io(), n3, n5, overrideLinkedFlag(), overrideSampling(), overrideTrigger() (+2 more)
+Nodes (8): io(), n3, n5, overrideLinkedFlag(), overrideSampling(), overrideTrigger(), ra(), ro()
 
 ### Community 306 - "talk_files/2jzi6wmj-58tn.js / tV()"
 Cohesion: 0.09
@@ -2436,20 +2430,20 @@ Cohesion: 0.15
 Nodes (20): Props, SharePage(), Props, SheetMode, MODE_CARDS, Props, useGuestSession(), cFetch() (+12 more)
 
 ### Community 311 - "Discover_files/09z-73jxnw6s... / et()"
-Cohesion: 0.09
-Nodes (33): a(), c(), D(), ea(), eg(), ei(), em(), en() (+25 more)
+Cohesion: 0.10
+Nodes (22): eg(), ei(), em(), en(), eo(), ep(), es(), et() (+14 more)
 
 ### Community 312 - "tR / htmlBuilder()"
-Cohesion: 0.09
-Nodes (7): b(), d, htmlBuilder(), mathmlBuilder(), p, r8(), tR
+Cohesion: 0.11
+Nodes (6): b(), d, htmlBuilder(), mathmlBuilder(), r8(), tR
 
 ### Community 313 - "Discover_files/2zfv0xljrwx3... / v()"
 Cohesion: 0.16
 Nodes (28): A(), b(), C(), clamp(), displayable(), e(), f(), formatHsl() (+20 more)
 
 ### Community 314 - "tb() / $r()"
-Cohesion: 0.12
-Nodes (33): cv(), Gv(), Hv(), Iv(), Jv(), Kv(), Lv(), Mv() (+25 more)
+Cohesion: 0.11
+Nodes (35): cv(), Gv(), Hv(), Iv(), Jv(), Kv(), Lv(), Mv() (+27 more)
 
 ### Community 315 - "talk2_files/2fzt8hoi7r-yg.js / j"
 Cohesion: 0.08
@@ -2464,12 +2458,12 @@ Cohesion: 0.16
 Nodes (28): A(), b(), C(), clamp(), displayable(), e(), f(), formatHsl() (+20 more)
 
 ### Community 318 - "Le() / oe"
-Cohesion: 0.09
-Nodes (6): gt(), Le(), oe, vt(), xe, Z()
+Cohesion: 0.14
+Nodes (6): gt(), Le(), mt(), oe, vt(), Z()
 
 ### Community 319 - "s6 / oa"
 Cohesion: 0.04
-Nodes (9): error(), lossyIntoFrame(), oa, oe, s3, s6, s7, sD (+1 more)
+Nodes (5): a9, oa, oe, s6, sj()
 
 ### Community 320 - "aq / handler()"
 Cohesion: 0.22
@@ -2492,8 +2486,8 @@ Cohesion: 0.12
 Nodes (30): a(), c(), constructor(), createFromParsedTheme(), createFromRawTheme(), createOnigScanner(), E(), eK() (+22 more)
 
 ### Community 325 - "e3() / e4()"
-Cohesion: 0.11
-Nodes (6): convertUtf16OffsetToUtf8(), convertUtf8OffsetToUtf16(), e3(), e4(), td, to()
+Cohesion: 0.08
+Nodes (11): aa(), convertUtf16OffsetToUtf8(), convertUtf8OffsetToUtf16(), e3(), e4(), error(), highlight(), r8() (+3 more)
 
 ### Community 326 - "Discover_files/36h7a5vf0bpv... / i()"
 Cohesion: 0.10
@@ -2509,7 +2503,7 @@ Nodes (24): ab(), ac(), ad(), ah(), aT(), av(), aw(), ay() (+16 more)
 
 ### Community 329 - "g() / constructor()"
 Cohesion: 0.09
-Nodes (10): De(), fs(), je, ke(), ni, nt(), Qe, Se() (+2 more)
+Nodes (8): addExceptionStep(), De(), g(), je, ni, si, st(), Ze
 
 ### Community 330 - "uwt.js / C()"
 Cohesion: 0.14
@@ -2532,8 +2526,8 @@ Cohesion: 0.06
 Nodes (33): check(), endsWith(), gt(), gte(), int(), length(), lowercase(), lt() (+25 more)
 
 ### Community 336 - "aw() / i8()"
-Cohesion: 0.18
-Nodes (23): ab(), ac(), ad(), ah(), aT(), av(), aw(), ay() (+15 more)
+Cohesion: 0.11
+Nodes (29): ab(), ac(), ad(), ah(), aT(), av(), aw(), ay() (+21 more)
 
 ### Community 339 - "check() / lte()"
 Cohesion: 0.06
@@ -2572,8 +2566,8 @@ Cohesion: 0.10
 Nodes (5): constructor(), g(), notifyFinished(), p(), updateFinished()
 
 ### Community 348 - "z() / EA()"
-Cohesion: 0.10
-Nodes (4): EA(), eT(), q(), z()
+Cohesion: 0.14
+Nodes (3): EA(), eT(), z()
 
 ### Community 349 - "g() / .onKeyframesResolved()"
 Cohesion: 0.10
@@ -2584,28 +2578,24 @@ Cohesion: 0.10
 Nodes (5): constructor(), g(), notifyFinished(), p(), updateFinished()
 
 ### Community 351 - "frontend/src/lib/sse.ts / connectSse()"
-Cohesion: 0.07
-Nodes (30): Configuration, Override, RequiredArgsConstructor, WebSocketConfig, DashScopeWebSocketListener, Logger, ObjectMapper, Override (+22 more)
+Cohesion: 0.08
+Nodes (27): Configuration, Override, RequiredArgsConstructor, WebSocketConfig, Override, Service, Slf4j, Value (+19 more)
 
 ### Community 352 - "aq / handler()"
 Cohesion: 0.22
 Nodes (4): aq, handler(), rO(), rP()
-
-### Community 353 - ".get() / sI"
-Cohesion: 0.11
-Nodes (4): it(), ob, oi, sI
 
 ### Community 354 - "aq / handler()"
 Cohesion: 0.22
 Nodes (4): aq, handler(), rO(), rP()
 
 ### Community 355 - ".get() / sI"
-Cohesion: 0.08
-Nodes (44): ENTERPRISE_SKILL, C, MODE_TAGS, Props, MsgSetter, useConversations(), Message, QaChatInputs (+36 more)
+Cohesion: 0.05
+Nodes (66): ENTERPRISE_SKILL, avgScore(), C, MODE_TAGS, Props, MsgSetter, useConversations(), initialState (+58 more)
 
 ### Community 356 - ".toLowerCase() / .toString()"
-Cohesion: 0.14
-Nodes (18): Assertion(), Backreference(), Character(), CharacterClass(), CharacterClassRange(), CharacterSet(), doCreateClientSecret(), r0() (+10 more)
+Cohesion: 0.09
+Nodes (25): Assertion(), Backreference(), Character(), CharacterClass(), CharacterClassRange(), CharacterSet(), doCreateClientSecret(), NamedCallout() (+17 more)
 
 ### Community 357 - "tR / htmlBuilder()"
 Cohesion: 0.09
@@ -2616,8 +2606,8 @@ Cohesion: 0.12
 Nodes (4): it(), ob, oi, sI
 
 ### Community 360 - "Discover_files/2fzt8hoi7r-y... / j"
-Cohesion: 0.08
-Nodes (13): j, M(), rE, rL(), rR, te(), tf(), tg() (+5 more)
+Cohesion: 0.07
+Nodes (15): ad, j, M(), rE, rL(), rR, rV(), te() (+7 more)
 
 ### Community 361 - "tO / .start()"
 Cohesion: 0.19
@@ -2640,12 +2630,12 @@ Cohesion: 0.12
 Nodes (24): a(), C(), ea(), ed(), ee(), ef(), eg(), eh() (+16 more)
 
 ### Community 366 - ".endpointFor() / ts()"
-Cohesion: 0.07
-Nodes (19): Ba(), captureLog(), D(), flushLogs(), getProductTours(), iD(), isBrowserSupported(), ja() (+11 more)
+Cohesion: 0.08
+Nodes (14): D(), iD(), isBrowserSupported(), N(), ne, Q(), s6(), sl() (+6 more)
 
 ### Community 367 - "D() / .capture()"
-Cohesion: 0.08
-Nodes (28): Flux, Override, Slf4j, TokenAwareChatModel, AdminTokenUsageController, GetMapping, RequestMapping, RequiredArgsConstructor (+20 more)
+Cohesion: 0.03
+Nodes (74): CompanyScopeService, RequiredArgsConstructor, Service, Flux, Override, Slf4j, TokenAwareChatModel, Nullable (+66 more)
 
 ### Community 368 - "tw / tg"
 Cohesion: 0.10
@@ -2656,24 +2646,24 @@ Cohesion: 0.12
 Nodes (24): a(), C(), ea(), ed(), ee(), ef(), eg(), eh() (+16 more)
 
 ### Community 370 - "qa() / .on()"
-Cohesion: 0.11
-Nodes (6): ensureFlagsLoaded(), Ln, qa(), setupSiteApp(), so(), Ya()
+Cohesion: 0.09
+Nodes (7): ensureFlagsLoaded(), Hr, Ln, qa(), setupSiteApp(), so(), Ya()
 
 ### Community 371 - "index_files/surveys.js / T()"
-Cohesion: 0.10
-Nodes (21): be(), debug(), Er, gr(), H(), he(), hr(), I() (+13 more)
+Cohesion: 0.11
+Nodes (20): be(), debug(), gr(), H(), he(), hr(), I(), info() (+12 more)
 
 ### Community 372 - "tw / tg"
 Cohesion: 0.10
 Nodes (7): t_, tE, tf, tg, tw, tx(), Z()
 
 ### Community 373 - ".endpointFor() / ts()"
-Cohesion: 0.07
-Nodes (27): Component, SecureRandom, PartnerCrypto, Claims, Component, ObjectMapper, RequiredArgsConstructor, Slf4j (+19 more)
+Cohesion: 0.06
+Nodes (30): Component, SecureRandom, PartnerCrypto, Claims, Component, ObjectMapper, RequiredArgsConstructor, Slf4j (+22 more)
 
 ### Community 374 - "D() / .capture()"
-Cohesion: 0.21
-Nodes (5): r9, re(), s3(), s5(), s8()
+Cohesion: 0.12
+Nodes (14): D(), iD(), iN(), isBrowserSupported(), N(), Q(), r5, r9 (+6 more)
 
 ### Community 375 - "tw / tg"
 Cohesion: 0.10
@@ -2684,28 +2674,28 @@ Cohesion: 0.11
 Nodes (29): ab(), ac(), ad(), ah(), aT(), av(), aw(), ay() (+21 more)
 
 ### Community 377 - "os / an()"
-Cohesion: 0.06
-Nodes (4): an(), ib(), os, ru
+Cohesion: 0.11
+Nodes (3): an(), os, uu()
 
 ### Community 378 - "Discover_files/0qlue1y1hmpy... / table()"
 Cohesion: 0.09
 Nodes (9): constructor(), ef(), el(), parse(), parser(), table(), tablecell(), tablerow() (+1 more)
 
 ### Community 379 - ".add() / qb()"
-Cohesion: 0.06
-Nodes (39): COLLECT_LABELS, H5ReportPage(), SessionData, MaterialsPage(), SelectedFile, ReportTab(), SkillDetailPage(), fileIcon() (+31 more)
+Cohesion: 0.07
+Nodes (26): CompanyInfo, SelectedFile, fileIcon(), FilePreviewCard(), formatSize(), Props, TYPE_LABELS, fileIcon() (+18 more)
 
 ### Community 380 - "getRecordingStatus() / startInstance()"
 Cohesion: 0.14
 Nodes (26): calculateNextUploadTime(), captureEvent(), checkSessionInfo(), configure(), confirmSession(), flushEventBuffer(), getRecordingStatus(), getSessionInfo() (+18 more)
 
 ### Community 381 - "afterAllSetup() / .add()"
-Cohesion: 0.06
-Nodes (7): ah(), as(), I(), R(), re, rz(), sr
+Cohesion: 0.03
+Nodes (22): aa(), ah(), as(), I(), i6(), ie(), ii(), lossyIntoFrame() (+14 more)
 
 ### Community 382 - "n3 / .onEvent()"
-Cohesion: 0.11
-Nodes (8): io(), n3, n5, overrideLinkedFlag(), overrideSampling(), overrideTrigger(), ra(), ro()
+Cohesion: 0.10
+Nodes (10): cancelPendingSurvey(), eo(), io(), n3, n5, overrideLinkedFlag(), overrideSampling(), overrideTrigger() (+2 more)
 
 ### Community 383 - "talk2_files/0qlue1y1hmpyc.js / table()"
 Cohesion: 0.09
@@ -2716,8 +2706,8 @@ Cohesion: 0.11
 Nodes (3): an(), os, uu()
 
 ### Community 385 - "of / .getTrackPublication()"
-Cohesion: 0.07
-Nodes (40): ThinkingCard(), ThinkingCardProps, avgScore(), initialState, PracticeAction, PracticeEval, PracticeFlowInputs, PracticeMessage (+32 more)
+Cohesion: 0.10
+Nodes (19): ThinkingCard(), ThinkingCardProps, PracticeEval, PracticeChatSection(), Props, EndConfirmModal(), Props, PracticeData (+11 more)
 
 ### Community 386 - "talk_files/0qlue1y1hmpyc.js / table()"
 Cohesion: 0.09
@@ -2726,10 +2716,6 @@ Nodes (9): constructor(), ef(), el(), parse(), parser(), table(), tablecell(), t
 ### Community 387 - "Browser Storage Utility / package.json (frontend)"
 Cohesion: 0.11
 Nodes (27): Dockerfile (backend), pom.xml, CSS Variable Theming System, docker-compose.yml, .editorconfig, Dockerfile (frontend), .env.local, package.json (frontend) (+19 more)
-
-### Community 388 - "n2 / tM"
-Cohesion: 0.12
-Nodes (5): n1(), n2, setElementSelectors(), tM, tT()
 
 ### Community 389 - "Discover_files/0v6u0-tbda_d... / e5()"
 Cohesion: 0.08
@@ -2748,8 +2734,8 @@ Cohesion: 0.13
 Nodes (23): Ce(), be(), ce(), de(), Ee(), fe(), ge(), he() (+15 more)
 
 ### Community 393 - "Le() / oe"
-Cohesion: 0.08
-Nodes (32): Ai(), bt(), Cs(), e(), ee(), Ei(), Er(), gs() (+24 more)
+Cohesion: 0.09
+Nodes (7): gt(), Le(), mt(), oe, vt(), xe, Z()
 
 ### Community 394 - "Ki / en"
 Cohesion: 0.11
@@ -2780,8 +2766,8 @@ Cohesion: 0.13
 Nodes (22): a(), C(), ea(), ed(), ee(), ef(), eg(), ei() (+14 more)
 
 ### Community 401 - "n2 / tM"
-Cohesion: 0.12
-Nodes (5): n1(), n2, setElementSelectors(), tM, tT()
+Cohesion: 0.11
+Nodes (7): Go(), n1(), n2, onConfigChange(), setElementSelectors(), tM, tT()
 
 ### Community 402 - "talk_files/0v6u0-tbda_d3.js / e5()"
 Cohesion: 0.08
@@ -2801,27 +2787,27 @@ Nodes (22): a(), C(), ea(), ed(), ee(), ef(), eg(), ei() (+14 more)
 
 ### Community 406 - "send() / startTimeout()"
 Cohesion: 0.08
-Nodes (29): ajax(), appendParams(), batchSend(), cancelRefEvent(), cancelTimeout(), canPush(), close(), closeAndRetry() (+21 more)
+Nodes (31): ajax(), appendParams(), batchSend(), cancelRefEvent(), cancelTimeout(), canPush(), close(), closeAndRetry() (+23 more)
 
 ### Community 407 - "Le() / oe"
-Cohesion: 0.12
-Nodes (5): Le(), oe, Qi, vt(), Z()
+Cohesion: 0.16
+Nodes (3): Le(), oe, Z()
 
 ### Community 408 - "compilerOptions / include"
-Cohesion: 0.08
-Nodes (21): a3(), B(), cf(), eP(), eT(), ew(), ia(), ie() (+13 more)
+Cohesion: 0.05
+Nodes (71): a3(), a5(), a6(), ad(), ae(), aF(), aH(), at() (+63 more)
 
 ### Community 409 - "compilerOptions / include"
 Cohesion: 0.07
 Nodes (26): compilerOptions, allowJs, esModuleInterop, incremental, isolatedModules, jsx, lib, module (+18 more)
 
 ### Community 410 - "nz() / iN()"
-Cohesion: 0.06
-Nodes (46): aa(), aI(), aj(), ak(), an(), cj(), cu(), e3() (+38 more)
+Cohesion: 0.08
+Nodes (18): ed(), gd(), mb(), nj(), nt(), nz(), Of(), Oy() (+10 more)
 
 ### Community 411 - "ni / .checkAndGetSessionAndWindo..."
-Cohesion: 0.12
-Nodes (4): ei(), es, ni, r5
+Cohesion: 0.15
+Nodes (3): ei(), es, ni
 
 ### Community 412 - "Discover_files/3w48woboemfn... / ey()"
 Cohesion: 0.12
@@ -2832,40 +2818,40 @@ Cohesion: 0.11
 Nodes (3): an(), os, uu()
 
 ### Community 414 - "ni / .checkAndGetSessionAndWindo..."
-Cohesion: 0.15
-Nodes (3): ei(), es, ni
+Cohesion: 0.12
+Nodes (4): ei(), es, ni, r5
 
 ### Community 415 - "e3() / e4()"
-Cohesion: 0.08
-Nodes (11): aa(), convertUtf16OffsetToUtf8(), convertUtf8OffsetToUtf16(), e3(), e4(), error(), highlight(), r8() (+3 more)
+Cohesion: 0.11
+Nodes (6): convertUtf16OffsetToUtf8(), convertUtf8OffsetToUtf16(), e3(), e4(), td, to()
 
 ### Community 416 - "talk2_files/3w48woboemfnp.js / ey()"
 Cohesion: 0.12
 Nodes (21): e7(), e8(), ea(), eg(), eK(), eL(), eT(), ev() (+13 more)
 
 ### Community 417 - "ni / .checkAndGetSessionAndWindo..."
-Cohesion: 0.12
-Nodes (4): ei(), es, ni, r5
+Cohesion: 0.15
+Nodes (3): ei(), es, ni
 
 ### Community 418 - "e3() / e4()"
-Cohesion: 0.11
-Nodes (6): convertUtf16OffsetToUtf8(), convertUtf8OffsetToUtf16(), e3(), e4(), td, to()
+Cohesion: 0.15
+Nodes (3): e3(), e4(), to()
 
 ### Community 419 - "talk_files/3w48woboemfnp.js / ey()"
 Cohesion: 0.12
 Nodes (21): e7(), e8(), ea(), eg(), eK(), eL(), eT(), ev() (+13 more)
 
 ### Community 420 - "AutoInsight / AutoInsightRepository"
-Cohesion: 0.14
-Nodes (13): AutoInsight, AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, PrePersist, Setter (+5 more)
+Cohesion: 0.04
+Nodes (56): AdminNotificationController, GetMapping, RequestMapping, RequiredArgsConstructor, RestController, Slf4j, AutoInsight, AllArgsConstructor (+48 more)
 
 ### Community 421 - "GrainRetrieveLog / GrainRetrieveLogRepository"
-Cohesion: 0.07
-Nodes (37): AnalyticsController, PostMapping, RequiredArgsConstructor, ResponseEntity, RestController, Slf4j, AnalyticsEvent, AllArgsConstructor (+29 more)
+Cohesion: 0.06
+Nodes (38): GrainRetrieveLog, AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, Setter, Table (+30 more)
 
 ### Community 422 - "ef / ed()"
-Cohesion: 0.11
-Nodes (9): ef, eh(), t$(), tG(), tK(), tq(), tv(), tz() (+1 more)
+Cohesion: 0.12
+Nodes (8): ed(), ef, eh(), ek(), t$(), ta(), tF(), tn()
 
 ### Community 423 - "Discover_files/2z7ha_1nqrsx... / X()"
 Cohesion: 0.19
@@ -2880,12 +2866,12 @@ Cohesion: 0.04
 Nodes (46): 0.1 已有机制, 0.2 多前端项目各自配置, 10.1 市场定位与 TAM, 10.2 单位经济模型, 10.3 收入模型, 10.4 价值主张矩阵, 10.5 标杆客户 ROI 模型, 10.6 退出价值 (+38 more)
 
 ### Community 426 - "ef / ._convertSpanToTransaction()"
-Cohesion: 0.11
-Nodes (9): ef, eh(), t$(), tG(), tK(), tq(), tv(), tz() (+1 more)
+Cohesion: 0.12
+Nodes (8): ed(), ef, eh(), ek(), t$(), ta(), tF(), tn()
 
 ### Community 427 - "get() / dn()"
-Cohesion: 0.04
-Nodes (88): a1(), a2(), a7(), a9(), afterAllSetup(), aM(), aS(), c2() (+80 more)
+Cohesion: 0.13
+Nodes (25): c2(), c5(), c6(), c7(), c8(), c9(), da(), de() (+17 more)
 
 ### Community 428 - "k() / .get()"
 Cohesion: 0.10
@@ -2944,8 +2930,8 @@ Cohesion: 0.17
 Nodes (17): d(), f(), g(), get(), h(), loadWebAssembly(), loadWebAssemblyModule(), m() (+9 more)
 
 ### Community 446 - "A() / D()"
-Cohesion: 0.18
-Nodes (20): A(), B(), critical(), D(), e(), error(), F(), j() (+12 more)
+Cohesion: 0.16
+Nodes (16): A(), B(), D(), F(), j(), L(), Lr, N() (+8 more)
 
 ### Community 447 - "n() / t()"
 Cohesion: 0.16
@@ -2962,6 +2948,10 @@ Nodes (4): en, Ki, tn, Vi()
 ### Community 450 - "talk2_files/turbopack-0kge1... / t()"
 Cohesion: 0.17
 Nodes (17): d(), f(), g(), get(), h(), loadWebAssembly(), loadWebAssemblyModule(), m() (+9 more)
+
+### Community 451 - "a9 / .ensureTransportConnected()"
+Cohesion: 0.12
+Nodes (4): it(), ob, oi, sI
 
 ### Community 452 - "n() / t()"
 Cohesion: 0.16
@@ -3000,16 +2990,16 @@ Cohesion: 0.17
 Nodes (6): d(), f, l(), scheduleResolve(), u(), v()
 
 ### Community 462 - "xe / xt()"
-Cohesion: 0.16
-Nodes (7): be(), kt(), S(), we(), xe, xt(), ye()
+Cohesion: 0.10
+Nodes (6): a_(), ao(), fromNumber(), lossyIntoFrame(), s3, sb
 
 ### Community 463 - "n() / u()"
 Cohesion: 0.22
 Nodes (23): B(), e2(), fa(), fg(), fh(), fs(), iq(), l1() (+15 more)
 
 ### Community 464 - "ed() / te()"
-Cohesion: 0.17
-Nodes (10): ed(), ek(), q, t8(), ta(), te(), tn(), tr() (+2 more)
+Cohesion: 0.24
+Nodes (6): q, t8(), te(), tr(), tt(), Y()
 
 ### Community 465 - "talk2_files/0wakbkhy5j_6d.js / eZ"
 Cohesion: 0.12
@@ -3080,16 +3070,16 @@ Cohesion: 0.16
 Nodes (7): be(), kt(), S(), we(), xe, xt(), ye()
 
 ### Community 484 - "enterprise/src/lib/api/auth.ts / enterprise/src/lib/stora..."
-Cohesion: 0.12
-Nodes (30): Ai(), be(), bt(), e(), Ei(), Er(), ie(), ir() (+22 more)
+Cohesion: 0.10
+Nodes (36): A(), B(), be(), bt(), C(), ct(), Dt(), e() (+28 more)
 
 ### Community 485 - "admin.ts / app/skills/page.tsx"
-Cohesion: 0.06
-Nodes (43): fmt(), SummaryCard(), TokenUsagePage(), ChatMode, formatRelativeTime(), SkillChatPage(), Channel, Props (+35 more)
+Cohesion: 0.08
+Nodes (22): ChatMode, formatRelativeTime(), SkillChatPage(), Conversation, HistorySidebar(), MODE_CONFIG, Props, Props (+14 more)
 
 ### Community 486 - "r() / n()"
-Cohesion: 0.29
-Nodes (6): ev, L(), n(), r(), t1(), tF()
+Cohesion: 0.20
+Nodes (15): a(), c(), D(), er(), ev, i(), L(), n() (+7 more)
 
 ### Community 487 - ".toLowerCase() / .toString()"
 Cohesion: 0.14
@@ -3100,20 +3090,24 @@ Cohesion: 0.15
 Nodes (3): A(), clear(), w()
 
 ### Community 489 - "bo() / oo()"
-Cohesion: 0.16
-Nodes (4): bo(), I(), oo(), Xs
+Cohesion: 0.10
+Nodes (7): bo(), di, hi(), I(), oo(), setElementSelectors(), Xs
 
 ### Community 490 - ".register() / TC()"
 Cohesion: 0.06
-Nodes (9): CA(), cm(), FA(), GA(), Iu(), oC(), TC(), vc() (+1 more)
+Nodes (11): Ab(), CA(), FA(), fn(), GA(), Gn(), Gy(), $m() (+3 more)
 
 ### Community 491 - ".constructor() / Xt"
 Cohesion: 0.18
-Nodes (6): Ht(), zt(), ae(), ft(), Jt(), Xt
+Nodes (6): ae(), ft(), Jt(), Sr(), warn(), Xt
+
+### Community 492 - "ac() / .setupEventListeners()"
+Cohesion: 0.09
+Nodes (3): ac(), ah(), oh
 
 ### Community 493 - ".toLowerCase() / .toString()"
-Cohesion: 0.14
-Nodes (18): Assertion(), Backreference(), Character(), CharacterClass(), CharacterClassRange(), CharacterSet(), doCreateClientSecret(), r0() (+10 more)
+Cohesion: 0.15
+Nodes (15): Character(), CharacterClassRange(), CharacterSet(), doCreateClientSecret(), NamedCallout(), r0(), r1(), rh (+7 more)
 
 ### Community 494 - "A() / .stop()"
 Cohesion: 0.15
@@ -3152,24 +3146,24 @@ Cohesion: 0.11
 Nodes (3): rg, rn(), t2
 
 ### Community 503 - "re() / ue"
-Cohesion: 0.08
-Nodes (6): ae, Dt(), Gn, Lt, re(), ue
+Cohesion: 0.17
+Nodes (3): Gn, re(), ue
 
 ### Community 505 - "t2 / .deepPartial()"
-Cohesion: 0.11
-Nodes (3): rg, rn(), t2
+Cohesion: 0.10
+Nodes (7): a_(), ao(), E(), fromNumber(), makeMessageType(), ox(), sb
 
 ### Community 506 - "t2 / .deepPartial()"
 Cohesion: 0.11
 Nodes (3): rg, rn(), t2
 
 ### Community 507 - "re() / ue"
-Cohesion: 0.14
-Nodes (4): Dt(), Gn, re(), ue
+Cohesion: 0.10
+Nodes (24): b6(), b9(), bp(), c1(), cM(), cR(), fk(), ic() (+16 more)
 
 ### Community 510 - "re() / ue"
-Cohesion: 0.17
-Nodes (4): Dt(), Gn, re(), ue
+Cohesion: 0.18
+Nodes (3): Gn, re(), ue
 
 ### Community 513 - "Extraction Dossier HTML Tem... / Six-Chapter Report Struc..."
 Cohesion: 0.25
@@ -3184,8 +3178,12 @@ Cohesion: 0.26
 Nodes (18): er(), tb(), tc(), td(), tf(), tg(), th(), tl() (+10 more)
 
 ### Community 516 - "send() / poll()"
-Cohesion: 0.14
-Nodes (20): ajax(), batchSend(), cancelRefEvent(), cancelTimeout(), close(), closeAndRetry(), fetchRequest(), isActive() (+12 more)
+Cohesion: 0.16
+Nodes (18): ajax(), appendParams(), batchSend(), close(), closeAndRetry(), endpointURL(), fetchRequest(), isActive() (+10 more)
+
+### Community 517 - "ol / .constructor()"
+Cohesion: 0.13
+Nodes (4): getEarlyAccessFeatures(), getProductTours(), nd, ol
 
 ### Community 518 - "eo / .advance()"
 Cohesion: 0.15
@@ -3216,8 +3214,8 @@ Cohesion: 0.05
 Nodes (41): 10. 合并去重（Layer 7）, 11. 模式发现（Layer 8）, 12. 后处理层（Layer 9-11）, 13.1 颗粒落库, 13.2 向量化, 13.3 语义去重, 13.4 报告 + Skill 状态, 13. 落库与向量化 (+33 more)
 
 ### Community 525 - ".fromBinary() / sb"
-Cohesion: 0.06
-Nodes (9): a_(), ao(), fromNumber(), sb, sg(), sH, sq, sW (+1 more)
+Cohesion: 0.05
+Nodes (16): C(), r3(), rg, rj(), rK(), rn(), ry, S() (+8 more)
 
 ### Community 526 - "clone() / .add()"
 Cohesion: 0.13
@@ -3248,40 +3246,48 @@ Cohesion: 0.15
 Nodes (11): bB(), bF(), bW(), bz(), f0(), fG(), fQ(), fX() (+3 more)
 
 ### Community 535 - ".fromBinary() / sb"
-Cohesion: 0.10
-Nodes (7): a_(), ao(), E(), fromNumber(), makeMessageType(), ox(), sb
+Cohesion: 0.17
+Nodes (4): a_(), ao(), fromNumber(), sb
 
 ### Community 536 - "afterAllSetup() / eq()"
-Cohesion: 0.11
-Nodes (23): afterAllSetup(), dw(), e5(), e6(), e7(), e9(), eq(), n2() (+15 more)
+Cohesion: 0.07
+Nodes (44): afterAllSetup(), c2(), c5(), c6(), c7(), c8(), c9(), da() (+36 more)
 
 ### Community 537 - "n() / eh()"
 Cohesion: 0.13
 Nodes (17): D(), defaultValue(), e1(), eB(), eh(), em(), eX(), get() (+9 more)
 
 ### Community 539 - "j / .addNewAndUpdateExisting()"
-Cohesion: 0.14
-Nodes (4): j, N, P, S
+Cohesion: 0.20
+Nodes (3): j, N, P
 
 ### Community 540 - "n() / eh()"
 Cohesion: 0.13
 Nodes (17): D(), defaultValue(), e1(), eB(), eh(), em(), eX(), get() (+9 more)
 
+### Community 541 - "tz / updateAnimationControlsSubs..."
+Cohesion: 0.15
+Nodes (11): bB(), bF(), bW(), bz(), f0(), fG(), fQ(), fX() (+3 more)
+
 ### Community 542 - "discover/page.tsx / ExpertRow.tsx"
-Cohesion: 0.09
-Nodes (29): ChatPage(), C, RegisterPage(), RegTab, SkillPage(), Navbar(), ORG_AVATAR_COLORS, Props (+21 more)
+Cohesion: 0.10
+Nodes (26): C, RegisterPage(), RegTab, Navbar(), ORG_AVATAR_COLORS, Props, SkillCardPage(), SKINS (+18 more)
 
 ### Community 543 - "useImChannels.ts / im.ts"
 Cohesion: 0.23
 Nodes (14): AdminImPage(), CHANNEL_TYPES, EMPTY_FORM, ImConfig, ImForm, parseConfig(), useImChannels(), createChannel() (+6 more)
 
 ### Community 544 - "AdminAuditLog / AdminAuditLogRepository"
-Cohesion: 0.23
-Nodes (12): AdminAuditLog, AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, Setter, Table (+4 more)
+Cohesion: 0.09
+Nodes (27): AdminAuditLog, AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, Setter, Table (+19 more)
 
 ### Community 545 - "Discover_files/0cz1d0mv5g_q... / ib()"
 Cohesion: 0.22
 Nodes (9): e(), eb(), ib(), nb(), ob(), rb(), sb(), t() (+1 more)
+
+### Community 546 - "ol / .constructor()"
+Cohesion: 0.15
+Nodes (3): getProductTours(), nd, ol
 
 ### Community 547 - "Discover_files/2pmor75jyeqt... / j()"
 Cohesion: 0.26
@@ -3312,8 +3318,8 @@ Cohesion: 0.22
 Nodes (9): e(), eb(), ib(), nb(), ob(), rb(), sb(), t() (+1 more)
 
 ### Community 555 - "n2 / .on()"
-Cohesion: 0.10
-Nodes (6): n1(), n2, nl(), setElementSelectors(), tM, tT()
+Cohesion: 0.12
+Nodes (5): n1(), n2, setElementSelectors(), tM, tT()
 
 ### Community 556 - "c / o()"
 Cohesion: 0.15
@@ -3342,10 +3348,6 @@ Nodes (10): a(), d(), e(), i(), O(), p(), r(), s() (+2 more)
 ### Community 562 - "talk_files/0cz1d0mv5g_q7.js / ib()"
 Cohesion: 0.22
 Nodes (9): e(), eb(), ib(), nb(), ob(), rb(), sb(), t() (+1 more)
-
-### Community 563 - "ol / .constructor()"
-Cohesion: 0.13
-Nodes (4): getEarlyAccessFeatures(), getProductTours(), nd, ol
 
 ### Community 564 - "c / o()"
 Cohesion: 0.15
@@ -3376,8 +3378,8 @@ Cohesion: 0.07
 Nodes (27): DiscoverPage(), AVATAR_COLORS, ExpertCard(), generateQuestions(), Props, FilterBar(), Props, SORTS (+19 more)
 
 ### Community 571 - "te() / q"
-Cohesion: 0.17
-Nodes (10): ed(), ek(), q, t8(), ta(), te(), tn(), tr() (+2 more)
+Cohesion: 0.24
+Nodes (6): q, t8(), te(), tr(), tt(), Y()
 
 ### Community 572 - "ri / ru"
 Cohesion: 0.14
@@ -3396,16 +3398,16 @@ Cohesion: 0.14
 Nodes (16): aS(), H(), J(), K(), M(), oj(), ou(), P() (+8 more)
 
 ### Community 576 - "nn() / k()"
-Cohesion: 0.21
-Nodes (24): an(), At(), C(), ce(), de(), fr(), ge(), gt() (+16 more)
+Cohesion: 0.24
+Nodes (18): an(), ce(), critical(), de(), e(), error(), fr(), ge() (+10 more)
 
 ### Community 577 - "clone() / e6()"
 Cohesion: 0.14
 Nodes (15): array(), catchall(), clone(), e3(), e6(), loose(), ns(), passthrough() (+7 more)
 
 ### Community 578 - "ri / ru"
-Cohesion: 0.14
-Nodes (5): rc, ri, rr, ru, t6
+Cohesion: 0.12
+Nodes (6): rc, ri, rp, rr, ru, t6
 
 ### Community 579 - "talk2_files/2e-ltj5b726v1.js / E()"
 Cohesion: 0.14
@@ -3445,7 +3447,7 @@ Nodes (15): array(), catchall(), clone(), e3(), e6(), loose(), ns(), passthrough
 
 ### Community 588 - "internal.py / main.py"
 Cohesion: 0.13
-Nodes (13): Logger, AI Extract 文件解析服务 — 统一日志配置  提供 rotating file handler，格式对齐后端 Spring Boot logback：, 配置根 logger，输出到控制台 + 轮转文件 + 错误文件。, setup_logging(), lifespan(), AI经验萃取平台 - 文件解析服务  负责上传文件的内容提取（txt/md/docx/pdf/pptx/xlsx/html/image/audio）。  Aut, parse_file(), _parse_sync() (+5 more)
+Nodes (13): AI Extract 文件解析服务 — 统一日志配置  提供 rotating file handler，格式对齐后端 Spring Boot logback：, 配置根 logger，输出到控制台 + 轮转文件 + 错误文件。, setup_logging(), lifespan(), AI经验萃取平台 - 文件解析服务  负责上传文件的内容提取（txt/md/docx/pdf/pptx/xlsx/html/image/audio）。  Aut, parse_file(), _parse_sync(), ParseFileRequest (+5 more)
 
 ### Community 589 - "n() / l()"
 Cohesion: 0.16
@@ -3484,8 +3486,8 @@ Cohesion: 0.29
 Nodes (9): a(), c(), d(), f(), i(), l(), n(), o() (+1 more)
 
 ### Community 605 - "r() / n()"
-Cohesion: 0.29
-Nodes (6): ev, L(), n(), r(), t1(), tF()
+Cohesion: 0.20
+Nodes (15): a(), c(), D(), er(), ev, i(), L(), n() (+7 more)
 
 ### Community 607 - "_ / eW()"
 Cohesion: 0.17
@@ -3620,8 +3622,8 @@ Cohesion: 0.29
 Nodes (11): f(), fQ(), fX(), fY(), fz(), tB(), tF(), tH() (+3 more)
 
 ### Community 650 - "gt() / ht()"
-Cohesion: 0.11
-Nodes (22): D(), g(), getElementSelectors(), ho(), iD(), iH(), iN(), N() (+14 more)
+Cohesion: 0.12
+Nodes (11): ae, ee(), extractLocation(), Lt, parse(), parseFFOrSafari(), parseOpera(), parseOpera10() (+3 more)
 
 ### Community 651 - "w() / F()"
 Cohesion: 0.22
@@ -3664,8 +3666,8 @@ Cohesion: 0.18
 Nodes (3): ag, rA(), tq()
 
 ### Community 665 - "scrapeMotionValuesFromProps() / tr()"
-Cohesion: 0.09
-Nodes (25): b6(), b9(), bp(), c1(), cM(), cR(), fk(), ic() (+17 more)
+Cohesion: 0.10
+Nodes (24): b6(), b9(), bp(), c1(), cM(), cR(), fk(), ic() (+16 more)
 
 ### Community 667 - "talk_files/script.js / v()"
 Cohesion: 0.29
@@ -3676,8 +3678,8 @@ Cohesion: 0.20
 Nodes (10): api:getAuditDashboard, api:publishSkill, component:ExplicitStep, component:PracticeScenarioModal, component:ProductDemoModal, component:ProductStep, component:ReportPreviewModal, component:SceneStep (+2 more)
 
 ### Community 669 - "AiExtractApplication.java / AiExtractApplication"
-Cohesion: 0.33
-Nodes (7): AiExtractApplication, Bean, Slf4j, WebClient, EnableAsync, EnableScheduling, SpringBootApplication
+Cohesion: 0.31
+Nodes (8): AiExtractApplication, Bean, Slf4j, WebClient, EnableAsync, EnableConfigurationProperties, EnableScheduling, SpringBootApplication
 
 ### Community 670 - "AiConfig / AiConfig.java"
 Cohesion: 0.23
@@ -3688,8 +3690,8 @@ Cohesion: 0.39
 Nodes (5): CorsConfig, Bean, Configuration, CorsConfiguration, CorsConfigurationSource
 
 ### Community 672 - "em() / ea()"
-Cohesion: 0.18
-Nodes (15): cc(), cd(), dd(), ea(), eC(), eD(), eI(), em() (+7 more)
+Cohesion: 0.10
+Nodes (44): ac(), cb(), cw(), cx(), cz(), d0(), dd(), du() (+36 more)
 
 ### Community 673 - "Discover_files/1ro6l1xk-m5w... / i()"
 Cohesion: 0.36
@@ -3700,12 +3702,12 @@ Cohesion: 0.33
 Nodes (5): a(), g(), n(), p(), v()
 
 ### Community 676 - "is / .onRemoteConfig()"
-Cohesion: 0.05
-Nodes (37): 1.1 候选领域及其本质差异, 1.2 这些差异带来的架构挑战, 2.1 三种架构方案, 2.2 方案B的完整架构, 3.1 效果度量体系, 3.2 质量保障流程, 3.3 质量回归防护, 4.1 方案B如何构建壁垒 (+29 more)
+Cohesion: 0.11
+Nodes (23): afterAllSetup(), dw(), e5(), e6(), e7(), e9(), eq(), n2() (+15 more)
 
 ### Community 677 - "em() / ea()"
-Cohesion: 0.05
-Nodes (37): 1.1 当前热加载能力矩阵, 1.2 关键瓶颈, 2.0 整体架构, 2.1 第一层：DomainConfigLoader 热加载改造, 2.2 第二层：ConfigHub 统一配置管理, 2.3 第二层补充：DB驱动的领域注册, 2.4 第二层补充：Redis Pub/Sub 多实例通知, 2.5 第三层：配置管理前端界面 (+29 more)
+Cohesion: 0.13
+Nodes (21): afterAllSetup(), e5(), e6(), e7(), e9(), eq(), n2(), n3() (+13 more)
 
 ### Community 678 - "talk2_files/1ro6l1xk-m5w1.js / i()"
 Cohesion: 0.36
@@ -3880,8 +3882,8 @@ Cohesion: 0.39
 Nodes (8): containsBalancedBrackets(), getBackground(), getFontStyle(), getForeground(), getLanguageId(), getTokenType(), print(), set()
 
 ### Community 737 - "Ge() / .toString()"
-Cohesion: 0.36
-Nodes (6): Ge(), He(), je(), Pe, qe(), ze()
+Cohesion: 0.14
+Nodes (9): ft, g(), Ge(), He(), je(), Pe, qe(), w() (+1 more)
 
 ### Community 738 - "frontend/src/middleware.ts / middleware()"
 Cohesion: 0.06
@@ -3904,8 +3906,8 @@ Cohesion: 0.33
 Nodes (6): oa(), oc(), oe(), ol(), os(), ot()
 
 ### Community 749 - "nf / ._estimateP98LongestInterac..."
-Cohesion: 0.09
-Nodes (22): ad(), cc(), cd(), ea(), en(), nC(), nf, nP() (+14 more)
+Cohesion: 0.06
+Nodes (36): ad(), cc(), cd(), e3(), ea(), en(), nb(), nC() (+28 more)
 
 ### Community 751 - "ee() / en()"
 Cohesion: 0.48
@@ -3953,11 +3955,11 @@ Nodes (5): b(), d(), h(), l(), w()
 
 ### Community 774 - "Lt / .constructor()"
 Cohesion: 0.07
-Nodes (24): ChatAvatar(), ChatAvatarProps, Role, ROLE_CONFIG, DefaultAvatar(), SPARKLES, EGG, PortraitCard() (+16 more)
+Nodes (28): ChatMode, QaHook, TABS, ChatAvatar(), ChatAvatarProps, Role, ROLE_CONFIG, DefaultAvatar() (+20 more)
 
 ### Community 775 - "s2 / .cancelled()"
-Cohesion: 0.13
-Nodes (24): LoginPage(), LoginTab, Props, SharePage(), Props, SheetMode, MODE_CARDS, Props (+16 more)
+Cohesion: 0.12
+Nodes (26): ChatPage(), LoginPage(), LoginTab, Props, SharePage(), Props, SheetMode, MODE_CARDS (+18 more)
 
 ### Community 777 - "inlineTokens() / lex()"
 Cohesion: 0.33
@@ -3970,6 +3972,10 @@ Nodes (6): callback(), ea(), eM(), ep(), es(), onSuccess()
 ### Community 779 - "talk2_files/1x722vldk6yu-.js / a()"
 Cohesion: 0.47
 Nodes (4): a(), h(), l(), p()
+
+### Community 783 - "Lt / .constructor()"
+Cohesion: 0.17
+Nodes (21): aD(), aH(), createTimeoutError(), doEmbed(), doGenerate(), doRerank(), doStream(), getArgs() (+13 more)
 
 ### Community 786 - "inlineTokens() / lex()"
 Cohesion: 0.33
@@ -4099,6 +4105,10 @@ Nodes (4): authorize(), E(), f(), p()
 Cohesion: 0.50
 Nodes (4): G(), get(), onError(), onRequest()
 
+### Community 837 - "ad / .lex()"
+Cohesion: 0.17
+Nodes (7): be(), kt(), S(), we(), xe, xt(), ye()
+
 ### Community 838 - "ns() / tr()"
 Cohesion: 0.50
 Nodes (4): array(), ns(), tg(), tr()
@@ -4112,8 +4122,8 @@ Cohesion: 0.83
 Nodes (3): c(), g(), l()
 
 ### Community 844 - "tk / X()"
-Cohesion: 0.08
-Nodes (12): Ba(), captureLog(), flushLogs(), getProductTours(), ja(), logger(), nd, sl() (+4 more)
+Cohesion: 0.10
+Nodes (20): 1.1 三层壁垒模型, 1.2 为什么叫"飞轮"而不是"功能", 1.3 壁垒在代码中的体现, 1.4 竞品对比, 3.1 素材上传管道（已打通 ✅）, 3.2 销冠访谈管道（本次修复 🔧）, 3.3 萃取师元访谈管道（本次修复 🔧）, 4.1 两条管道的领域隔离对比 (+12 more)
 
 ### Community 845 - "authorize() / E()"
 Cohesion: 0.50
@@ -4152,8 +4162,8 @@ Cohesion: 0.67
 Nodes (3): setFocused(), setOnline(), setup()
 
 ### Community 860 - "Xi / .stop()"
-Cohesion: 0.09
-Nodes (28): ajax(), batchSend(), cancelRefEvent(), cancelTimeout(), canPush(), close(), closeAndRetry(), fetchRequest() (+20 more)
+Cohesion: 0.11
+Nodes (18): 6.1 命名规范, 6.2 摘录而非整篇, 6.3 标注时间与背景, 6.4 音频/图片素材, 6.5 敏感信息说明（宽进严出）, 一、核心定位（先理解，再提交）, 七、提交示例（好 vs 坏）, 三、我们不接收什么（拒绝清单） (+10 more)
 
 ### Community 862 - "Er / .constructor()"
 Cohesion: 0.07
@@ -4183,9 +4193,17 @@ Nodes (3): eF(), ex(), s()
 Cohesion: 0.67
 Nodes (3): setFocused(), setOnline(), setup()
 
+### Community 875 - "Xi / .stop()"
+Cohesion: 0.18
+Nodes (10): ae, extractLocation(), hi(), parse(), parseFFOrSafari(), parseOpera(), parseOpera10(), parseOpera11() (+2 more)
+
+### Community 876 - "Er / .constructor()"
+Cohesion: 0.18
+Nodes (5): Component, RequiredArgsConstructor, Slf4j, MaterialPreChecker, PreCheckResult
+
 ### Community 877 - "enterprise/src/app/layout.tsx / metadata"
-Cohesion: 0.10
-Nodes (20): AdminOrgSkillsPage(), OrgSkill, SkillOption, DoneContent(), COLLECT_LABELS, H5ReportPage(), SessionData, PROGRESS_STEPS (+12 more)
+Cohesion: 0.09
+Nodes (24): qrcode, AdminOrgSkillsPage(), OrgSkill, SkillOption, DoneContent(), COLLECT_LABELS, H5ReportPage(), SessionData (+16 more)
 
 ### Community 878 - "Material Context Tag Prompt / Classify Scenes Prompt"
 Cohesion: 0.67
@@ -4228,8 +4246,8 @@ Cohesion: 0.08
 Nodes (26): After the file is written, Emitting a `design.md` from `study`, Image-mode template, Junk-or-blocked detection, Limits and disclaimers, Refusal — when not to study, Remote URL safety, Source mode — image or URL (+18 more)
 
 ### Community 955 - "Enterprise Skill API (分身/会话..."
-Cohesion: 0.10
-Nodes (24): b6(), b9(), bp(), c1(), cM(), cR(), fk(), ic() (+16 more)
+Cohesion: 0.12
+Nodes (6): rc, ri, rp, rr, ru, t6
 
 ### Community 957 - "Enterprise ChatActive (消息列表..."
 Cohesion: 0.08
@@ -4240,12 +4258,12 @@ Cohesion: 0.08
 Nodes (24): 1. 模式总览, 2. 分身问答（Q&A）, 3. 审核页（Admin Audit）, 4. 分身对练（Practice）, 5. 企业总调度（Enterprise）, 6. 访谈（Interview）— 四阶段引擎, 7. 关键对比矩阵, 8. SSE 事件协议 (+16 more)
 
 ### Community 959 - "Enterprise ChatView (三模式:qa..."
-Cohesion: 0.12
-Nodes (17): DoneContent(), C, domainLabel(), PlatformMyPage(), SkillItem, statusColor(), statusLabel(), BORDER_COLORS (+9 more)
+Cohesion: 0.07
+Nodes (36): DoneContent(), COLLECT_LABELS, H5ReportPage(), SessionData, C, domainLabel(), PlatformMyPage(), SkillItem (+28 more)
 
 ### Community 961 - "Enterprise MessageBubble (含..."
-Cohesion: 0.20
-Nodes (10): AutoInsightScheduler, GapCluster, ObjectMapper, RequiredArgsConstructor, Scheduled, Service, Slf4j, Transactional (+2 more)
+Cohesion: 0.12
+Nodes (15): 0. 一句话结论, 1. 【架构级 · 已验证】设计说一套，实现做一套, 2.1 JWT 密钥硬编码进仓库 —— `backend/src/main/resources/application.yml:77`, 2.2 XSS + localStorage token = 完整账户接管链（前端 · 已验证）, 2.3 IM 回调零签名校验（后端 · 已验证）, 2.4 越权 / IDOR：资源按 ID 直查、无归属校验（后端）, 2. 【CRITICAL · 安全 · 已验证】密钥与凭据, 3. 【CRITICAL/HIGH · 性能红线】事务里跑 AI/HTTP（与 CLAUDE.md 直接冲突） (+7 more)
 
 ### Community 962 - "Enterprise Chat Page (/chat..."
 Cohesion: 0.08
@@ -4254,10 +4272,6 @@ Nodes (23): 13\-编码规范, 1\.1 命名规范, 1\.2 代码格式, 1\.3 注释�
 ### Community 963 - "Enterprise PracticeView (实战..."
 Cohesion: 0.08
 Nodes (23): enterprise_system.md, expert_document_extraction.md, expert_grain_extraction.md, expert_structure_report.md, grain_extraction.md, interview_completion.md, interview_opening.md, interview_system.md (+15 more)
-
-### Community 964 - "Discover ExpertRow (专家卡片+轮播问题)"
-Cohesion: 0.12
-Nodes (3): is, Ye, Ze
 
 ### Community 965 - "Enterprise Discover Page (S..."
 Cohesion: 0.08
@@ -4272,12 +4286,12 @@ Cohesion: 0.09
 Nodes (22): Anti-patterns (theme-specific), Axes (diversification), Build hint, Drop 01 · Cold Snap *(default)*, Drop 02 · Citrus Riot, Drop 03 · Diner Sign, Drop 04 · Studio Night, Drop 05 · Aqua Park (+14 more)
 
 ### Community 968 - "Enterprise Error Page"
-Cohesion: 0.11
-Nodes (12): yt(), At(), critical(), error(), get(), getId(), getNode(), has() (+4 more)
+Cohesion: 0.10
+Nodes (12): yt(), At(), error(), get(), getId(), getNode(), Gn, has() (+4 more)
 
 ### Community 969 - "MindForge Footer"
-Cohesion: 0.17
-Nodes (21): aD(), aH(), createTimeoutError(), doEmbed(), doGenerate(), doRerank(), doStream(), getArgs() (+13 more)
+Cohesion: 0.21
+Nodes (7): bo(), Co(), Mt(), nJ(), nl(), r5, wo()
 
 ### Community 970 - "Delphi Warm Sand Design Tok..."
 Cohesion: 0.09
@@ -4308,12 +4322,8 @@ Cohesion: 0.17
 Nodes (17): AuditPage(), btnReset, C, GrainItem, GrainRow(), groupByScene(), isBypassed(), qualityBadge() (+9 more)
 
 ### Community 977 - "Landing Competitive Moat Se..."
-Cohesion: 0.10
-Nodes (20): 1.1 三层壁垒模型, 1.2 为什么叫"飞轮"而不是"功能", 1.3 壁垒在代码中的体现, 1.4 竞品对比, 3.1 素材上传管道（已打通 ✅）, 3.2 销冠访谈管道（本次修复 🔧）, 3.3 萃取师元访谈管道（本次修复 🔧）, 4.1 两条管道的领域隔离对比 (+12 more)
-
-### Community 978 - "MindForge Landing Page"
-Cohesion: 0.16
-Nodes (12): CandidateGrain, AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, PrePersist, Setter (+4 more)
+Cohesion: 0.14
+Nodes (13): 0. 一句话结论, 1. 本轮已修复（确认 FIXED）, 2.1 🔴 系统性跨租户 IDOR（最该修，且比上轮面更大）, 2.2 🔴 C5 飞书回调零签名 + 硬编码 companyId, 2.3 🔴 M7 下载伪装 JSON + regenerateFile 空操作, 2.4 🟠 新回归：getReport GET 写 viewCount, 2.5 ⚠️ C4 数据源凭据兜底明文, 2.6 ⚠️ H12 ToolController.getTools 跨租户 (+5 more)
 
 ### Community 979 - "Landing ROI Before/After Co..."
 Cohesion: 0.10
@@ -4332,8 +4342,8 @@ Cohesion: 0.16
 Nodes (14): ExplorePage(), GenerationPhase, PROGRESS_STEPS, ReportDonePage(), ReportViewer(), ReportViewerProps, getReport(), getReports() (+6 more)
 
 ### Community 983 - "Enterprise Loading State"
-Cohesion: 0.17
-Nodes (6): Modifying, Page, Pageable, Query, Repository, KnowledgeGapRepository
+Cohesion: 0.21
+Nodes (4): ci(), getAndClearBuffer(), handlePageUnload(), r6
 
 ### Community 984 - "Enterprise Login Page (企业ID..."
 Cohesion: 0.11
@@ -4403,25 +4413,17 @@ Nodes (17): dependencies, @aiextract/shared-ui, clsx, @nivo/bar, @nivo/core, @ni
 Cohesion: 0.12
 Nodes (16): 你擅长的领域, 你的性格, 你的技能标签, 你的沟通偏好, 你的经验（以下是你的真实经历和思考）, 你的说话风格, 你适用的场景, 口头禅 (+8 more)
 
-### Community 1012 - "CheckItem"
-Cohesion: 0.21
-Nodes (3): CheckItem, PreCheckResult, StructureAnalyzer
-
 ### Community 1013 - "iW"
-Cohesion: 0.17
-Nodes (8): ci(), fo(), getAndClearBuffer(), iW(), monitorHistoryChanges(), po(), r6, vo()
-
-### Community 1014 - "s"
-Cohesion: 0.14
-Nodes (12): aj(), ak(), cj(), cu(), e3(), iG(), iV(), iy() (+4 more)
+Cohesion: 0.07
+Nodes (20): addExceptionStep(), Ba(), captureLog(), ci(), constructor(), f(), flushLogs(), getAndClearBuffer() (+12 more)
 
 ### Community 1015 - "领域扩展说明"
 Cohesion: 0.12
 Nodes (15): Step 1：在 `_tree.json` 中注册, Step 2：创建一级领域配置, Step 3：创建二级领域（可选）, Step 4：创建领域 prompt 文件, Step 5：验证, 一、架构概览, 三、完整示例：医疗领域, 二、扩展步骤 (+7 more)
 
 ### Community 1016 - "AI经验萃取平台 — 设计与实现问题分析报告"
-Cohesion: 0.12
-Nodes (15): 0. 一句话结论, 1. 【架构级 · 已验证】设计说一套，实现做一套, 2.1 JWT 密钥硬编码进仓库 —— `backend/src/main/resources/application.yml:77`, 2.2 XSS + localStorage token = 完整账户接管链（前端 · 已验证）, 2.3 IM 回调零签名校验（后端 · 已验证）, 2.4 越权 / IDOR：资源按 ID 直查、无归属校验（后端）, 2. 【CRITICAL · 安全 · 已验证】密钥与凭据, 3. 【CRITICAL/HIGH · 性能红线】事务里跑 AI/HTTP（与 CLAUDE.md 直接冲突） (+7 more)
+Cohesion: 0.15
+Nodes (12): 1.1 已有的领域基础设施（做得好的部分）, 1.2 核心局限（扩展到10+领域时会爆的问题）, 5.1 题域选择界面升级, 5.2 题域健康度看板组件, 一、现状分析：当前领域体系的能力与局限, 三、新增领域标准流程（从半天到2小时）, 五、前端领域交互升级, 八、总结：从2领域到20领域的路径 (+4 more)
 
 ### Community 1017 - "萃取师资料上传分析完整流程"
 Cohesion: 0.13
@@ -4467,6 +4469,10 @@ Nodes (13): 一、整体架构, 三、数据存储位置, 二、状态机, 五�
 Cohesion: 0.14
 Nodes (13): 一、总览：一个萃取师的生命周期, 三、分步详解, 二、涉及文件, 五、文件管理操作, 六、关键 API 速查, 四、数据存储一览, 步骤 1：上传, 步骤 2：定时调度 (+5 more)
 
+### Community 1029 - "st"
+Cohesion: 0.21
+Nodes (8): ea(), ey(), tG(), ti(), tK(), tq(), tv(), tz()
+
 ### Community 1030 - "知识飞轮 — 实现细节"
 Cohesion: 0.14
 Nodes (13): 一、数据根基：一条颗粒长什么样, 三、具体示例：一条颗粒的完整优化过程, 下一阶段（P1）：管理员能审查, 二、飞轮四步，每一步的具体代码, 五、飞轮的"飞"体现在哪里, 再下一阶段（P2）：在线编辑, 四、改动清单, 本次（P0）：让飞轮开始转 (+5 more)
@@ -4480,12 +4486,8 @@ Cohesion: 0.14
 Nodes (13): AI经验萃取平台 · 手工测试用例, TC01：销冠登录 → 创建访谈 → 完成四阶段对话 → 生成完整报告, TC02：访谈中途关闭页面 → 重新进入 → 弹出恢复弹窗 → 可继续对话, TC03：员工进入经验广场 → 搜索周铭 → 查看空间 → 向分身提问, TC04：员工进入分身页 → 切换对练模式 → 完成一轮对练 → 显示评判和示范, TC05：管理员查看场景覆盖地图 → 看到空白场景 → 发起萃取邀请, TC06：管理员上传萃取师材料 → AI分析 → 提取颗粒 → 审核 → 激活Skill, TC07：创建新访谈时选择已激活的萃取师 → 访谈开场引导显示萃取师信息 (+5 more)
 
 ### Community 1033 - "2. 仍破（重点：安全）"
-Cohesion: 0.14
-Nodes (13): 0. 一句话结论, 1. 本轮已修复（确认 FIXED）, 2.1 🔴 系统性跨租户 IDOR（最该修，且比上轮面更大）, 2.2 🔴 C5 飞书回调零签名 + 硬编码 companyId, 2.3 🔴 M7 下载伪装 JSON + regenerateFile 空操作, 2.4 🟠 新回归：getReport GET 写 viewCount, 2.5 ⚠️ C4 数据源凭据兜底明文, 2.6 ⚠️ H12 ToolController.getTools 跨租户 (+5 more)
-
-### Community 1034 - "SkillEvaluation"
-Cohesion: 0.28
-Nodes (8): AllArgsConstructor, Builder, Data, Entity, NoArgsConstructor, Table, SkillEvaluation, SkillEvaluationRepository
+Cohesion: 0.21
+Nodes (8): ea(), ey(), tG(), ti(), tK(), tq(), tv(), tz()
 
 ### Community 1035 - "Responsive"
 Cohesion: 0.15
@@ -4512,16 +4514,20 @@ Cohesion: 0.15
 Nodes (12): 你擅长的领域, 你的性格, 你的技能标签, 你的沟通偏好, 你的经验（以下是你的真实经历和思考）, 你的说话风格, 你适用的场景, 口头禅 (+4 more)
 
 ### Community 1041 - "多领域架构设计方案"
-Cohesion: 0.15
-Nodes (12): 1.1 已有的领域基础设施（做得好的部分）, 1.2 核心局限（扩展到10+领域时会爆的问题）, 5.1 题域选择界面升级, 5.2 题域健康度看板组件, 一、现状分析：当前领域体系的能力与局限, 三、新增领域标准流程（从半天到2小时）, 五、前端领域交互升级, 八、总结：从2领域到20领域的路径 (+4 more)
+Cohesion: 0.49
+Nodes (10): At(), C(), gt(), ht(), It(), Mt(), Rt(), Tt() (+2 more)
 
 ### Community 1042 - "KnowledgeGap"
-Cohesion: 0.24
-Nodes (9): AllArgsConstructor, Builder, Entity, Getter, NoArgsConstructor, PreUpdate, Setter, Table (+1 more)
+Cohesion: 0.31
+Nodes (10): cc(), cd(), ea(), eC(), eD(), eI(), em(), en() (+2 more)
+
+### Community 1043 - "st"
+Cohesion: 0.22
+Nodes (8): 0. 总体结论, 1. 已验证修复（我亲自读了代码）, 2. 后端 Delta, 3. 前端 Delta, 4. ai-service Delta, 5. 本轮必须收口（优先级）, 6. 一句话给架构师, AI经验萃取平台 — 复查报告（Delta）
 
 ### Community 1044 - "di"
-Cohesion: 0.21
-Nodes (4): di, hi(), onConfigChange(), setElementSelectors()
+Cohesion: 0.22
+Nodes (9): 2.1.1 配置类型系统, 2.1.2 领域配置继承增强, 2.1.3 领域配置校验器, 2.2.1 领域注册数据模型, 2.2.2 领域生命周期 API, 2.2.3 题域生命周期 Gate, Layer 1 — 领域元模型（Domain Meta-Model）, Layer 2 — 领域注册中心（Domain Registry） (+1 more)
 
 ### Community 1045 - "RAG 检索三种模式 — 完整流程对比"
 Cohesion: 0.17
@@ -4530,6 +4536,10 @@ Nodes (11): RAG 检索三种模式 — 完整流程对比, 三种模式对比: �
 ### Community 1046 - "AI 经验萃取平台 — 系统使用说明书"
 Cohesion: 0.17
 Nodes (11): 1.1 这是什么, 1.2 核心概念, 1.3 用户角色总览, 7.1 管线全景, 7.2 调度机制, AI 经验萃取平台 — 系统使用说明书, 一、产品概述, 七、平台端 vs B 端 — 功能对应关系 (+3 more)
+
+### Community 1048 - "ContentAnalyzer"
+Cohesion: 0.22
+Nodes (9): 2.1 严重架构问题 (P0), 2.2 中等架构问题 (P1), 2.3 代码规范问题 (P2), 3.1 性能优化 (按优先级排序), 3.2 安全优化, 3.3 架构演进方向, 三、架构优化建议, 二、架构不足识别 (+1 more)
 
 ### Community 1049 - "Genre — atmospheric"
 Cohesion: 0.18
@@ -4649,19 +4659,15 @@ Nodes (8): 你的任务, 场景, 学员回答, 客户说的, 要求, 角色, 追
 
 ### Community 1078 - "AI经验萃取平台 — 复查报告（Delta）"
 Cohesion: 0.22
-Nodes (8): 0. 总体结论, 1. 已验证修复（我亲自读了代码）, 2. 后端 Delta, 3. 前端 Delta, 4. ai-service Delta, 5. 本轮必须收口（优先级）, 6. 一句话给架构师, AI经验萃取平台 — 复查报告（Delta）
+Nodes (9): 2.1 ❌ 访谈创建流程门槛太高, 2.2 ❌ 访谈过程中缺乏掌控感, 2.3 ❌ 报告查看体验割裂, 2.4 ❌ 分身对话的"空壳感", 2.5 ❌ 管理后台信息过载, 2.6 ❌ 缺乏学习效果度量, 2.7 ❌ 语音输入降级但无替代, 2.8 ❌ 多端体验不连贯 (+1 more)
 
 ### Community 1079 - "二、多领域架构设计：7层架构"
-Cohesion: 0.22
-Nodes (9): 2.1.1 配置类型系统, 2.1.2 领域配置继承增强, 2.1.3 领域配置校验器, 2.2.1 领域注册数据模型, 2.2.2 领域生命周期 API, 2.2.3 题域生命周期 Gate, Layer 1 — 领域元模型（Domain Meta-Model）, Layer 2 — 领域注册中心（Domain Registry） (+1 more)
+Cohesion: 0.25
+Nodes (8): 2.1 ❌ 定位模糊：是工具还是平台？, 2.2 ❌ 冷启动问题严重, 2.3 ❌ 商业模式未定义, 2.4 ❌ 11层清洗管道过度工程化, 2.5 ❌ IM集成半成品降低专业感, 2.6 ❌ ExpertGrain审核流程UX缺失, 2.7 ❌ 企业总调度是假需求, 二、不合理的商业设计
 
 ### Community 1080 - "三、架构优化建议"
-Cohesion: 0.22
-Nodes (9): 2.1 严重架构问题 (P0), 2.2 中等架构问题 (P1), 2.3 代码规范问题 (P2), 3.1 性能优化 (按优先级排序), 3.2 安全优化, 3.3 架构演进方向, 三、架构优化建议, 二、架构不足识别 (+1 more)
-
-### Community 1081 - "二、不合理的用户体验设计"
-Cohesion: 0.22
-Nodes (9): 2.1 ❌ 访谈创建流程门槛太高, 2.2 ❌ 访谈过程中缺乏掌控感, 2.3 ❌ 报告查看体验割裂, 2.4 ❌ 分身对话的"空壳感", 2.5 ❌ 管理后台信息过载, 2.6 ❌ 缺乏学习效果度量, 2.7 ❌ 语音输入降级但无替代, 2.8 ❌ 多端体验不连贯 (+1 more)
+Cohesion: 0.29
+Nodes (6): AI经验萃取平台 — 三视角深度 Review 报告, 不合理的地方（三方共识）, 合理的地方（三方共识）, 最高优先级改进（三方排序）, 第二部分：商业化产品经理视角, 第四部分：三视角交叉结论
 
 ### Community 1084 - "design.md — opt-in portable design system"
 Cohesion: 0.25
@@ -4675,6 +4681,10 @@ Nodes (7): Export formats, Format 1 — `tokens.css`, Format 2 — Tailwind v4 `
 Cohesion: 0.25
 Nodes (7): 一、核心价值链 — 当前状态, 三、当前不适合作为交付项的功能, 二、本轮已修复的关键缺陷, 五、交付就绪度, 六、验收步骤, 商业产品审查报告（终版）, 四、已知待优化的点（不影响交付）
 
+### Community 1088 - "ae"
+Cohesion: 0.33
+Nodes (6): 2.5.1 知识颗粒分类体系, 2.5.2 方法论萃取（Meta-Extraction）, 2.5.3 方法论萃取 Prompt, 2.5.4 跨域迁移规则, 2.5.5 跨域检索实现, Layer 5 — 跨域知识迁移（Cross-Domain Knowledge Transfer）
+
 ### Community 1089 - "三种对话模式 — 全端交互设计文档"
 Cohesion: 0.25
 Nodes (8): 2.1 QA / Talk 模式（共用 ChatStreamService.chat()）, 2.2 Practice 模式, 一、统一命名规范（2026-07-22 审定）, 七、当前已知问题与优化路线, 三种对话模式 — 全端交互设计文档, 二、代码流程图, 五、提示词体系全景, 六、各模块商业意义
@@ -4684,8 +4694,8 @@ Cohesion: 0.25
 Nodes (7): 1. 语言风格（30%）, 2. 经验一致性（30%）, 3. 行为模式（20%）, 4. 话术复用（20%）, 变量: {real_samples}, {grains_text}, {scripts}, {conversation}, 完整对话, 输出要求
 
 ### Community 1091 - "二、不合理的商业设计"
-Cohesion: 0.25
-Nodes (8): 2.1 ❌ 定位模糊：是工具还是平台？, 2.2 ❌ 冷启动问题严重, 2.3 ❌ 商业模式未定义, 2.4 ❌ 11层清洗管道过度工程化, 2.5 ❌ IM集成半成品降低专业感, 2.6 ❌ ExpertGrain审核流程UX缺失, 2.7 ❌ 企业总调度是假需求, 二、不合理的商业设计
+Cohesion: 0.33
+Nodes (6): 1.1 SSE流式体验优秀, 1.2 四阶段进度可视化, 1.3 中断恢复机制, 1.4 三模式分身切换, 1.5 领域标签降维, 一、合理的用户体验设计
 
 ### Community 1092 - "WebMvcConfig.java"
 Cohesion: 0.43
@@ -4712,20 +4722,12 @@ Cohesion: 0.29
 Nodes (6): 核心流程输入输出详表, 汇总, 流程① 萃取师技能, 流程② 销冠访谈, 流程③ 分身问答, 流程④ 分身对练
 
 ### Community 1098 - "od"
-Cohesion: 0.38
-Nodes (7): od(), of(), ol(), op(), os(), ro(), s5()
-
-### Community 1099 - "ty"
-Cohesion: 0.29
-Nodes (5): Tb(), tg(), Tv(), tW, ty()
+Cohesion: 0.33
+Nodes (6): 1.1 核心价值链清晰, 1.2 三层壁垒设计合理, 1.3 元萃取系统是亮点, 1.4 领域扩展架构合理, 1.5 两种输入管道互补, 一、合理的商业设计
 
 ### Community 1100 - "Bv"
-Cohesion: 0.33
-Nodes (4): Av(), Bv(), og(), Pg()
-
-### Community 1101 - "iB"
-Cohesion: 0.29
-Nodes (3): iB(), iy(), TF()
+Cohesion: 0.15
+Nodes (8): Av(), Bv(), JM(), md(), mj(), og(), pd(), Pg()
 
 ### Community 1102 - "四、各角色使用指南"
 Cohesion: 0.29
@@ -4759,10 +4761,6 @@ Nodes (6): 你的任务, 场景, 完整对话记录, 溯源信息, 要求, 角�
 Cohesion: 0.29
 Nodes (6): 2026-07-10, 决策：C6 / C5 暂不动（23:32）, 晚间复查（用户改完代码后第二轮）, 流式渲染卡顿诊断（23:43，用户问"为何4-5字但前端一大段"）, 第三轮复查（用户再次改完）, 项目代码审查：AI经验萃取平台 (ai-extract)
 
-### Community 1112 - "AI经验萃取平台 — 三视角深度 Review 报告"
-Cohesion: 0.29
-Nodes (6): AI经验萃取平台 — 三视角深度 Review 报告, 不合理的地方（三方共识）, 合理的地方（三方共识）, 最高优先级改进（三方排序）, 第二部分：商业化产品经理视角, 第四部分：三视角交叉结论
-
 ### Community 1113 - "graphify reference: query, path, explain"
 Cohesion: 0.33
 Nodes (5): For /graphify explain, For /graphify path, graphify reference: query, path, explain, Step 0 — Constrained query expansion (REQUIRED before traversal), Step 1 — Traversal
@@ -4774,6 +4772,14 @@ Nodes (6): Anti-patterns Hallmark refuses, Floating nav on scroll — the cross-
 ### Community 1115 - "五、分身模块"
 Cohesion: 0.33
 Nodes (6): 20\. POST /api/v1/skills/\{skillId\}/chat（SSE）, 21\. POST /api/v1/skills/\{skillId\}/practice/start, 22\. POST /api/v1/skills/\{skillId\}/practice/respond（SSE）, 23\. POST /api/v1/skills/enterprise/chat（SSE）, 24\. POST /api/v1/skills/\{skillId\}/feedback, 五、分身模块
+
+### Community 1117 - "Lr"
+Cohesion: 0.40
+Nodes (5): 2.3.1 当前问题, 2.3.2 解决方案：三层 Prompt 架构, 2.3.3 模板变量体系升级, 2.3.4 PromptTemplateEngine 实现, Layer 3 — Prompt 模板引擎（Prompt Template Engine）
+
+### Community 1118 - "ft"
+Cohesion: 0.40
+Nodes (5): 2.4.1 当前问题, 2.4.2 解决方案：领域路由层, 2.4.3 领域意图识别 Prompt, 2.4.4 领域路由应用场景, Layer 4 — 题域路由网关（Domain Router Gateway）
 
 ### Community 1119 - "二、导航菜单详解"
 Cohesion: 0.33
@@ -4804,16 +4810,16 @@ Cohesion: 0.33
 Nodes (5): 你的任务, 共 {totalRounds} 轮, 对练记录, 角色, 评分参考
 
 ### Community 1126 - "Layer 5 — 跨域知识迁移（Cross-Domain Knowledge Transfer）"
-Cohesion: 0.33
-Nodes (6): 2.5.1 知识颗粒分类体系, 2.5.2 方法论萃取（Meta-Extraction）, 2.5.3 方法论萃取 Prompt, 2.5.4 跨域迁移规则, 2.5.5 跨域检索实现, Layer 5 — 跨域知识迁移（Cross-Domain Knowledge Transfer）
+Cohesion: 0.40
+Nodes (5): 2.6.1 三层冷启动方案, 2.6.2 种子框架定义, 2.6.3 冷启动加载流程, 2.6.4 种子颗粒在Chat中的呈现, Layer 6 — 题域冷启动引擎（Domain Cold-Start Engine）
 
 ### Community 1127 - "一、合理的用户体验设计"
-Cohesion: 0.33
-Nodes (6): 1.1 SSE流式体验优秀, 1.2 四阶段进度可视化, 1.3 中断恢复机制, 1.4 三模式分身切换, 1.5 领域标签降维, 一、合理的用户体验设计
+Cohesion: 0.40
+Nodes (5): 2.7.1 题域商店模型, 2.7.2 题域定价模型, 2.7.3 题域效果计量, 2.7.4 题域运营看板, Layer 7 — 题域市场与商业引擎（Domain Marketplace & Commerce）
 
 ### Community 1128 - "一、合理的商业设计"
-Cohesion: 0.33
-Nodes (6): 1.1 核心价值链清晰, 1.2 三层壁垒设计合理, 1.3 元萃取系统是亮点, 1.4 领域扩展架构合理, 1.5 两种输入管道互补, 一、合理的商业设计
+Cohesion: 0.40
+Nodes (5): Phase 1 — 基础加固（2周）, Phase 2 — 冷启动与迁移（2周）, Phase 3 — 商业化与运营（2周）, Phase 4 — 规模扩展（持续）, 六、实施路线图
 
 ### Community 1129 - "四、报告模块"
 Cohesion: 0.40
@@ -4877,31 +4883,19 @@ Nodes (4): 2026-07-16 项目三视角深度Review, 多领域实战方案：从�
 
 ### Community 1145 - "Layer 3 — Prompt 模板引擎（Prompt Template Engine）"
 Cohesion: 0.40
-Nodes (5): 2.3.1 当前问题, 2.3.2 解决方案：三层 Prompt 架构, 2.3.3 模板变量体系升级, 2.3.4 PromptTemplateEngine 实现, Layer 3 — Prompt 模板引擎（Prompt Template Engine）
+Nodes (5): 1.1 核心架构拓扑, 1.2 三条核心数据管道, 1.3 AI分身对话链路(RAG), 1.4 调度器架构, 一、系统流程梳理
 
 ### Community 1146 - "Layer 4 — 题域路由网关（Domain Router Gateway）"
 Cohesion: 0.40
-Nodes (5): 2.4.1 当前问题, 2.4.2 解决方案：领域路由层, 2.4.3 领域意图识别 Prompt, 2.4.4 领域路由应用场景, Layer 4 — 题域路由网关（Domain Router Gateway）
+Nodes (5): 3.1 冷启动运营策略, 3.2 活跃度驱动策略, 3.3 付费转化路径, 三、运营策略建议, 第三部分：高级运营 + 用户视角
 
 ### Community 1147 - "Layer 6 — 题域冷启动引擎（Domain Cold-Start Engine）"
 Cohesion: 0.40
-Nodes (5): 2.6.1 三层冷启动方案, 2.6.2 种子框架定义, 2.6.3 冷启动加载流程, 2.6.4 种子颗粒在Chat中的呈现, Layer 6 — 题域冷启动引擎（Domain Cold-Start Engine）
-
-### Community 1148 - "Layer 7 — 题域市场与商业引擎（Domain Marketplace & Commerce）"
-Cohesion: 0.40
-Nodes (5): 2.7.1 题域商店模型, 2.7.2 题域定价模型, 2.7.3 题域效果计量, 2.7.4 题域运营看板, Layer 7 — 题域市场与商业引擎（Domain Marketplace & Commerce）
+Nodes (4): config, PUBLIC_PATHS, PUBLIC_PREFIXES, SKIP_PREFIXES
 
 ### Community 1149 - "六、实施路线图"
-Cohesion: 0.40
-Nodes (5): Phase 1 — 基础加固（2周）, Phase 2 — 冷启动与迁移（2周）, Phase 3 — 商业化与运营（2周）, Phase 4 — 规模扩展（持续）, 六、实施路线图
-
-### Community 1150 - "一、系统流程梳理"
-Cohesion: 0.40
-Nodes (5): 1.1 核心架构拓扑, 1.2 三条核心数据管道, 1.3 AI分身对话链路(RAG), 1.4 调度器架构, 一、系统流程梳理
-
-### Community 1151 - "三、运营策略建议"
-Cohesion: 0.40
-Nodes (5): 3.1 冷启动运营策略, 3.2 活跃度驱动策略, 3.3 付费转化路径, 三、运营策略建议, 第三部分：高级运营 + 用户视角
+Cohesion: 0.50
+Nodes (4): 7.1 题域继承应从 base 还是从同类领域继承？, 7.2 跨域迁移是否应自动？, 7.3 种子颗粒的置信度如何与真实萃取区分？, 七、关键设计决策与争议点
 
 ### Community 1152 - "graphify reference: add a URL and watch a folder"
 Cohesion: 0.50
@@ -4951,10 +4945,6 @@ Nodes (4): 4.1 QA 模式（经验请教）, H5 分享页 (`/s/[shareCode]`), 主
 Cohesion: 0.50
 Nodes (3): 变量: {material_content}, 材料内容, 输出纯JSON数组
 
-### Community 1166 - "七、关键设计决策与争议点"
-Cohesion: 0.50
-Nodes (4): 7.1 题域继承应从 base 还是从同类领域继承？, 7.2 跨域迁移是否应自动？, 7.3 种子颗粒的置信度如何与真实萃取区分？, 七、关键设计决策与争议点
-
 ### Community 1171 - "QA 模式（quick / discuss）"
 Cohesion: 0.67
 Nodes (3): QA 模式（quick / discuss）, System Prompt 结构, 实际回答示例
@@ -4964,24 +4954,24 @@ Cohesion: 0.67
 Nodes (3): Talk 模式, 与 QA 的核心差异, 实际回答示例
 
 ## Knowledge Gaps
-- **2778 isolated node(s):** `com.aiextract:ai-extract-backend`, `ENABLED`, `DISABLED`, `EXACT`, `SEMANTIC` (+2773 more)
+- **2792 isolated node(s):** `com.aiextract:ai-extract-backend`, `ENABLED`, `DISABLED`, `EXACT`, `SEMANTIC` (+2787 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **213 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `sP()` connect `sj() / nz()` to `main.MTA2MWE1OWMwMQ.js / J()`, `ue() / um()`, `ie() / sr`, `s() / ue()`, `.emit() / .constructor()`, `lu() / o5()`, `.emit() / .constructor()`, `e() / r()`?**
+- **Why does `sP()` connect `sj() / nz()` to `main.MTA2MWE1OWMwMQ.js / J()`, `ue() / uh()`, `.emit() / .constructor()`, `.emit() / .constructor()`, `Discover_files/0c97dea774dw... / lu()`, `compilerOptions / include`, `e() / r()`, `afterAllSetup() / .add()`?**
   _High betweenness centrality (0.076) - this node is a cross-community bridge._
-- **Why does `sG()` connect `c() / b()` to `vl() / Ht()`, `ue() / uh()`, `ue() / um()`, `Ab() / FA()`, `s() / ue()`, `gtm.js / mt()`, `Q() / yk()`?**
-  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+- **Why does `sG()` connect `c() / b()` to `ue() / uh()`, `ue() / um()`, `Ab() / FA()`, `s() / ue()`, `gtm.js / mt()`, `Q() / yk()`, `.push() / .R()`, `nz() / iN()`?**
+  _High betweenness centrality (0.055) - this node is a cross-community bridge._
 - **Why does `rV()` connect `lu() / o5()` to `talk2_files/45cbrjgbvzifi.js / mount()`, `aq / handler()`, `talk2_files/2fzt8hoi7r-yg.js / j`?**
-  _High betweenness centrality (0.033) - this node is a cross-community bridge._
+  _High betweenness centrality (0.034) - this node is a cross-community bridge._
 - **What connects `com.aiextract:ai-extract-backend`, `ENABLED`, `DISABLED` to the rest of the system?**
-  _2778 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _2792 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `talk_files/45cbrjgbvzifi.js / mount()` be split into smaller, more focused modules?**
-  _Cohesion score 0.014404761904761905 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.014266892527762092 - nodes in this community are weakly interconnected._
 - **Should `PreCheckConfig / DomainConfigLoader` be split into smaller, more focused modules?**
-  _Cohesion score 0.03483817769532055 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.019235836627140974 - nodes in this community are weakly interconnected._
 - **Should `talk2_files/45cbrjgbvzifi.js / mount()` be split into smaller, more focused modules?**
-  _Cohesion score 0.013492545368683802 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.01349527665317139 - nodes in this community are weakly interconnected._

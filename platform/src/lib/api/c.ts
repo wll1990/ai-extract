@@ -147,6 +147,11 @@ export function createGuest(shareCode: string): Promise<CSessionResponse> {
   return cFetch<CSessionResponse>(`/public/share/${encodeURIComponent(shareCode)}/guest`, { method: 'POST' });
 }
 
+/** 按 skillId 游客发证（平台端 PC 聊天页入口，无需分享码） */
+export function createGuestBySkillId(skillId: string): Promise<CSessionResponse> {
+  return cFetch<CSessionResponse>(`/public/share/skills/${encodeURIComponent(skillId)}/guest`, { method: 'POST' });
+}
+
 /** C 端登录（平台级账号密码，无企业 ID） */
 export function cLogin(account: string, password: string): Promise<CSessionResponse> {
   return cFetch<CSessionResponse>('/c/auth/login', { method: 'POST', body: JSON.stringify({ account, password }) });

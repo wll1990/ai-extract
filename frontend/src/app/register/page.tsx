@@ -89,7 +89,7 @@ export default function RegisterPage() {
           </div>
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">密码</label>
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)}
+            <input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)}
               placeholder="至少6位"
               className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary" />
           </div>

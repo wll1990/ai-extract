@@ -46,7 +46,6 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
   const [evaluation, setEvaluation] = useState('');
   const [streamText, setStreamText] = useState('');
   const [inputValue, setInputValue] = useState('');
-  const [interimVoiceText, setInterimVoiceText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [practiceId, setPracticeId] = useState('');
   const [practiceConvId, setPracticeConvId] = useState<string | undefined>();
@@ -712,18 +711,17 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
             <div style={{ position: 'relative', flex: 1 }}>
               <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 10 }}>
                 <VoiceRecorder
-                  mode="longpress"
-                  onTranscription={(text) => { setInterimVoiceText(''); setInputValue(prev => prev + text); }}
-                  onInterimText={setInterimVoiceText}
+                  mode="click"
+                  onTranscription={(text) => setInputValue(text)}
                   disabled={isStreaming}
                 />
               </div>
               <textarea
                 ref={textareaRef}
-                value={interimVoiceText || inputValue}
-                onChange={(e) => { setInterimVoiceText(''); setInputValue(e.target.value); }}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleRespond(); } }}
-                placeholder={interimVoiceText ? '' : '回应客户...'}
+                placeholder={'回应客户...'}
                 disabled={isStreaming}
                 rows={1}
                 style={{
@@ -735,7 +733,7 @@ export function PracticeView({ skillId, ownerName, initialSceneTag, onBack }: Pr
               />
             </div>
             <button onClick={handleRespond}
-              disabled={(!inputValue.trim() && !interimVoiceText) || isStreaming}
+              disabled={!inputValue.trim() || isStreaming}
               style={{
                 width: 44, height: 44, borderRadius: 14, flexShrink: 0,
                 background: 'var(--tangerine)', color: '#fff', border: 'none',

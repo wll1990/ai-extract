@@ -288,7 +288,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
                 <form onSubmit={doBLogin} className="space-y-2.5">
                   <input type="text" value={info.companyName} disabled className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-gray-50 text-[#747f9e] text-xs" />
                   <input type="text" value={bAccount} onChange={e => setBAccount(e.target.value)} placeholder="企业账号" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
-                  <input type="password" value={bPassword} onChange={e => setBPassword(e.target.value)} placeholder="密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
+                  <input type="password" autoComplete="current-password" value={bPassword} onChange={e => setBPassword(e.target.value)} placeholder="密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   {authError && <div className="px-3 py-2 rounded-lg bg-red-50 text-xs text-red-600">{authError}</div>}
                   <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-full bg-[#2147ff] text-white text-xs font-medium disabled:opacity-40">{authLoading ? '...' : '登录'}</button>
                 </form>
@@ -297,7 +297,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
                   <input type="text" value={info.companyName} disabled className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-gray-50 text-[#747f9e] text-xs" />
                   <input type="text" value={bRegName} onChange={e => setBRegName(e.target.value)} placeholder="你的真实姓名" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   <input type="text" value={bRegAccount} onChange={e => setBRegAccount(e.target.value)} placeholder="设置登录账号" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
-                  <input type="password" value={bRegPassword} onChange={e => setBRegPassword(e.target.value)} placeholder="至少6位密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
+                  <input type="password" autoComplete="new-password" value={bRegPassword} onChange={e => setBRegPassword(e.target.value)} placeholder="至少6位密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   {authError && <div className="px-3 py-2 rounded-lg bg-red-50 text-xs text-red-600">{authError}</div>}
                   <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-full bg-[#2147ff] text-white text-xs font-medium disabled:opacity-40">{authLoading ? '...' : '注册'}</button>
                 </form>
@@ -306,7 +306,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
               loginSub === 'login' ? (
                 <form onSubmit={doCLogin} className="space-y-2.5">
                   <input type="text" value={cAccount} onChange={e => setCAccount(e.target.value)} placeholder="手机号或邮箱" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
-                  <input type="password" value={cPassword} onChange={e => setCPassword(e.target.value)} placeholder="密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
+                  <input type="password" autoComplete="current-password" value={cPassword} onChange={e => setCPassword(e.target.value)} placeholder="密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   {authError && <div className="px-3 py-2 rounded-lg bg-red-50 text-xs text-red-600">{authError}</div>}
                   <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-full bg-[#2147ff] text-white text-xs font-medium disabled:opacity-40">{authLoading ? '...' : '登录'}</button>
                 </form>
@@ -314,7 +314,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
                 <form onSubmit={doCRegister} className="space-y-2.5">
                   <input type="text" value={cRegNickname} onChange={e => setCRegNickname(e.target.value)} placeholder="昵称（选填）" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   <input type="text" value={cRegAccount} onChange={e => setCRegAccount(e.target.value)} placeholder="手机号或邮箱" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
-                  <input type="password" value={cRegPassword} onChange={e => setCRegPassword(e.target.value)} placeholder="至少6位密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
+                  <input type="password" autoComplete="new-password" value={cRegPassword} onChange={e => setCRegPassword(e.target.value)} placeholder="至少6位密码" className="w-full px-3 py-2.5 rounded-xl border border-[#dfe6ff] bg-white text-xs focus:outline-none focus:border-[#2147ff]" />
                   {authError && <div className="px-3 py-2 rounded-lg bg-red-50 text-xs text-red-600">{authError}</div>}
                   <button type="submit" disabled={authLoading} className="w-full py-2.5 rounded-full bg-[#2147ff] text-white text-xs font-medium disabled:opacity-40">{authLoading ? '...' : '注册'}</button>
                 </form>

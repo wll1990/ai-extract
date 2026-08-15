@@ -168,7 +168,7 @@ export default function RegisterPage() {
               </div>
               <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 6 }}>密码</label>
-                <input type="password" value={bPassword} onChange={(e) => setBPassword(e.target.value)}
+                <input type="password" autoComplete="new-password" value={bPassword} onChange={(e) => setBPassword(e.target.value)}
                   placeholder="至少 6 位密码"
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '1.5px solid var(--border-subtle)', background: 'var(--s1)', fontSize: 13, outline: 'none', fontFamily: 'inherit', color: 'var(--fg-high)', boxSizing: 'border-box' }} />
               </div>
@@ -240,7 +240,7 @@ export default function RegisterPage() {
               </div>
               <div style={{ marginBottom: 20 }}>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 6 }}>密码</label>
-                <input type="password" value={cPassword} onChange={(e) => setCPassword(e.target.value)}
+                <input type="password" autoComplete="new-password" value={cPassword} onChange={(e) => setCPassword(e.target.value)}
                   placeholder="至少 6 位密码"
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '1.5px solid var(--border-subtle)', background: 'var(--s1)', fontSize: 13, outline: 'none', fontFamily: 'inherit', color: 'var(--fg-high)', boxSizing: 'border-box' }} />
               </div>

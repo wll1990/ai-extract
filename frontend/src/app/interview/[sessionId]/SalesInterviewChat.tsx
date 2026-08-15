@@ -8,7 +8,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { QuickReplies, ThinkingCard } from '@aiextract/shared-ui';
-import { PortraitCard } from '@aiextract/shared-ui';
+import { PortraitCard, defAvatar } from '@aiextract/shared-ui';
 import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 import { ResumeModal } from '@/components/modals/ResumeModal';
 import { pauseSession, getSession } from '@/lib/api/interview';
@@ -48,7 +48,7 @@ export function SalesInterviewChat() {
   const [skipTopicClicked, setSkipTopicClicked] = useState(false);
   const [newAngleClicked, setNewAngleClicked] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [interimVoiceText, setInterimVoiceText] = useState('');
+  const [voiceMode, setVoiceMode] = useState(false);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const showToast = useCallback((msg: string) => {
@@ -233,9 +233,13 @@ export function SalesInterviewChat() {
             <button onClick={() => router.back()} className="text-[#63708f] hover:text-[#10162f] transition-colors flex-shrink-0" title="返回">
               <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
             </button>
-            <img src="/def-avatar.png" alt="logo"
+            <img
+              src={state.session?.avatarUrl || defAvatar}
+              alt="logo"
               className="h-[42px] w-[42px] rounded-[13px] object-cover flex-shrink-0"
-              style={{ boxShadow: '0 8px 20px rgba(33,71,255,0.18)' }} />
+              style={{ boxShadow: '0 8px 20px rgba(33,71,255,0.18)' }}
+              onError={(e) => { (e.target as HTMLImageElement).src = defAvatar; }}
+            />
             <div className="min-w-0">
               <div className="text-[16px] max-sm:text-[14px] font-extrabold tracking-[-0.5px] truncate max-w-[260px]" style={{ color: '#10162f' }}>
                 {state.session?.topic || 'AI经验萃取师'}
@@ -532,32 +536,60 @@ export function SalesInterviewChat() {
           <div className="mx-auto flex max-w-[720px] items-end gap-3">
             <div className="flex flex-1 items-center gap-2 rounded-3xl border border-[#aab8ff] bg-white/97 px-3 py-2"
               style={{ boxShadow: '0 12px 28px rgba(37,67,166,0.10)' }}>
-              <VoiceRecorder
-                mode="longpress"
-                onTranscription={(text) => {
-                  setInterimVoiceText('');
-                  h.setInputValue(prev => prev + text);
-                }}
-                onInterimText={(text) => setInterimVoiceText(text)}
-                disabled={h.isStreaming}
-              />
-              <textarea ref={h.inputRef}
-                value={interimVoiceText || h.inputValue}
-                onChange={(e) => { setInterimVoiceText(''); h.setInputValue(e.target.value); }}
-                onKeyDown={handleKeyDown}
-                placeholder={interimVoiceText ? '' : '和萃取师一起，探索你的经验与价值…'}
-                disabled={h.isStreaming} rows={1}
-                className="flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-foreground placeholder-[#a3abc0] outline-none disabled:opacity-50"
-                style={{ minHeight: '42px', maxHeight: '120px', lineHeight: 1.6 }}
-                onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
-              <button type="button" onClick={h.handleSend} disabled={(!h.inputValue.trim() && !interimVoiceText) || h.isStreaming}
-                className="interview-send-btn flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-full text-white disabled:cursor-not-allowed disabled:opacity-40"
-                style={{
-                  background: 'linear-gradient(135deg, #2147ff, #3b60ff)',
-                  boxShadow: '0 9px 18px rgba(33,71,255,0.25)',
-                }}>
-                {h.isStreaming ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>}
-              </button>
+
+              {/* H5 语音模式：左侧键盘切换 + 全宽「按住 说话」条 */}
+              {isH5 && voiceMode ? (
+                <>
+                  <button type="button" onClick={() => setVoiceMode(false)}
+                    className="flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-full text-[#5b6886] hover:bg-[#eef2ff] transition-colors"
+                    title="切换到键盘输入">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="6" width="20" height="12" rx="2" /><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" /></svg>
+                  </button>
+                  <VoiceRecorder
+                    mode="longpress"
+                    variant="bar"
+                    onSend={(text) => { h.handleSend(text); setVoiceMode(false); }}
+                    onCancel={() => setVoiceMode(false)}
+                    disabled={h.isStreaming}
+                  />
+                </>
+              ) : (
+                <>
+                  {/* H5：语音切换按钮（左侧） */}
+                  {isH5 && (
+                    <button type="button" onClick={() => setVoiceMode(true)}
+                      className="flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-full text-[#5b6886] hover:bg-[#eef2ff] transition-colors"
+                      title="切换到语音输入">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z" /><path d="M15.54 8.46a5 5 0 010 7.07" /><path d="M19.07 4.93a10 10 0 010 14.14" /></svg>
+                    </button>
+                  )}
+                  {/* PC 端：点击式麦克风 */}
+                  {!isH5 && (
+                    <VoiceRecorder
+                      mode="click"
+                      onTranscription={(text) => h.setInputValue(text)}
+                      disabled={h.isStreaming}
+                    />
+                  )}
+                  <textarea ref={h.inputRef}
+                    value={h.inputValue}
+                    onChange={(e) => h.setInputValue(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={'和萃取师一起，探索你的经验与价值…'}
+                    disabled={h.isStreaming} rows={1}
+                    className="flex-1 resize-none border-0 bg-transparent px-1 py-1.5 text-[15px] text-foreground placeholder-[#a3abc0] outline-none disabled:opacity-50"
+                    style={{ minHeight: '42px', maxHeight: '120px', lineHeight: 1.6 }}
+                    onInput={(e) => { const t = e.target as HTMLTextAreaElement; t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 120) + 'px'; }} />
+                  <button type="button" onClick={() => h.handleSend()} disabled={!h.inputValue.trim() || h.isStreaming}
+                    className="interview-send-btn flex h-[40px] w-[40px] flex-shrink-0 items-center justify-center rounded-full text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    style={{
+                      background: 'linear-gradient(135deg, #2147ff, #3b60ff)',
+                      boxShadow: '0 9px 18px rgba(33,71,255,0.25)',
+                    }}>
+                    {h.isStreaming ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> : <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" /></svg>}
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

@@ -126,7 +126,7 @@ function RegisterForm() {
             <div>
               <label className="block text-sm text-[#747f9e] mb-1">密码</label>
               <input
-                type="password" value={password} onChange={(e) => setPassword(e.target.value)}
+                type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="至少6位" required minLength={6} maxLength={64}
                 className="w-full px-4 py-3 rounded-xl border border-[#dfe6ff] bg-white text-sm focus:outline-none focus:border-[#2147ff]"
               />

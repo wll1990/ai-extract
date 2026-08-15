@@ -25,6 +25,7 @@ export interface InterviewSessionData {
   reportId?: string;
   interviewType?: string;
   grainCount?: number;
+  avatarUrl?: string;
 }
 
 export interface PhaseInfo {

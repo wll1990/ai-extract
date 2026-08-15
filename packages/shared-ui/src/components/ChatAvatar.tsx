@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { defAvatar } from '../defAvatar';
 
 type Role = 'ai' | 'user' | 'customer';
 
@@ -46,15 +47,9 @@ export function ChatAvatar({ role, src, size = 32 }: ChatAvatarProps) {
         <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }}
           onError={() => setImgFailed(true)} />
       ) : (
-        <span style={{
-          color: '#fff',
-          fontSize,
-          fontWeight: 700,
-          lineHeight: 1,
-          userSelect: 'none',
-        }}>
-          {label}
-        </span>
+        <img src={defAvatar} alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
       )}
     </div>
   );
