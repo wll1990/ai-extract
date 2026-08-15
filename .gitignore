@@ -29,3 +29,12 @@ data/files/
 
 # Docker
 docker-compose.override.yml
+
+# macOS
+.DS_Store
+
+# TypeScript 增量编译缓存
+*.tsbuildinfo
+
+# graphify AST 缓存（知识图谱本体 graphify-out/graph.json 等仍追踪）
+graphify-out/cache/
