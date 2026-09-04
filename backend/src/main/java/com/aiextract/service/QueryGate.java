@@ -48,7 +48,7 @@ import java.util.regex.Pattern;
  *   <li>基础合法性 — 空/长/纯符号（0ms，纯 Java 正则）</li>
  *   <li>内容安全   — 违禁词 Trie + 隐私正则 + Prompt 注入检测（0-1ms）</li>
  *   <li>频率控制   — Redis INCR 固定窗口（1-2ms，fail-open）</li>
- *   <li>游客额度   — DB 每日计数（0-5ms，仅 c_guest 角色）</li>
+ *   <li>每日额度   — DB 每日计数（0-5ms，c_guest + c_user 角色）</li>
  * </ol>
  *
  * <p>userId 和 role 可为 null（IM 回调无 JWT），此时仅执行 Layer 1+2。</p>
@@ -76,6 +76,9 @@ public class QueryGate {
 
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
+
+    @Value("${app.share.c-user-message-limit:100}")
+    private int cUserMessageLimit;
 
     // ── Micrometer counters ──
     private final Map<String, Counter> blockCounters = new ConcurrentHashMap<>();
@@ -152,6 +155,7 @@ public class QueryGate {
             if ("false".equals(redisSwitch)) return null;
         } catch (Exception e) {
             // Redis 不可用时 fall-through 到 YAML 开关（fail-open）
+            log.debug("Redis 不可用，回退 YAML 开关: {}", e.getMessage());
         }
 
         // ── YAML 启动默认值 ──
@@ -169,8 +173,8 @@ public class QueryGate {
         Flux<ChatChunk> l3 = auditRate(userId, role, clientIp);
         if (l3 != null) return l3;
 
-        // ── Layer 4: 游客额度（0-5ms，仅 c_guest） ──
-        Flux<ChatChunk> l4 = auditGuestQuota(userId, role);
+        // ── Layer 4: 每日免费额度（0-5ms，c_guest + c_user） ──
+        Flux<ChatChunk> l4 = auditQuota(userId, role);
         if (l4 != null) return l4;
 
         // TODO: 引入 Micrometer 后移除此 null 保护
@@ -350,27 +354,39 @@ public class QueryGate {
     // ============================================================
 
     /**
-     * 游客每日免费额度 — 仅 c_guest 角色生效，其余角色直接放行。
+     * C 端每日免费额度 — c_guest 与 c_user 角色生效，其余角色（B 端）直接放行。
      *
-     * <p>从 {@code ChatStreamService.interceptGuest()} 迁移而来。
-     * 被拦截的消息不落库。注册用户无额度限制。</p>
+     * <p>被拦截的消息不落库。游客与注册用户各自独立限额（可配置，后续订阅分级）。</p>
      */
     @Nullable
-    private Flux<ChatChunk> auditGuestQuota(@Nullable UUID userId, @Nullable String role) {
-        if (!"c_guest".equals(role) || userId == null) {
+    private Flux<ChatChunk> auditQuota(@Nullable UUID userId, @Nullable String role) {
+        if (userId == null) {
+            return null;
+        }
+
+        final int limit;
+        final String code;
+        if ("c_guest".equals(role)) {
+            limit = guestMessageLimit;
+            code = "GUEST_LIMIT_REACHED";
+        } else if ("c_user".equals(role)) {
+            limit = cUserMessageLimit;
+            code = "USER_LIMIT_REACHED";
+        } else {
+            // 员工 / 管理员等 B 端角色不受每日条数限制
             return null;
         }
 
         long used = skillMessageRepository.countUserMessagesByUserIdSince(
             userId, LocalDate.now().atStartOfDay());
-        if (used >= guestMessageLimit) {
-            log.info("QueryGate L4: 游客免费额度已用完 userId={} used={}/{}", userId, used, guestMessageLimit);
-            blockCounter("4_quota", "guest_limit").increment();
+        if (used >= limit) {
+            log.info("QueryGate L4: 免费额度已用完 userId={} role={} used={}/{}", userId, role, used, limit);
+            blockCounter("4_quota", "c_guest".equals(role) ? "guest_limit" : "user_limit").increment();
             return Flux.just(
                 ChatChunk.event("limit", Map.of(
-                    "code", "GUEST_LIMIT_REACHED",
+                    "code", code,
                     "used", used,
-                    "limit", guestMessageLimit)),
+                    "limit", limit)),
                 ChatChunk.done());
         }
 

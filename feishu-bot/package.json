@@ -1,0 +1,19 @@
+{
+  "name": "feishu-bot",
+  "version": "1.0.0",
+  "description": "飞书分身机器人侧车：扫码授权 + WebSocket 长连接 + 桥接后端分身对话",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/index.cjs",
+    "build": "esbuild src/index.js --bundle --platform=node --format=cjs --target=node18 --outfile=dist/index.cjs"
+  },
+  "dependencies": {
+    "@larksuite/channel": "^0.5.0",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

@@ -8,6 +8,7 @@ lsof -ti:8080 | xargs kill -9 2>/dev/null || true
 lsof -ti:3000 | xargs kill -9 2>/dev/null || true
 lsof -ti:3001 | xargs kill -9 2>/dev/null || true
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+lsof -ti:3010 | xargs kill -9 2>/dev/null || true
 sleep 1
 
 echo "=== 启动文件解析服务 :8000 ==="
@@ -25,6 +26,13 @@ nohup java -Xms256m -Xmx512m -jar "$JAR" > "$DIR/logs/backend.log" 2>&1 &
 echo $! > "$DIR/.backend.pid"
 sleep 15
 curl -s -o /dev/null -w "  后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyCode":"DEFAULT01"}'
+
+echo "=== 启动飞书桥 :3010 ==="
+cd "$DIR/feishu-bot"
+# 首次部署自动安装依赖（node_modules 已存在则跳过）
+[ -d node_modules ] || npm install
+PORT=3010 BACKEND_URL=http://127.0.0.1:8080/api/v1 nohup node src/index.js > "$DIR/logs/feishu-bot.log" 2>&1 &
+echo $! > "$DIR/.feishu-bot.pid"
 
 echo "=== 打包前端管理后台 ==="
 cd "$DIR/frontend" && npm run build 2>&1 | tail -1
@@ -48,4 +56,4 @@ echo "后端日志: $DIR/logs/backend.log"
 echo "管理后台日志: $DIR/logs/frontend.log"
 echo "平台端日志: $DIR/logs/platform.log"
 echo "文件解析日志: $DIR/logs/file-parser.log"
-echo "停止服务: kill \$(cat $DIR/.backend.pid) \$(cat $DIR/.frontend.pid) \$(cat $DIR/.platform.pid) \$(cat $DIR/.file-parser.pid)"
+echo "停止服务: kill \$(cat $DIR/.backend.pid) \$(cat $DIR/.frontend.pid) \$(cat $DIR/.platform.pid) \$(cat $DIR/.file-parser.pid) \$(cat $DIR/.feishu-bot.pid)"

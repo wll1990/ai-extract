@@ -177,8 +177,8 @@ interface PracticeFlowInputs {
   abortRef: React.MutableRefObject<AbortController | null>;
   /** C 端分享页显式 Bearer（内部页不传 = 零行为变化） */
   authToken?: string;
-  /** 游客免费额度用尽（后端 limit 事件），页面弹注册抽屉 */
-  onLimit?: (info: { used: number; limit: number; pendingText: string }) => void;
+  /** 每日额度用尽（后端 limit 事件）：code 区分 GUEST_LIMIT_REACHED / USER_LIMIT_REACHED */
+  onLimit?: (info: { code: string; used: number; limit: number; pendingText: string }) => void;
 }
 
 export function usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onLimit }: PracticeFlowInputs) {
@@ -317,7 +317,7 @@ export function usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onL
             if (type === 'limit') {
               setIsStreaming(false);
               dispatch({ type: 'REMOVE_LAST_CUSTOMER' });
-              onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
+              onLimit?.({ code: String(data.code ?? 'GUEST_LIMIT_REACHED'), used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
             }
           },
         }, state.sceneLabel, histStr, conversationIdRef.current || undefined, state.sceneLabel, authToken);
@@ -354,7 +354,7 @@ export function usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onL
       onEvent: (type, data) => {
         if (type === 'limit') {
           setIsStreaming(false);
-          onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: '（继续下一轮）' });
+          onLimit?.({ code: String(data.code ?? 'GUEST_LIMIT_REACHED'), used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: '（继续下一轮）' });
         }
       },
     }, state.sceneLabel, histStr, conversationIdRef.current || undefined, state.sceneLabel, authToken);

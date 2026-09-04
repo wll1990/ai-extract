@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="oZbkvCJn441Ia5Op3AqVHc">
+<head data-page-node-id="igXYcKI8w5EDRfb1HNCmVL">
+<meta charset="UTF-8" data-page-node-id="oBd6wXI6wmIXRcRvVo4Mf4">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="ESnUBxVoZqtdCA9uQU619T">
+<title>伟达商业咨询分身 · 创业可行性诊断（原型）</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#ffffff; --ink:#1f2329; --sub:#6b7280;
+    --line:#e5e7eb; --brand:#b8252d; --brand2:#c8862a;
+    --ai:#fff7ed; --user:#eef2ff; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+    --shadow:0 1px 3px rgba(0,0,0,.08),0 8px 24px rgba(0,0,0,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6}
+  .wrap{max-width:820px;margin:0 auto;padding:18px 16px 40px}
+  header{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--card);
+    border-radius:14px;box-shadow:var(--shadow);margin-bottom:16px;border:1px solid var(--line)}
+  .logo{width:42px;height:42px;border-radius:10px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:20px;flex:0 0 auto}
+  .ht h1{font-size:17px;margin:0}
+  .ht p{margin:2px 0 0;font-size:12.5px;color:var(--sub)}
+  .stage{background:var(--card);border-radius:14px;box-shadow:var(--shadow);border:1px solid var(--line);overflow:hidden}
+  /* 场景选择 */
+  .scenes{padding:22px}
+  .scenes h2{font-size:15px;margin:0 0 4px}
+  .scenes .tip{font-size:12.5px;color:var(--sub);margin:0 0 16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .scene{border:1px solid var(--line);border-radius:12px;padding:14px;cursor:pointer;transition:.15s;background:#fff}
+  .scene:hover{border-color:var(--brand);box-shadow:0 4px 14px rgba(184,37,45,.12)}
+  .scene.off{opacity:.5;cursor:not-allowed}
+  .scene h3{margin:0 0 4px;font-size:14.5px}
+  .scene p{margin:0;font-size:12px;color:var(--sub)}
+  .scene .tag{display:inline-block;margin-top:8px;font-size:11px;color:var(--brand);
+    border:1px solid var(--brand);border-radius:999px;padding:1px 8px}
+  .scene .tag.soon{color:var(--sub);border-color:var(--line)}
+  /* 对话 */
+  .chat{display:none;flex-direction:column;height:64vh}
+  .chatbar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+    border-bottom:1px solid var(--line);background:#fafafa}
+  .chatbar .name{font-size:13.5px;font-weight:700}
+  .chatbar .name small{color:var(--sub);font-weight:400;margin-left:6px}
+  .chatbar button{font-size:12px;color:var(--sub);background:none;border:1px solid var(--line);
+    border-radius:8px;padding:4px 10px;cursor:pointer}
+  .msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
+  .msg{max-width:82%;padding:10px 13px;border-radius:14px;font-size:13.5px;white-space:pre-wrap}
+  .msg.ai{background:var(--ai);align-self:flex-start;border-top-left-radius:4px}
+  .msg.user{background:var(--user);align-self:flex-end;border-top-right-radius:4px}
+  .msg .meta{font-size:10.5px;color:var(--sub);margin-top:4px}
+  .msg.warn{border:1px solid #fde68a;background:#fffbeb}
+  .msg.bad{border:1px solid #fecaca;background:#fef2f2}
+  .typing{font-size:12px;color:var(--sub);align-self:flex-start;padding:2px 4px}
+  .input{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);background:#fff}
+  .input textarea{flex:1;resize:none;height:44px;max-height:120px;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font-size:13.5px;font-family:inherit;outline:none}
+  .input textarea:focus{border-color:var(--brand)}
+  .input button{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:0 18px;
+    font-size:14px;font-weight:600;cursor:pointer}
+  .input button:disabled{opacity:.5;cursor:not-allowed}
+  /* 进度 */
+  .prog{height:4px;background:var(--line);position:relative}
+  .prog > i{position:absolute;left:0;top:0;bottom:0;background:var(--brand);width:0;transition:.3s}
+  /* 报告 */
+  .report{display:none;padding:22px}
+  .report h2{font-size:16px;margin:0 0 2px}
+  .report .sub{font-size:12px;color:var(--sub);margin:0 0 16px}
+  .verdict{border-radius:12px;padding:14px 16px;margin-bottom:16px;font-size:14px}
+  .verdict.go{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+  .verdict.hold{background:#fffbeb;border:1px solid #fde68a;color:#92400e}
+  .verdict.stop{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .sec{margin:14px 0}
+  .sec h3{font-size:14px;margin:0 0 8px;display:flex;align-items:center;gap:6px}
+  .sec h3::before{content:"";width:4px;height:14px;background:var(--brand);border-radius:2px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:#fafafa;font-weight:600}
+  .score{font-weight:700}
+  .s-hi{color:var(--ok)} .s-mid{color:var(--warn)} .s-lo{color:var(--bad)}
+  .pill{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;margin:2px 4px 2px 0}
+  .pill.red{background:#fef2f2;color:var(--bad);border:1px solid #fecaca}
+  .pill.ok{background:#ecfdf5;color:var(--ok);border:1px solid #a7f3d0}
+  .zhenduan{background:#fff7ed;border:1px solid #fed7aa;border-radius:10px;padding:12px 14px;font-size:13px}
+  .acts{background:#eef2ff;border:1px solid #c7d2fe;border-radius:10px;padding:12px 14px;font-size:13px}
+  .acts b{color:#3730a3}
+  .foot{margin-top:18px;text-align:center}
+  .foot button{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:9px 20px;
+    font-size:13.5px;font-weight:600;cursor:pointer}
+  .note{font-size:11.5px;color:var(--sub);margin-top:10px;text-align:center}
+</style>
+</head>
+<body data-page-node-id="snZOx4Fen0JiVLCgdJi9n3">
+<div class="wrap" data-page-node-id="AbjpOP6MDFYRU19YAwrVGp">
+  <header data-page-node-id="iAAo9XilRHGscxrPNhYWR5">
+    <div class="logo" data-page-node-id="yPkMmtAiAWNGXU1tiUUihF">讲</div>
+    <div class="ht" data-page-node-id="CHPg5bfVr8e9yI8F8iEn5t">
+      <h1 data-page-node-id="MoW7Zh1zdf2ST858jDMjBz">伟达商业咨询分身</h1>
+      <p data-page-node-id="vQgATDCFAu4PTbCVAbEACU">选场景 → 苏格拉底式追问 → 按理论体系出诊断报告 · 原型 S1</p>
+    </div>
+  </header>
+
+  <!-- 场景选择 -->
+  <div class="stage" id="stageSelect" data-page-node-id="TrLU20oi1RiyUImI9h6LVs">
+    <div class="scenes" data-page-node-id="2SixD3wNOqi3RSQAFnAkzD">
+      <h2 data-page-node-id="CMHoIdX4Ad69VZQfYhUaEw">想解决什么具体问题？</h2>
+      <p class="tip" data-page-node-id="usixQR5l1Mlp2PNdi27Lv1">选一个场景进入；如果不确定自己属于哪类，直接在对话框里描述，分身会帮你判断。</p>
+      <div class="grid" id="sceneGrid" data-page-node-id="o8Dk6G5l3cvInRgbnCcE17"></div>
+    </div>
+  </div>
+
+  <!-- 对话 -->
+  <div class="stage" id="stageChat" style="display:none" data-page-node-id="6K1ie4Ul707UMrukyPMPLJ">
+    <div class="chatbar" data-page-node-id="cEx7FLLfkj2OBMEcLGIeDH">
+      <div class="name" id="chatName" data-page-node-id="LZKfkEJ0GB9UJhD4qYAlnR">创业可行性诊断 <small data-page-node-id="WelhGOC2n5uJlYb8dYcIn2">第 1 / 7 问</small></div>
+      <button onclick="backToSelect()" data-page-node-id="wUzjuc01e2udQEZYey0KTM">← 换场景</button>
+    </div>
+    <div class="prog" data-page-node-id="23bHGy8zYOvXN2o9fiQv5K"><i id="progBar" data-page-node-id="ST6ZbKA291oheZoBbxIvpG"></i></div>
+    <div class="chat" data-page-node-id="HzRF9yeiIUYJ2Y7naFEYV6">
+      <div class="msgs" id="msgs" data-page-node-id="6vjK9hXUFo4ojNxB5tseS2"></div>
+      <div class="input" data-page-node-id="HxSpHSeSepKnS5wE24Y4EA">
+        <textarea id="ta" placeholder="按分身的问题回答，越具体越好…"></textarea>
+        <button id="sendBtn" onclick="send()" data-page-node-id="WgpDJ4ZmYa5HFs1zWpd00h">发送</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 报告 -->
+  <div class="stage" id="stageReport" style="display:none" data-page-node-id="19HAzcirU6QQGRu4eB94qF">
+    <div class="report" id="reportBox" data-page-node-id="6ny6ocFm1oFUIjW7VEFsy4"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   导师视角决策基线（来自 09_导师视角决策基线.md）
+   引擎：规则驱动状态机，纯前端可离线运行。
+   每条必问问题含：苏格拉底澄清追问 + 一票否决信号。
+   ============================================================ */
+
+const RED_LINES = [
+  {hit:["你帮我猜","你估个","你定个数","帮我编个","随便猜"],
+   text:"⚠️ 红线：我不会替你猜数字。你大概的区间也可以，但得是你自己盘过的数——这是你生意的真实情况，不能我来编。"},
+  {hit:["帮我写代码","帮我开发app","做个软件","帮我编程"],
+   text:"⚠️ 红线：这超出了商业咨询的范围。我只帮你看清生意本身的问题；落地开发另找人。我们先把'值不值得做'问清楚。"},
+  {hit:["你直接告诉我答案","别问了直接给方案","快点给结论"],
+   text:"⚠️ 红线：还没问够就下结论，是对你不负责任。先让我把关键几件事问清楚，结论才站得住。"}
+];
+
+// 苏格拉底追问触发：用户回答偏"模糊/感受/无证据"时的信号词
+const VAGUE = ["觉得","可能","大概","应该","估计","好像","不太清楚","不知道","说不好","也许","似乎","感觉"];
+const FEEL  = ["烦","累","难","焦虑","头疼","痛苦","郁闷","没底"];
+const RESULT_NO_REASON = ["下降","跌","亏","没起色","不行","涨了","好了","少","差"];
+const REASON = ["因为","由于","所以","原因是"];
+
+const SCENES = [
+  {id:"S1", name:"创业项目可行性诊断", on:true,
+   desc:"这个项目值不值得做、为什么、卡在哪、先动哪一步", tag:"可进入"},
+  {id:"S3", name:"企业增长瓶颈诊断", on:false, desc:"生意遇到天花板，增长卡在哪一环", tag:"即将上线", soon:true},
+  {id:"S5", name:"团队管理问题诊断", on:false, desc:"人不对、力不齐、执行力跟不上", tag:"即将上线", soon:true},
+  {id:"Sx", name:"更多场景持续扩展", on:false, desc:"路演 / 成交 / 社交 / 内容 / 沙龙…", tag:"规划中", soon:true}
+];
+
+// S1 场景配置（问题节点 + 规则节点 + 报告节点）
+const S1 = {
+  name:"创业项目可行性诊断",
+  opening:"说说你的项目——现在做到哪了？是还没起步、刚上线、还是已经跑了一段却没起色？",
+  questions:[
+    {id:"q1", text:"你这项目，具体解决谁的、什么痛点？", purpose:"需求真实性",
+     clarify:"你说的'痛点'能举一个具体用户、具体场景吗？是'觉得不方便'，还是'愿意掏钱解决'？这俩差别很大。",
+     veto:null,
+     scoreDim:"需求真实"},
+    {id:"q2", text:"现在有没有人真掏钱买？多少人、多少钱？", purpose:"验证付费",
+     clarify:"具体几个？有没有人真的付过钱？哪怕预付款、定金也算——'有兴趣'和'掏钱'是两件事。",
+     veto:{sig:["没有","没","还未","不确定","没掏钱","没付","没买过","0个"], label:"无真实付费证据"},
+     scoreDim:"付费验证"},
+    {id:"q3", text:"你算过账吗？一个客户你花多少获客成本、毛利多少？", purpose:"算得过账",
+     clarify:"不用精确，大概区间也行：拉一个新客花多少、他给你赚多少、扣完还剩多少？",
+     veto:{sig:["没算","算不过","亏","不赚钱","负","划不来"], label:"单客经济模型算不过账"},
+     scoreDim:"经济模型"},
+    {id:"q4", text:"跟你做一样的有谁？你凭什么赢？", purpose:"差异化",
+     clarify:"列两个最直接的对手。你比他们多做了什么，或哪点做得明显更好？",
+     veto:{sig:["没差异","一样","没优势","没壁垒","不知道凭什么","没比别人好"], label:"无差异化、无壁垒"},
+     scoreDim:"差异化"},
+    {id:"q5", text:"你个人，之前干过这行吗？手头能调动什么资源人脉？", purpose:"人岗匹配（六看·人三看）",
+     clarify:"说一个你干过的相关经历，或者你现在能直接调动的关键资源——钱、渠道、人、牌照都算。",
+     veto:{sig:["没干过","完全陌生","没资源","没人脉","啥都没有","从零"], label:"人岗不匹配（六看红灯）"},
+     scoreDim:"人岗匹配"},
+    {id:"q6", text:"你觉得自己项目最大的雷在哪？", purpose:"自我认知",
+     clarify:"你说'雷'，是市场、产品、团队还是钱的问题？具体哪件事让你最担心？",
+     veto:null,
+     scoreDim:"自我认知"},
+    {id:"q7", text:"如果只解决一件事，你最想先动哪一步？", purpose:"明确目标",
+     clarify:"如果这周只能做一件事，你选哪个？先验证需求、还是先打磨产品、还是先找第一个付费客户？",
+     veto:null,
+     scoreDim:"目标清晰"}
+  ],
+  // 报告：七步判生意评分维度（复用方法论）
+  reportDims:["需求真实","付费验证","经济模型","差异化","人岗匹配","自我认知","目标清晰"],
+  sixLook:[
+    {k:"人三看·愿力", note:"是否真想做成、愿投入"},
+    {k:"人三看·能力", note:"干这行的经验与本领"},
+    {k:"人三看·品性", note:"诚信与靠谱度（红灯则一票否决）"},
+    {k:"事三看·市场", note:"需求是否真实存在且够大"},
+    {k:"事三看·模式", note:"赚钱逻辑是否跑得通"},
+    {k:"事三看·壁垒", note:"别人难抄、你有的护城河"}
+  ]
+};
+
+/* ---------------- 引擎状态 ---------------- */
+let cur = null;            // 当前场景配置
+let idx = 0;               // 当前必问问题下标
+let clarified = [];        // 每个问题是否已澄清过
+let answers = [];          // 收集的答案 {qid,text,veto}
+let vetoes = [];           // 触发的一票否决
+
+/* ---------------- 渲染场景选择 ---------------- */
+function renderScenes(){
+  const g = document.getElementById("sceneGrid");
+  g.innerHTML = "";
+  SCENES.forEach(s=>{
+    const d = document.createElement("div");
+    d.className = "scene" + (s.on?"":" off");
+    d.innerHTML = `<h3>${s.name}</h3><p>${s.desc}</p>
+      <span class="tag ${s.soon?'soon':''}">${s.tag}</span>`;
+    if(s.on) d.onclick = ()=>startScene(s.id);
+    g.appendChild(d);
+  });
+}
+
+function startScene(id){
+  if(id!=="S1"){ alert("该场景原型尚未接入，当前仅开放 S1。"); return; }
+  cur = S1; idx = 0; clarified = cur.questions.map(()=>false);
+  answers = []; vetoes = [];
+  document.getElementById("stageSelect").style.display="none";
+  document.getElementById("stageChat").style.display="flex";
+  document.getElementById("stageReport").style.display="none";
+  document.getElementById("msgs").innerHTML = "";
+  pushAI(cur.opening);
+  updateProg();
+}
+
+function backToSelect(){
+  document.getElementById("stageSelect").style.display="block";
+  document.getElementById("stageChat").style.display="none";
+  document.getElementById("stageReport").style.display="none";
+}
+
+/* ---------------- 对话 ---------------- */
+function pushAI(text, cls=""){
+  const m = document.getElementById("msgs");
+  const d = document.createElement("div");
+  d.className = "msg ai" + (cls?(" "+cls):"");
+  d.innerHTML = escapeHtml(text);
+  m.appendChild(d); m.scrollTop = m.scrollHeight;
+}
+function pushUser(text){
+  const m = document.getElementById("msgs");
+  const d = document.createElement("div");
+  d.className = "msg user";
+  d.textContent = text;
+  m.appendChild(d); m.scrollTop = m.scrollHeight;
+}
+function escapeHtml(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+function updateProg(){
+  const p = (idx/Math.max(1,cur.questions.length))*100;
+  document.getElementById("progBar").style.width = p+"%";
+  document.getElementById("chatName").innerHTML =
+    `${cur.name} <small>第 ${Math.min(idx+1,cur.questions.length)} / ${cur.questions.length} 问</small>`;
+}
+
+function send(){
+  const ta = document.getElementById("ta");
+  const txt = ta.value.trim();
+  if(!txt) return;
+  ta.value = "";
+  pushUser(txt);
+
+  // 1) 红线检查
+  const rl = RED_LINES.find(r=>r.hit.some(k=>txt.includes(k)));
+  if(rl){ pushAI(rl.text, "bad"); return; }
+
+  const q = cur.questions[idx];
+
+  // 2) 苏格拉底澄清：未澄清且回答偏模糊/感受 → 追问，不推进
+  if(!clarified[idx] && needClarify(txt)){
+    clarified[idx] = true;
+    pushAI(q.clarify, "warn");
+    return;
+  }
+
+  // 3) 记录答案 + 一票否决检查
+  let veto = null;
+  if(q.veto && q.veto.sig.some(k=>txt.includes(k))){
+    veto = q.veto.label; vetoes.push(veto);
+  }
+  answers.push({qid:q.id, dim:q.scoreDim, text:txt, veto});
+
+  // 4) 推进
+  idx++;
+  if(idx >= cur.questions.length){
+    // 满足"问够了"标准 → 转报告
+    setTimeout(finish, 500);
+    return;
+  }
+  clarified[idx] = clarified[idx] || false;
+  updateProg();
+  // 下一问前，给一句苏格拉底过渡（挑战/确认），再抛正式问题
+  const bridge = bridgeLine(cur.questions[idx], answers);
+  if(bridge) pushAI(bridge, "warn");
+  setTimeout(()=>pushAI(cur.questions[idx].text), 450);
+}
+
+function needClarify(txt){
+  if(VAGUE.some(k=>txt.includes(k))) return true;
+  if(FEEL.some(k=>txt.includes(k))) return true;
+  // 提了结果但没给原因 → 追原因
+  if(RESULT_NO_REASON.some(k=>txt.includes(k)) && !REASON.some(k=>txt.includes(k))) return true;
+  if(txt.length < 6) return true; // 过短也算没说清
+  return false;
+}
+
+function bridgeLine(nextQ, anss){
+  // 基于上一答做一句挑战/确认，体现"数字分身"风格
+  const last = anss[anss.length-1];
+  if(!last) return "";
+  if(last.veto) return `好，这点我先记下了——"${last.veto}"是个硬信号，我们后面会重点看。`;
+  if(last.text.length>30) return `收到。你这条信息很关键，我记下了。`;
+  return `嗯，我先记下。接着问下一个：`;
+}
+
+/* ---------------- 报告生成（按导师理论体系打分） ---------------- */
+function finish(){
+  document.getElementById("stageChat").style.display="none";
+  document.getElementById("stageReport").style.display="block";
+  const box = document.getElementById("reportBox");
+
+  // 评分：每个维度基于答案完整度 + 否决扣分
+  const dimScore = {};
+  cur.reportDims.forEach(d=>{
+    const a = answers.find(x=>x.dim===d);
+    if(!a){ dimScore[d]={s:2,n:"未回答"}; return; }
+    if(a.veto){ dimScore[d]={s:2,n:"触发否决："+a.veto}; return; }
+    let s = 8;
+    if(a.text.length<10) s=5;
+    if(VAGUE.some(k=>a.text.includes(k))) s=5;
+    dimScore[d]={s, n:""};
+  });
+  const avg = Math.round(cur.reportDims.reduce((t,d)=>t+dimScore[d].s,0)/cur.reportDims.length);
+
+  // 结论判定
+  let verdict, vclass;
+  if(vetoes.length>=2){ verdict="暂不建议推进。已触发 "+vetoes.length+" 项一票否决，根子问题没解决前，不建议 All in。"; vclass="stop"; }
+  else if(vetoes.length===1){ verdict="方向可探，但必须先补掉这一项否决："+vetoes[0]+"。补完再判断。"; vclass="hold"; }
+  else if(avg>=7){ verdict="方向基本可行，可以小步快跑验证，先动你最想动的那一步。"; vclass="go"; }
+  else { verdict="有基础，但多处信息不足，建议先把几件关键事实问实再下注。"; vclass="hold"; }
+
+  // 七步评分表
+  let tbl = `<table><tr><th>七步判生意 · 维度</th><th>得分</th><th>说明</th></tr>`;
+  cur.reportDims.forEach(d=>{
+    const o=dimScore[d]; const cls=o.s>=7?"s-hi":(o.s>=5?"s-mid":"s-lo");
+    tbl += `<tr><td>${d}</td><td class="score ${cls}">${o.s}/10</td><td>${o.n||"已提供，较清晰"}</td></tr>`;
+  });
+  tbl += `</table>`;
+
+  // 六看尽调
+  let six = `<table><tr><th>六看尽调</th><th>评估要点</th><th>本次信号</th></tr>`;
+  cur.sixLook.forEach(x=>{
+    const red = (x.k.includes("品性") && vetoes.some(v=>v.includes("品性")));
+    six += `<tr><td>${x.k}</td><td>${x.note}</td><td>${red?'<span class="pill red">红灯</span>':'<span class="pill ok">未见红灯</span>'}</td></tr>`;
+  });
+  six += `</table>`;
+
+  // 一针变现四步诊断（讲赢口吻）
+  const zhenduan = buildZhenduan(avg, vetoes);
+
+  // 先动一步建议（穿线/降维）
+  const goal = answers.find(a=>a.dim==="目标清晰");
+  const acts = goal ? `基于你"最想先动：${goal.text.slice(0,30)}…"，建议用<b>降维</b>思路——把它拆成一周内能验证的最小动作，先拿结果再扩。` :
+                      `建议先补<b>需求与付费</b>两条最容易被假想的证据，再谈扩张。`;
+
+  box.innerHTML = `
+    <h2>创业可行性诊断报告</h2>
+    <p class="sub">按「七步判生意 + 六看尽调 + 一针变现」框架生成 · 信息充足度 ${avg}/10</p>
+    <div class="verdict ${vclass}"><b>结论：</b>${verdict}</div>
+    <div class="sec"><h3>一、七步判生意 · 评分</h3>${tbl}</div>
+    <div class="sec"><h3>二、六看尽调 · 红灯检查</h3>${six}</div>
+    <div class="sec"><h3>三、一针变现 · 诊断</h3><div class="zhenduan">${zhenduan}</div></div>
+    <div class="sec"><h3>四、先动一步（穿线·降维）</h3><div class="acts">${acts}</div></div>
+    <div class="foot"><button onclick="backToSelect()">再做一次 / 换场景</button></div>
+    <p class="note">原型说明：本分身目前用规则引擎驱动（不接大模型），演示"选场景→苏格拉底追问→一票否决→出报告"的产品形态。接入导师真实大模型后，追问会更自然。结论仅供方向参考。</p>
+  `;
+  window.scrollTo(0,0);
+}
+
+function buildZhenduan(avg, vetoes){
+  const parts = [];
+  parts.push(`<b>破局：</b>${vetoes.length? "当前最大破局点在于先消解否决项——"+vetoes[0]+"。":"已基本具备起步条件，破局点在把验证动作做小做实。"}`);
+  const weak = answers.filter(a=>a.text.length<10 || VAGUE.some(k=>a.text.includes(k)))
+                .map(a=>a.dim);
+  parts.push(`<b>找根：</b>${weak.length? "信息偏虚的环节在——"+weak.join("、")+"，根因往往藏在最说不清的地方。":"各环信息较实，根因已较清晰。"}`);
+  parts.push(`<b>穿线：</b>把"需求→付费→模型→差异化→人岗"串成一条线看，哪一环断，整条生意就断。`);
+  parts.push(`<b>降维：</b>不要想"做大"，先想"这一周用最小成本验证哪一件事"，验证通过再升维。`);
+  return parts.join("<br><br>");
+}
+
+/* 回车发送 */
+document.getElementById("ta").addEventListener("keydown",e=>{
+  if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); }
+});
+
+renderScenes();
+</script>
+</body>
+</html>

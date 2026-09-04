@@ -50,8 +50,8 @@ interface QaChatInputs {
   onResetPracticeRef: React.MutableRefObject<() => void>;
   /** C 端分享页显式 Bearer（内部页不传 = 零行为变化） */
   authToken?: string;
-  /** 游客免费额度用尽（后端 limit 事件）：pendingText 为被拦截的消息，注册后可重发 */
-  onLimit?: (info: { used: number; limit: number; pendingText: string }) => void;
+  /** 每日额度用尽（后端 limit 事件）：code 区分 GUEST_LIMIT_REACHED / USER_LIMIT_REACHED */
+  onLimit?: (info: { code: string; used: number; limit: number; pendingText: string }) => void;
 }
 
 export function useQaChat({
@@ -146,7 +146,7 @@ export function useQaChat({
           setIsStreaming(false);
           setQaStreamText('');
           setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
-          onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
+          onLimit?.({ code: String(data.code ?? 'GUEST_LIMIT_REACHED'), used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
           return;
         }
         if (type === 'suggested' && Array.isArray(data.questions)) {
@@ -199,7 +199,7 @@ export function useQaChat({
         if (type === 'limit') {
           setIsStreaming(false);
           setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
-          onLimit?.({ used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
+          onLimit?.({ code: String(data.code ?? 'GUEST_LIMIT_REACHED'), used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: text });
           return;
         }
         if (type === 'suggested' && Array.isArray(data.questions)) {

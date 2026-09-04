@@ -14,7 +14,4 @@ nohup java -Xms256m -Xmx512m -jar backend.jar > ../logs/backend.log 2>&1 &
 echo $! > ../logs/backend.pid
 
 echo "backend starting (pid $(cat ../logs/backend.pid))..."
-sleep 20
-curl -s http://127.0.0.1:8080/api/v1/public/stats
-echo ""
-echo "backend ready"
+bash /opt/mindforge/scripts/wait-ready.sh backend http://127.0.0.1:8080/api/v1/public/stats 90

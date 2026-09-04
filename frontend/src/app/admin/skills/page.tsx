@@ -5,12 +5,20 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listSkills, updateSkillStatus } from '@/lib/api/skill';
 import ShareModal from '@/components/admin/ShareModal';
+import FeishuPublishModal from '@/components/admin/FeishuPublishModal';
+import { listImBots } from '@/lib/api/im';
 
 export default function AdminSkillsPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [shareOpenId, setShareOpenId] = useState<string | null>(null);
+  const [feishuSkill, setFeishuSkill] = useState<{ id: string; name: string; avatar?: string } | null>(null);
+  const [feishuBoundIds, setFeishuBoundIds] = useState<Set<string>>(new Set());
+
+  const loadFeishuBots = () => {
+    listImBots().then(bots => setFeishuBoundIds(new Set(bots.map(b => b.skillId)))).catch(() => {});
+  };
 
   const loadData = () => {
     listSkills(1, 50)
@@ -18,7 +26,7 @@ export default function AdminSkillsPage() {
       .catch(() => {}).finally(() => setLoading(false));
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); loadFeishuBots(); }, []);
 
   const updateStatus = async (id: string, status: string) => {
     await updateSkillStatus(id, status);
@@ -90,6 +98,11 @@ export default function AdminSkillsPage() {
                     <button onClick={() => router.push(`/skill/${s.id}`)} className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-primary-light">查看</button>
                     <button onClick={() => router.push(`/admin/skills/${s.id}/audit`)} className="rounded-lg px-3 py-1.5 text-xs text-primary hover:bg-primary-light">审核</button>
                     <button onClick={() => router.push(`/admin/skills/${s.id}/materials`)} className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:bg-primary-light">素材</button>
+                    {feishuBoundIds.has(s.id) ? (
+                      <span className="self-center text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">🕊️ 已发布</span>
+                    ) : (
+                      <button onClick={() => setFeishuSkill({ id: s.id, name: s.ownerName || s.displayName || '分身', avatar: s.avatarUrl })} className="rounded-lg px-3 py-1.5 text-xs text-indigo-600 hover:bg-primary-light">🕊️ 飞书</button>
+                    )}
                     <button onClick={() => updateStatus(s.id, 'failed')} className="rounded-lg px-3 py-1.5 text-xs text-danger hover:bg-danger-bg">停用</button>
                   </div>
                 </div>
@@ -138,6 +151,17 @@ export default function AdminSkillsPage() {
               ))}
             </div>
           </div>
+        )}
+
+        {/* Feishu publish modal */}
+        {feishuSkill && (
+          <FeishuPublishModal
+            skillId={feishuSkill.id}
+            skillName={feishuSkill.name}
+            skillAvatar={feishuSkill.avatar}
+            onClose={() => setFeishuSkill(null)}
+            onPublished={() => { loadData(); loadFeishuBots(); }}
+          />
         )}
       </div>
     </div>

@@ -38,3 +38,53 @@ export function deleteChannel(channelId: string): Promise<void> {
 export function testChannel(channelId: string): Promise<{ success: boolean; message: string }> {
   return apiClient<{ success: boolean; message: string }>(`/im/channels/${channelId}/test`, { method: 'POST' });
 }
+
+// ============================================================
+// 飞书机器人（1 分身 = 1 bot）
+// ============================================================
+
+/** 已发布机器人 */
+export interface ImBot {
+  id: string;
+  channelType: string;
+  botId: string;
+  appId: string;
+  skillId: string;
+  skillName: string | null;
+  status: string;
+  enabled: boolean;
+  connected: string | null;
+  createdAt: string;
+}
+
+/** 发布扫码授权结果 */
+export interface FeishuPublishResult {
+  registerToken: string;
+  qrUrl: string;
+  expireIn: number;
+}
+
+/** 发布配置（扫码前可编辑机器人名称/描述/头像，缺省回退分身资料） */
+export interface FeishuPublishConfig {
+  name?: string;
+  description?: string;
+  avatar?: string;
+}
+
+/** 发起「发布到飞书」，返回扫码授权二维码 */
+export function publishFeishu(skillId: string, config?: FeishuPublishConfig): Promise<FeishuPublishResult> {
+  return apiClient<FeishuPublishResult>('/im/channels/feishu/publish', {
+    method: 'POST',
+    body: JSON.stringify({ skillId, ...(config || {}) }),
+  });
+}
+
+/** 本企业已发布机器人列表 */
+export function listImBots(): Promise<ImBot[]> {
+  return apiClient<ImBot[]>('/im/channels/bots');
+}
+
+/** 下线机器人 */
+export function unpublishImBot(botId: string): Promise<void> {
+  return apiClient<void>(`/im/channels/bots/${botId}`, { method: 'DELETE' });
+}

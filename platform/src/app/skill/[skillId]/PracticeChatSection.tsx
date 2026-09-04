@@ -16,7 +16,7 @@ interface Props {
   /** C 端分享页显式 Bearer（内部页不传 = 零行为变化） */
   authToken?: string;
   /** 游客免费额度用尽回调（分享页弹注册抽屉） */
-  onLimit?: (info: { used: number; limit: number; pendingText: string }) => void;
+  onLimit?: (info: { code: string; used: number; limit: number; pendingText: string }) => void;
 }
 
 export default function PracticeChatSection({ skillId, initialSceneTag, setChatMode, abortRef, authToken, onLimit }: Props) {

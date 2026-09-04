@@ -1,8 +1,8 @@
 'use client';
 
 import { useReducer, useCallback, useRef } from 'react';
-import { chat, type SseCallbacks } from '@aiextract/shared-ui';
-import { enterpriseChat } from '@/lib/api/skill';
+import type { SseCallbacks } from '@/lib/sse';
+import { chat, enterpriseChat } from '@/lib/api/skill';
 import type { ConversationMessage } from '@/lib/api/skill';
 
 // ========== Types ==========
@@ -52,6 +52,7 @@ type ChatAction =
   | { type: 'SUGGESTED'; questions: string[] }
   | { type: 'DISMISS_WARNING' }
   | { type: 'LOAD_HISTORY'; messages: Message[]; conversationId: string }
+  | { type: 'LIMIT' }
   | { type: 'RESET' };
 
 // ========== Reducer ==========
@@ -115,6 +116,13 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
         error: null, warning: null, streamText: '', sourceInfo: null,
       };
 
+    case 'LIMIT':
+      return {
+        ...state, phase: 'idle',
+        messages: state.messages.slice(0, -1),
+        streamText: '',
+      };
+
     case 'RESET':
       return {
         phase: 'entry', messages: [], streamText: '',
@@ -139,18 +147,22 @@ interface UseChatOptions {
   skillId: string;
   ownerName: string;
   enterprise?: boolean;
+  /** 每日额度用尽（后端 limit 事件）：code 区分 GUEST_LIMIT_REACHED / USER_LIMIT_REACHED */
+  onLimit?: (info: { code: string; used: number; limit: number; pendingText: string }) => void;
 }
 
-export function useChat({ skillId, ownerName, enterprise }: UseChatOptions) {
+export function useChat({ skillId, ownerName, enterprise, onLimit }: UseChatOptions) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortRef = useRef<AbortController | null>(null);
   const sourceRef = useRef<SourceInfo>({});
+  const limitReachedRef = useRef(false);
 
   const sendMessage = useCallback((text: string, mode: string = 'qa') => {
     const trimmed = text.trim();
     if (!trimmed || state.phase === 'streaming') return;
     if (!skillId && !enterprise) return;
 
+    limitReachedRef.current = false;
     const userMsg: Message = { id: `u-${Date.now()}`, role: 'user', content: trimmed };
     dispatch({ type: 'SEND', userMsg });
 
@@ -175,10 +187,17 @@ export function useChat({ skillId, ownerName, enterprise }: UseChatOptions) {
         }
       },
       onDone: () => {
+        if (limitReachedRef.current) { limitReachedRef.current = false; return; }
         dispatch({ type: 'DONE', sourceInfo: sourceRef.current });
       },
       onError: (msg) => { dispatch({ type: 'ERROR', message: msg }); },
       onEvent: (type, data) => {
+        if (type === 'limit') {
+          limitReachedRef.current = true;
+          dispatch({ type: 'LIMIT' });
+          onLimit?.({ code: String(data.code ?? 'GUEST_LIMIT_REACHED'), used: Number(data.used ?? 0), limit: Number(data.limit ?? 0), pendingText: trimmed });
+          return;
+        }
         if (type === 'suggested' && Array.isArray(data.questions)) {
           dispatch({ type: 'SUGGESTED', questions: data.questions as string[] });
         }
@@ -192,9 +211,9 @@ export function useChat({ skillId, ownerName, enterprise }: UseChatOptions) {
     if (enterprise) {
       abortRef.current = enterpriseChat(trimmed, callbacks, historyText);
     } else {
-      abortRef.current = chat(skillId, trimmed, callbacks, state.currentConvId || undefined, mode, historyText);
+      abortRef.current = chat(skillId, trimmed, callbacks, state.currentConvId || undefined, 'web', mode, historyText);
     }
-  }, [skillId, ownerName, enterprise, state.phase, state.messages, state.currentConvId]);
+  }, [skillId, ownerName, enterprise, state.phase, state.messages, state.currentConvId, onLimit]);
 
   const clearError = useCallback(() => {
     dispatch({ type: 'RESET' });

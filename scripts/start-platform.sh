@@ -9,6 +9,5 @@ sleep 1
 HOSTNAME=0.0.0.0 PORT=3001 nohup node server.js > ../logs/platform.log 2>&1 &
 echo $! > ../logs/platform.pid
 
-sleep 3
-curl -s -o /dev/null -w "platform: HTTP %{http_code}\n" http://127.0.0.1:3001
-echo "platform started (pid $(cat ../logs/platform.pid))"
+echo "platform starting (pid $(cat ../logs/platform.pid))..."
+bash /opt/mindforge/scripts/wait-ready.sh platform http://127.0.0.1:3001 30

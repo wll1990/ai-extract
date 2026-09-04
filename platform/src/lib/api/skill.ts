@@ -7,6 +7,7 @@
  */
 
 import { getToken } from '@/lib/storage';
+import { getCAuth } from '@/lib/api/c';
 import { apiClient, API_BASE } from './client';
 import { connectSse, type SseCallbacks } from '@/lib/sse';
 
@@ -108,7 +109,8 @@ export interface SkillDetail {
  */
 export function fetchSkillDetail(skillId: string): Promise<SkillDetail> {
   const token = getToken();
-  if (token) {
+  const isGuest = getCAuth()?.user?.status === 'guest';
+  if (token && !isGuest) {
     return apiClient(`/skills/${skillId}/detail`, { headers: { Authorization: `Bearer ${token}` } });
   }
   return apiClient(`/public/skills/${skillId}`);

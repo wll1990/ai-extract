@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { SkillDetail } from '@/lib/api/skill';
 import { fetchRecommendedQuestions, getOrCreateShare } from '@/lib/api/skill';
+import { QRCodeSVG } from 'qrcode.react';
 import { getUser, getToken, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
 import { copyToClipboard } from '@/lib/clipboard';
@@ -548,70 +549,74 @@ export function SkillCardPage({ skill }: Props) {
           >← 发现</button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {!mounted ? <span style={{ width: 100, height: 34 }} /> : user && user.role !== 'guest' ? (
+            {!mounted ? <span style={{ width: 100, height: 34 }} /> : (
               <>
-                <button onClick={handleShare} disabled={shareLoading} style={{
-                  fontSize: 12, background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-secondary)',
-                  border: '1px solid var(--sk-border-medium)', borderRadius: 8,
-                  padding: '5px 12px', cursor: 'pointer', fontWeight: 500,
-                  fontFamily: 'inherit', opacity: shareLoading ? 0.5 : 1, transition: 'all 0.15s',
-                }}
-                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--sk-bg-card-solid)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--sk-bg-btn-ghost)'; }}
-                >📤 分享</button>
-                <div style={{ position: 'relative' }}>
-                  <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px 3px 3px',
-                    borderRadius: 100, background: 'var(--sk-bg-user-btn)', border: '1px solid var(--sk-border-medium)',
-                    cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                {user && (
+                  <button onClick={handleShare} disabled={shareLoading} style={{
+                    fontSize: 12, background: 'var(--sk-bg-btn-ghost)', color: 'var(--sk-text-secondary)',
+                    border: '1px solid var(--sk-border-medium)', borderRadius: 8,
+                    padding: '5px 12px', cursor: 'pointer', fontWeight: 500,
+                    fontFamily: 'inherit', opacity: shareLoading ? 0.5 : 1, transition: 'all 0.15s',
                   }}
-                    onMouseEnter={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-accent)'; }}
-                    onMouseLeave={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-border-medium)'; }}
-                  >
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: 8, objectFit: 'cover' }} />
-                    ) : (
-                      <span style={{
-                        width: 24, height: 24, borderRadius: 8,
-                        background: 'var(--sk-avatar-gradient)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 11, fontWeight: 700,
-                      }}>{userInitial}</span>
+                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--sk-bg-card-solid)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--sk-bg-btn-ghost)'; }}
+                  >📤 分享</button>
+                )}
+                {user && user.role !== 'guest' ? (
+                  <div style={{ position: 'relative' }}>
+                    <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
+                      display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px 3px 3px',
+                      borderRadius: 100, background: 'var(--sk-bg-user-btn)', border: '1px solid var(--sk-border-medium)',
+                      cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                    }}
+                      onMouseEnter={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-accent)'; }}
+                      onMouseLeave={e2 => { e2.currentTarget.style.borderColor = 'var(--sk-border-medium)'; }}
+                    >
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" style={{ width: 24, height: 24, borderRadius: 8, objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{
+                          width: 24, height: 24, borderRadius: 8,
+                          background: 'var(--sk-avatar-gradient)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: 11, fontWeight: 700,
+                        }}>{userInitial}</span>
+                      )}
+                      <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</span>
+                    </button>
+                    {showUserMenu && (
+                      <div onClick={e => e.stopPropagation()} style={{
+                        position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                        background: 'var(--sk-bg-card-solid)', borderRadius: 12,
+                        boxShadow: 'var(--sk-shadow-modal)',
+                        border: '1px solid var(--sk-border-medium)', padding: '4px 0', minWidth: 140, zIndex: 20,
+                      }}>
+                        <button onClick={() => { router.push('/platform/my'); setShowUserMenu(false); }} style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px',
+                          fontSize: 13, color: 'var(--sk-text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                        }}>📋 我的分身</button>
+                        <button onClick={handleLogout} style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px',
+                          fontSize: 13, color: 'var(--sk-danger)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                        }}>🚪 退出登录</button>
+                      </div>
                     )}
-                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--sk-text-secondary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</span>
-                  </button>
-                  {showUserMenu && (
-                    <div onClick={e => e.stopPropagation()} style={{
-                      position: 'absolute', top: '100%', right: 0, marginTop: 4,
-                      background: 'var(--sk-bg-card-solid)', borderRadius: 12,
-                      boxShadow: 'var(--sk-shadow-modal)',
-                      border: '1px solid var(--sk-border-medium)', padding: '4px 0', minWidth: 140, zIndex: 20,
-                    }}>
-                      <button onClick={() => { router.push('/platform/my'); setShowUserMenu(false); }} style={{
-                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px',
-                        fontSize: 13, color: 'var(--sk-text-secondary)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                      }}>📋 我的分身</button>
-                      <button onClick={handleLogout} style={{
-                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px',
-                        fontSize: 13, color: 'var(--sk-danger)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                      }}>🚪 退出登录</button>
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <Link href="/login" style={{
-                  fontSize: 12, color: 'var(--sk-text-secondary)', background: 'var(--sk-bg-btn-ghost)',
-                  border: '1px solid var(--sk-border-medium)', borderRadius: 8,
-                  padding: '5px 14px', cursor: 'pointer', fontWeight: 500,
-                  fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
-                }}>登录</Link>
-                <Link href="/register" style={{
-                  fontSize: 12, background: 'var(--sk-accent)', color: '#fff', border: 'none',
-                  borderRadius: 8, padding: '5px 14px', cursor: 'pointer', fontWeight: 600,
-                  fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
-                }}>注册</Link>
+                  </div>
+                ) : (
+                  <>
+                    <Link href="/login" style={{
+                      fontSize: 12, color: 'var(--sk-text-secondary)', background: 'var(--sk-bg-btn-ghost)',
+                      border: '1px solid var(--sk-border-medium)', borderRadius: 8,
+                      padding: '5px 14px', cursor: 'pointer', fontWeight: 500,
+                      fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
+                    }}>登录</Link>
+                    <Link href="/register" style={{
+                      fontSize: 12, background: 'var(--sk-accent)', color: '#fff', border: 'none',
+                      borderRadius: 8, padding: '5px 14px', cursor: 'pointer', fontWeight: 600,
+                      fontFamily: 'inherit', textDecoration: 'none', transition: 'all 0.15s',
+                    }}>注册</Link>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -981,8 +986,7 @@ export function SkillCardPage({ skill }: Props) {
               return (
                 <div key="pub" style={{ marginBottom: 16 }}>
                   <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--sk-text-primary)', margin: '0 0 8px' }}>📱 经典版 · 标准落地页</p>
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(pubUrl)}`}
-                    width={140} height={140} alt="经典版二维码"
+                  <QRCodeSVG value={pubUrl} size={140}
                     style={{ borderRadius: 12, border: '1px solid var(--sk-border-subtle)', marginBottom: 8 }} />
                   <ShareLinkRow url={pubUrl} copied={copied === pubCode} onCopy={() => handleCopy(pubCode!)} />
                 </div>
@@ -993,8 +997,7 @@ export function SkillCardPage({ skill }: Props) {
               return (
                 <div key="card">
                   <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--sk-text-primary)', margin: '0 0 8px' }}>🎴 名片版 · 卡片式布局</p>
-                  <img src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(cardUrl)}`}
-                    width={140} height={140} alt="名片版二维码"
+                  <QRCodeSVG value={cardUrl} size={140}
                     style={{ borderRadius: 12, border: '1px solid var(--sk-border-subtle)', marginBottom: 8 }} />
                   <ShareLinkRow url={cardUrl} copied={copied === cardCode} onCopy={() => handleCopy(cardCode!)} />
                 </div>

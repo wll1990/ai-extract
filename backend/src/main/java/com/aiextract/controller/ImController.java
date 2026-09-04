@@ -1,14 +1,18 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.ImConstants;
 import com.aiextract.config.TokenContext;
+import com.aiextract.dto.ImBotResponse;
 import com.aiextract.dto.ImChannelRequest;
 import com.aiextract.dto.ImChannelResponse;
+import com.aiextract.dto.ImPublishRequest;
+import com.aiextract.dto.ImPublishResponse;
 import com.aiextract.service.ImGatewayService;
+import com.aiextract.service.ImLifecycleService;
 import com.aiextract.service.QueryGate;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -31,7 +35,6 @@ import java.util.UUID;
  * @author AI Extract Team
  * @since 2026-06-29
  */
-@Slf4j
 @RestController
 @RequestMapping("/im")
 @RequiredArgsConstructor
@@ -39,24 +42,7 @@ public class ImController {
 
     private final ImGatewayService imGatewayService;
     private final QueryGate queryGate;
-
-    /**
-     * 接收IM平台消息回调（无需JWT鉴权）
-     *
-     * <p>由IM平台主动调用，通过平台自身签名机制验证。
-     * 飞书首次配置时会发送challenge验证请求。</p>
-     *
-     * @param channel 渠道类型（feishu/wecom/wechat/dingtalk）
-     * @param payload 回调请求体（已由过滤器注入）
-     * @return 回复消息内容
-     */
-    @PostMapping("/{channel}/callback")
-    public Object handleCallback(
-            @PathVariable String channel,
-            @RequestBody String payload) {
-        log.info("接收IM回调, channel: {}, payloadLength: {}", channel, payload.length());
-        return imGatewayService.handleCallback(channel, payload);
-    }
+    private final ImLifecycleService imLifecycleService;
 
     /**
      * 获取IM渠道列表
@@ -123,5 +109,44 @@ public class ImController {
     public ApiResponse<Map<String, Object>> testChannel(@PathVariable String channelId) {
         Map<String, Object> result = imGatewayService.testChannel(channelId);
         return ApiResponse.success(result);
+    }
+
+    /**
+     * 发布分身到 IM 渠道（仅 company_admin，扫码授权）
+     */
+    @PostMapping("/channels/{channelType}/publish")
+    public ApiResponse<ImPublishResponse> publish(
+            @PathVariable String channelType,
+            @Valid @RequestBody ImPublishRequest request) {
+        if (!ImConstants.CHANNEL_FEISHU.equals(channelType)) {
+            throw new com.aiextract.exception.BusinessException(400, "暂只支持飞书渠道");
+        }
+        UUID skillId;
+        try {
+            skillId = UUID.fromString(request.getSkillId());
+        } catch (IllegalArgumentException e) {
+            throw new com.aiextract.exception.BusinessException(400, "分身ID格式不正确");
+        }
+        ImPublishResponse response = imLifecycleService.publish(
+                skillId, request.getName(), request.getDescription(), request.getAvatar());
+        return ApiResponse.success(response);
+    }
+
+    /**
+     * 已发布机器人列表（仅 company_admin）
+     */
+    @GetMapping("/channels/bots")
+    public ApiResponse<List<ImBotResponse>> listBots() {
+        UUID companyId = TokenContext.getCompanyId();
+        return ApiResponse.success(imLifecycleService.listBots(companyId));
+    }
+
+    /**
+     * 下线机器人（仅 company_admin）
+     */
+    @DeleteMapping("/channels/bots/{botId}")
+    public ApiResponse<Void> unpublish(@PathVariable String botId) {
+        imLifecycleService.unpublish(botId);
+        return ApiResponse.success();
     }
 }

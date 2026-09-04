@@ -27,6 +27,7 @@ import ShareLanding from './ShareLanding';
 import MobileChatShell from './MobileChatShell';
 import HistoryDrawer from './HistoryDrawer';
 import RegisterSheet, { type SheetMode } from './RegisterSheet';
+import SubscriptionSheet from '@/components/SubscriptionSheet';
 
 /**
  * 分身分享页 /s/[shareCode] — C 端唯一入口（mobile-first，PC 居中即网页版）
@@ -65,6 +66,11 @@ export default function SharePage() {
   const [sheetSubmitting, setSheetSubmitting] = useState(false);
   const pendingResendRef = useRef('');
 
+  // 注册用户额度用尽 → 订阅升级占位
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [subscriptionUsed, setSubscriptionUsed] = useState(0);
+  const [subscriptionLimit, setSubscriptionLimit] = useState(0);
+
   const abortRef = useRef<AbortController | null>(null);
   const noopRef = useRef<() => void>(() => {});
   const noop = useCallback(() => {}, []);
@@ -78,7 +84,14 @@ export default function SharePage() {
   }, []);
 
   /** 游客额度用尽 → 弹注册抽屉（qa/talk 记录待重发消息） */
-  const handleLimit = useCallback((limitInfo: { used: number; limit: number; pendingText: string }) => {
+  const handleLimit = useCallback((limitInfo: { code: string; used: number; limit: number; pendingText: string }) => {
+    // 注册用户额度用尽 → 订阅升级占位（游客仍走注册抽屉）
+    if (limitInfo.code === 'USER_LIMIT_REACHED') {
+      setSubscriptionUsed(limitInfo.used);
+      setSubscriptionLimit(limitInfo.limit);
+      setSubscriptionOpen(true);
+      return;
+    }
     guest.setRemaining(0);
     pendingResendRef.current = limitInfo.pendingText;
     setSheetMode('register');
@@ -88,7 +101,13 @@ export default function SharePage() {
   }, [guest]);
 
   /** 对练额度用尽：不自动重发（避免重复评价轮），注册后提示点"下一轮"继续 */
-  const handlePracticeLimit = useCallback((limitInfo: { used: number; limit: number; pendingText: string }) => {
+  const handlePracticeLimit = useCallback((limitInfo: { code: string; used: number; limit: number; pendingText: string }) => {
+    if (limitInfo.code === 'USER_LIMIT_REACHED') {
+      setSubscriptionUsed(limitInfo.used);
+      setSubscriptionLimit(limitInfo.limit);
+      setSubscriptionOpen(true);
+      return;
+    }
     guest.setRemaining(0);
     pendingResendRef.current = '';
     setSheetMode('register');
@@ -281,6 +300,13 @@ export default function SharePage() {
         onClose={() => setSheetOpen(false)}
         onRegister={handleRegister}
         onLogin={handleLogin}
+      />
+
+      <SubscriptionSheet
+        open={subscriptionOpen}
+        used={subscriptionUsed}
+        limit={subscriptionLimit}
+        onClose={() => setSubscriptionOpen(false)}
       />
     </div>
   );

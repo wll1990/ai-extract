@@ -9,6 +9,7 @@ import { HistorySidebar } from './HistorySidebar';
 import { useChat } from '@/hooks/useChat';
 import { useConversations } from '@/hooks/useConversations';
 import type { SkillDetail } from '@/lib/api/skill';
+import SubscriptionSheet from '@/components/SubscriptionSheet';
 
 type Mode = 'qa' | 'talk' | 'practice';
 
@@ -33,7 +34,24 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
   const [practiceTag, setPracticeTag] = useState<string | undefined>();
 
   const ownerName = skill.displayName || skill.ownerName || '专家';
-  const chat = useChat({ skillId: skill.id, ownerName, enterprise });
+
+  // 每日额度用尽：注册用户 → 订阅升级占位；游客 → 提示登录
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [subscriptionUsed, setSubscriptionUsed] = useState(0);
+  const [subscriptionLimit, setSubscriptionLimit] = useState(0);
+  const [limitNotice, setLimitNotice] = useState<string | null>(null);
+
+  const handleLimit = useCallback((info: { code: string; used: number; limit: number; pendingText: string }) => {
+    if (info.code === 'USER_LIMIT_REACHED') {
+      setSubscriptionUsed(info.used);
+      setSubscriptionLimit(info.limit);
+      setSubscriptionOpen(true);
+    } else {
+      setLimitNotice('免费体验次数已用完，登录后继续对话');
+    }
+  }, []);
+
+  const chat = useChat({ skillId: skill.id, ownerName, enterprise, onLimit: handleLimit });
 
   // Auto-send: 名片页带问题进来 → 自动发送 → 清除 URL 参数防刷新重发
   useEffect(() => {
@@ -261,6 +279,26 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
             ⚠️ {chat.error}（点击关闭）
           </div>
         )}
+
+        {/* 游客限额提示 */}
+        {limitNotice && (
+          <div style={{
+            position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+            padding: '10px 20px', borderRadius: 100, background: '#f59e0b',
+            color: '#fff', fontSize: 13, fontWeight: 500, zIndex: 200,
+            cursor: 'pointer',
+          }} onClick={() => setLimitNotice(null)}>
+            💡 {limitNotice}（点击关闭）
+          </div>
+        )}
+
+        {/* 订阅升级占位 */}
+        <SubscriptionSheet
+          open={subscriptionOpen}
+          used={subscriptionUsed}
+          limit={subscriptionLimit}
+          onClose={() => setSubscriptionOpen(false)}
+        />
       </div>
     </div>
   );

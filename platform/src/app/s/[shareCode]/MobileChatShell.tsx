@@ -41,7 +41,7 @@ interface Props {
   onPickScene: (tag: string) => void;
   abortRef: React.MutableRefObject<AbortController | null>;
   authToken?: string;
-  onPracticeLimit: (info: { used: number; limit: number; pendingText: string }) => void;
+  onPracticeLimit: (info: { code: string; used: number; limit: number; pendingText: string }) => void;
   practiceHint?: string;
   /** 是否已用完免费额度（游客 remaining === 0） */
   isLimitReached?: boolean;

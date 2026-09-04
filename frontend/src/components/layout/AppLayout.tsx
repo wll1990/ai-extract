@@ -47,6 +47,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: '🗺️', label: '场景地图', path: '/admin/coverage', permission: Permission.SCENE_COVERAGE },
   { icon: '💎', label: '颗粒管理', path: '/admin/grains', permission: Permission.GRAIN_MANAGE },
   { icon: '🏢', label: '组织分身', path: '/admin/organization-skills', permission: Permission.ORG_SKILL_MANAGE },
+  { icon: '🔌', label: '分身接入', path: '/admin/im-bots', permission: Permission.ORG_SKILL_MANAGE },
   { icon: '🪙', label: 'Token 统计', path: '/admin/token-usage', permission: Permission.TOKEN_VIEW_COMPANY },
   // ── 平台级（仅 super_admin 拥有对应权限码） ──
   { icon: '⚙️', label: 'IM管理', path: '/admin/im', permission: Permission.IM_MANAGE },

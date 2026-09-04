@@ -6,7 +6,6 @@ import com.aiextract.common.ErrorMessages;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.ImChannel;
 import com.aiextract.repository.ImChannelRepository;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +17,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -53,138 +51,7 @@ import java.util.stream.Collectors;
 public class ImGatewayService {
 
     private final ImChannelRepository imChannelRepository;
-    private final FeishuAdapter feishuAdapter;
-    private final ChatStreamService chatStreamService;
     private final ObjectMapper objectMapper;
-
-    /**
-     * 处理IM消息回调
-     *
-     * <p>
-     * 验证签名、解析消息、匹配渠道获取skillId，
-     * 生成sessionId并路由到对应分身进行对话。
-     * </p>
-     *
-     * @param channel 渠道类型（feishu/wecom/wechat/dingtalk）
-     * @param payload 回调请求体
-     * @return 回复消息内容
-     * @throws BusinessException 如果签名验证失败或渠道未配置
-     */
-    public Object handleCallback(String channel, String payload) {
-        log.info("收到IM回调, channel: {}", channel);
-
-        // 飞书渠道处理
-        if ("feishu".equals(channel)) {
-            return handleFeishuCallback(payload);
-        }
-
-        throw new BusinessException(HttpStatus.BAD_REQUEST.value(),
-                "暂不支持的渠道类型: " + channel);
-    }
-
-    /**
-     * 处理飞书回调
-     */
-    private Object handleFeishuCallback(String payload) {
-        FeishuAdapter.FeishuMessage msg = feishuAdapter.parseMessage(payload);
-
-        // 飞书URL验证请求
-        if (msg.isChallenge()) {
-            return Map.of("challenge", msg.getChallengeCode());
-        }
-
-        // 按 appId 匹配渠道 → 反查 companyId（多企业支持）
-        String callbackAppId = msg.getAppId();
-        List<ImChannel> allFeishuChannels = imChannelRepository.findByChannelType("feishu");
-        ImChannel activeChannel = null;
-        UUID companyId = null;
-
-        for (ImChannel ch : allFeishuChannels) {
-            {
-                if (!Boolean.TRUE.equals(ch.getEnabled()))
-                    continue;
-            }
-            try {
-                JsonNode config = objectMapper.readTree(ch.getConfig());
-                String channelAppId = config.path("appId").asText();
-                if (callbackAppId != null && callbackAppId.equals(channelAppId)) {
-                    activeChannel = ch;
-                    companyId = ch.getCompanyId();
-                    break;
-                }
-            } catch (Exception e) {
-                log.warn("解析渠道配置失败, channelId: {}", ch.getId(), e);
-            }
-        }
-
-        if (activeChannel == null) {
-            log.warn("未找到匹配的飞书渠道, callbackAppId: {}", callbackAppId);
-            return Map.of("msg_type", "text", "content", "{\"text\":\"系统未配置飞书渠道\"}");
-        }
-
-        // 生成sessionId
-        String sessionId = "feishu_" + msg.getChatId() + "_" + msg.getUserId();
-
-        // 识别对话模式
-        String mode = resolveMode(msg.getText());
-
-        // 调用企业总调度获取 AI 流式回答
-        var chatReq = new com.aiextract.dto.SkillChatRequest();
-        chatReq.setMessage(msg.getText());
-        chatReq.setChannel("feishu");
-
-        String replyContent;
-        try {
-            replyContent = chatStreamService.enterpriseChatSync(chatReq, companyId)
-                    .get(120, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            log.error("AI回答生成失败", e);
-            replyContent = "抱歉，AI服务暂时不可用，请稍后重试。";
-        }
-
-        // 构建飞书回复
-        String replyMsgJson = feishuAdapter.buildReplyMessage(
-                msg.getChatId(), replyContent,
-                "group".equals(msg.getChatType()) ? msg.getUserId() : null);
-
-        // 后期优化：调用飞书/企微API发送消息，高并发时结果缓存 Redis
-        log.info("飞书回复已构建, chatId: {}, sessionId: {}", msg.getChatId(), sessionId);
-
-        try {
-            return objectMapper.readTree(replyMsgJson);
-        } catch (Exception e) {
-            return Map.of("msg_type", "text", "content", "{\"text\":\"" + replyContent + "\"}");
-        }
-    }
-
-    /**
-     * 识别对话模式
-     *
-     * @param text 消息文本
-     * @return quick/discuss/practice
-     */
-    private String resolveMode(String text) {
-        if (text == null) {
-
-            return "quick";
-
-        }
-        if (text.startsWith("/对练")
-
-                || text.startsWith("/练习")) {
-            return "practice";
-
-        }
-        if (text.startsWith("/讨论")
-
-                || text.startsWith("/聊聊")) {
-            return "discuss";
-
-        }
-        if (text.matches(".*你怎么看|为什么|你觉得.*"))
-            return "discuss";
-        return "quick";
-    }
 
     /**
      * 获取IM渠道列表
@@ -230,7 +97,7 @@ public class ImGatewayService {
                 .id(UUID.randomUUID())
                 .companyId(companyId)
                 .channelType(request.getChannelType())
-                .enabled(request.getEnabled() != null ? request.getEnabled() : true)
+                .enabled(request.getEnabled() == null || request.getEnabled())
                 .config(configJson)
                 .linkedSkills(linkedSkillsJson)
                 .createdAt(now)

@@ -68,6 +68,9 @@ public class SecurityConfig {
                         // ── IM 回调：无需 JWT ──
                         .requestMatchers("/im/*/callback").permitAll()
 
+                        // ── IM 内部接口（传输层 ↔ 后端，HMAC 签名在 Controller 校验） ──
+                        .requestMatchers("/internal/im/**").permitAll()
+
                         // ── 登录状态检查 ──
                         .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()

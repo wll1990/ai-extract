@@ -21,6 +21,7 @@ sleep 2
 pkill -f "backend.jar" 2>/dev/null || true
 kill $(ss -tlnp 2>/dev/null | grep ':3000 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
 kill $(ss -tlnp 2>/dev/null | grep ':3001 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
+kill $(ss -tlnp 2>/dev/null | grep ':3010 ' | grep -oP 'pid=\K[0-9]+') 2>/dev/null || true
 pkill -f "uvicorn main:app" 2>/dev/null || true
 
 echo "all services stopped"

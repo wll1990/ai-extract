@@ -5,6 +5,8 @@ import { apiClient, API_BASE } from '@/lib/api/client';
 import { OrgDashboard } from '@/components/admin/OrgDashboard';
 import { Pagination } from '@/components/ui/Pagination';
 import { copyToClipboard } from '@/lib/clipboard';
+import FeishuPublishModal from '@/components/admin/FeishuPublishModal';
+import { listImBots } from '@/lib/api/im';
 
 interface OrgSkill {
   id: string;
@@ -56,7 +58,7 @@ export default function AdminOrgSkillsPage() {
       .catch(() => {});
   };
 
-  useEffect(() => { load(); loadAllSkills(); }, [load]);
+  useEffect(() => { load(); loadAllSkills(); loadFeishuBots(); }, [load]);
 
   const resetForm = () => {
     setFormName(''); setFormDesc(''); setFormAvatar(''); setFormMembers([]);
@@ -100,6 +102,12 @@ export default function AdminOrgSkillsPage() {
 
   const [shareCode, setShareCode] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<any>(null);
+  const [feishuSkill, setFeishuSkill] = useState<{ id: string; name: string; avatar?: string } | null>(null);
+  const [feishuBoundIds, setFeishuBoundIds] = useState<Set<string>>(new Set());
+
+  const loadFeishuBots = () => {
+    listImBots().then(bots => setFeishuBoundIds(new Set(bots.map(b => b.skillId)))).catch(() => {});
+  };
 
   const handleDashboard = async (id: string) => {
     try {
@@ -228,6 +236,13 @@ export default function AdminOrgSkillsPage() {
                     <button onClick={() => handleShare(org.id)}
                       className="rounded-lg border border-blue-200 text-blue-600 px-3 py-1 text-xs">分享</button>
                   )}
+                  {org.status === 'published' && feishuBoundIds.has(org.id) && (
+                    <span className="self-center text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">🕊️ 已发布</span>
+                  )}
+                  {org.status === 'published' && !feishuBoundIds.has(org.id) && (
+                    <button onClick={() => setFeishuSkill({ id: org.id, name: org.displayName, avatar: org.avatarUrl })}
+                      className="rounded-lg border border-indigo-200 text-indigo-600 px-3 py-1 text-xs">🕊️ 飞书</button>
+                  )}
                   {org.status === 'published' && (
                     <button onClick={() => handleDashboard(org.id)}
                       className="rounded-lg border border-purple-200 text-purple-600 px-3 py-1 text-xs">📊</button>
@@ -261,6 +276,17 @@ export default function AdminOrgSkillsPage() {
                 className="text-sm text-muted-foreground">关闭</button>
             </div>
           </div>
+        )}
+
+        {/* Feishu publish modal */}
+        {feishuSkill && (
+          <FeishuPublishModal
+            skillId={feishuSkill.id}
+            skillName={feishuSkill.name}
+            skillAvatar={feishuSkill.avatar}
+            onClose={() => setFeishuSkill(null)}
+            onPublished={() => { load(); loadFeishuBots(); }}
+          />
         )}
       </div>
 

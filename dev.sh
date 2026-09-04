@@ -7,6 +7,7 @@ lsof -ti:8080 | xargs kill -9 2>/dev/null && echo "后端已停止" || echo "后
 lsof -ti:3000 | xargs kill -9 2>/dev/null && echo "管理后台已停止" || echo "管理后台未运行"
 lsof -ti:3001 | xargs kill -9 2>/dev/null && echo "平台端已停止" || echo "平台端未运行"
 lsof -ti:8000 | xargs kill -9 2>/dev/null && echo "文件解析已停止" || echo "文件解析未运行"
+lsof -ti:3010 | xargs kill -9 2>/dev/null && echo "飞书桥已停止" || echo "飞书桥未运行"
 
 echo "=== 启动文件解析服务 (Python) :8000 ==="
 cd "$DIR/ai-service" && nohup uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/file-parser.log 2>&1 &
@@ -15,6 +16,10 @@ sleep 2 && curl -s -o /dev/null -w "文件解析: HTTP %{http_code}\n" http://lo
 echo "=== 启动后端 (dev) :8080 ==="
 cd "$DIR/backend" && mvn clean spring-boot:run -q &
 sleep 18 && curl -s -o /dev/null -w "后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyId":"c0000000-0000-0000-0000-000000000001"}'
+
+echo "=== 启动飞书桥 (dev) :3010 ==="
+cd "$DIR/feishu-bot" && [ -d node_modules ] || npm install && PORT=3010 BACKEND_URL=http://127.0.0.1:8080/api/v1 nohup node src/index.js > /tmp/feishu-bot.log 2>&1 &
+sleep 2 && curl -s -o /dev/null -w "飞书桥: HTTP %{http_code}\n" http://localhost:3010/health
 
 echo "=== 启动前端管理后台 (dev) :3000 ==="
 cd "$DIR/frontend" && npm run dev &

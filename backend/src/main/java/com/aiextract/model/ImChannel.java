@@ -74,6 +74,31 @@ public class ImChannel {
     private String linkedSkills;
 
     /**
+     * 平台 bot 标识（飞书 app_id / 钉钉 appKey / 企微 corpId:agentId），全局唯一路由键
+     */
+    @Column(name = "bot_id", length = 128)
+    private String botId;
+
+    /**
+     * 绑定的分身ID（1:1），未发布前为 null
+     */
+    @Column(name = "skill_id")
+    private UUID skillId;
+
+    /**
+     * 生命周期：draft | publishing | published | disabled
+     */
+    @Column(name = "status", length = 20)
+    private String status;
+
+    /**
+     * 加密后的平台密钥（appSecret 等机密，AES-GCM 密文 JSON）
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "secrets", columnDefinition = "JSONB")
+    private String secrets;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false, updatable = false)

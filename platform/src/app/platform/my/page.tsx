@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import PlatformTopBar from '@/components/ui/PlatformTopBar';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface SkillItem {
   id: string;
@@ -430,8 +431,7 @@ export default function PlatformMyPage() {
               display: 'inline-block', padding: 8, background: C.cardBg,
               border: `1px solid ${C.cardBorder}`, borderRadius: 14, marginBottom: 16,
             }}>
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(inviteUrl)}`}
-                width={180} height={180} alt="邀请二维码" style={{ borderRadius: 8, display: 'block' }} />
+              <QRCodeSVG value={inviteUrl} size={180} style={{ borderRadius: 8, display: 'block' }} />
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
