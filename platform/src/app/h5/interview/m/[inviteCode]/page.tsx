@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams, useParams } from 'next/navigation';
 import { getActiveSessions, restartSession } from '@/lib/api/interview';
+import { getToken } from '@/lib/storage';
 
 interface InviteInfo {
   type: 'enterprise' | 'personal';
@@ -73,6 +74,15 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
         }
       } catch {}
     }
+    // B端 token（企业登录）
+    try {
+      const bToken = localStorage.getItem('token');
+      if (bToken) {
+        const r = await fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${bToken}` } });
+        const d = await r.json();
+        if (d.code === 200) return true;
+      }
+    } catch {}
     // C端 c_auth
     try {
       const stored = localStorage.getItem('c_auth');
@@ -99,11 +109,8 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
     setSubmitting(true); setToasts(null);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (partnerToken) headers['Authorization'] = `Bearer ${partnerToken}`;
-      else {
-        const stored = localStorage.getItem('c_auth');
-        if (stored) { const s = JSON.parse(stored); if (s?.token) headers['Authorization'] = `Bearer ${s.token}`; }
-      }
+      const token = partnerToken || getToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
       const r = await fetch('/api/v1/interviews', {
         method: 'POST', headers,
         body: JSON.stringify({ topic: topic.trim(), inviteCode }),

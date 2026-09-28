@@ -8,6 +8,7 @@ import { fetchRecommendedQuestions, getOrCreateShare } from '@/lib/api/skill';
 import { QRCodeSVG } from 'qrcode.react';
 import { getUser, getToken, clearAuth, getSkinPreference, setSkinPreference } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
+import { createGuestBySkillId, setCAuth } from '@/lib/api/c';
 import { copyToClipboard } from '@/lib/clipboard';
 import { VoiceRecorder } from '@/components/voice/VoiceRecorder';
 
@@ -491,6 +492,19 @@ export function SkillCardPage({ skill }: Props) {
   const handleShare = useCallback(async () => {
     setShareLoading(true); setShareError(null);
     try {
+      // 游客未领证时先静默领游客证，避免匿名请求被 403
+      if (!getToken()) {
+        const resp = await createGuestBySkillId(skill.id);
+        if (resp.token) {
+          setCAuth(resp.token, {
+            userId: resp.userId,
+            nickname: resp.nickname,
+            status: resp.status,
+            remaining: resp.remaining,
+            limit: resp.limit,
+          });
+        }
+      }
       const [pub, card] = await Promise.all([getOrCreateShare(skill.id), getOrCreateShare(skill.id, 'card')]);
       setPubCode(pub.shareCode); setCardCode(card.shareCode); setShowShareModal(true);
     } catch { setShareError('分享失败，请先登录'); }
