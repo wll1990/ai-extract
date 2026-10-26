@@ -35,15 +35,15 @@ public class AdminInsightController {
     private final FeedbackLogRepository feedbackLogRepository;
     private final GrainRetrieveLogRepository grainRetrieveLogRepository;
     private final KnowledgeGapRepository knowledgeGapRepository;
-    private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
-    private final com.aiextract.repository.SkillRepository skillRepository;
+    private final ExperienceGrainRepository grainRepository;
+    private final SkillRepository skillRepository;
     private final com.aiextract.service.AdminInsightService adminInsightService;
-    private final com.aiextract.repository.AutoInsightRepository autoInsightRepository;
-    private final com.aiextract.repository.CandidateGrainRepository candidateGrainRepository;
+    private final AutoInsightRepository autoInsightRepository;
+    private final CandidateGrainRepository candidateGrainRepository;
     private final com.aiextract.service.DashScopeEmbeddingService embeddingService;
     private final CompanyScopeService companyScopeService;
-    private final com.aiextract.repository.AnswerCorrectionRepository correctionRepository;
-    private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
+    private final AnswerCorrectionRepository correctionRepository;
+    private final AdminAuditLogRepository auditLogRepository;
 
     /**
      * 分身使用概览 — 对话量 / 用户数 / 满意率。
@@ -57,7 +57,7 @@ public class AdminInsightController {
 
         // 对话量 + 用户数（从 conversation_stats 聚合）
         List<Object[]> stats = conversationStatsRepository
-            .statsOverview(id, java.time.LocalDateTime.now().minusDays(7), java.time.LocalDateTime.now());
+            .statsOverview(id, LocalDateTime.now().minusDays(7), LocalDateTime.now());
         long conversations = stats.isEmpty() || stats.get(0)[0] == null ? 0 : (Long) stats.get(0)[0];
         long activeUsers = stats.isEmpty() || stats.get(0)[1] == null ? 0 : (Long) stats.get(0)[1];
 
@@ -133,7 +133,7 @@ public class AdminInsightController {
         companyScopeService.assertSkillOwnership(id);
         var skill = skillRepository.findById(id).orElseThrow(() ->
             new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
-        List<com.aiextract.model.ExperienceGrain> grains = "best".equals(sort)
+        List<ExperienceGrain> grains = "best".equals(sort)
             ? grainRepository.findTopBySpaceIdOrderByHelpfulCountDesc(
                 skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 10))
             : grainRepository.findTopBySpaceIdOrderByUnhelpfulCountDesc(
@@ -143,7 +143,7 @@ public class AdminInsightController {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", g.getId().toString());
             m.put("description", g.getSceneDescription() != null ? g.getSceneDescription()
-                : (g.getSceneTag() != null ? g.getSceneTag() : "未命名"));
+                : g.getSceneTag() != null ? g.getSceneTag() : "未命名");
             m.put("sceneTag", g.getSceneTag());
             m.put("helpful", g.getHelpfulCount());
             m.put("unhelpful", g.getUnhelpfulCount());
@@ -193,7 +193,7 @@ public class AdminInsightController {
         companyScopeService.assertSkillOwnership(id);
         org.springframework.data.domain.Pageable pageable =
             org.springframework.data.domain.PageRequest.of(page, size);
-        org.springframework.data.domain.Page<com.aiextract.model.FeedbackLog> logs;
+        org.springframework.data.domain.Page<FeedbackLog> logs;
         if (rating != null && !rating.isEmpty()) {
             logs = feedbackLogRepository.findBySkillIdAndRatingOrderByCreatedAtDesc(id, rating, pageable);
         } else {
@@ -224,7 +224,7 @@ public class AdminInsightController {
     @PutMapping("/knowledge-gaps/{gapId}")
     public ApiResponse<Void> resolveKnowledgeGap(
             @PathVariable String gapId, @RequestBody Map<String, String> body) {
-        com.aiextract.model.KnowledgeGap gap = knowledgeGapRepository
+        KnowledgeGap gap = knowledgeGapRepository
             .findById(UUID.fromString(gapId))
             .orElseThrow(() -> new BusinessException(404, "缺口不存在"));
         companyScopeService.assertSkillOwnership(gap.getSkillId());
@@ -248,8 +248,8 @@ public class AdminInsightController {
         // 从最近 200 条中随机取 20 条
         var pageable = org.springframework.data.domain.PageRequest.of(0, 200);
         var stats = conversationStatsRepository.findBySkillIdAndIsTestFalse(id, pageable);
-        List<com.aiextract.model.ConversationStats> list = new ArrayList<>(stats.getContent());
-        java.util.Collections.shuffle(list);
+        List<ConversationStats> list = new ArrayList<>(stats.getContent());
+        Collections.shuffle(list);
         List<Map<String, Object>> result = list.stream().limit(20).map(s -> {
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", s.getId().toString());
@@ -292,7 +292,7 @@ public class AdminInsightController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         var pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        List<com.aiextract.model.AutoInsight> insights;
+        List<AutoInsight> insights;
 
         if (skillId != null && !skillId.isEmpty()) {
             UUID sid = UUID.fromString(skillId);
@@ -307,7 +307,7 @@ public class AdminInsightController {
         } else {
             UUID companyId = TokenContext.getCompanyId();
             List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-            if (companySkillIds != null) {
+            if (!companyScopeService.isSuperAdmin()) {
                 // company_admin — 只返回本企业分身的洞察
                 if (companySkillIds.isEmpty()) {
                     return ApiResponse.success(List.of());
@@ -357,7 +357,7 @@ public class AdminInsightController {
         }
 
         // 同洞察产生的所有候选颗粒
-        List<com.aiextract.model.CandidateGrain> grains = candidateGrainRepository
+        List<CandidateGrain> grains = candidateGrainRepository
             .findBySourceInsightId(insightId);
         result.put("candidateGrains", grains.stream().map(this::toCandidateGrainMap).collect(Collectors.toList()));
 
@@ -383,7 +383,7 @@ public class AdminInsightController {
         }
 
         // 标记已通过
-        candidate.setStatus(com.aiextract.model.CandidateGrain.STATUS_APPROVED);
+        candidate.setStatus(CandidateGrain.STATUS_APPROVED);
         candidate.setReviewedAt(LocalDateTime.now());
         if (body != null && body.containsKey(KEY_NOTE)) {
             candidate.setNote(body.get(KEY_NOTE));
@@ -391,9 +391,9 @@ public class AdminInsightController {
         candidateGrainRepository.save(candidate);
 
         // 写入 experience_grain + 向量化
-        com.aiextract.model.Skill skill = skillRepository.findById(candidate.getSkillId())
+        Skill skill = skillRepository.findById(candidate.getSkillId())
                 .orElseThrow(() -> new BusinessException(404, "关联分身不存在"));
-        com.aiextract.model.ExperienceGrain grain = com.aiextract.model.ExperienceGrain.builder()
+        ExperienceGrain grain = ExperienceGrain.builder()
                 .id(UUID.randomUUID())
                 .spaceId(skill.getSpaceId())
                 .sceneTag(candidate.getSceneTag())
@@ -451,7 +451,7 @@ public class AdminInsightController {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
         }
 
-        candidate.setStatus(com.aiextract.model.CandidateGrain.STATUS_REJECTED);
+        candidate.setStatus(CandidateGrain.STATUS_REJECTED);
         candidate.setReviewedAt(LocalDateTime.now());
         candidate.setNote(body != null ? body.getOrDefault("note", "") : "");
         candidateGrainRepository.save(candidate);
@@ -496,7 +496,7 @@ public class AdminInsightController {
     // helper
     // ============================================================
 
-    private Map<String, Object> toInsightMap(com.aiextract.model.AutoInsight i) {
+    private Map<String, Object> toInsightMap(AutoInsight i) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", i.getId().toString());
         m.put("skillId", i.getSkillId() != null ? i.getSkillId().toString() : null);
@@ -511,7 +511,7 @@ public class AdminInsightController {
         return m;
     }
 
-    private Map<String, Object> toCandidateGrainMap(com.aiextract.model.CandidateGrain g) {
+    private Map<String, Object> toCandidateGrainMap(CandidateGrain g) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", g.getId().toString());
         m.put("skillId", g.getSkillId() != null ? g.getSkillId().toString() : null);
@@ -543,10 +543,10 @@ public class AdminInsightController {
         String correctedResponse = (String) body.get("correctedResponse");
         String correctedBy = (String) body.getOrDefault("correctedBy", "admin");
         @SuppressWarnings("unchecked")
-        java.util.List<String> grainIdList = (java.util.List<String>) body.get("grainIds");
+        List<String> grainIdList = (List<String>) body.get("grainIds");
 
         // 1. 保存矫正记录
-        var correction = com.aiextract.model.AnswerCorrection.builder()
+        var correction = AnswerCorrection.builder()
                 .id(UUID.randomUUID())
                 .skillId(skillId)
                 .conversationId(body.get("conversationId") != null
@@ -558,7 +558,7 @@ public class AdminInsightController {
                 .correctedResponse(correctedResponse)
                 .correctedBy(correctedBy)
                 .grainIds(grainIdList != null ? grainIdList.toString() : null)
-                .createdAt(java.time.LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
                 .build();
         correctionRepository.save(correction);
 
@@ -577,13 +577,13 @@ public class AdminInsightController {
 
         // 3. 写审计日志
         try {
-            auditLogRepository.save(com.aiextract.model.AdminAuditLog.builder()
+            auditLogRepository.save(AdminAuditLog.builder()
                 .id(UUID.randomUUID())
                 .action("correct_answer")
                 .detail(String.format("skillId=%s by=%s query=%s grains=%d", skillId, correctedBy,
                     originalQuery != null ? originalQuery.substring(0, Math.min(50,
                         originalQuery.length())) : "", decayed))
-                .createdAt(java.time.LocalDateTime.now())
+                .createdAt(LocalDateTime.now())
                 .build());
         } catch (Exception e) {
             log.warn("审计日志写入失败", e);

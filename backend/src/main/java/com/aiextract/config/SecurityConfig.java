@@ -54,7 +54,7 @@ public class SecurityConfig {
 
                         // ── C 端认证 ──
                         .requestMatchers(HttpMethod.POST, "/c/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/c/auth/register").hasAuthority("c_guest")
+                        .requestMatchers(HttpMethod.POST, "/c/auth/register").hasAuthority(RolePermissions.C_GUEST)
                         .requestMatchers(HttpMethod.POST, "/c/auth/register/new").permitAll()
                         .requestMatchers(HttpMethod.GET, "/c/auth/me").authenticated()
 
@@ -71,13 +71,20 @@ public class SecurityConfig {
                         // ── IM 内部接口（传输层 ↔ 后端，HMAC 签名在 Controller 校验） ──
                         .requestMatchers("/internal/im/**").permitAll()
 
+                        // ── 前端埋点（fire-and-forget）──
+                        .requestMatchers(HttpMethod.POST, "/analytics/event").permitAll()
+
                         // ── 登录状态检查 ──
                         .requestMatchers(HttpMethod.POST, "/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/auth/avatar").authenticated()
 
                         // ── 对内分享 ──
                         .requestMatchers(HttpMethod.GET, "/i/*/info").permitAll()
                         .requestMatchers("/i/**").authenticated()
+
+                        // ── 菜单下发（任意登录态，后端按权限过滤）──
+                        .requestMatchers(HttpMethod.GET, "/config/nav").authenticated()
 
                         // ═══════════════════════════════════════════════════════
                         // 管理后台 — Platform 级（仅 super_admin 拥有对应权限码）
@@ -86,15 +93,23 @@ public class SecurityConfig {
                         .requestMatchers("/admin/companies/**").hasAuthority(Permission.COMPANY_MANAGE)
                         .requestMatchers("/admin/partners/**").hasAuthority(Permission.PARTNER_MANAGE)
                         .requestMatchers("/admin/im/**").hasAuthority(Permission.IM_MANAGE)
-                        .requestMatchers(HttpMethod.POST, "/admin/invite").hasAnyAuthority("super_admin", "company_admin", "employee")
+                        .requestMatchers("/admin/token-usage/**").hasAuthority(Permission.TOKEN_VIEW_COMPANY)
+                        .requestMatchers("/admin/insights/**").hasAuthority(Permission.DASHBOARD_VIEW)
+                        .requestMatchers("/admin/notifications/**").hasAuthority(Permission.DASHBOARD_VIEW)
+                        .requestMatchers("/admin/organization-skills/**").hasAuthority(Permission.ORG_SKILL_MANAGE)
+                        .requestMatchers("/admin/grains/**").hasAuthority(Permission.GRAIN_MANAGE)
+                        .requestMatchers(HttpMethod.POST, "/admin/invite").hasAnyAuthority(RolePermissions.SUPER_ADMIN, RolePermissions.COMPANY_ADMIN, RolePermissions.EMPLOYEE)
                         .requestMatchers("/admin/materials/**").hasAuthority(Permission.MATERIAL_MANAGE)
                         .requestMatchers("/admin/skills/picker").hasAuthority(Permission.MATERIAL_MANAGE)
                         .requestMatchers("/admin/users/picker").hasAuthority(Permission.MATERIAL_MANAGE)
                         .requestMatchers("/admin/skills/*/materials/**").hasAuthority(Permission.MATERIAL_MANAGE)
+                        .requestMatchers("/admin/skills/**").hasAuthority(Permission.SKILL_MANAGE)
+                        .requestMatchers("/admin/conversations/**").hasAuthority(Permission.CONVERSATION_VIEW)
+                        .requestMatchers("/admin/experts/**").hasAuthority(Permission.EXPERT_MANAGE)
                         .requestMatchers("/admin/**").hasAuthority(Permission.DASHBOARD_VIEW)
 
-                        // ── 访谈：B端全员 + C端注册用户 + 合作方（排除游客） ──
-                        .requestMatchers("/interviews/**").hasAnyAuthority("super_admin", "company_admin", "employee", "c_user", "c_partner")
+                        // ── 访谈：非游客（权限码正面表达） ──
+                        .requestMatchers("/interviews/**").hasAuthority(Permission.INTERVIEW_USE)
 
                         // ── 颗粒操作 ──
                         .requestMatchers("/grains/**").authenticated()
@@ -106,7 +121,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/skills/list").hasAuthority(Permission.SKILL_USE)
 
                         // ── 企业总调度问答：仅 B 端 ──
-                        .requestMatchers(HttpMethod.POST, "/skills/enterprise/chat").hasAnyAuthority("super_admin", "company_admin", "employee")
+                        .requestMatchers(HttpMethod.POST, "/skills/enterprise/chat").hasAnyAuthority(RolePermissions.SUPER_ADMIN, RolePermissions.COMPANY_ADMIN, RolePermissions.EMPLOYEE)
 
                         // ── 聊天全家桶 ──
                         .requestMatchers("/skills/**").hasAuthority(Permission.SKILL_USE)
@@ -115,10 +130,17 @@ public class SecurityConfig {
                         .requestMatchers("/reports/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/reports/by-session/**").authenticated()
 
-                        // ── 其余内部接口：仅 B 端全员 ──
-                        // ⚠️ 注意：C 端接口（c_guest/c_user/c_partner）必须在上方显式声明，
-                        // 否则会被此 catch-all 规则拒绝。新增 C 端接口时务必加 .requestMatchers()。
-                        .anyRequest().hasAnyAuthority("super_admin", "company_admin", "employee"))
+                        // ── B 端内部端点（原靠 anyRequest 兜底，现显式声明）──
+                        .requestMatchers("/spaces/**").hasAnyAuthority(RolePermissions.SUPER_ADMIN, RolePermissions.COMPANY_ADMIN, RolePermissions.EMPLOYEE)
+                        .requestMatchers("/tools/**").hasAnyAuthority(RolePermissions.SUPER_ADMIN, RolePermissions.COMPANY_ADMIN, RolePermissions.EMPLOYEE)
+                        .requestMatchers("/workbench/**").hasAnyAuthority(RolePermissions.SUPER_ADMIN, RolePermissions.COMPANY_ADMIN, RolePermissions.EMPLOYEE)
+                        .requestMatchers("/im/channels/**").hasAuthority(Permission.IM_MANAGE)
+                        .requestMatchers(HttpMethod.GET, "/api/domains").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/skills/*/domain-config").hasAuthority(Permission.SKILL_USE)
+                        .requestMatchers(HttpMethod.GET, "/experts/available").hasAuthority(Permission.SKILL_USE)
+
+                        // ── 默认拒绝：未显式声明的接口一律 403 ──
+                        .anyRequest().denyAll())
 
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 

@@ -4,7 +4,7 @@ import { useState, FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { login } from '@/lib/api/auth';
-import { setAuth, getUser } from '@/lib/storage';
+import { setAuth } from '@/lib/storage';
 import { cLogin, setCAuth } from '@/lib/api/c';
 
 type LoginTab = 'enterprise' | 'personal';

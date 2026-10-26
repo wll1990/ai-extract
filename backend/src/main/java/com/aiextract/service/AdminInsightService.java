@@ -97,7 +97,7 @@ public class AdminInsightService {
         // ① 已发布分身列表（1 次 SQL），按企业过滤
         List<Skill> skills;
         List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-        if (companySkillIds != null) {
+        if (!companyScopeService.isSuperAdmin()) {
             // company_admin — 只取本企业已发布分身
             skills = companySkillIds.isEmpty() ? List.of() : skillRepository.findByIdInAndStatus(companySkillIds, "published");
         } else {
@@ -182,7 +182,7 @@ public class AdminInsightService {
             Map<String, Object> row = new LinkedHashMap<>();
             row.put("skillId", skill.getId().toString());
             row.put("name", skill.getOwnerName() != null ? skill.getOwnerName()
-                : (skill.getDisplayName() != null ? skill.getDisplayName() : "未命名"));
+                : skill.getDisplayName() != null ? skill.getDisplayName() : "未命名");
             row.put("ownerTitle", skill.getOwnerTitle());
             row.put("department", skill.getDepartment());
 

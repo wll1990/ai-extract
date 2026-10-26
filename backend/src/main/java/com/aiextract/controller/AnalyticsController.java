@@ -29,7 +29,7 @@ public class AnalyticsController {
      *
      * @param body 事件数据，包含 event_type 和 event_data（JSONB）
      */
-    @PostMapping("/api/v1/analytics/event")
+    @PostMapping("/analytics/event")
     public ResponseEntity<Void> trackEvent(@RequestBody Map<String, Object> body) {
         try {
             analyticsEventRepository.save(AnalyticsEvent.builder()

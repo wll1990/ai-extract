@@ -394,7 +394,7 @@ export function SkillCardPage({ skill }: Props) {
   const orgMembers = skill.members || [];
   const previewMembers = orgMembers.slice(0, 4);
 
-  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string; isGuest: boolean } | null>(null);
   const [mounted, setMounted] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
 
@@ -403,7 +403,7 @@ export function SkillCardPage({ skill }: Props) {
 
   useEffect(() => {
     const u = getUser();
-    if (u?.name) setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined });
+    if (u?.name) setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined, isGuest: u.isGuest });
     const savedSkin = getSkinPreference();
     if (savedSkin) setSkin(savedSkin);
     setMounted(true);
@@ -576,7 +576,7 @@ export function SkillCardPage({ skill }: Props) {
                     onMouseLeave={e => { e.currentTarget.style.background = 'var(--sk-bg-btn-ghost)'; }}
                   >📤 分享</button>
                 )}
-                {user && user.role !== 'guest' ? (
+                {user && !user.isGuest ? (
                   <div style={{ position: 'relative' }}>
                     <button onClick={() => setShowUserMenu(!showUserMenu)} style={{
                       display: 'flex', alignItems: 'center', gap: 6, padding: '3px 10px 3px 3px',

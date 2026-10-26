@@ -1,5 +1,6 @@
 package com.aiextract.util;
 
+import com.aiextract.config.RolePermissions;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.JwtParser;
@@ -15,7 +16,10 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -94,6 +98,10 @@ public class JwtUtil {
             claims.put("companyId", companyId.toString());
         }
         claims.put("role", role);
+        // 自包含：签发时解析角色→权限，token 内嵌
+        claims.put("permissions", RolePermissions.getPermissions(role));
+        // 会话标识：支持精确撤销单 token
+        claims.put("jti", UUID.randomUUID().toString());
 
         String token = Jwts.builder()
                 .claims(claims)
@@ -171,6 +179,30 @@ public class JwtUtil {
     public String getRoleFromToken(String token) {
         Claims claims = parseToken(token);
         return claims.get("role", String.class);
+    }
+
+    /**
+     * 从Token中提取权限码集合（自包含 claim）；旧 token 无此 claim 返回空集合。
+     */
+    @SuppressWarnings("unchecked")
+    public Set<String> getPermissionsFromToken(String token) {
+        Claims claims = parseToken(token);
+        List<String> perms = claims.get("permissions", List.class);
+        return perms == null ? Set.of() : new HashSet<>(perms);
+    }
+
+    /**
+     * 从Token中提取会话标识 jti。
+     */
+    public String getJtiFromToken(String token) {
+        return parseToken(token).get("jti", String.class);
+    }
+
+    /**
+     * 从Token中提取过期时间。
+     */
+    public Date getExpirationFromToken(String token) {
+        return parseToken(token).getExpiration();
     }
 
 }

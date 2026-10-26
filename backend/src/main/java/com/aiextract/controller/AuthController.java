@@ -2,6 +2,7 @@ package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
 import com.aiextract.config.TokenContext;
+import com.aiextract.config.TokenRevocationService;
 import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
@@ -43,6 +44,7 @@ public class AuthController {
     private final AuthService authService;
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
+    private final TokenRevocationService tokenRevocationService;
 
     @org.springframework.beans.factory.annotation.Value("${jwt.cookie-secure:false}")
     private boolean cookieSecure;
@@ -64,7 +66,7 @@ public class AuthController {
                                                HttpServletRequest httpRequest) {
         // 安全校验：仅已认证的 super_admin 可注册 super_admin 角色
         if ("super_admin".equals(request.getRole())) {
-            String token = getTokenFromSecurityContext(httpRequest);
+            String token = getTokenFromSecurityContext();
             if (token == null) {
                 return ApiResponse.error(403, "不允许自注册为超级管理员");
             }
@@ -100,8 +102,8 @@ public class AuthController {
     }
 
     @GetMapping("/me")
-    public ApiResponse<UserInfoResponse> getCurrentUser(HttpServletRequest request) {
-        String token = getTokenFromSecurityContext(request);
+    public ApiResponse<UserInfoResponse> getCurrentUser() {
+        String token = getTokenFromSecurityContext();
         if (token == null || token.isBlank()) {
             return ApiResponse.error(401, "未登录");
         }
@@ -142,7 +144,7 @@ public class AuthController {
 
         // 创建用户 — 使用注册码的 defaultRole
         String role = body.get("role") != null ? (String) body.get("role")
-            : (c.getDefaultRole() != null ? c.getDefaultRole() : "employee");
+            : c.getDefaultRole() != null ? c.getDefaultRole() : "employee";
         if (!com.aiextract.config.RolePermissions.REGISTRABLE_ROLES.contains(role)) {
             role = "employee";
         }
@@ -160,7 +162,7 @@ public class AuthController {
         return ApiResponse.success(response);
     }
 
-    /** 退出登录 — 清除 HttpOnly Cookie */
+    /** 退出登录 — 清除 HttpOnly Cookie 并撤销当前 token */
     @PostMapping("/logout")
     public ApiResponse<Void> logout(HttpServletResponse response) {
         Cookie clear = new Cookie("token", "");
@@ -169,6 +171,21 @@ public class AuthController {
         clear.setPath("/");
         clear.setMaxAge(0);
         response.addCookie(clear);
+
+        // 撤销当前 token（登出后立即失效），匿名请求无 token 则跳过
+        String token = getTokenFromSecurityContext();
+        if (token != null) {
+            try {
+                String jti = jwtUtil.getJtiFromToken(token);
+                long remaining = (jwtUtil.getExpirationFromToken(token).getTime()
+                        - System.currentTimeMillis()) / 1000;
+                if (remaining > 0) {
+                    tokenRevocationService.revokeToken(jti, remaining);
+                }
+            } catch (Exception e) {
+                log.warn("登出撤销 token 失败", e);
+            }
+        }
         return ApiResponse.success();
     }
 
@@ -192,7 +209,7 @@ public class AuthController {
     }
 
     /** 从 SecurityContext 取 token */
-    private String getTokenFromSecurityContext(HttpServletRequest request) {
+    private String getTokenFromSecurityContext() {
         var auth = org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication();
         if (auth != null && auth.getCredentials() instanceof String token && !token.isEmpty()) {

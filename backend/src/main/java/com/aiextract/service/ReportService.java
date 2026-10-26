@@ -71,7 +71,7 @@ public class ReportService {
             .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
         if (rating <= 0 || rating > MAX_RATING)
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "评分范围1-5");
-        report.setRating(java.math.BigDecimal.valueOf(rating));
+        report.setRating(BigDecimal.valueOf(rating));
         reportRepository.save(report);
     }
 
@@ -92,10 +92,8 @@ public class ReportService {
 
         // 公司隔离：非 super_admin 只查本公司 space 下的报告
         List<UUID> companySpaceIds = null;
-        if (companyId != null) {
-            companySpaceIds = companyScopeService.getSpaceIds(companyId) != null
-                    ? new ArrayList<>(companyScopeService.getSpaceIds(companyId))
-                    : null;
+        if (companyId != null && !companyScopeService.isSuperAdmin()) {
+            companySpaceIds = new ArrayList<>(companyScopeService.getSpaceIds(companyId));
         }
 
         Page<Report> reportPage;

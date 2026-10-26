@@ -27,11 +27,11 @@ export function getToken(): string | null {
   return null;
 }
 
-export function getUser(): { name: string; role: string; [key: string]: unknown } | null {
+export function getUser(): { name: string; role: string; isGuest: boolean; [key: string]: unknown } | null {
   if (!isBrowser()) return null;
   const raw = localStorage.getItem(KEYS.USER);
   if (raw) {
-    try { return JSON.parse(raw); } catch { /* fall through */ }
+    try { return { ...JSON.parse(raw), isGuest: false }; } catch { /* fall through */ }
   }
   // C 端降级：个人登录存 c_auth
   const cAuth = localStorage.getItem('c_auth');
@@ -39,9 +39,11 @@ export function getUser(): { name: string; role: string; [key: string]: unknown 
     try {
       const session = JSON.parse(cAuth);
       if (session?.token || session?.userId) {
+        const status = (session.user?.status) || session.status;
         return {
           name: (session.user?.nickname) || (session.user?.userId?.substring(0, 8)) || session.nickname || session.userId?.substring(0, 8) || '用户',
-          role: (session.user?.status) || session.status || 'registered',
+          role: status || 'registered',
+          isGuest: status === 'guest',
           avatarUrl: (session.user?.avatarUrl) || session.avatarUrl || undefined,
         };
       }

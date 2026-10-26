@@ -245,6 +245,8 @@ public class AuthService {
      * @return UserInfoResponse
      */
     private UserInfoResponse buildUserInfoResponse(User user, String companyName) {
+        // 注意：此方法被 login/register 复用，彼时 SecurityContext 尚未建立，
+        // 故从 role 映射表派生（与 JwtUtil 签发时的 permissions claim 同源）。
         return UserInfoResponse.builder()
                 .id(user.getId().toString())
                 .name(user.getName())

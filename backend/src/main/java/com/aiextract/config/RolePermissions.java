@@ -53,6 +53,8 @@ public final class RolePermissions {
             Permission.SCENE_COVERAGE, Permission.EXPERT_MANAGE,
             Permission.GRAIN_MANAGE, Permission.TOKEN_VIEW_COMPANY,
             Permission.ORG_SKILL_MANAGE,
+            // C 端服务等级
+            Permission.INTERVIEW_USE,
             // Basic
             Permission.SKILL_USE, Permission.SPACE_OWN
         ),
@@ -64,21 +66,24 @@ public final class RolePermissions {
             Permission.SCENE_COVERAGE, Permission.EXPERT_MANAGE,
             Permission.GRAIN_MANAGE, Permission.TOKEN_VIEW_COMPANY,
             Permission.ORG_SKILL_MANAGE,
+            // C 端服务等级
+            Permission.INTERVIEW_USE,
             // Basic
             Permission.SKILL_USE, Permission.SPACE_OWN
         ),
         EMPLOYEE, Set.of(
-            Permission.SKILL_USE, Permission.SPACE_OWN, Permission.MATERIAL_MANAGE
+            Permission.SKILL_USE, Permission.SPACE_OWN,
+            Permission.MATERIAL_MANAGE, Permission.INTERVIEW_USE
         ),
-        // C-end 角色 — 服务等级，仅分配基础使用权限
-        "c_guest", Set.of(
+        // C-end 角色 — 服务等级，游客仅基础使用，注册/合作方增加访谈
+        C_GUEST, Set.of(
             Permission.SKILL_USE
         ),
-        "c_user", Set.of(
-            Permission.SKILL_USE
+        C_USER, Set.of(
+            Permission.SKILL_USE, Permission.INTERVIEW_USE
         ),
-        "c_partner", Set.of(
-            Permission.SKILL_USE
+        C_PARTNER, Set.of(
+            Permission.SKILL_USE, Permission.INTERVIEW_USE
         )
     );
 

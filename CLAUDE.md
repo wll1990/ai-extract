@@ -2,63 +2,102 @@
 
 ## 项目概览
 
-**AI 经验萃取平台** — 从销冠的对话录音/文档中自动萃取销售经验，生成可对话的 AI 分身。
+**AI 经验萃取平台** — 从销冠的对话录音/文档中自动萃取销售经验，生成可对话的 AI 分身（Skill）。
 
-- **领域**：销售 B2B（主） + 金融二级市场（辅）
-- **核心流程**：上传素材 → AI 萃取颗粒 → 审核发布 → 分身广场（QA问答/自由对话/实战对练三种模式）
-- **后端**：Spring Boot 3 + JPA + pgvector + @Async + SSE 流式
-- **前端**：Next.js 14 App Router + React 18 + TypeScript + Tailwind CSS 3
-- **数据库**：PostgreSQL + pgvector（向量检索）
+- **领域**：销售 B2B（主） + 金融二级市场（辅，通过领域 YAML 层级继承 `domain/*.yml`）
+- **核心流程**：上传素材 → AI 萃取颗粒 → 审核发布 → 分身广场（QA/自由对话/实战对练）
+
+### 五个服务（以代码为准）
+
+| 服务 | 技术栈 | 职责 |
+|------|--------|------|
+| `backend/` | Spring Boot 3 + JPA + pgvector + **Spring AI** | **唯一核心**：业务、LLM 调用、RAG、SSE、调度全在这 |
+| `frontend/` | Next.js 14 | B 端管理后台 + 分身广场主应用 |
+| `platform/` | Next.js 14 | C 端平台「MindForge」（发现专家/我的分身/分享页） |
+| `ai-service/` | Python FastAPI | **只剩文件解析**（txt/docx/pdf/pptx/xlsx/csv/html/图片/音频→文本） |
+| `feishu-bot/` | Node.js | 飞书桥接（WebSocket 长连接 + HMAC 验签，转发后端） |
+
+> ⚠️ **与 README 的偏差**：README 声称 ai-service 提供 `/internal/chat`、报告生成、访谈引擎——**这些已全部迁回 backend**（Spring AI 直连 DeepSeek）。ai-service 现在只有 `/internal/parse-file`（[internal.py](ai-service/routers/internal.py)，179 行，`services/` 为空）。后端 `client/` 目录空置。
 
 ### 目录结构
 
 ```
 ai-extract/
 ├── backend/src/main/java/com/aiextract/
-│   ├── controller/     # REST + SSE 接口（SkillController, AdminController...）
-│   ├── service/        # 核心业务（ChatStreamService, SkillService, PracticeDemoService, MaterialCleaningService）
-│   ├── model/          # JPA 实体（Skill, ExperienceGrain, SkillConversation, SkillMessage...）
-│   ├── repository/     # JPA Repository
-│   ├── dto/            # 请求/响应 DTO
-│   ├── config/         # 域名配置、Prompt 模板加载
-│   └── scheduler/      # 定时任务（素材清洗、颗粒萃取）
-├── frontend/src/
-│   ├── app/            # Next.js App Router 页面
-│   │   ├── skill/[skillId]/  # 🔥 分身广场（核心页面，3 种模式：QA/Talk/Practice）
-│   │   ├── admin/             # 管理后台（审核流水线、对话历史）
-│   │   └── login/register/    # 认证
-│   ├── components/
-│   │   ├── skill/       # 分身对话组件（SkillChatView, PracticeView, HistorySidebar）
-│   │   ├── admin/       # 审核步骤组件（ExplicitStep, SkillStep, SceneStep, ProductStep）
-│   │   └── modals/      # ProductDemoModal, PracticeScenarioModal
-│   └── lib/api/         # API 客户端（skill.ts, audit.ts, sse.ts）
+│   ├── controller/   # REST + SSE（SkillController=分身对话, AdminController=审核流水线）
+│   ├── service/      # 核心业务（ChatStreamService/RagPipelineService/MaterialCleaningScheduler...）
+│   ├── model/        # 37 个 JPA 实体
+│   ├── repository/   # JPA Repository + pgvector 原生 SQL
+│   ├── config/       # 安全/权限/SSE/Prompt/领域/多租户（AiConfig, SecurityConfig, Permission, RolePermissions...）
+│   ├── scheduler/    # 定时任务（DataCleanupScheduler, SkillStatsScheduler）
+│   └── common/       # ApiResponse, PageResponse, TraceContext
+├── frontend/src/     # B 端：app/(admin, skill/[skillId], interview, report, explore, space) + lib/(api, sse.ts)
+├── platform/src/     # C 端 MindForge：app/(discover, chat, platform/my, s/[shareCode], h5)
+├── ai-service/       # 文件解析服务（routers/internal.py → /internal/parse-file）
+├── feishu-bot/src/   # index.js/bridge.js/channel-manager.js/hmac.js
+├── prompts/          # 40+ 个 .md Prompt 模板（领域感知，PromptLoader 加载）
+└── docs/             # 30+ 设计/API/测试文档
 ```
 
-### 核心概念
+### 多租户归属链路
 
-| 概念 | 表/实体 | 说明 |
-|------|---------|------|
-| 分身 (Skill) | `skill` | AI 分身，绑定一个销冠的画像和经验 |
-| 颗粒 (Grain) | `experience_grain` | 萃取出的最小经验单元（场景+话术+思路） |
-| 素材 (Material) | `skill_material` | 上传的原始对话/文档 |
-| 报告 (Report) | `report` | 萃取完成后的汇总报告 |
-| 对话 (Conversation) | `skill_conversation` | 用户与分身的对话记录，按 skill+user 隔离 |
-| 消息 (Message) | `skill_message` | 对话中的每条消息，含溯源字段 |
+```
+Company → User(company_id) → Space(user_id) → Skill(space_id) → ExperienceGrain(space_id)
+```
+
+- [User](backend/src/main/java/com/aiextract/model/User.java)：**统一用户表**，B 端（`super_admin`/`company_admin`/`employee`）+ C 端（`c_guest`/`c_user`/`c_partner`），`companyId` 可空
+- [Skill](backend/src/main/java/com/aiextract/model/Skill.java)：`type=individual|organization`；状态机 `generating→reviewing→published/discarded`；发布期 @Async 预生成字段（`openingMessage`/`introProfile`/`recommendedQuestions`/`practiceOpenings`）+ 互动统计列（`SkillStatsScheduler` 每 5 分钟聚合）
+- [ExperienceGrain](backend/src/main/java/com/aiextract/model/ExperienceGrain.java)：`embedding VECTOR(1024)`（JPA 不管，原生 SQL 更新）；`weight`/`qualityScore`/`status=active|deprecated`；`sourceType=file_upload|interview`
+- [SkillConversation](backend/src/main/java/com/aiextract/model/SkillConversation.java) / [SkillMessage](backend/src/main/java/com/aiextract/model/SkillMessage.java)：按 skill+user 隔离；消息带 `grainId`/`reportId` 溯源字段
+
+### 权限体系（单一真相源）
+
+`Permission` 常量分级 → `RolePermissions.ROLE_MAP`（角色→权限码）→ JWT 自包含 claim → SecurityConfig 校验：
+
+1. [Permission](backend/src/main/java/com/aiextract/config/Permission.java)：权限码常量（Platform 级/Company 级/Basic 级/C 端服务等级）
+2. [RolePermissions](backend/src/main/java/com/aiextract/config/RolePermissions.java)：`ROLE_MAP` 唯一映射表，三个消费点同源（JwtAuthFilter、`/auth/me`、SecurityConfig）
+3. [JwtUtil](backend/src/main/java/com/aiextract/util/JwtUtil.java)：JWT 含 `userId/companyId/role/permissions/jti`
+4. [SecurityConfig](backend/src/main/java/com/aiextract/config/SecurityConfig.java)：**默认 `denyAll()`**，接口显式白名单，规则顺序敏感
+5. [JwtAuthFilter](backend/src/main/java/com/aiextract/config/JwtAuthFilter.java)：Bearer→query param 双通道；标准 JWT + 合作方 JWT（`?token=`+`appId`）双链；Redis 黑名单撤销（fail-open）
+6. [CompanyScopeService](backend/src/main/java/com/aiextract/config/CompanyScopeService.java)：ThreadLocal 请求级缓存 `companyId→spaceIds`，`isSuperAdmin()`（有 `COMPANY_MANAGE`）跳过企业隔离
+7. [TokenContext](backend/src/main/java/com/aiextract/config/TokenContext.java)：ThreadLocal 传 userId/companyId，`TaskDecorator` 跨线程
+8. [NavConfigController](backend/src/main/java/com/aiextract/controller/NavConfigController.java)：后端按权限过滤菜单下发，消除前端 route→permission drift
+
+### 三条核心链路
+
+1. **分身对话**（QA/Talk/Practice/Enterprise/Organization）：`SkillController POST /skills/{id}/chat` (SSE) → `ChatStreamService` 按 type 分发 → 三阶段 Setup(RAG)→Stream(LLM)→Post-stream(meta+source 溯源) → `ChatStreamAdapter` → Spring AI `ChatClient.stream` → `SseAdapter.fromFlux` → [ChatChunk](backend/src/main/java/com/aiextract/model/ChatChunk.java) 事件
+2. **素材萃取**（异步）：`MaterialCleaningScheduler` 每 30s 扫描 → material 乐观锁 + skill 级 Redis 锁 → parseFile(调 ai-service) → clean(AI 萃取) → saveGrains → embed(DashScope) → 语义去重 → `generating→reviewing` → 报告标脏 → 每 2 分钟合并生成报告
+3. **访谈报告**：`InterviewController` + `InterviewService` + `ReportGenerationService`（AI 四阶段访谈 → 六章报告）
+
+### RAG 检索
+
+- [GrainRetriever](backend/src/main/java/com/aiextract/service/GrainRetriever.java)：pgvector `cosine_distance <=>` ANN(HNSW) + **BM25(zhparser) hybrid(RRF 融合)** + `weight × 拉普拉斯平滑反馈权重` 重排；多空间并行 ANN
+- [RagPipelineService](backend/src/main/java/com/aiextract/service/RagPipelineService.java)：查询改写(LLM) → **4 级降级**(降阈值→去质量门禁→Dense-only→记录缺口) → tier 分层(high≥0.5/ref≥0.3，阈值来自领域配置) → sceneTag 2-4 字 boost
+
+### AI 调用
+
+- `AiConfig` 定义 `ChatClient`（Spring AI OpenAi → DeepSeek `deepseek-chat`），**后端直连，不经 ai-service**
+- [TokenAwareChatModel](backend/src/main/java/com/aiextract/config/TokenAwareChatModel.java)：ChatModel 装饰器，流式自估 token（中文 1 token≈2 字符）
+- [DashScopeEmbeddingService](backend/src/main/java/com/aiextract/service/DashScopeEmbeddingService.java)：阿里 DashScope `text-embedding-v4` 1024 维
+- [PromptLoader](backend/src/main/java/com/aiextract/config/PromptLoader.java)：40+ .md 模板，领域感知 + L1 本地/L2 Redis 双层缓存
+- [DomainConfigLoader](backend/src/main/java/com/aiextract/config/DomainConfigLoader.java)：领域 YAML 层级继承（`sales.b2b_enterprise` 继承 `sales`）
 
 ### 三种模式
 
-| 模式 | 前端入口 | 后端入口 | 持久化 |
-|------|---------|---------|--------|
-| QA 问答 | `page.tsx` + `useQaChat` | `POST /chat` (SSE) | `SkillConversation` mode=qa |
-| Talk 对话 | 同上，mode='talk' | 同上 | 同上 mode=talk |
-| Practice 对练 | `PracticeChatSection` + `usePracticeFlow` | `POST /practice/start` → `POST /practice/respond` (SSE) | 同上 mode=practice |
+| 模式 | 后端入口 | 前端入口 | 说明 |
+|------|---------|---------|------|
+| QA 问答 | `POST /skills/{id}/chat` (SSE) | `page.tsx` + `useQaChat` | 默认，结论先行（mode=quick） |
+| Talk 对话 | 同上 `mode='talk'` | 同上 | 自由对话 |
+| Practice 对练 | `POST /skills/{id}/practice/start` → `/practice/respond` (SSE) | `PracticeChatSection` + `usePracticeFlow` | AI 扮演客户，逐轮评判 |
+
+模式解析在 [SkillService.resolveMode](backend/src/main/java/com/aiextract/service/SkillService.java#L511)：`/对练`→practice、`/讨论`→discuss、默认 quick。
 
 ### 关键约定
 
-
-- 历史消息角色：前端用 `'ai'`，**DB 存的是 `'assistant'`**，渲染时两个都要匹配
+- 历史消息角色：前端用 `'ai'`，**DB 存 `'assistant'`**，渲染时两者都要匹配
 - 已发布分身 (`status='published'`) 才持久化对话，未发布分身使用临时 UUID
-- SSE 三种格式统一处理见 `frontend/src/lib/sse.ts`
+- SSE 统一走 `frontend/src/lib/sse.ts`（逐行 JSON + raw 两种格式），禁止内联 fetch 手写解析
+- `feishu-bot` 与后端 `/internal/im/*` 之间 HMAC-SHA256 双向验签（`feishu-bot/src/hmac.js` ↔ `config/ImBridgeAuth`）
 
 ## 角色定位
 

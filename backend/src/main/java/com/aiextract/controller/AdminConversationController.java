@@ -25,7 +25,7 @@ public class AdminConversationController {
 
     private final SkillConversationRepository conversationRepository;
     private final SkillMessageRepository messageRepository;
-    private final com.aiextract.repository.SkillRepository skillRepository;
+    private final SkillRepository skillRepository;
     private final com.aiextract.repository.UserRepository userRepository;
     private final CompanyScopeService companyScopeService;
 
@@ -43,9 +43,9 @@ public class AdminConversationController {
             convPage = conversationRepository.findBySkillIdOrderByUpdatedAtDesc(skillId, PageRequest.of(page - 1, size));
         } else {
             List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-            if (companySkillIds != null && !companySkillIds.isEmpty()) {
+            if (!companyScopeService.isSuperAdmin() && !companySkillIds.isEmpty()) {
                 convPage = conversationRepository.findBySkillIdInOrderByUpdatedAtDesc(companySkillIds, PageRequest.of(page - 1, size));
-            } else if (companySkillIds != null) {
+            } else if (!companyScopeService.isSuperAdmin()) {
                 // company_admin with no skills — return empty page
                 convPage = Page.empty();
             } else {

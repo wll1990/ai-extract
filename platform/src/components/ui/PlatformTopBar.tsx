@@ -22,12 +22,12 @@ const C = {
 
 export default function PlatformTopBar({ backTo, backLabel, title }: Props) {
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string; isGuest: boolean } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const u = getUser();
-    if (u?.name) setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined });
+    if (u?.name) setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined, isGuest: u.isGuest });
     setMounted(true);
   }, []);
 
@@ -81,7 +81,7 @@ export default function PlatformTopBar({ backTo, backLabel, title }: Props) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: 120 }}>
         {!mounted ? (
           <span style={{ width: 32, height: 32 }} />
-        ) : user && user.role !== 'guest' ? (
+        ) : user && !user.isGuest ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,

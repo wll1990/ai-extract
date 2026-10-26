@@ -40,9 +40,10 @@ public class AdminTokenUsageController {
         LocalDate today = LocalDate.now();
         LocalDate monthStart = today.withDayOfMonth(1);
         UUID companyId = TokenContext.getCompanyId();
+        boolean isSuper = companyScopeService.isSuperAdmin();
         List<UUID> userIds = companyScopeService.getUserIds(companyId);
 
-        List<Object[]> todayList = userIds != null
+        List<Object[]> todayList = !isSuper
                 ? repository.sumByDateAndUserIdIn(today, userIds)
                 : repository.sumByDate(today);
         Object[] todaySum = todayList.isEmpty() ? new Object[]{0L, 0L, 0L} : todayList.get(0);
@@ -51,7 +52,7 @@ public class AdminTokenUsageController {
         long todayCount = ((Number) todaySum[2]).longValue();
 
         // 本月：从月初到今天逐日聚合
-        List<Object[]> monthRows = userIds != null
+        List<Object[]> monthRows = !isSuper
                 ? repository.sumByDateSinceAndUserIdIn(monthStart, userIds)
                 : repository.sumByDateSince(monthStart);
         long monthInput = monthRows.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
@@ -59,7 +60,7 @@ public class AdminTokenUsageController {
         long monthCount = monthRows.stream().mapToLong(r -> ((Number) r[3]).longValue()).sum();
 
         // 总计：单次 SUM 聚合，无需 GROUP BY
-        List<Object[]> totalList = userIds != null
+        List<Object[]> totalList = !isSuper
                 ? repository.sumTotalByUserIdIn(userIds)
                 : repository.sumTotal();
         Object[] totalSum = totalList.isEmpty() ? new Object[]{0L, 0L, 0L} : totalList.get(0);
@@ -79,8 +80,9 @@ public class AdminTokenUsageController {
         int clampedDays = Math.max(MIN_DAYS, Math.min(MAX_DAYS, days));
         LocalDate since = LocalDate.now().minusDays(clampedDays);
         UUID companyId = TokenContext.getCompanyId();
+        boolean isSuper = companyScopeService.isSuperAdmin();
         List<UUID> userIds = companyScopeService.getUserIds(companyId);
-        List<Object[]> rows = userIds != null
+        List<Object[]> rows = !isSuper
                 ? repository.sumByDateSinceAndUserIdIn(since, userIds)
                 : repository.sumByDateSince(since);
         List<Map<String, Object>> result = new ArrayList<>();
@@ -102,12 +104,13 @@ public class AdminTokenUsageController {
         int clampedPage = Math.max(0, page);
         int clampedSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
         UUID companyId = TokenContext.getCompanyId();
+        boolean isSuper = companyScopeService.isSuperAdmin();
         List<UUID> userIds = companyScopeService.getUserIds(companyId);
 
-        List<TokenUsageLog> list = userIds != null
+        List<TokenUsageLog> list = !isSuper
                 ? repository.findRecentByUserIdIn(userIds, PageRequest.of(clampedPage, clampedSize))
                 : repository.findRecent(PageRequest.of(clampedPage, clampedSize));
-        long total = userIds != null
+        long total = !isSuper
                 ? repository.countByUserIdIn(userIds)
                 : repository.countAll();
 

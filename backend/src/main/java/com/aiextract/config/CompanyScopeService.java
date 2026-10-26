@@ -45,7 +45,7 @@ public class CompanyScopeService {
     }
 
     /** super_admin（拥有 COMPANY_MANAGE）不受企业数据范围限制 */
-    private boolean isSuperAdmin() {
+    public boolean isSuperAdmin() {
         var auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return false;
         return auth.getAuthorities().stream()
@@ -59,8 +59,7 @@ public class CompanyScopeService {
      * @return null 表示不限制（super_admin），空集合表示该企业无空间
      */
     public Set<UUID> getSpaceIds(UUID companyId) {
-        if (isSuperAdmin()) return null;
-        if (companyId == null) return null;
+        if (isSuperAdmin() || companyId == null) return Collections.emptySet();
         Map<UUID, Set<UUID>> cache = SPACE_ID_CACHE.get();
         return cache.computeIfAbsent(companyId, cid -> {
             List<UUID> userIds = userRepository.findByCompanyId(cid).stream()
@@ -75,8 +74,7 @@ public class CompanyScopeService {
      * 获取企业下的所有用户 ID。
      */
     public List<UUID> getUserIds(UUID companyId) {
-        if (isSuperAdmin()) return null;
-        if (companyId == null) return null;
+        if (isSuperAdmin() || companyId == null) return Collections.emptyList();
         return userRepository.findByCompanyId(companyId).stream()
                 .map(User::getId).toList();
     }
@@ -129,8 +127,7 @@ public class CompanyScopeService {
      * @return null 表示不限制（super_admin），空列表表示该企业无分身
      */
     public List<UUID> getCompanySkillIds(UUID companyId) {
-        if (isSuperAdmin()) return null;
-        if (companyId == null) return null;
+        if (isSuperAdmin() || companyId == null) return Collections.emptyList();
         Set<UUID> spaceIds = getSpaceIds(companyId);
         if (spaceIds.isEmpty()) return Collections.emptyList();
         return skillRepository.findBySpaceIdIn(new ArrayList<>(spaceIds)).stream()

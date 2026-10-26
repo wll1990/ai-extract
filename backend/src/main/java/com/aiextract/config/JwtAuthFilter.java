@@ -42,13 +42,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final PartnerJwtFilter partnerJwtFilter;
+    private final TokenRevocationService tokenRevocationService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
         // 无条件生成 traceId（未认证请求也需要追踪）
-        TraceContext.init(java.util.UUID.randomUUID());
+        TraceContext.init(UUID.randomUUID());
         response.setHeader("X-Trace-Id", TraceContext.get());
 
         try {
@@ -61,7 +62,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         UUID userId = jwtUtil.getUserIdFromToken(token);
                         String role = jwtUtil.getRoleFromToken(token);
                         UUID companyId = jwtUtil.getCompanyIdFromToken(token);
-                        setAuthentication(userId, role, token, companyId, request);
+                        String jti = jwtUtil.getJtiFromToken(token);
+                        // 高危变更即时撤销：命中黑名单则视为匿名，交给 SecurityConfig 裁决
+                        if (tokenRevocationService.isRevoked(userId, jti)) {
+                            filterChain.doFilter(request, response);
+                            return;
+                        }
+                        Set<String> permissions = jwtUtil.getPermissionsFromToken(token);
+                        setAuthentication(userId, role, permissions, token, companyId, request);
                         request.setAttribute("token", token);
                         log.trace("JWT认证成功, userId: {}, role: {}", userId, role);
                         filterChain.doFilter(request, response);
@@ -78,7 +86,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             if (paramToken != null && !paramToken.isBlank() && hasAppIdClaim(paramToken)) {
                 try {
                     UUID userId = partnerJwtFilter.authenticate(paramToken);
-                    setAuthentication(userId, "c_partner", paramToken, null, request);
+                    setAuthentication(userId, "c_partner", RolePermissions.getPermissions(RolePermissions.C_PARTNER), paramToken, null, request);
                     filterChain.doFilter(request, response);
                     return;
                 } catch (Exception e) {
@@ -97,11 +105,14 @@ public class JwtAuthFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void setAuthentication(UUID userId, String role, String credentials,
-                                   UUID companyId, HttpServletRequest request) {
-        Set<String> permissions = RolePermissions.getPermissions(role);
+    private void setAuthentication(UUID userId, String role, Set<String> permissions,
+                                   String credentials, UUID companyId, HttpServletRequest request) {
+        // 向后兼容：灰度期旧 token 无 permissions claim，回退角色映射解析
+        if (permissions.isEmpty()) {
+            permissions = RolePermissions.getPermissions(role);
+        }
         List<SimpleGrantedAuthority> authorities = new ArrayList<>(permissions.size() + 1);
-        // 角色名本身也作为 authority（C 端 hasAuthority("c_guest") 等规则依赖此项）
+        // 角色名仍作为 authority（供「身份迁移」类规则使用，见 SecurityConfig 注释）
         authorities.add(new SimpleGrantedAuthority(role));
         for (String perm : permissions) {
             authorities.add(new SimpleGrantedAuthority(perm));

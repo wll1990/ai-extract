@@ -20,7 +20,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [user, setUser] = useState<{ name: string; role: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; isGuest: boolean } | null>(null);
 
   useEffect(() => {
     if (!skillId) return;
@@ -34,7 +34,7 @@ export default function ChatPage() {
   useEffect(() => {
     setMounted(true);
     const u = getUser();
-    if (u?.name) setUser({ name: u.name, role: u.role as string });
+    if (u?.name) setUser({ name: u.name, role: u.role as string, isGuest: u.isGuest });
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -104,7 +104,7 @@ export default function ChatPage() {
         </button>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {!mounted ? null : user && user.role !== 'guest' ? (
+          {!mounted ? null : user && !user.isGuest ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 12, fontWeight: 500, color: '#5b6886' }}>
                 {user.name}

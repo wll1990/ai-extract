@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { clearAuth } from '@/lib/storage';
 import { getCurrentUser } from '@/lib/api/auth';
+import { apiClient } from '@/lib/api/client';
 
 interface UserInfo {
   id: string;
@@ -55,6 +56,11 @@ const NAV_ITEMS: NavItem[] = [
   { icon: '🏢', label: '企业合作', path: '/admin/companies', permission: Permission.COMPANY_MANAGE },
 ];
 
+/** path → icon 映射：服务端菜单下发时补图标 */
+const NAV_ICON: Record<string, string> = Object.fromEntries(
+  NAV_ITEMS.map(item => [item.path, item.icon])
+);
+
 /** 判断当前用户是否可以访问管理后台 */
 function canAccessAdmin(permissions: string[]): boolean {
   return permissions.some(
@@ -81,6 +87,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
+  const [serverNav, setServerNav] = useState<NavItem[] | null>(null);
 
   const isPublicPage = pathname === '/login' || pathname === '/register'
     || pathname.startsWith('/s/') || pathname.startsWith('/h5/') || pathname.startsWith('/i/');
@@ -103,6 +110,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, user]);
 
+  // 菜单服务端下发：后端按权限过滤，前端仅补图标；失败则回退本地 NAV_ITEMS
+  useEffect(() => {
+    if (isPublicPage) return;
+    apiClient<{ path: string; label: string; permission: string }[]>('/config/nav')
+      .then(items => setServerNav(items.map(i => ({
+        icon: NAV_ICON[i.path] || '📄',
+        label: i.label,
+        path: i.path,
+        permission: i.permission,
+      }))))
+      .catch(() => setServerNav(null));
+  }, [isPublicPage]);
+
   if (isPublicPage) return <>{children}</>;
   if (loading) {
     return (
@@ -124,7 +144,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return currentPath.startsWith(navPath + '/');
   };
 
-  const visibleNav = NAV_ITEMS.filter(item =>
+  const visibleNav = serverNav ?? NAV_ITEMS.filter(item =>
     !item.permission || permissions.includes(item.permission)
   );
 

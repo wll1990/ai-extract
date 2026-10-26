@@ -8,13 +8,13 @@ import { logout as logoutApi } from '@/lib/api/auth';
 
 export function Navbar() {
   const router = useRouter();
-  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string } | null>(null);
+  const [user, setUser] = useState<{ name: string; role: string; avatarUrl?: string; isGuest: boolean } | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     const u = getUser();
     if (u && u.name) {
-      setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined });
+      setUser({ name: u.name, role: u.role as string, avatarUrl: u.avatarUrl as string | undefined, isGuest: u.isGuest });
     }
     setMounted(true);
   }, []);
@@ -27,7 +27,8 @@ export function Navbar() {
   }, [router]);
 
   // SSR 阶段和客户端首帧一致：始终先渲染未登录态，hydration 后再更新
-  const isLoggedIn = mounted && user !== null;
+  // 游客不算已登录，与 PlatformTopBar/SkillCardPage 保持一致
+  const isLoggedIn = mounted && user !== null && !user.isGuest;
   const initial = user?.name?.[0] || '?';
 
   return (
