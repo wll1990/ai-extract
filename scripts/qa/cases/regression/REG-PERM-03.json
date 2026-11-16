@@ -1,0 +1,17 @@
+[
+  {
+    "id": "REG-PERM-03",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "platform",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "K7 导航与接口权限不一致",
+    "steps": [
+      { "as": "company_admin", "api": "GET /im/channels", "expect": { "status": 200 } },
+      { "as": "company_admin", "api": "GET /admin/companies", "expect": { "status": 403 } },
+      { "as": "company_admin", "api": "GET /admin/partners", "expect": { "status": 403 } }
+    ],
+    "assertions": []
+  }
+]

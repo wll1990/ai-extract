@@ -20,6 +20,13 @@ public class ContentAnalyzer {
      * @return AcceptanceResult，passed=false 表示拒绝
      */
     public AcceptanceResult checkAcceptance(String text, AcceptanceConfig config) {
+        // 参考资料识别必须排在关键词密度之前：合同/制度/产品说明天然含大量业务关键词，
+        // 只靠密度会把它们放进「销冠经验」萃取管线。
+        AcceptanceResult reference = checkReferenceDocument(text);
+        if (reference != null) {
+            return reference;
+        }
+
         List<String> allKeywords = new ArrayList<>();
         if (config.getSalesKeywords() != null) {
             for (String group : config.getSalesKeywords()) {
@@ -28,12 +35,13 @@ public class ContentAnalyzer {
                 }
             }
         }
-        // 销售关键词密度
+        // 销售关键词密度 —— 按出现次数统计。原实现「出现过就算 1 次」，
+        // 关键词库只有 47 个，超过约 9,400 字的素材必然低于阈值被误判为非销售领域。
         int hitCount = 0;
         for (String kw : allKeywords) {
-            { if (text.contains(kw)) hitCount++; }
+            hitCount += countOccurrences(text, kw);
         }
-        double density = allKeywords.isEmpty() ? 0 : (double) hitCount / text.length();
+        double density = allKeywords.isEmpty() ? 0 : (double) hitCount / Math.max(1, text.length());
         double threshold = config.getSalesKeywordDensityMin();
 
         if (density < threshold) {
@@ -47,7 +55,7 @@ public class ContentAnalyzer {
         if (config.getFirstPersonRatioMin() != null && config.getFirstPersonRatioMin() > 0) {
             int woCount = countPattern(text, "我");
             double firstPersonRatio = (double) woCount / Math.max(1, text.length());
-            int theoreticalCount = countPattern(text, "(应该|需要|必须|要\\.*才能|一定要|切记|记住)");
+            int theoreticalCount = countPattern(text, "(应该|需要|必须|要.{0,8}才能|一定要|切记|记住)");
             double theoreticalRatio = (double) theoreticalCount / Math.max(1, text.length());
             if (firstPersonRatio < config.getFirstPersonRatioMin()
                     && theoreticalRatio > config.getTheoreticalRatioMax()) {
@@ -91,6 +99,100 @@ public class ContentAnalyzer {
         }
 
         return AcceptanceResult.pass();
+    }
+
+    /** 判定为「对话」所需的最少说话人行数 */
+    private static final int DIALOGUE_TURN_MIN = 3;
+
+    /**
+     * 识别「参考资料」类文档：合同/协议、制度/办法、产品说明/白皮书、组织人事。
+     *
+     * <p>高精度优先：只有多个强标记同时出现才拒绝；真实销售对话里引用合同条款、
+     * 讨论竞品参数属于正常内容，不能误杀。</p>
+     *
+     * @return 命中时返回拒绝结果；未命中返回 null
+     */
+    private AcceptanceResult checkReferenceDocument(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        boolean dialogue = countPattern(text,
+                "(?m)^\\s*(客户|销售|我|对方|问|答)[：:]") >= DIALOGUE_TURN_MIN;
+        int firstPerson = countOccurrences(text, "我");
+        boolean personalNarrative = firstPerson >= 3
+                && (double) firstPerson / Math.max(1, text.length()) >= 0.002;
+        if (dialogue || personalNarrative) {
+            // 真实对话/个人叙事里可能引用合同条款、讨论产品参数，不能按参考资料拒绝
+            return null;
+        }
+
+        // 无对话/无个人叙事的文档里出现「模板/范本」字样，按参考资料处理
+        if (text.contains("合同模板") || text.contains("协议模板") || text.contains("合同范本")) {
+            return rejectReference("CONTRACT", "合同/协议模板");
+        }
+
+        // 合同 / 协议
+        boolean contractParty = text.contains("甲方") && text.contains("乙方");
+        int contractHits = countMarkers(text, "本合同", "协议书", "违约责任",
+                "签字盖章", "一式两份", "签订地点", "合同编号");
+        if (contractParty && contractHits >= 2) {
+            return rejectReference("CONTRACT", "合同/协议模板");
+        }
+
+        // 制度 / 管理办法
+        int articles = countPattern(text, "第[一二三四五六七八九十百零〇\\d]+条");
+        if (articles >= 3 && countMarkers(text, "本办法", "本制度", "本规定",
+                "实施细则", "管理办法", "暂行规定") >= 1) {
+            return rejectReference("POLICY", "制度/管理办法");
+        }
+
+        // 产品说明 / 白皮书
+        int specHits = countMarkers(text, "产品规格", "技术参数", "规格参数",
+                "产品说明书", "用户手册", "使用说明书", "安装手册", "白皮书");
+        boolean specContext = countMarkers(text, "目录", "型号", "修订记录",
+                "版本历史", "技术指标") >= 1;
+        if (specHits >= 2 && specContext) {
+            return rejectReference("PRODUCT_DOC", "产品说明/白皮书");
+        }
+
+        // 组织架构 / 人事制度
+        if (countMarkers(text, "组织架构", "部门职责", "岗位职责", "员工手册",
+                "薪酬制度", "考勤制度", "岗位说明书") >= 2) {
+            return rejectReference("ORG_HR", "组织架构/人事制度");
+        }
+        return null;
+    }
+
+    private AcceptanceResult rejectReference(String type, String label) {
+        return AcceptanceResult.reject("REFERENCE_DOCUMENT",
+                "检测到这是" + label + "，不是销冠的实战经历。素材上传只用于从真实销售过程里萃取经验；"
+                        + "这类文件请到「知识库 → 新增知识 → 上传文档」抽取知识卡，"
+                        + "如果分身不需要回答相关内容，请不要上传。",
+                Map.of("documentType", type));
+    }
+
+    private int countMarkers(String text, String... markers) {
+        int count = 0;
+        for (String marker : markers) {
+            if (text.contains(marker)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** 关键词出现次数（不是「出现过就算一次」） */
+    private int countOccurrences(String text, String keyword) {
+        if (keyword == null || keyword.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int index = 0;
+        while ((index = text.indexOf(keyword, index)) >= 0) {
+            count++;
+            index += keyword.length();
+        }
+        return count;
     }
 
     /**

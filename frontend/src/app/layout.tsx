@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import AppLayout from '@/components/layout/AppLayout';
 import { ThemeProvider } from '@/lib/theme';
+import { TourProvider } from '@/components/tour/TourProvider';
 
 export const metadata: Metadata = {
   title: 'AI经验萃取平台',
@@ -29,7 +30,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
-          <AppLayout>{children}</AppLayout>
+          <TourProvider>
+            <AppLayout>{children}</AppLayout>
+          </TourProvider>
         </ThemeProvider>
       </body>
     </html>

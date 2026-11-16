@@ -55,7 +55,10 @@ public class PublicController {
     private final com.aiextract.repository.SkillShareRepository shareRepository;
     private final com.aiextract.service.SkillService skillService;
     private final com.aiextract.service.OrganizationSkillService orgSkillService;
+    private final com.aiextract.util.JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
+    private final com.aiextract.service.AuthRateLimiter authRateLimiter;
+    private final com.aiextract.common.ClientIpResolver clientIpResolver;
 
     /**
      * 落地页数据背书 — 平台实时统计数据。
@@ -63,7 +66,7 @@ public class PublicController {
      */
     @GetMapping("/stats")
     public ApiResponse<Map<String, Object>> getStats() {
-        long publishedSkills = skillRepository.findByStatus("published").size();
+        long publishedSkills = skillRepository.countByStatus("published");
         long totalGrains = grainRepository.countByStatus("active");
         long totalConversations = conversationRepository.count();
 
@@ -282,7 +285,9 @@ public class PublicController {
      * 查询企业注册码信息 — H5 注册页预填公司名。
      */
     @GetMapping("/company-code/{code}")
-    public ApiResponse<Map<String, Object>> getCompanyCodeInfo(@PathVariable String code) {
+    public ApiResponse<Map<String, Object>> getCompanyCodeInfo(@PathVariable String code,
+                                                               jakarta.servlet.http.HttpServletRequest httpRequest) {
+        authRateLimiter.checkPublicLookup("company-code", clientIpResolver.resolve(httpRequest));
         CompanyRegisterCode c = registerCodeRepository.findByCode(code)
             .orElseThrow(() -> new BusinessException(404, "注册码无效"));
         if (Boolean.FALSE.equals(c.getEnabled())) {
@@ -293,7 +298,7 @@ public class PublicController {
         }
         Company company = companyRepository.findById(c.getCompanyId()).orElse(null);
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("companyId", c.getCompanyId().toString());
+        // 不返回 companyId：注册页只需要企业名，避免公开接口泄露租户标识
         result.put("companyName", company != null ? company.getName() : "未知企业");
         return ApiResponse.success(result);
     }
@@ -302,7 +307,9 @@ public class PublicController {
      * 查询访谈邀请码信息 — H5 邀请页预填公司名。
      */
     @GetMapping("/invite/{inviteCode}")
-    public ApiResponse<Map<String, Object>> getInviteInfo(@PathVariable String inviteCode) {
+    public ApiResponse<Map<String, Object>> getInviteInfo(@PathVariable String inviteCode,
+                                                          jakarta.servlet.http.HttpServletRequest httpRequest) {
+        authRateLimiter.checkPublicLookup("invite", clientIpResolver.resolve(httpRequest));
         InterviewInviteCode c = inviteCodeRepository.findByCode(inviteCode)
             .orElseThrow(() -> new BusinessException(404, "邀请码无效或已过期"));
         if (Boolean.FALSE.equals(c.getEnabled())) {
@@ -317,8 +324,12 @@ public class PublicController {
             result.put("inviterName", c.getInvitedBy() != null ? c.getInvitedBy() : "平台用户");
         } else {
             Company company = companyRepository.findById(c.getCompanyId()).orElse(null);
-            result.put("companyId", c.getCompanyId() != null ? c.getCompanyId().toString() : null);
+            // 不公开 companyId：登录/注册都使用签名邀请令牌
             result.put("companyName", company != null ? company.getName() : "未知企业");
+            if (c.getCompanyId() != null) {
+                result.put("registerToken", jwtUtil.generateInviteToken(c.getCompanyId(),
+                        "interview", com.aiextract.util.JwtUtil.REGISTER_INVITE_TTL_MILLIS));
+            }
         }
         return ApiResponse.success(result);
     }

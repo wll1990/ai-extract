@@ -6,12 +6,25 @@
 
 import asyncio
 import base64
+import ipaddress
 import logging
 import os as _os
+import socket
+import tempfile
+import urllib.request
 from typing import Dict
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+
+# 允许下载的域名后缀（逗号分隔，可用环境变量覆盖）；默认只允许 OSS
+_ALLOWED_DOWNLOAD_HOSTS = tuple(
+    h.strip().lower()
+    for h in _os.getenv("ALLOWED_DOWNLOAD_HOSTS", "aliyuncs.com").split(",")
+    if h.strip()
+)
+_DOWNLOAD_TIMEOUT_SECONDS = 30
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +52,52 @@ async def parse_file(request: ParseFileRequest):
     return await loop.run_in_executor(None, _parse_sync, request.file_path, request.file_name)
 
 
+def _assert_download_allowed(url: str) -> None:
+    """只允许下载白名单域名，并拒绝解析到内网/回环地址的 URL（防 SSRF）。"""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="仅支持 http(s) 文件地址")
+    host = (parsed.hostname or "").lower()
+    if not host or not any(
+        host == suffix or host.endswith("." + suffix) for suffix in _ALLOWED_DOWNLOAD_HOSTS
+    ):
+        raise HTTPException(status_code=400, detail="文件地址域名不在允许范围")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise HTTPException(status_code=400, detail="文件地址域名解析失败") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            raise HTTPException(status_code=400, detail="文件地址指向内网，已拒绝")
+
+
 def _parse_sync(file_path: str, file_name: str) -> dict:
-    """同步文件解析逻辑，在线程池中运行。"""
+    """同步文件解析逻辑，在线程池中运行。支持本地路径或 http(s) 预签名 URL。"""
+    if file_path.startswith(("http://", "https://")):
+        # OSS 预签名 URL：下载到临时文件再解析，解析后清理（backend 与 ai-service 可分离部署）
+        _assert_download_allowed(file_path)
+        suffix = _os.path.splitext(file_name)[1].lower() if file_name else ""
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        tmp_path = tmp.name
+        tmp.close()
+        try:
+            with urllib.request.urlopen(file_path, timeout=_DOWNLOAD_TIMEOUT_SECONDS) as resp, \
+                    open(tmp_path, "wb") as out:
+                while True:
+                    chunk = resp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    out.write(chunk)
+            return _parse_local(tmp_path, file_name)
+        finally:
+            if _os.path.exists(tmp_path):
+                _os.unlink(tmp_path)
+    return _parse_local(file_path, file_name)
+
+
+def _parse_local(file_path: str, file_name: str) -> dict:
+    """按本地文件路径解析（原逻辑）。"""
     if not _os.path.exists(file_path):
         raise HTTPException(status_code=404, detail=f"文件不存在: {file_path}")
 

@@ -44,7 +44,7 @@ export default function SharePage() {
   const authToken = guest.session?.token || undefined;
 
   // ---- 视图状态 ----
-  const [view, setView] = useState<'landing' | 'chat'>('chat');
+  const [view, setView] = useState<'landing' | 'chat'>('landing');
   const [mode, setMode] = useState<ChatMode>('talk');
   const [practiceSceneTag, setPracticeSceneTag] = useState('');
   const [practiceKey, setPracticeKey] = useState(0);

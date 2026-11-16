@@ -43,10 +43,12 @@ export function useConversations(skillId: string, mode: string, msgSetter: MsgSe
         id: m.id, role: m.role, content: m.content,
         source: m.reportTitle || '',
         grainId: m.grainId || '',
+        grainIds: (m.grainIds || []).join(','),
         reportId: m.reportId || '',
         grainTags: m.grainTags || '',
         grainCount: m.grainCount || 0,
         avgScore: m.avgScore || '',
+        avgSimilarity: m.avgSimilarity != null ? String(m.avgSimilarity) : '',
       })));
     } catch(e) { console.error(e); }
   }, [msgSetter, authToken]);

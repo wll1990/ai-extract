@@ -1,0 +1,50 @@
+[
+  {
+    "id": "REG-CASE-03",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "案例列表公共/企业内容混在一起，无法按来源分组（CA-04）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-案例分组回归",
+          "result": "win",
+          "objection": "客户担心交付周期。",
+          "reusablePoints": "先给分阶段交付计划，再承诺关键节点。",
+          "source": "QA 回归",
+          "status": "pending"
+        },
+        "expect": { "status": 200 },
+        "save": { "caseId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases?scope=private&keyword=案例分组回归&page=1&size=20",
+        "expect": { "status": 200, "json": { "data.total": 1 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases?scope=public&keyword=案例分组回归&page=1&size=20",
+        "expect": { "status": 200, "json": { "data.total": 0 } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.industry_case where id = :caseId and company_id is not null",
+        "op": "gte",
+        "expect": 1
+      }
+    ]
+  }
+]

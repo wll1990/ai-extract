@@ -11,6 +11,8 @@ export function useExperts() {
   const pageRef = useRef(1);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [industryFilter, setIndustryFilter] = useState('');
+  const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -23,20 +25,41 @@ export function useExperts() {
 
   const loadData = useCallback(async (p?: number) => {
     const pg = p || pageRef.current;
-    setPage(pg); pageRef.current = pg; setLoading(true);
+    setPage(pg); pageRef.current = pg; setLoading(true); setError(null);
     try {
       const [expData, compData] = await Promise.all([
         getExperts(pg, 12, keyword || undefined, statusFilter || undefined),
-        getCompositeDetail(),
+        getCompositeDetail().catch(() => null),
       ]);
       setExperts(expData.content || []); setTotalPages(expData.totalPages || 1); setComposite(compData);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setExperts([]);
+      setError(e instanceof Error ? e.message : '萃取师列表加载失败');
+    }
     finally { setLoading(false); }
   }, [keyword, statusFilter]);
 
   useEffect(() => { loadData(1); }, [loadData]);
 
-  return { experts, composite, loading, page, totalPages, pageRef, keyword, setKeyword,
+  // 分析中的萃取师自动轮询，避免用户手动刷新
+  useEffect(() => {
+    const busy = experts.some(e => e.status === 'pending' || e.status === 'analyzing');
+    if (!busy) return;
+    const timer = window.setInterval(() => { void loadData(pageRef.current); }, 10_000);
+    return () => window.clearInterval(timer);
+  }, [experts, loadData]);
+
+  /** 行业筛选在客户端做（后端列表未支持行业条件），选项来自当前页标签 */
+  const industries = Array.from(new Set(
+    experts.flatMap(e => e.industryTags || []).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const filteredExperts = industryFilter
+    ? experts.filter(e => (e.industryTags || []).includes(industryFilter))
+    : experts;
+
+  return { experts, filteredExperts, industries, industryFilter, setIndustryFilter,
+    composite, loading, error, page, totalPages, pageRef, keyword, setKeyword,
     statusFilter, setStatusFilter, toast, setToast, showToast, actionLoading, setActionLoading,
     showUpload, setShowUpload, showPreview, setShowPreview, compositeLoading, setCompositeLoading,
     previewData, setPreviewData, reviewGrains, setReviewGrains, loadData, regenerateComposite };

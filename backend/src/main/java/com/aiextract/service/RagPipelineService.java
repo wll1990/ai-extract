@@ -58,6 +58,9 @@ public class RagPipelineService {
     @Value("${app.rag.hybrid-search.enabled:false}")
     private boolean hybridSearchEnabled;
 
+    /** 多空间合并后的颗粒总量上限（按相似度保留） */
+    private static final int MAX_MULTI_SPACE_GRAINS = 12;
+
     // ============================================================
     // 数据传输 record
     // ============================================================
@@ -84,8 +87,14 @@ public class RagPipelineService {
      * @param skillId        分身 ID
      * @param conversationId 会话 ID
      * @param originalQuery  用户原始消息
+     * @param externalQuery  跨企业/匿名调用：不把提问写入知识缺口与检索日志
      */
-    public record RagContext(UUID skillId, UUID conversationId, String originalQuery) {}
+    public record RagContext(UUID skillId, UUID conversationId, String originalQuery,
+                             boolean externalQuery) {
+        public RagContext(UUID skillId, UUID conversationId, String originalQuery) {
+            this(skillId, conversationId, originalQuery, false);
+        }
+    }
 
     // ============================================================
     // 查询改写
@@ -183,9 +192,24 @@ public class RagPipelineService {
      */
     public GrainResult retrieveGrainsWithScores(String query, UUID spaceId, int topK,
                                                  String domain, RagContext ragCtx) {
+        return retrieveGrainsWithScores(query, spaceId, topK, domain, ragCtx, true);
+    }
+
+    /**
+     * 检索 + 分级降级（可控是否记录知识缺口）。
+     *
+     * @param recordKnowledgeGap false 时不写 knowledge_gap。评测运行必须传 false：
+     *                           评测题目不是真实用户提问，写缺口会污染业务统计（docs/38 E2）
+     */
+    public GrainResult retrieveGrainsWithScores(String query, UUID spaceId, int topK,
+                                                 String domain, RagContext ragCtx,
+                                                 boolean recordKnowledgeGap) {
         // ── Level 0: 正常检索 ──
         GrainResult result = doRetrieve(query, spaceId, topK, domain, ragCtx, minSimilarity, false);
-        if (!result.grains().isEmpty()) return result;
+        if (!result.grains().isEmpty()) {
+            recordLowMatchGap(query, spaceId, ragCtx, result, recordKnowledgeGap);
+            return result;
+        }
 
         // ── Level 1: 降低 min-similarity 重试 ──
         log.info("RAG Level 0 无结果，降级 Level 1: minSim={}", FALLBACK_MIN_SIMILARITY);
@@ -216,8 +240,10 @@ public class RagPipelineService {
             }
         }
 
-        // ── 全部失败：记录缺口 ──
-        writeKnowledgeGap(query, spaceId, ragCtx);
+        // ── 全部失败：记录缺口（评测运行不记） ──
+        if (recordKnowledgeGap) {
+            writeKnowledgeGap(query, spaceId, ragCtx);
+        }
         return new GrainResult(List.of(), Map.of(), Map.of(), 4);
     }
 
@@ -313,9 +339,18 @@ public class RagPipelineService {
      */
     public GrainResult retrieveGrainsWithScores(String query, List<UUID> spaceIds, int topK,
                                                  String domain, RagContext ragCtx) {
+        return retrieveGrainsWithScores(query, spaceIds, topK, domain, ragCtx, true);
+    }
+
+    public GrainResult retrieveGrainsWithScores(String query, List<UUID> spaceIds, int topK,
+                                                 String domain, RagContext ragCtx,
+                                                 boolean recordKnowledgeGap) {
         // ── Level 0: 正常检索 ──
         GrainResult result = doMultiSpaceRetrieve(query, spaceIds, topK, domain, ragCtx, minSimilarity, false);
-        if (!result.grains().isEmpty()) return result;
+        if (!result.grains().isEmpty()) {
+            recordLowMatchGap(query, spaceIds.isEmpty() ? null : spaceIds.get(0), ragCtx, result, recordKnowledgeGap);
+            return result;
+        }
 
         // ── Level 1: 降阈值 ──
         log.info("多空间RAG Level 0 无结果，降级 Level 1: minSim={}", FALLBACK_MIN_SIMILARITY);
@@ -335,9 +370,11 @@ public class RagPipelineService {
             return new GrainResult(result.grains(), fallbackTiers, result.similarities(), 2);
         }
 
-        // ── 全部失败 ──
-        writeKnowledgeGap(query,
-            spaceIds.isEmpty() ? null : spaceIds.get(0), ragCtx);
+        // ── 全部失败（测试对话不记缺口） ──
+        if (recordKnowledgeGap) {
+            writeKnowledgeGap(query,
+                spaceIds.isEmpty() ? null : spaceIds.get(0), ragCtx);
+        }
         return new GrainResult(List.of(), Map.of(), Map.of(), 3);
     }
 
@@ -371,7 +408,17 @@ public class RagPipelineService {
             return new GrainResult(List.of(), Map.of(), Map.of());
         }
 
-        return processRetrievedGrains(scored, query, domain, ragCtx, minSim, ragMs,
+        // 多空间合并后按相似度截断：每个空间各 topK，成员一多总量会线性膨胀
+        List<GrainRetriever.GrainResult> merged = scored;
+        if (merged.size() > MAX_MULTI_SPACE_GRAINS) {
+            merged = merged.stream()
+                .sorted(java.util.Comparator.comparingDouble(
+                        GrainRetriever.GrainResult::similarity).reversed())
+                .limit(MAX_MULTI_SPACE_GRAINS)
+                .toList();
+        }
+
+        return processRetrievedGrains(merged, query, domain, ragCtx, minSim, ragMs,
             "多空间RAG检索完成");
     }
 
@@ -425,12 +472,13 @@ public class RagPipelineService {
             } else if (sim >= refThreshold) {
                 tiers.put(r.grain().getId(), "ref");
             }
+            boolean external = ragCtx != null && ragCtx.externalQuery();
             logs.add(com.aiextract.model.GrainRetrieveLog.builder()
                     .id(UUID.randomUUID())
                     .skillId(ragCtx != null ? ragCtx.skillId() : null)
                     .conversationId(ragCtx != null ? ragCtx.conversationId() : UUID.randomUUID())
-                    .originalQuery(ragCtx != null ? ragCtx.originalQuery() : null)
-                    .rewrittenQuery(query)
+                    .originalQuery(external ? null : (ragCtx != null ? ragCtx.originalQuery() : null))
+                    .rewrittenQuery(external ? null : query)
                     .grainId(r.grain().getId())
                     .sceneTag(r.grain().getSceneTag())
                     .similarity(sim)
@@ -444,7 +492,7 @@ public class RagPipelineService {
             catch (Exception e) { log.debug("批量写检索日志失败: {}", e.getMessage()); }
         }
 
-        // 所有颗粒均低于参考阈值 → 记录缺口
+        // 所有颗粒均低于参考阈值：这里只记日志，缺口由上层 recordLowMatchGap 统一落库
         if (tiers.isEmpty() && !filtered.isEmpty()) {
             double bestSim = filtered.stream().mapToDouble(r ->
                 similarities.getOrDefault(r.grain().getId(), r.similarity())).max().orElse(0);
@@ -468,6 +516,22 @@ public class RagPipelineService {
     // ============================================================
 
     /**
+     * 有命中但全部低于参考阈值 → 记录低匹配缺口（K5）。
+     * 之前只打日志不落库，导致「分身答得很勉强」的场景永远进不了缺口列表。
+     */
+    private void recordLowMatchGap(String query, UUID spaceId, RagContext ragCtx,
+                                   GrainResult result, boolean recordKnowledgeGap) {
+        if (!recordKnowledgeGap || result.grains().isEmpty() || !result.tiers().isEmpty()) {
+            return;
+        }
+        double best = result.similarities().values().stream()
+                .mapToDouble(Double::doubleValue).max().orElse(0);
+        String matchInfo = String.format(java.util.Locale.ROOT,
+                "type=all_low_similarity bestSim=%.3f threshold=%.2f", best, 0.30);
+        writeKnowledgeGap(query, spaceId, ragCtx, matchInfo);
+    }
+
+    /**
      * 写入知识缺口 — 记录 RAG 覆盖盲区。
      *
      * <p>过滤短消息（"继续""嗯"等 ≤5 字），按 skill+scene 统计累计次数。</p>
@@ -489,27 +553,47 @@ public class RagPipelineService {
      * @param matchInfo 匹配质量信息，null 表示 RAG 零结果；非 null 表示有结果但全部低分
      */
     public void writeKnowledgeGap(String query, UUID spaceId, RagContext ragCtx, String matchInfo) {
+        // 跨企业/匿名提问不进入本企业知识缺口，避免外部用户的提问被归属企业看到
+        if (ragCtx != null && ragCtx.externalQuery()) {
+            return;
+        }
         if (query == null || query.trim().length() < 5) {
             return;
         }
         try {
+            UUID skillId = ragCtx != null ? ragCtx.skillId() : null;
             String sceneTag = guessSceneTag(query, spaceId);
-            long prevCount = knowledgeGapRepository.countBySkillIdAndSceneTag(
-                ragCtx != null ? ragCtx.skillId() : null, sceneTag);
+            // upsert：同一 (skill, scene) 只保留一条 open 缺口，累计次数
+            var existing = knowledgeGapRepository.findOpenMatches(
+                    skillId, spaceId, sceneTag, org.springframework.data.domain.PageRequest.of(0, 1));
+            LocalDateTime now = LocalDateTime.now();
+            if (!existing.isEmpty()) {
+                var gap = existing.get(0);
+                gap.setQuery(query);
+                gap.setAttemptedQueryCount((gap.getAttemptedQueryCount() == null ? 0 : gap.getAttemptedQueryCount()) + 1);
+                if (matchInfo != null) {
+                    gap.setNote(matchInfo);
+                }
+                gap.setUpdatedAt(now);
+                knowledgeGapRepository.save(gap);
+                log.info("知识缺口已合并 skillId={} sceneTag={} count={} matchInfo={}",
+                        skillId, sceneTag, gap.getAttemptedQueryCount(), matchInfo);
+                return;
+            }
             knowledgeGapRepository.save(com.aiextract.model.KnowledgeGap.builder()
                 .id(UUID.randomUUID())
-                .skillId(ragCtx != null ? ragCtx.skillId() : null)
+                .skillId(skillId)
                 .spaceId(spaceId)
                 .query(query)
                 .sceneTag(sceneTag)
-                .attemptedQueryCount((int) prevCount + 1)
+                .attemptedQueryCount(1)
                 .status("open")
                 .note(matchInfo)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(now)
+                .updatedAt(now)
                 .build());
-            log.info("知识缺口已记录 skillId={} sceneTag={} count={} matchInfo={}",
-                ragCtx != null ? ragCtx.skillId() : null, sceneTag, prevCount + 1, matchInfo);
+            log.info("知识缺口已记录 skillId={} sceneTag={} count=1 matchInfo={}",
+                skillId, sceneTag, matchInfo);
         } catch (Exception e) {
             log.warn("记录知识缺口失败: {}", e.getMessage());
         }

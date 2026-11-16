@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { apiClient } from '@/lib/api/client';
 import { copyToClipboard } from '@/lib/clipboard';
+import { submitGrainCorrection } from '@/lib/api/grain-corrections';
 
 interface GrainTrace {
   grainId: string;
@@ -28,6 +29,8 @@ interface TraceabilityDrawerProps {
   onClose: () => void;
   /** 组织分身 ID — 传入后渲染成员可点击链接 */
   orgSkillId?: string;
+  /** 当前分身 ID — 传入后可对单条颗粒提交纠错建议 */
+  skillId?: string;
 }
 
 function matchLevel(sim: number) {
@@ -36,12 +39,18 @@ function matchLevel(sim: number) {
   return { label: '参考', cls: 'bg-gray-100 text-gray-600', icon: '📖' };
 }
 
-export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, orgSkillId }: TraceabilityDrawerProps) {
+export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, orgSkillId, skillId }: TraceabilityDrawerProps) {
   const [data, setData] = useState<GrainTrace[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [copied, setCopied] = useState<Record<string, boolean>>({});
   const [memberLinks, setMemberLinks] = useState<Record<string, string>>({});
+  const [reportTarget, setReportTarget] = useState<GrainTrace | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportSuggestion, setReportSuggestion] = useState('');
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [reportDone, setReportDone] = useState(false);
   const touchStartX = useRef(0);
   const [swipeOffset, setSwipeOffset] = useState(0);
 
@@ -64,8 +73,16 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
   useEffect(() => {
     if (!open || !grainIds) return;
     setLoading(true);
+    setData([]);      // 切换消息时先清空，避免展示上一条的旧数据
+    setError('');
     apiClient(`/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`)
       .then(r => setData((r as any) || []))
+      .catch((e: unknown) => {
+        const status = (e as { status?: number })?.status;
+        setError(status === 403
+          ? '当前账号无权查看经验溯源（需要颗粒管理权限）'
+          : '溯源加载失败，请稍后重试');
+      })
       .finally(() => setLoading(false));
   }, [open, grainIds]);
 
@@ -84,6 +101,28 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
         setTimeout(() => setCopied(prev => ({ ...prev, [id]: false })), 1500);
       }
     });
+  };
+
+  const submitReport = async () => {
+    if (!skillId || !reportTarget || !reportReason.trim() || reportSubmitting) return;
+    setReportSubmitting(true);
+    try {
+      await submitGrainCorrection(skillId, reportTarget.grainId, {
+        reason: reportReason.trim(),
+        expertThought: reportSuggestion.trim() || undefined,
+      });
+      setReportDone(true);
+      setTimeout(() => {
+        setReportTarget(null);
+        setReportReason('');
+        setReportSuggestion('');
+        setReportDone(false);
+      }, 1200);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : '提交失败');
+    } finally {
+      setReportSubmitting(false);
+    }
   };
 
   if (!open) return null;
@@ -120,6 +159,25 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3" style={{ scrollbarWidth: 'thin' }}>
           {loading ? (
             <div className="text-center py-12 text-gray-400 text-sm">加载中…</div>
+          ) : error ? (
+            <div className="text-center py-12 text-red-500 text-sm">
+              <p>{error}</p>
+              {skillId && grainIds && (
+                <button
+                  onClick={() => {
+                    setReportTarget({ grainId: grainIds.split(',')[0].trim() });
+                    setReportReason('');
+                    setReportSuggestion('');
+                    setReportDone(false);
+                  }}
+                  className="mt-3 text-xs text-indigo-500 underline"
+                >
+                  仍然报告这条回答引用的经验有误
+                </button>
+              )}
+            </div>
+          ) : data.length === 0 ? (
+            <div className="text-center py-12 text-gray-400 text-sm">暂无溯源信息</div>
           ) : data.map((grain, i) => {
             const sim = typeof avgSimilarity === 'number' ? avgSimilarity
               : avgSimilarity ? Number(avgSimilarity) : 0;
@@ -237,6 +295,14 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
                   {grain.sourceName || '未知来源'}
                   {grain.reportTitle && <span className="text-gray-400"> · {grain.reportTitle}</span>}
                 </span>
+                {skillId && (
+                  <button
+                    onClick={() => { setReportTarget(grain); setReportReason(''); setReportSuggestion(''); setReportDone(false); }}
+                    className="text-[10px] text-red-500 hover:text-red-600 font-medium bg-transparent border-none cursor-pointer whitespace-nowrap"
+                  >
+                    这条有误？
+                  </button>
+                )}
                 {grain.reportId && (
                   <button
                     onClick={() => {
@@ -255,6 +321,35 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
           )})}
         </div>
       </div>
+
+      {reportTarget && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 px-4"
+          onClick={() => setReportTarget(null)}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-base font-bold text-gray-900">报告经验有误</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              提交后由管理员审核，通过前不会改动这条经验。
+            </p>
+            <label className="mt-4 block text-xs font-medium text-gray-600">问题原因（必填）</label>
+            <textarea value={reportReason} onChange={e => setReportReason(e.target.value)}
+              rows={3} placeholder="例如：话术已过期 / 场景描述不准确 / 造成了误导"
+              className="mt-1 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+            <label className="mt-3 block text-xs font-medium text-gray-600">建议改成什么（选填）</label>
+            <textarea value={reportSuggestion} onChange={e => setReportSuggestion(e.target.value)}
+              rows={3} placeholder="可直接写建议的专家思考/做法"
+              className="mt-1 w-full resize-y rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-indigo-400" />
+            {reportDone && <p className="mt-3 text-sm text-green-600">已提交，等待管理员审核</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setReportTarget(null)}
+                className="rounded-lg border border-gray-200 px-4 py-1.5 text-sm text-gray-600">取消</button>
+              <button onClick={submitReport} disabled={!reportReason.trim() || reportSubmitting || reportDone}
+                className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm text-white disabled:opacity-40">
+                {reportSubmitting ? '提交中…' : '提交建议'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         @keyframes slideInRight {

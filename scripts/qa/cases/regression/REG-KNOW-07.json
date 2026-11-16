@@ -1,0 +1,50 @@
+[
+  {
+    "id": "REG-KNOW-07",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "知识详情只有派生草稿，没有完整版本链，也不能以历史版本生成新草稿（KN-04）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-版本链回归",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "版本链回归：详情页必须能拿到 v1 及后续版本，并且不能对当前版本自身回滚。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}/versions",
+        "expect": { "status": 200, "json": { "data.0.version": 1, "data.0.status": "active" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/versions/${knowledgeId}/rollback",
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id = :knowledgeId and version = 1",
+        "op": "gte",
+        "expect": 1
+      }
+    ]
+  }
+]

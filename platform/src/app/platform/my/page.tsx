@@ -234,6 +234,15 @@ export default function PlatformMyPage() {
                 onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; e.currentTarget.style.background = C.cardBg; }}
               >邀请专家</button>
 
+              <button onClick={() => router.push('/platform/notifications')} style={{
+                padding: '9px 18px', borderRadius: 100, cursor: 'pointer',
+                border: `1.5px solid ${C.cardBorder}`, background: C.cardBg,
+                color: C.textMid, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition,
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = C.cardBorderHover; e.currentTarget.style.background = '#f8fafc'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = C.cardBorder; e.currentTarget.style.background = C.cardBg; }}
+              >站内信</button>
+
               <button onClick={() => router.push('/h5/interview/start')} style={{
                 padding: '9px 20px', borderRadius: 100, border: 'none', cursor: 'pointer',
                 background: C.accent, color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition,

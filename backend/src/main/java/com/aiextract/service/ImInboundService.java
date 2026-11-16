@@ -38,13 +38,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ImInboundService {
 
+    /** 已完成标记：流正常结束后才写入，保证失败消息可重投 */
     private static final String DEDUP_PREFIX = "im:dedup:";
     private static final Duration DEDUP_TTL = Duration.ofHours(1);
+    /** 处理中锁：防止并发重复处理；桥调用失败时随 TTL 自动释放，可被重试 */
+    private static final String DEDUP_LOCK_PREFIX = "im:dedup:lock:";
+    private static final Duration DEDUP_LOCK_TTL = Duration.ofMinutes(5);
     private static final String RATE_PREFIX = "im:rate:";
     private static final DateTimeFormatter MINUTE_FMT = DateTimeFormatter.ofPattern("yyyyMMddHHmm");
 
     private final ImChannelRepository imChannelRepository;
     private final ChatStreamService chatStreamService;
+    private final ImBindingService imBindingService;
     private final QueryGate queryGate;
     private final StringRedisTemplate redisTemplate;
 
@@ -61,26 +66,31 @@ public class ImInboundService {
             return Flux.just(ChatChunk.error("缺少 botId 或 messageId"), ChatChunk.done());
         }
         String dedupKey = DEDUP_PREFIX + req.getBotId() + ":" + req.getMessageId();
+        String lockKey = DEDUP_LOCK_PREFIX + req.getBotId() + ":" + req.getMessageId();
         Boolean first;
         try {
-            first = redisTemplate.opsForValue().setIfAbsent(dedupKey, "1", DEDUP_TTL);
+            // 已完成 → 直接跳过；处理中 → 视为并发重复；只有正常结束才写「已完成」
+            if (Boolean.TRUE.equals(redisTemplate.hasKey(dedupKey))) {
+                log.info("重复消息已忽略 botId={} messageId={}", req.getBotId(), req.getMessageId());
+                return Flux.just(ChatChunk.done());
+            }
+            first = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", DEDUP_LOCK_TTL);
         } catch (Exception e) {
             log.warn("IM 去重 Redis 异常，fail-open 放行: {}", e.getMessage());
             first = Boolean.TRUE;
         }
         if (Boolean.FALSE.equals(first)) {
-            log.info("重复消息已忽略 botId={} messageId={}", req.getBotId(), req.getMessageId());
+            log.info("消息处理中或重复，忽略 botId={} messageId={}", req.getBotId(), req.getMessageId());
             return Flux.just(ChatChunk.done());
         }
 
-        // ── 2. 路由：bot_id → 绑定分身 ──
+        // ── 2. 路由：bot_id → 渠道（可只做通知，不绑分身） ──
         ImChannel channel = imChannelRepository.findByBotId(req.getBotId()).orElse(null);
         if (channel == null || !Boolean.TRUE.equals(channel.getEnabled())
-                || !ImConstants.STATUS_PUBLISHED.equals(channel.getStatus()) || channel.getSkillId() == null) {
-            log.warn("IM 渠道未配置/未启用/未绑定分身 botId={}", req.getBotId());
+                || !ImConstants.STATUS_PUBLISHED.equals(channel.getStatus())) {
+            log.warn("IM 渠道未配置/未启用 botId={}", req.getBotId());
             return Flux.just(ChatChunk.error("机器人未配置或已下线"), ChatChunk.done());
         }
-        UUID skillId = channel.getSkillId();
 
         // ── 2.5 限流（每 bot 每分钟上限，fail-open） ──
         if (imRatePerMin > 0 && !allowRate(req.getBotId())) {
@@ -95,6 +105,26 @@ public class ImInboundService {
             return Flux.just(ChatChunk.error("暂只支持文字消息，请发送文字"), ChatChunk.done());
         }
 
+        // ── 3.5 绑定命令：绑定 123456（通知型机器人也走这里，不要求绑定分身） ──
+        String senderId = req.getSender() == null ? null : req.getSender().getId();
+        String conversationId = req.getConversation() == null ? null : req.getConversation().getId();
+        String displayName = req.getSender() == null ? null : req.getSender().getDisplayName();
+        var bindReply = imBindingService.handleBindCommand(channel, message.getText(),
+                senderId, conversationId, displayName);
+        if (bindReply.isPresent()) {
+            return Flux.just(ChatChunk.content(bindReply.get()), ChatChunk.done());
+        }
+        // 已绑定用户每发一条消息都刷新最后活跃时间与 chatId
+        imBindingService.touch(channel, senderId, conversationId);
+
+        if (channel.getSkillId() == null) {
+            return Flux.just(ChatChunk.content(
+                    "这个机器人用于培训提醒。要接收提醒，请在平台「我的培训」生成绑定码，"
+                            + "然后在这里发送：绑定 123456"),
+                    ChatChunk.done());
+        }
+        UUID skillId = channel.getSkillId();
+
         // ── 4. 内容安全（QueryGate Layer 1+2） ──
         String blocked = queryGate.auditSimple(message.getText());
         if (blocked != null) {
@@ -108,7 +138,33 @@ public class ImInboundService {
         chatReq.setChannel(req.getChannelType());
 
         // ── 6. 统一 chat() 管线（单聊多轮 / 群聊每问独立） ──
-        return chatStreamService.chat(skillId, chatReq, syntheticUserId, RolePermissions.EMPLOYEE);
+        // 流正常结束才标记「已完成」；中断/异常只释放处理中锁，允许桥重投
+        return chatStreamService.chat(skillId, chatReq, syntheticUserId, RolePermissions.EMPLOYEE)
+                .doOnComplete(() -> markProcessed(dedupKey, lockKey))
+                .doOnError(e -> releaseProcessingLock(lockKey, e));
+    }
+
+    private void markProcessed(String dedupKey, String lockKey) {
+        try {
+            redisTemplate.opsForValue().set(dedupKey, "1", DEDUP_TTL);
+        } catch (Exception e) {
+            log.warn("IM 去重标记写入失败（消息已回复，可能重复）: {}", e.getMessage());
+        } finally {
+            try {
+                redisTemplate.delete(lockKey);
+            } catch (Exception ignored) {
+                // TTL 兜底
+            }
+        }
+    }
+
+    private void releaseProcessingLock(String lockKey, Throwable error) {
+        log.warn("IM 消息处理失败，释放去重锁以便重投: {}", error.getMessage());
+        try {
+            redisTemplate.delete(lockKey);
+        } catch (Exception ignored) {
+            // TTL 兜底
+        }
     }
 
     /**
@@ -119,13 +175,14 @@ public class ImInboundService {
         String type = req.getConversation() != null ? req.getConversation().getType() : ImConstants.CONV_P2P;
         String convId = req.getConversation() != null ? req.getConversation().getId() : "";
         String senderId = req.getSender() != null ? req.getSender().getId() : "";
+        String channelType = req.getChannelType();
         String key;
         if (ImConstants.CONV_P2P.equals(type)) {
-            key = ImConstants.SYNTHETIC_USER_PREFIX + senderId;
+            key = ImConstants.userPrefix(channelType) + senderId;
         } else if (ImConstants.CONV_DOC.equals(type)) {
-            key = ImConstants.SYNTHETIC_DOC_PREFIX + convId + ":" + senderId;
+            key = ImConstants.docPrefix(channelType) + convId + ":" + senderId;
         } else {
-            key = ImConstants.SYNTHETIC_CHAT_PREFIX + convId + ":" + req.getMessageId();
+            key = ImConstants.chatPrefix(channelType) + convId + ":" + req.getMessageId();
         }
         return UUID.nameUUIDFromBytes(key.getBytes(StandardCharsets.UTF_8));
     }

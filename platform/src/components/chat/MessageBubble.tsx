@@ -16,9 +16,13 @@ export function MessageBubble({ message, ownerName, skillId }: MessageBubbleProp
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [feedback, setFeedback] = useState<'up' | 'down' | null>(null);
   const isUser = message.role === 'user';
-  const hasTrace = !!(message.grainTags && message.grainCount);
-  const sim = message.avgSimilarity ? Number(message.avgSimilarity) : 0;
-  const matchLevel = sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
+  const rawSim = message.avgSimilarity;
+  const hasSim = rawSim != null && rawSim !== '' && !Number.isNaN(Number(rawSim));
+  const sim = hasSim ? Number(rawSim) : 0;
+  const hasTrace = !!(message.grainCount && message.grainIds);
+  const matchLevel = !hasSim
+    ? (hasTrace ? 'related' : 'synthetic')
+    : sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
 
   if (isUser) {
     return (
@@ -197,6 +201,23 @@ export function MessageBubble({ message, ownerName, skillId }: MessageBubbleProp
                     </button>
                   </div>
                 )}
+
+                  {(message.knowledgeSources?.length || message.caseSources?.length) ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 6, marginLeft: 4 }}>
+                      {message.knowledgeSources?.map((k, i) => (
+                        <span key={`k-${i}`} title={k.source || ''}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 6, border: '1px solid #D7E3F8', background: '#F1F5FB', padding: '2px 8px', fontSize: 11, color: '#475569' }}>
+                          📖 {k.title}
+                        </span>
+                      ))}
+                      {message.caseSources?.map((c, i) => (
+                        <span key={`c-${i}`} title={c.source || ''}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, borderRadius: 6, border: '1px solid rgba(253, 230, 138, 0.6)', background: '#FFFBEB', padding: '2px 8px', fontSize: 11, color: '#92400E' }}>
+                          🎞️ {c.title}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
               </>
             );
           })()}

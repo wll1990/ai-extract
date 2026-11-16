@@ -1,0 +1,22 @@
+{
+  "name": "im-bridge",
+  "version": "1.1.0",
+  "description": "IM 桥：飞书扫码/WebSocket、企业微信自建应用回调、钉钉 Stream 长连接，统一桥接后端分身对话",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "build": "esbuild src/index.js --bundle --platform=node --format=cjs --target=node18 --outfile=dist/index.cjs",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "@larksuite/channel": "^0.5.0",
+    "axios": "^1.7.2",
+    "dingtalk-stream": "^2.1.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "fast-xml-parser": "^4.5.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

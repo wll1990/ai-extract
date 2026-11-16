@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-TENANT-06",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "A11 员工可按空间 ID 读取他人空间详情",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /spaces/0a000000-0000-0000-0000-000000000021?reportPage=1&reportSize=5",
+        "expect": { "status": 403 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /spaces/0a000000-0000-0000-0000-000000000022?reportPage=1&reportSize=5",
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": []
+  }
+]

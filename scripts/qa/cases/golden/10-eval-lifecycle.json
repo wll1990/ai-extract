@@ -1,0 +1,70 @@
+[
+  {
+    "id": "GOLD-EVAL-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets",
+        "body": { "name": "QA-${runId}-评测题集", "purpose": "acceptance", "description": "QA 评测状态机链路" },
+        "expect": { "status": 200, "json": { "data.status": "draft", "data.currentVersion": 1 } },
+        "save": { "datasetId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/submit",
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/items",
+        "body": {
+          "question": "客户说价格太高，要求再降价 20%，如何回应？",
+          "expectedPoints": "[\"先确认预算与决策链\",\"用价值锚定替代直接降价\"]",
+          "sceneTag": "价格异议",
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/submit",
+        "expect": { "status": 200, "json": { "data.status": "in_review" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/review",
+        "body": { "action": "approve" },
+        "expect": { "status": 200, "json": { "data.status": "approved" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/publish",
+        "expect": { "status": 200, "json": { "data.status": "published", "data.itemCount": 1 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/versions",
+        "expect": { "status": 200, "json": { "data.status": "draft", "data.currentVersion": 2 } }
+      },
+      {
+        "asAccount": "qa_b_admin",
+        "companyId": "0b000000-0000-0000-0000-000000000001",
+        "api": "GET /admin/evaluations/datasets/${datasetId}",
+        "expect": { "status": [403, 404] }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.evaluation_dataset where id=:datasetId and company_id='0a000000-0000-0000-0000-000000000001' and current_version=2",
+        "expect": "1"
+      }
+    ]
+  }
+]

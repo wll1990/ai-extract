@@ -1,0 +1,71 @@
+{
+  "commit": "aafae7d",
+  "capturedAt": "2026-11-02T14:43:14.047Z",
+  "shots": [
+    {
+      "file": "01-login.png",
+      "url": "/login",
+      "at": "2026-11-02T14:42:52.444Z"
+    },
+    {
+      "file": "02-upload.png",
+      "url": "/admin/skills/upload",
+      "at": "2026-11-02T14:42:54.424Z"
+    },
+    {
+      "file": "03-interview.png",
+      "url": "/interview/create",
+      "at": "2026-11-02T14:42:56.216Z"
+    },
+    {
+      "file": "04-materials.png",
+      "url": "/admin/skills/d3000000-0000-0000-0000-000000000001/materials",
+      "at": "2026-11-02T14:42:58.028Z"
+    },
+    {
+      "file": "05-audit.png",
+      "url": "/admin/skills/d3000000-0000-0000-0000-000000000001/audit",
+      "at": "2026-11-02T14:42:59.835Z"
+    },
+    {
+      "file": "06-chat.png",
+      "url": "/skill/d3000000-0000-0000-0000-000000000001",
+      "at": "2026-11-02T14:43:01.713Z"
+    },
+    {
+      "file": "07-review.png",
+      "url": "/sales/reviews",
+      "at": "2026-11-02T14:43:03.471Z"
+    },
+    {
+      "file": "08-gap.png",
+      "url": "/admin/insights/d3000000-0000-0000-0000-000000000001",
+      "at": "2026-11-02T14:43:05.364Z"
+    },
+    {
+      "file": "09-knowledge.png",
+      "url": "/admin/knowledge",
+      "at": "2026-11-02T14:43:07.112Z"
+    },
+    {
+      "file": "10-users.png",
+      "url": "/admin/users",
+      "at": "2026-11-02T14:43:08.826Z"
+    },
+    {
+      "file": "11-training.png",
+      "url": "/admin/training/plans",
+      "at": "2026-11-02T14:43:10.627Z"
+    },
+    {
+      "file": "12-share.png",
+      "url": "/admin/skills",
+      "at": "2026-11-02T14:43:12.391Z"
+    },
+    {
+      "file": "13-help.png",
+      "url": "/help",
+      "at": "2026-11-02T14:43:14.047Z"
+    }
+  ]
+}

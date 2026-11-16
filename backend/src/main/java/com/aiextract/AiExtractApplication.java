@@ -33,7 +33,11 @@ public class AiExtractApplication {
      */
     @Bean
     public WebClient webClient() {
-        return WebClient.builder().build();
+        // 默认 256KB 会把长文档解析结果直接截断成 "AI 服务不可用"。放到 32MB，
+        // 足够接收 50MB 文件解析出的文本（字符上限在业务层另行校验）。
+        return WebClient.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(32 * 1024 * 1024))
+                .build();
     }
 
     /**

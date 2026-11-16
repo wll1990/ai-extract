@@ -2,6 +2,7 @@ package com.aiextract.repository;
 
 import com.aiextract.model.InterviewSession;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -37,6 +38,9 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
      * @return 已完成会话数量
      */
     long countBySpaceIdAndStatus(UUID spaceId, String status);
+
+    /** 后台任务健康检查：最近窗口内萃取失败会话数 */
+    long countByExtractionStatusAndCreatedAtAfter(String extractionStatus, java.time.LocalDateTime after);
     /**
      * 根据多个空间ID查询活跃会话（按最后活跃时间降序）
      *
@@ -65,5 +69,32 @@ public interface InterviewSessionRepository extends JpaRepository<InterviewSessi
         @Param("spaceIds") List<UUID> spaceIds,
         @Param("statuses") List<String> statuses,
         @Param("interviewType") String interviewType);
+
+    /**
+     * 只更新萃取状态列（不写整实体）。
+     *
+     * <p>异步萃取管道与「强制完成」并发时，整实体 save 会用旧快照把
+     * status=completed 覆盖回 in_progress（丢失更新），因此这里必须走定向 UPDATE。</p>
+     */
+    @Modifying
+    @Query("UPDATE InterviewSession s SET s.extractionStatus = :status, s.extractionError = :error "
+         + "WHERE s.id = :id")
+    int updateExtractionState(@Param("id") UUID id,
+                              @Param("status") String status,
+                              @Param("error") String error);
+
+    /** 萃取师删除时解除访谈引用，保留历史会话本身。 */
+    @Modifying
+    @Query("UPDATE InterviewSession s SET s.expertSkillId = null WHERE s.expertSkillId = :expertId")
+    int clearExpertSkillId(@Param("expertId") UUID expertId);
+
+    /** 同上，额外写 extractedAt（仅在萃取完成时使用）。 */
+    @Modifying
+    @Query("UPDATE InterviewSession s SET s.extractionStatus = :status, s.extractionError = :error, "
+         + "s.extractedAt = :extractedAt WHERE s.id = :id")
+    int updateExtractionStateWithTime(@Param("id") UUID id,
+                                      @Param("status") String status,
+                                      @Param("error") String error,
+                                      @Param("extractedAt") java.time.LocalDateTime extractedAt);
 }
 

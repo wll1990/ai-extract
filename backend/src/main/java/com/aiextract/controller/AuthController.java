@@ -8,9 +8,8 @@ import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
 import com.aiextract.dto.UserInfoResponse;
 import com.aiextract.exception.BusinessException;
-import com.aiextract.model.CompanyRegisterCode;
-import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.service.AuthService;
+import com.aiextract.service.RegistrationPolicy;
 import com.aiextract.util.JwtUtil;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,8 +21,8 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,9 +41,10 @@ import java.util.UUID;
 public class AuthController {
 
     private final AuthService authService;
-    private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
     private final TokenRevocationService tokenRevocationService;
+    private final com.aiextract.service.AuthRateLimiter authRateLimiter;
+    private final com.aiextract.common.ClientIpResolver clientIpResolver;
 
     @org.springframework.beans.factory.annotation.Value("${jwt.cookie-secure:false}")
     private boolean cookieSecure;
@@ -54,9 +54,12 @@ public class AuthController {
 
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
-                                             HttpServletResponse httpResponse) {
+                                             HttpServletResponse httpResponse,
+                                             HttpServletRequest httpRequest) {
+        authRateLimiter.checkLogin(clientIpResolver.resolve(httpRequest), request.getAccount());
         LoginResponse response = authService.login(request);
         setTokenCookie(httpResponse, response.getToken());
+        setCsrfCookie(httpResponse);
         return ApiResponse.success(response);
     }
 
@@ -64,25 +67,55 @@ public class AuthController {
     public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request,
                                                HttpServletResponse httpResponse,
                                                HttpServletRequest httpRequest) {
-        // 安全校验：仅已认证的 super_admin 可注册 super_admin 角色
-        if ("super_admin".equals(request.getRole())) {
-            String token = getTokenFromSecurityContext();
-            if (token == null) {
-                return ApiResponse.error(403, "不允许自注册为超级管理员");
-            }
+        // 只限制匿名注册；管理员带 token 批量建号不受此限
+        if (!hasValidToken(httpRequest)) {
+            authRateLimiter.checkRegister(clientIpResolver.resolve(httpRequest));
+        }
+        UUID inviteCompanyId = null;
+        if (request.getInviteToken() != null && !request.getInviteToken().isBlank()) {
             try {
-                String requesterRole = jwtUtil.getRoleFromToken(token);
-                if (!"super_admin".equals(requesterRole)) {
-                    return ApiResponse.error(403, "无权限创建超级管理员");
-                }
+                inviteCompanyId = jwtUtil.parseInviteToken(request.getInviteToken());
             } catch (Exception e) {
-                return ApiResponse.error(403, "Token 无效");
+                throw new BusinessException(400, "邀请令牌无效或已过期，请刷新页面重试");
             }
         }
+
+        String token = getTokenFromSecurityContext();
+        String callerRole = null;
+        UUID callerCompanyId = null;
+        Set<String> callerPermissions = Set.of();
+        if (token != null) {
+            try {
+                callerRole = jwtUtil.getRoleFromToken(token);
+                callerCompanyId = jwtUtil.getCompanyIdFromToken(token);
+                callerPermissions = jwtUtil.getPermissionsFromToken(token);
+            } catch (Exception e) {
+                callerRole = null;
+                callerCompanyId = null;
+                callerPermissions = Set.of();
+            }
+        }
+
+        // 匿名注册：企业归属只认服务端签发的邀请令牌，忽略请求体 companyId
+        UUID targetCompanyId;
+        if (callerRole == null && inviteCompanyId != null) {
+            targetCompanyId = inviteCompanyId;
+            request.setCompanyId(inviteCompanyId.toString());
+        } else {
+            try {
+                targetCompanyId = UUID.fromString(request.getCompanyId());
+            } catch (Exception e) {
+                return ApiResponse.error(400, "企业ID格式不正确");
+            }
+        }
+        RegistrationPolicy.assertAssignable(request.getRole(), callerRole,
+                callerCompanyId, targetCompanyId, callerPermissions,
+                callerRole == null && inviteCompanyId != null);
         LoginResponse response = authService.register(request);
         // 仅自注册时设置 Cookie：管理员创建其他用户时已有自己的有效 token，不覆盖
         if (!hasValidToken(httpRequest)) {
             setTokenCookie(httpResponse, response.getToken());
+            setCsrfCookie(httpResponse);
         }
         return ApiResponse.success(response);
     }
@@ -99,6 +132,21 @@ public class AuthController {
             }
         }
         return false;
+    }
+
+    /** 修改自己的密码：成功后返回新 token 并刷新 Cookie */
+    @PostMapping("/change-password")
+    public ApiResponse<Map<String, String>> changePassword(@RequestBody Map<String, String> body,
+                                                           HttpServletResponse httpResponse) {
+        UUID userId = TokenContext.get();
+        if (userId == null) {
+            throw new BusinessException(401, "未登录");
+        }
+        String newToken = authService.changePassword(userId,
+                body.get("oldPassword"), body.get("newPassword"));
+        setTokenCookie(httpResponse, newToken);
+        setCsrfCookie(httpResponse);
+        return ApiResponse.success(Map.of("token", newToken));
     }
 
     @GetMapping("/me")
@@ -120,7 +168,9 @@ public class AuthController {
      */
     @PostMapping("/register/with-code")
     public ApiResponse<LoginResponse> registerWithCode(@RequestBody Map<String, Object> body,
-                                                        HttpServletResponse httpResponse) {
+                                                        HttpServletResponse httpResponse,
+                                                        HttpServletRequest httpRequest) {
+        authRateLimiter.checkRegister(clientIpResolver.resolve(httpRequest));
         String companyCode = (String) body.get("companyCode");
         String account = (String) body.get("account");
         String password = (String) body.get("password");
@@ -130,35 +180,10 @@ public class AuthController {
             return ApiResponse.error(400, "请填写所有字段");
         }
 
-        CompanyRegisterCode c = registerCodeRepository.findByCode(companyCode)
-            .orElseThrow(() -> new BusinessException(400, "注册码无效"));
-        if (Boolean.FALSE.equals(c.getEnabled())) {
-            throw new BusinessException(400, "注册码已失效");
-        }
-        if (c.getExpiresAt() != null && c.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new BusinessException(400, "注册码已过期");
-        }
-        if (c.getMaxUses() > 0 && c.getUsedCount() >= c.getMaxUses()) {
-            throw new BusinessException(400, "注册码已达使用上限");
-        }
-
-        // 创建用户 — 使用注册码的 defaultRole
-        String role = body.get("role") != null ? (String) body.get("role")
-            : c.getDefaultRole() != null ? c.getDefaultRole() : "employee";
-        if (!com.aiextract.config.RolePermissions.REGISTRABLE_ROLES.contains(role)) {
-            role = "employee";
-        }
-        RegisterRequest request = RegisterRequest.builder()
-            .companyId(c.getCompanyId().toString())
-            .account(account).password(password).name(name)
-            .role(role).build();
-        LoginResponse response = authService.register(request);
-
-        // 消费注册码
-        c.setUsedCount(c.getUsedCount() + 1);
-        registerCodeRepository.save(c);
-
+        // 校验 + 建号 + 原子消费注册码全部在 AuthService 的事务内完成
+        LoginResponse response = authService.registerWithCode(companyCode, account, password, name);
         setTokenCookie(httpResponse, response.getToken());
+        setCsrfCookie(httpResponse);
         return ApiResponse.success(response);
     }
 
@@ -171,6 +196,13 @@ public class AuthController {
         clear.setPath("/");
         clear.setMaxAge(0);
         response.addCookie(clear);
+
+        Cookie csrfClear = new Cookie("csrf_token", "");
+        csrfClear.setHttpOnly(false);
+        csrfClear.setSecure(cookieSecure);
+        csrfClear.setPath("/");
+        csrfClear.setMaxAge(0);
+        response.addCookie(csrfClear);
 
         // 撤销当前 token（登出后立即失效），匿名请求无 token 则跳过
         String token = getTokenFromSecurityContext();
@@ -201,6 +233,23 @@ public class AuthController {
     private void setTokenCookie(HttpServletResponse response, String token) {
         Cookie cookie = new Cookie("token", token);
         cookie.setHttpOnly(true);
+        cookie.setSecure(cookieSecure);
+        cookie.setPath("/");
+        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
+        cookie.setAttribute("SameSite", "Strict");
+        response.addCookie(cookie);
+    }
+
+    /** 下发 CSRF 双提交 Cookie：非 HttpOnly，前端读取后写回 X-CSRF-Token */
+    private void setCsrfCookie(HttpServletResponse response) {
+        byte[] bytes = new byte[32];
+        new java.security.SecureRandom().nextBytes(bytes);
+        StringBuilder sb = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            sb.append(String.format("%02x", b));
+        }
+        Cookie cookie = new Cookie("csrf_token", sb.toString());
+        cookie.setHttpOnly(false);
         cookie.setSecure(cookieSecure);
         cookie.setPath("/");
         cookie.setMaxAge((int) (jwtExpirationMs / 1000));

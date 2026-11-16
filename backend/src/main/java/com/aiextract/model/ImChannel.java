@@ -99,6 +99,19 @@ public class ImChannel {
     private String secrets;
 
     /**
+     * 负责该 bot 的传输桥标识，开机对账只下发本桥的 bot
+     */
+    @Builder.Default
+    @Column(name = "bridge_id", length = 64)
+    private String bridgeId = "default";
+
+    /**
+     * 最近一次发布/重连失败原因
+     */
+    @Column(name = "last_error", length = 500)
+    private String lastError;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false, updatable = false)

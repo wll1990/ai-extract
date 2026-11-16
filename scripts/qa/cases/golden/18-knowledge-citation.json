@@ -1,0 +1,67 @@
+[
+  {
+    "id": "GOLD-KNOW-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-北极星定价法",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "北极星定价法：报价时先用客户年度目标收益做锚点，再倒推客户可接受的价格区间。第一步确认客户想达成的年度业务目标与可量化收益；第二步把我们的方案拆成能直接贡献该收益的模块；第三步用收益回收周期反向定价，而不是按功能清单逐项报价。遇到压价时优先调整交付范围与付款节奏，不破坏价值锚点。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "请解释一下北极星定价法具体怎么用？为什么不能按功能清单报价？",
+          "sessionId": "QA-${runId}-knowledge-citation"
+        },
+        "await": {
+          "sql": "select (embedding is not null)::text from public.knowledge_entry where id = :knowledgeId",
+          "until": ["true"],
+          "maxAttempts": 30,
+          "intervalMs": 5000
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["meta", "content", "source", "done"],
+          "contentNonEmpty": true,
+          "sourceType": "knowledge",
+          "sourceTitleContains": "QA-${runId}-北极星定价法"
+        },
+        "timeout": 120000
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.knowledge_entry where id = :knowledgeId",
+        "expect": "active"
+      },
+      {
+        "type": "db",
+        "sql": "select (embedding is not null)::text from public.knowledge_entry where id = :knowledgeId",
+        "expect": "true"
+      }
+    ]
+  }
+]

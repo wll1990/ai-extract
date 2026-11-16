@@ -1,0 +1,63 @@
+[
+  {
+    "id": "REG-KNOW-12",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "知识/案例缺少准入标准：便签式知识与空壳案例可以通过审批生效，稀释检索、拉低分身回答质量",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-过短知识",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "短",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 400 },
+        "note": "正文不足 10 字，未达准入标准"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-预算未批时先确认决策链",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "客户说预算未批时，先确认谁签字、谁使用、谁反对，再准备对比材料。适用前提是客户已经进入内部评审流程。",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-空壳案例",
+          "result": "win"
+        },
+        "expect": { "status": 200 },
+        "save": { "caseId": "data.id" },
+        "note": "可以保存为草稿/待审，但会被记录为准入未通过"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": { "status": 400 },
+        "note": "缺少核心异议与关键动作，审批必须被拦截"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "pending"
+      }
+    ]
+  }
+]

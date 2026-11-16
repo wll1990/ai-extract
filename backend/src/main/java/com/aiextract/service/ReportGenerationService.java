@@ -32,9 +32,9 @@ public class ReportGenerationService {
     private final SkillRepository skillRepository;
     private final ExperienceGrainRepository grainRepository;
     private final ExtractionReportService extractionReportService;
-    private final com.aiextract.repository.InterviewSessionRepository interviewRepository;
     private final ReportRepository reportRepository;
     private final ObjectMapper objectMapper;
+    private final ReportStorageService reportStorageService;
 
     /** 自注入代理：确保 @Async 通过 AOP 代理生效，避免内部调用绕过异步 */
     @org.springframework.beans.factory.annotation.Autowired
@@ -93,9 +93,8 @@ public class ReportGenerationService {
                 .build();
         }
 
-        // HTML 写文件
-        writeReportHtml(report.getId(), html);
-        report.setHtmlPath("./data/reports/" + report.getId() + ".html");
+        // HTML 写 OSS，html_path 存对象 key
+        report.setHtmlPath(reportStorageService.write(report.getId(), html));
 
         // content_json 改为轻量统计
         try {
@@ -105,37 +104,6 @@ public class ReportGenerationService {
         }
         reportRepository.save(report);
         log.info("报告已保存, skillId: {}, reportId: {}, htmlPath: {}", skill.getId(), report.getId(), report.getHtmlPath());
-    }
-
-    /** 写报告 HTML 到文件（供 saveOrUpdateReport 和 AdminAuditController 复用） */
-    public static void writeReportHtml(UUID reportId, String html) {
-        try {
-            java.nio.file.Path dir = java.nio.file.Paths.get("./data/reports");
-            java.nio.file.Files.createDirectories(dir);
-            java.nio.file.Files.writeString(dir.resolve(reportId + ".html"), html,
-                    java.nio.charset.StandardCharsets.UTF_8);
-        } catch (java.io.IOException e) {
-            throw new RuntimeException("写入报告文件失败: " + reportId, e);
-        }
-    }
-
-    /**
-     * 访谈完成后生成报告 — 找到访谈对应的 skill 异步生成。
-     */
-    public UUID generateReport(UUID interviewId) {
-        var session = interviewRepository.findById(interviewId).orElse(null);
-        if (session == null) {
-            log.warn("generateReport: 访谈不存在, interviewId: {}", interviewId);
-            return null;
-        }
-        Skill skill = skillRepository.findBySpaceId(session.getSpaceId()).orElse(null);
-        if (skill == null) {
-            log.warn("generateReport: 访谈对应空间无 skill, interviewId: {}, spaceId: {}", interviewId, session.getSpaceId());
-            return null;
-        }
-        /** 通过自注入代理调用，确保 @Async 生效，AI 调用不阻塞当前线程 */
-        self.generateAsync(skill.getId());
-        return skill.getId();
     }
 
 }

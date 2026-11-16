@@ -1,0 +1,33 @@
+[
+  {
+    "id": "GOLD-USER-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "manage",
+    "roles": ["company_admin", "employee"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /auth/register",
+        "body": {
+          "companyId": "0a000000-0000-0000-0000-000000000001",
+          "name": "QA-${runId}-员工",
+          "account": "${prefix}emp",
+          "password": "${qaPassword}",
+          "role": "employee"
+        },
+        "expect": { "status": 200 },
+        "save": { "userId": "data.user.id" }
+      },
+      { "as": "company_admin", "api": "GET /admin/users?page=1&size=100", "expect": { "status": 200 } },
+      { "asAccount": "${prefix}emp", "api": "GET /config/nav", "expect": { "status": 200 } },
+      { "asAccount": "${prefix}emp", "api": "GET /admin/users?page=1&size=5", "expect": { "status": 403 } }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from \"user\" where account = :prefix || 'emp' and company_id='0a000000-0000-0000-0000-000000000001' and role='employee'", "expect": "1" },
+      { "type": "db", "sql": "select role from \"user\" where account = :prefix || 'emp'", "expect": "employee" }
+    ]
+  }
+]

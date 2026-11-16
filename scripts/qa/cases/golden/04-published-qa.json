@@ -1,0 +1,27 @@
+[
+  {
+    "id": "GOLD-QA-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说价格太高怎么办？",
+          "sessionId": "QA-${runId}-chat"
+        },
+        "expect": { "status": 200, "eventTypes": ["meta", "content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      }
+    ],
+    "assertions": [
+      { "type": "sse", "has": ["meta", "content", "done"] }
+    ]
+  }
+]

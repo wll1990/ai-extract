@@ -7,7 +7,6 @@ import { useImChannels } from './useImChannels';
 const CHANNEL_TYPES = [
   { value: 'feishu', label: '飞书', icon: '🕊️' },
   { value: 'wecom', label: '企业微信', icon: '💼' },
-  { value: 'wechat', label: '微信', icon: '💬' },
   { value: 'dingtalk', label: '钉钉', icon: '📌' },
 ];
 
@@ -16,9 +15,15 @@ export default function AdminImPage() {
 
   return (
     <div>
+      {/* 说明：本页已从菜单移除，仅保留 URL 直达用于排查 */}
+      <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+        日常接入请用「分身管理 → 📡 发布到 IM」或「IM 分身接入」。本页只做底层排查，
+        在此手工建的渠道不会自动连接 IM 平台。
+      </div>
+
       {/* 头部 */}
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-xl font-bold text-foreground">IM渠道配置</h2>
+        <h2 className="text-xl font-bold text-foreground">IM 渠道配置（排查用）</h2>
         <button
           type="button"
           onClick={h.openCreate}

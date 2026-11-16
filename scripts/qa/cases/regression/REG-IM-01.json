@@ -1,0 +1,51 @@
+[
+  {
+    "id": "REG-IM-01",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "im",
+    "roles": ["employee", "company_admin"],
+    "llm": false,
+    "sourceBug": "IM 发布原先只放行飞书；本轮放开企微/钉钉，需确认权限门禁与凭据校验顺序",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /im/channels/wecom/publish",
+        "body": { "skillId": "00000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 403 },
+        "note": "员工无 IM_MANAGE，必须在 SecurityConfig 被拦"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /im/channels/wechat/publish",
+        "body": { "skillId": "00000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 400 },
+        "note": "个人微信无官方机器人协议，不在支持渠道内"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /im/channels/wecom/publish",
+        "body": { "skillId": "00000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 400 },
+        "note": "未填凭据时先报缺少凭据，不会走到分身查询/平台探测"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /im/channels/dingtalk/publish",
+        "body": {
+          "skillId": "00000000-0000-0000-0000-000000000001",
+          "credentials": { "appKey": "qa-app-key" }
+        },
+        "expect": { "status": 400 },
+        "note": "缺 appSecret"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.im_channel where bot_id in ('qa-app-key')",
+        "expect": "0"
+      }
+    ]
+  }
+]

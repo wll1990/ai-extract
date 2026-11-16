@@ -67,8 +67,45 @@ public final class Permission {
     /** 颗粒管理（CRUD/废弃/恢复） */
     public static final String GRAIN_MANAGE = "GRAIN_MANAGE";
 
+    /** 知识库 + 案例库管理（CRUD/审批/复制/上传萃取） */
+    public static final String KNOWLEDGE_MANAGE = "KNOWLEDGE_MANAGE";
+    /** 员工提交知识/案例草稿（只能 pending，审批仍需 KNOWLEDGE_MANAGE） */
+    public static final String KNOWLEDGE_SUBMIT = "KNOWLEDGE_SUBMIT";
+
+    /** 评测集管理（CRUD/提交审核/发布/版本/复制/AI 生成候选） */
+    public static final String EVAL_MANAGE = "EVAL_MANAGE";
+
+    /** 评测审核（通过/退回） */
+    public static final String EVAL_REVIEW = "EVAL_REVIEW";
+
+    /** 培训计划/批次/分配管理 */
+    public static final String TRAINING_MANAGE = "TRAINING_MANAGE";
+
+    /**
+     * 培训复核与认证。
+     *
+     * <p>该权限也授予 employee：URL 级只回答「是不是复核人」，
+     * 「能不能复核这个批次」由 TrainingAccessService 按 cohort.mentor_id 判定。</p>
+     */
+    public static final String TRAINING_REVIEW = "TRAINING_REVIEW";
+
+    /** 培训学员端（我的培训/任务/考试） */
+    public static final String TRAINING_LEARN = "TRAINING_LEARN";
+
     /** 本企业 Token 消耗统计 */
     public static final String TOKEN_VIEW_COMPANY = "TOKEN_VIEW_COMPANY";
+
+    /** 本企业 AI Key 配置（DeepSeek Key / 回退开关） */
+    public static final String AI_MODEL_MANAGE = "AI_MODEL_MANAGE";
+
+    /** 销售复盘（发起/查看自己的/教练补充） */
+    public static final String SALES_REVIEW = "SALES_REVIEW";
+
+    /** 查看全公司销售复盘（company_admin / super_admin） */
+    public static final String SALES_REVIEW_VIEW_ALL = "SALES_REVIEW_VIEW_ALL";
+
+    /** 线索 / 跟进任务管理 */
+    public static final String SALES_LEAD_MANAGE = "SALES_LEAD_MANAGE";
 
     /** 组织/综合分身管理 */
     public static final String ORG_SKILL_MANAGE = "ORG_SKILL_MANAGE";

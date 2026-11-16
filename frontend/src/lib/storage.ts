@@ -61,9 +61,13 @@ export function getUser(): { name: string; role: string; [key: string]: unknown 
   }
 }
 
-/** 登录成功时写入 token 和用户信息 */
-export function setAuth(token: string, user: Record<string, unknown>): void {
-  safeSetItem(KEYS.TOKEN, token);
+/**
+ * 登录成功时只缓存用户展示信息。
+ *
+ * <p>JWT 走 HttpOnly Cookie，不再写入 localStorage：XSS 拿不到 token。
+ * 保留参数签名以兼容调用方。</p>
+ */
+export function setAuth(_token: string, user: Record<string, unknown>): void {
   safeSetItem(KEYS.USER, JSON.stringify(user));
 }
 
@@ -72,6 +76,31 @@ export function clearAuth(): void {
   safeRemoveItem(KEYS.TOKEN);
   safeRemoveItem(KEYS.USER);
   safeRemoveItem('c_auth');
+  // 企业视角按 session 存储；登出/401 两条路径都必须清，避免下个账号继承
+  if (isBrowser()) {
+    const sessionKeys: string[] = [];
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const key = sessionStorage.key(i);
+      if (key && (key.startsWith('acting.companyId.') || key.startsWith('acting.companyName.'))) {
+        sessionKeys.push(key);
+      }
+    }
+    sessionKeys.forEach(key => sessionStorage.removeItem(key));
+  }
+  // 清除销售追问草稿与导览进度，避免同机换账号看到上一个人的输入/路线
+  if (isBrowser()) {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('sales:review:draft:') || key.startsWith('tour.progress.')
+        || key === 'nav.cache' || key.startsWith('nav.cache.'))) {
+        keys.push(key);
+      }
+    }
+    keys.forEach(key => localStorage.removeItem(key));
+    // 通知根布局里的导览立即停止，否则会带着遮罩出现在登录页
+    window.dispatchEvent(new Event('auth:logout'));
+  }
 }
 
 // ==================== 报告检查清单 ====================

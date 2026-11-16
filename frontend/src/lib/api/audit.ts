@@ -62,8 +62,34 @@ export function saveSupplement(skillId: string, data: Partial<SupplementData>): 
   return apiClient(`/admin/skills/${skillId}/supplement`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
-export function publishSkill(skillId: string, action: 'publish' | 'discard'): Promise<void> {
-  return apiClient(`/admin/skills/${skillId}/publish`, { method: 'PUT', body: JSON.stringify({ action }) });
+export interface PublishResult {
+  passed: boolean;
+  blockers?: string[];
+}
+
+/** NT-02 分身质量告警：缺口 / 低质量颗粒 / 满意率 */
+export interface SkillNotifications {
+  openGaps: number;
+  gapAlert: boolean;
+  lowQualityGrains: number;
+  lowQualityAlert: boolean;
+  satisfactionRate: number;
+  satisfactionAlert: boolean;
+  totalAlerts: number;
+}
+
+export function getSkillNotifications(skillId: string): Promise<SkillNotifications> {
+  return apiClient<SkillNotifications>(`/admin/notifications/skills/${skillId}`);
+}
+
+export function publishSkill(
+  skillId: string,
+  action: 'publish' | 'discard' | 'unpublish',
+): Promise<PublishResult> {
+  return apiClient<PublishResult>(`/admin/skills/${skillId}/publish`, {
+    method: 'PUT',
+    body: JSON.stringify({ action }),
+  });
 }
 
 // ---- 发布前验证 ----

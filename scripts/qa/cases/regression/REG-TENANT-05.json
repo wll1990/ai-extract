@@ -1,0 +1,20 @@
+[
+  {
+    "id": "REG-TENANT-05",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "sales",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "A10 跨企业销售复盘越权读取",
+    "steps": [
+      {
+        "asAccount": "qa_b_admin",
+        "companyId": "0b000000-0000-0000-0000-000000000001",
+        "api": "GET /sales/reviews/0a000000-0000-0000-0000-000000000071",
+        "expect": { "status": [403, 404] }
+      }
+    ],
+    "assertions": []
+  }
+]

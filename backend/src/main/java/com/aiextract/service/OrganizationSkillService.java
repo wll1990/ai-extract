@@ -1,6 +1,7 @@
 package com.aiextract.service;
 
 import com.aiextract.exception.BusinessException;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.model.Skill;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SkillRepository;
@@ -43,6 +44,7 @@ public class OrganizationSkillService {
     private final PracticeDemoService practiceDemoService;
     private final ChatStreamAdapter chatStreamAdapter;
     private final OssService ossService;
+    private final CompanyScopeService companyScopeService;
 
     // ============================================================
     // CRUD
@@ -52,6 +54,10 @@ public class OrganizationSkillService {
     public Skill create(String name, String description,
                                      List<UUID> memberSkillIds,
                                      String avatarUrl, UUID companyId, UUID createdBy) {
+        if (companyId == null) {
+            throw new BusinessException(400, "组织分身必须归属企业：请先切换到目标企业视角再创建");
+        }
+        validateMembers(memberSkillIds, companyId);
         Skill org = Skill.builder().type("organization").spaceId(null)
                 .id(UUID.randomUUID())
                 .companyId(companyId)
@@ -77,6 +83,9 @@ public class OrganizationSkillService {
                                      List<UUID> memberSkillIds, String avatarUrl) {
         Skill org = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
+        if (memberSkillIds != null) {
+            validateMembers(memberSkillIds, org.getCompanyId());
+        }
         if (name != null) org.setDisplayName(name);
         if (description != null) org.setDescription(description);
         if (memberSkillIds != null) org.setMemberSkillIds(toJson(memberSkillIds));
@@ -92,8 +101,8 @@ public class OrganizationSkillService {
         Skill org = skillRepository.findById(orgSkillId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
 
-        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
-        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+        String extension = com.aiextract.common.UploadValidator.requireImage(file, 2 * 1024 * 1024);
+        String safeName = System.currentTimeMillis() + extension;
         String objectKey = "avatars/skills/" + orgSkillId + "/" + safeName;
         String avatarUrl = ossService.upload(objectKey, file);
 
@@ -117,7 +126,9 @@ public class OrganizationSkillService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int removeMemberFromAllOrgSkills(UUID memberSkillId) {
-        List<Skill> orgSkills = skillRepository.findByTypeAndStatusIn("organization",
+        // DB 侧 JSONB 包含查询，只返回真正引用了该成员的组织分身
+        List<Skill> orgSkills = skillRepository.findByMemberSkillIdAndStatusIn(
+                "[\"" + memberSkillId + "\"]",
                 List.of("published", "draft", "reviewing"));
         int cleaned = 0;
         for (Skill org : orgSkills) {
@@ -134,10 +145,35 @@ public class OrganizationSkillService {
         return cleaned;
     }
 
+    private static final Set<String> ORG_STATUSES =
+            Set.of("draft", "generating", "reviewing", "published", "paused", "discarded");
+
+    private static final Map<String, Set<String>> ORG_TRANSITIONS = Map.of(
+            // 新建即 draft：管理端「发布」按钮直接调用 published，必须允许这条迁移
+            "draft", Set.of("reviewing", "published", "discarded"),
+            "generating", Set.of("reviewing", "discarded"),
+            "reviewing", Set.of("published", "discarded"),
+            "published", Set.of("paused", "discarded"),
+            "paused", Set.of("reviewing", "published", "discarded"),
+            "discarded", Set.of("reviewing"));
+
     @Transactional(rollbackFor = Exception.class)
     public void updateStatus(UUID id, String status) {
         Skill org = skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
+        if (!ORG_STATUSES.contains(status)) {
+            throw new BusinessException(400, "不支持的组织分身状态: " + status);
+        }
+        String current = org.getStatus();
+        if (!status.equals(current)) {
+            Set<String> allowed = ORG_TRANSITIONS.getOrDefault(current, Set.of());
+            if (!allowed.contains(status)) {
+                throw new BusinessException(409, "不允许的状态变更：" + current + " → " + status);
+            }
+        }
+        if ("published".equals(status) && resolveMembers(org).isEmpty()) {
+            throw new BusinessException(409, "组织分身至少需要一位已发布成员才能发布");
+        }
         org.setStatus(status);
         org.setUpdatedAt(LocalDateTime.now());
         skillRepository.save(org);
@@ -235,16 +271,48 @@ public class OrganizationSkillService {
     public org.springframework.data.domain.Page<Skill> listByCompanyPaged(UUID companyId, String status,
             int page, int size) {
         var pageable = org.springframework.data.domain.PageRequest.of(page - 1, size);
-        if (status != null && !status.isEmpty()) {
-            return skillRepository.findByCompanyIdAndStatus(companyId, status, pageable);
+        // 超管（companyId 为空）看全平台组织分身；不能 findByCompanyId(null)（SQL = null 永远无结果）
+        if (companyId == null) {
+            return status != null && !status.isEmpty()
+                    ? skillRepository.findByTypeAndStatusOrderByCreatedAtDesc("organization", status, pageable)
+                    : skillRepository.findByType("organization", pageable);
         }
-        return skillRepository.findByCompanyId(companyId, pageable);
+        if (status != null && !status.isEmpty()) {
+            return skillRepository.findByCompanyIdAndTypeAndStatus(companyId, "organization", status, pageable);
+        }
+        return skillRepository.findByCompanyIdAndType(companyId, "organization", pageable);
     }
 
     @Transactional(readOnly = true)
     public Skill findById(UUID id) {
         return skillRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "组织分身不存在"));
+    }
+
+    /**
+     * 组织分身成员校验：必须存在、是个人分身、已发布、且属于本企业。
+     * 防止把其他企业的已发布分身挂进来，导致组织对话读到对方颗粒。
+     */
+    private void validateMembers(List<UUID> memberSkillIds, UUID companyId) {
+        if (memberSkillIds == null || memberSkillIds.isEmpty()) {
+            return;
+        }
+        List<Skill> members = skillRepository.findAllById(memberSkillIds);
+        if (members.size() != new java.util.HashSet<>(memberSkillIds).size()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "部分成员分身不存在");
+        }
+        for (Skill member : members) {
+            if (!"individual".equals(member.getType())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "只能选择个人分身作为成员");
+            }
+            if (!"published".equals(member.getStatus())) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(),
+                        "成员分身「" + member.getDisplayName() + "」尚未发布");
+            }
+            if (!companyScopeService.skillBelongsToCompany(member, companyId)) {
+                throw new BusinessException(HttpStatus.FORBIDDEN.value(), "成员分身不属于本企业");
+            }
+        }
     }
 
     // ============================================================
@@ -281,7 +349,38 @@ public class OrganizationSkillService {
     /**
      * 转为 API Map — 与 SkillService.listAllSkills() 响应格式一致。
      */
+    /**
+     * 批量统计每个组织分身的有效成员数：一次 findAllById，避免列表逐条 resolveMembers。
+     */
+    public Map<UUID, Integer> memberCounts(List<Skill> orgs) {
+        Map<UUID, List<UUID>> idsByOrg = new LinkedHashMap<>();
+        java.util.Set<UUID> allIds = new java.util.HashSet<>();
+        for (Skill org : orgs) {
+            List<UUID> ids = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
+            idsByOrg.put(org.getId(), ids);
+            allIds.addAll(ids);
+        }
+        java.util.Set<UUID> publishedIds = allIds.isEmpty() ? java.util.Set.of()
+                : skillRepository.findAllById(allIds).stream()
+                    .filter(s -> "published".equals(s.getStatus()))
+                    .map(Skill::getId)
+                    .collect(Collectors.toSet());
+        Map<UUID, Integer> counts = new LinkedHashMap<>();
+        idsByOrg.forEach((orgId, ids) -> counts.put(orgId,
+                (int) ids.stream().filter(publishedIds::contains).count()));
+        return counts;
+    }
+
+    /** 列表批量映射：memberCount 由调用方一次算好传入 */
+    public Map<String, Object> toApiMap(Skill org, int memberCount) {
+        return buildApiMap(org, memberCount);
+    }
+
     public Map<String, Object> toApiMap(Skill org) {
+        return buildApiMap(org, resolveMembers(org).size());
+    }
+
+    private Map<String, Object> buildApiMap(Skill org, int memberCount) {
         Map<String, Object> item = new LinkedHashMap<>();
         item.put("id", org.getId().toString());
         item.put("type", "organization");
@@ -295,7 +394,7 @@ public class OrganizationSkillService {
         item.put("openingMessage", org.getOpeningMessage());
         item.put("introProfile", JsonUtil.parseStringMap(org.getIntroProfile()));
         item.put("tags", List.of());
-        item.put("memberCount", resolveMembers(org).size());
+        item.put("memberCount", memberCount);
         item.put("grainCount", 0); // 组织分身无自有颗粒，前端用 memberCount 替代展示
 
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -314,7 +413,14 @@ public class OrganizationSkillService {
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getDetail(UUID id) {
-        Skill org = findById(id);
+        return getDetail(findById(id));
+    }
+
+    /**
+     * 复用已加载的组织分身实体，避免详情链路重复查库。
+     */
+    @Transactional(readOnly = true)
+    public Map<String, Object> getDetail(Skill org) {
         Map<String, Object> detail = toApiMap(org);
 
         List<UUID> allMemberIds = JsonUtil.parseList(org.getMemberSkillIds(), UUID::fromString);
@@ -466,12 +572,15 @@ public class OrganizationSkillService {
         try {
             Skill org = findById(orgSkillId);
             List<UUID> spaceIds = resolveMemberSpaceIds(org);
-            java.util.Set<String> all = new java.util.LinkedHashSet<>();
-            for (UUID sid : spaceIds) {
-                grainRepository.findBySpaceId(sid).stream()
+            if (spaceIds.isEmpty()) return List.of();
+            // 一次 IN 查询取全部场景标签，避免逐空间查询
+            java.util.Set<String> tags = grainRepository.findAllBySpaceIdIn(spaceIds).stream()
                     .filter(g -> g.getSceneTag() != null && "active".equals(g.getStatus()))
-                    .map(g -> g.getSceneTag()).distinct()
-                    .forEach(tag -> all.addAll(practiceDemoService.generateRecommendedQuestions(tag)));
+                    .map(g -> g.getSceneTag())
+                    .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
+            java.util.Set<String> all = new java.util.LinkedHashSet<>();
+            for (String tag : tags) {
+                all.addAll(practiceDemoService.generateRecommendedQuestions(tag));
             }
             return new ArrayList<>(all);
         } catch (Exception ignored) {
@@ -485,7 +594,10 @@ public class OrganizationSkillService {
 
     /** 构建 spaceId → skillId 映射，用于前端溯源卡片的成员可点击跳转 */
     public Map<UUID, UUID> resolveSpaceToSkillMap(Skill org) {
+        // 成员分身可能没有 spaceId（组织分身/历史脏数据），必须先过滤再 toMap，
+        // 否则 Collectors.toMap 遇到 null key 直接 NPE
         return resolveMembers(org).stream()
+                .filter(m -> m.getSpaceId() != null)
                 .collect(java.util.stream.Collectors.toMap(
                         Skill::getSpaceId, Skill::getId, (a, b) -> a));
     }

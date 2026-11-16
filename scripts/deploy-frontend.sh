@@ -27,4 +27,9 @@ echo "上传开始"
 # 3. 单次 --delete 同步：HTML 与 CSS/JS 哈希永远来自同一次构建，且清掉过期文件
 rsync -av --delete .next/standalone/ mindforge:/opt/mindforge/frontend/
 
-echo "[frontend]上传服务器完成✅"
+# 4. 必须重启：运行中的旧进程仍持有旧 build 的 HTML（引用旧 CSS 哈希），
+#    而旧静态文件已被 --delete 清掉 → 页面无样式。只上传不重启必然出现这个错位。
+scp "$ROOT/scripts/start-frontend.sh" mindforge:/opt/mindforge/scripts/start-frontend.sh
+ssh mindforge "chmod +x /opt/mindforge/scripts/start-frontend.sh && bash /opt/mindforge/scripts/start-frontend.sh"
+
+echo "[frontend]上传服务器完成✅（已重启，静态资源与运行进程一致）"

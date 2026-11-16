@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-SALES-02",
+    "set": "regression",
+    "priority": "P2",
+    "domain": "sales",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "销售没有个人视角的复盘/线索/任务汇总，只能逐个页面翻",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /sales/dashboard/mine",
+        "expect": {
+          "status": 200,
+          "json": {
+            "data.weekly.length": 8
+          }
+        }
+      }
+    ],
+    "assertions": []
+  }
+]

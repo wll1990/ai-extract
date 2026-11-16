@@ -1,5 +1,6 @@
 package com.aiextract.exception;
 
+import com.aiextract.common.AiErrorMapper;
 import com.aiextract.common.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -42,8 +43,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
-        log.warn("业务异常, code: {}, message: {}", e.getErrorCode(), e.getMessage());
-        ApiResponse<Void> response = ApiResponse.error(e.getErrorCode(), e.getMessage());
+        log.warn("业务异常, code: {}, subCode: {}, message: {}", e.getErrorCode(), e.getSubCode(), e.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(e.getErrorCode(), e.getSubCode(), e.getMessage());
         return ResponseEntity.status(e.getErrorCode()).body(response);
     }
 
@@ -86,6 +87,69 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 处理请求体不可读（JSON 语法错误、字段类型与 DTO 不匹配）
+     *
+     * <p>这一组都是「客户端传错」而不是「服务端故障」，落到 Exception 兜底会返回 500，
+     * 前端和监控都会误判成服务挂了。</p>
+     */
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMessageNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException e) {
+        log.warn("请求体解析失败: {}", e.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.BAD_REQUEST.value(),
+                "请求体格式错误，请检查 JSON 结构与字段类型");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 处理路径/查询参数类型不匹配（如 UUID、页码传了非法值）
+     */
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException e) {
+        log.warn("参数类型错误: name={}, value={}", e.getName(), e.getValue());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.BAD_REQUEST.value(),
+                "参数类型错误: " + e.getName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 处理缺失必填请求参数
+     */
+    @ExceptionHandler(org.springframework.web.bind.MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingParameter(
+            org.springframework.web.bind.MissingServletRequestParameterException e) {
+        log.warn("缺少必填参数: {}", e.getParameterName());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.BAD_REQUEST.value(),
+                "缺少必填参数: " + e.getParameterName());
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+    }
+
+    /**
+     * 处理 HTTP 方法不支持（如接口只接受 POST，客户端用了 GET）
+     */
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException e) {
+        log.warn("请求方法不支持: {}", e.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.METHOD_NOT_ALLOWED.value(),
+                "请求方法不支持: " + e.getMethod());
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(response);
+    }
+
+    /**
+     * 处理请求内容类型不支持（如接口只接受 application/json）
+     */
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(
+            org.springframework.web.HttpMediaTypeNotSupportedException e) {
+        log.warn("媒体类型不支持: {}", e.getMessage());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.UNSUPPORTED_MEDIA_TYPE.value(),
+                "请求内容类型不支持，请使用 application/json");
+        return ResponseEntity.status(HttpStatus.UNSUPPORTED_MEDIA_TYPE).body(response);
+    }
+
+    /**
      * 处理数据库完整性约束违反异常（如外键约束、唯一约束）
      */
     @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
@@ -110,6 +174,44 @@ public class GlobalExceptionHandler {
         data.put("suggestion", "文件过大，建议拆分为多个小文件分批上传，处理速度更快、萃取质量更高");
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
                 .body(ApiResponse.error(413, data));
+    }
+
+    /**
+     * 处理路径不存在（无匹配 Controller / 无静态资源）
+     *
+     * <p>Spring 6.1 起未匹配路径抛 NoResourceFoundException，若不单独处理会被下方的
+     * Exception 兜底映射成 500，前端会把「调错接口」误判成「服务端挂了」。</p>
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        log.warn("请求路径不存在: {} /{}", e.getHttpMethod(), e.getResourcePath());
+        ApiResponse<Void> response = ApiResponse.error(HttpStatus.NOT_FOUND.value(),
+                "接口不存在: /" + e.getResourcePath());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+    }
+
+    /**
+     * 模型供应商异常（401/402/403/429/5xx/超时）。
+     *
+     * <p>同步 AI 接口（AI 整理、AI 建议等）如果走全局兜底，用户只会看到
+     * 「服务器内部错误」；这里统一映射成可读原因 + 稳定 subCode，
+     * 与 SSE / 后台任务使用同一套 {@link AiErrorMapper}。</p>
+     */
+    @ExceptionHandler({
+            org.springframework.web.client.RestClientResponseException.class,
+            org.springframework.web.reactive.function.client.WebClientResponseException.class,
+            org.springframework.ai.retry.NonTransientAiException.class,
+            org.springframework.ai.retry.TransientAiException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleAiException(Exception e) {
+        AiErrorMapper.AiError aiError = AiErrorMapper.map(e);
+        log.warn("模型调用异常, code: {}, message: {}", aiError.code(), e.getMessage());
+        int status = AiErrorMapper.RATE_LIMITED.equals(aiError.code())
+                ? HttpStatus.TOO_MANY_REQUESTS.value()
+                : HttpStatus.BAD_GATEWAY.value();
+        ApiResponse<Void> response = ApiResponse.error(status, aiError.code(), aiError.message());
+        return ResponseEntity.status(status).body(response);
     }
 
     /**

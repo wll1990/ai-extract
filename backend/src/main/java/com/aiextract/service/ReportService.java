@@ -5,6 +5,7 @@ import com.aiextract.dto.ReportListResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.config.CompanyScopeService;
+import com.aiextract.config.TokenContext;
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.Space;
@@ -54,8 +55,10 @@ public class ReportService {
     private final com.aiextract.repository.SkillRepository skillRepository;
     private final com.aiextract.repository.InterviewSessionRepository sessionRepository;
     private final ExtractionReportService extractionReportService;
+    private final ReportGenerationService reportGenerationService;
     private final CompanyScopeService companyScopeService;
     private final ObjectMapper objectMapper;
+    private final ReportStorageService reportStorageService;
 
     @org.springframework.beans.factory.annotation.Value("${app.report.min-grains:10}")
     private int reportMinGrains;
@@ -87,42 +90,45 @@ public class ReportService {
      * @return 报告分页列表
      */
     @Transactional(readOnly = true)
-    public Page<ReportListResponse> getReports(UUID companyId, String spaceId, String keyword, String tag, String sort, int page, int size) {
+    public Page<ReportListResponse> getReports(UUID companyId, UUID userId, String spaceId,
+                                               String keyword, String tag, String sort,
+                                               int page, int size) {
         Pageable pageable = PageRequest.of(page - 1, size);
 
-        // 公司隔离：非 super_admin 只查本公司 space 下的报告
-        List<UUID> companySpaceIds = null;
-        if (companyId != null && !companyScopeService.isSuperAdmin()) {
-            companySpaceIds = new ArrayList<>(companyScopeService.getSpaceIds(companyId));
+        // 可见空间：超管不限制；B 端按企业空间；C 端按本人空间（companyId 为空时绝不能退化成全平台）
+        List<UUID> allowedSpaceIds = resolveAllowedSpaceIds(companyId, userId);
+        if (allowedSpaceIds != null && allowedSpaceIds.isEmpty()) {
+            return Page.empty(pageable);
         }
 
         Page<Report> reportPage;
 
-        if (tag != null && !tag.isEmpty()) {
-            reportPage = reportRepository.findBySceneTag(tag, pageable);
+        if (spaceId != null && !spaceId.isEmpty()) {
+            UUID targetSpaceId = UUID.fromString(spaceId);
+            if (allowedSpaceIds != null && !allowedSpaceIds.contains(targetSpaceId)) {
+                throw new BusinessException(403, "无权访问该空间的报告");
+            }
+            reportPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(targetSpaceId, pageable);
+        } else if (tag != null && !tag.isEmpty()) {
+            reportPage = allowedSpaceIds == null
+                    ? reportRepository.findBySceneTag(tag, pageable)
+                    : reportRepository.findBySpaceIdInAndSceneTag(allowedSpaceIds, tag, pageable);
         } else if (keyword != null && !keyword.isEmpty()) {
-            reportPage = reportRepository.searchFullText(keyword, pageable);
-        } else if (spaceId != null && !spaceId.isEmpty()) {
-            reportPage = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
-                    UUID.fromString(spaceId), pageable);
+            reportPage = allowedSpaceIds == null
+                    ? reportRepository.searchFullText(keyword, pageable)
+                    : reportRepository.searchFullTextInSpaces(allowedSpaceIds, keyword, pageable);
         } else if ("rating".equals(sort)) {
-            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
-                    ? reportRepository.findBySpaceIdInOrderByRatingDesc(companySpaceIds, pageable)
-                    : companySpaceIds != null
-                        ? Page.empty(pageable)
-                        : reportRepository.findAllByOrderByRatingDesc(pageable);
+            reportPage = allowedSpaceIds == null
+                    ? reportRepository.findAllByOrderByRatingDesc(pageable)
+                    : reportRepository.findBySpaceIdInOrderByRatingDesc(allowedSpaceIds, pageable);
         } else if ("viewCount".equals(sort)) {
-            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
-                    ? reportRepository.findBySpaceIdInOrderByViewCountDesc(companySpaceIds, pageable)
-                    : companySpaceIds != null
-                        ? Page.empty(pageable)
-                        : reportRepository.findAllByOrderByViewCountDesc(pageable);
+            reportPage = allowedSpaceIds == null
+                    ? reportRepository.findAllByOrderByViewCountDesc(pageable)
+                    : reportRepository.findBySpaceIdInOrderByViewCountDesc(allowedSpaceIds, pageable);
         } else {
-            reportPage = companySpaceIds != null && !companySpaceIds.isEmpty()
-                    ? reportRepository.findBySpaceIdInOrderByCreatedAtDesc(companySpaceIds, pageable)
-                    : companySpaceIds != null
-                        ? Page.empty(pageable)
-                        : reportRepository.findAllByOrderByCreatedAtDesc(pageable);
+            reportPage = allowedSpaceIds == null
+                    ? reportRepository.findAllByOrderByCreatedAtDesc(pageable)
+                    : reportRepository.findBySpaceIdInOrderByCreatedAtDesc(allowedSpaceIds, pageable);
         }
 
         // 批量预加载 author names + scene tags
@@ -132,6 +138,52 @@ public class ReportService {
         Map<UUID, List<String>> sceneTagsMap = batchResolveSceneTags(spaceIds);
 
         return reportPage.map(r -> toListResponse(r, authorNames, sceneTagsMap));
+    }
+
+    /** null = 超管不限制；否则返回可见空间集合（B 端企业空间 / C 端本人空间）。 */
+    private List<UUID> resolveAllowedSpaceIds(UUID companyId, UUID userId) {
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return null;
+        }
+        if (companyId != null) {
+            return new ArrayList<>(companyScopeService.getSpaceIds(companyId));
+        }
+        if (userId == null) {
+            return List.of();
+        }
+        return spaceRepository.findByUserId(userId).stream().map(Space::getId).toList();
+    }
+
+    /**
+     * 按 ID 取报告并校验归属：B 端按企业空间，C 端按本人空间，超管放行。
+     * 用于 HTML 查看、下载、分享、详情等「按 UUID 直读」入口。
+     */
+    public Report requireAccessibleReport(String reportId) {
+        Report report = reportRepository.findById(UUID.fromString(reportId))
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        requireReportAccess(report);
+        return report;
+    }
+
+    private void requireReportAccess(Report report) {
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return;
+        }
+        UUID spaceId = report.getSpaceId();
+        if (spaceId == null) {
+            throw new BusinessException(403, "无权访问该报告");
+        }
+        UUID companyId = TokenContext.getCompanyId();
+        if (companyId != null) {
+            companyScopeService.assertSpaceOwnership(spaceId);
+            return;
+        }
+        UUID userId = TokenContext.get();
+        Space space = spaceRepository.findById(spaceId)
+                .orElseThrow(() -> new BusinessException(404, "空间不存在"));
+        if (userId == null || !space.isOwnedBy(userId)) {
+            throw new BusinessException(403, "无权访问该报告");
+        }
     }
 
     private Map<UUID, String> batchResolveAuthorNames(List<UUID> spaceIds) {
@@ -288,8 +340,21 @@ public class ReportService {
 
         if (!ready) return ReportHtmlResult.notReady(grains, scenes, reportMinGrains, reportMinScenes);
 
-        String html = extractionReportService.generateHtml(skill.getId());
-        return ReportHtmlResult.ready(html, grains, scenes);
+        // 只读缓存文件；未生成时异步触发，HTTP 线程绝不调 AI（性能红线）
+        var latest = reportRepository.findBySpaceIdOrderByCreatedAtDesc(
+                session.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 1)).getContent();
+        if (!latest.isEmpty() && latest.get(0).getHtmlPath() != null) {
+            try {
+                String html = reportStorageService.read(latest.get(0).getHtmlPath());
+                if (html != null && !html.isBlank()) {
+                    return ReportHtmlResult.ready(html, grains, scenes);
+                }
+            } catch (Exception e) {
+                log.warn("读取报告 HTML 失败 reportId={}", latest.get(0).getId(), e);
+            }
+        }
+        reportGenerationService.generateAsync(skill.getId());
+        return ReportHtmlResult.notReady(grains, scenes, reportMinGrains, reportMinScenes);
     }
 
     public record ReportHtmlResult(boolean ready, String html, long grains, long scenes,

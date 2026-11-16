@@ -43,6 +43,7 @@ public class OrganizationSkillController extends BaseController {
 
     private final OrganizationSkillService orgSkillService;
     private final ShareService shareService;
+    private final com.aiextract.config.CompanyScopeService companyScopeService;
 
     // ============================================================
     // 列表（分页）
@@ -55,8 +56,10 @@ public class OrganizationSkillController extends BaseController {
             @RequestParam(defaultValue = "20") int size) {
         UUID companyId = TokenContext.getCompanyId();
         var orgPage = orgSkillService.listByCompanyPaged(companyId, status, page, size);
+        Map<UUID, Integer> memberCounts = orgSkillService.memberCounts(orgPage.getContent());
         List<Map<String, Object>> result = orgPage.getContent().stream()
-                .map(orgSkillService::toApiMap)
+                .map(org -> orgSkillService.toApiMap(org,
+                        memberCounts.getOrDefault(org.getId(), 0)))
                 .collect(Collectors.toList());
         return ApiResponse.success(PageResponse.of(result, orgPage, page, size));
     }
@@ -88,8 +91,15 @@ public class OrganizationSkillController extends BaseController {
 
     private Skill requireCompanyAccess(String id) {
         Skill org = orgSkillService.findById(UUID.fromString(id));
+        // 组织分身接口只能操作 type=organization，防止借道修改/删除个体分身
+        if (!"organization".equals(org.getType())) {
+            throw new BusinessException(404, "组织分身不存在");
+        }
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return org;
+        }
         UUID callerCompanyId = TokenContext.getCompanyId();
-        if (!callerCompanyId.equals(org.getCompanyId())) {
+        if (callerCompanyId == null || !callerCompanyId.equals(org.getCompanyId())) {
             throw new BusinessException(403, "无权操作其他企业的组织分身");
         }
         return org;

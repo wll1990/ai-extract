@@ -59,6 +59,14 @@ public interface ImChannelRepository extends JpaRepository<ImChannel, UUID> {
      */
     List<ImChannel> findByChannelTypeAndStatus(String channelType, String status);
 
+    /** 发布状态机：同一企业+渠道+分身只保留一行，便于 publishing/failed 复用 */
+    Optional<ImChannel> findFirstByCompanyIdAndChannelTypeAndSkillId(
+            UUID companyId, String channelType, UUID skillId);
+
+    /** 开机对账：只下发指定桥负责的 bot */
+    List<ImChannel> findByChannelTypeAndStatusAndBridgeId(
+            String channelType, String status, String bridgeId);
+
     /**
      * 判断企业+渠道+分身是否已绑定（防重复绑定）
      *

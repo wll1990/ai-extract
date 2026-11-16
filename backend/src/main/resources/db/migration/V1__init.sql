@@ -3,6 +3,10 @@
 -- Auto-generated: 2026-07-30
 -- ============================================================
 
+-- 新库依赖的扩展必须先于索引创建
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 
 --
 --

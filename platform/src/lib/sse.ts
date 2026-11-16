@@ -6,16 +6,24 @@
  * @since 2026-07-20
  */
 
+import { csrfHeader } from './csrf';
+
 export type SseEventType = 'chunk' | 'content' | 'heartbeat' | 'phase_change' | 'collect_update' | 'done' | 'error' | 'source' | 'meta' | 'customer' | 'avatar' | 'analysis' | 'mode';
 
 export interface SseEvent {
   type: SseEventType;
   content?: string;
   message?: string;
+  /** 稳定错误码（type=error）：AI_KEY_INVALID / AI_QUOTA_EXCEEDED / AI_RATE_LIMITED ... */
+  code?: string;
   phase?: string;
   module?: string;
   reportId?: string;
   reportTitle?: string;
+  /** 溯源类型：'knowledge' | 'case'（undefined = 经验溯源，向后兼容） */
+  sourceType?: string;
+  /** 知识/案例溯源标题（sourceType=knowledge/case 时有效） */
+  sourceTitle?: string;
 }
 
 export interface SseCallbacks {
@@ -23,9 +31,13 @@ export interface SseCallbacks {
   onPhaseChange?: (phase: string) => void;
   onCollectUpdate?: (module: string) => void;
   onDone?: () => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: string) => void;
   onAbort?: () => void;
   onSource?: (reportId: string, reportTitle: string, grainIds?: string, grainTags?: string, grainCount?: number, avgScore?: string, avgSimilarity?: string, sourceNames?: string) => void;
+  /** 知识库溯源（sourceType=knowledge）：标题 + 来源 + 相似度百分比 */
+  onKnowledgeSource?: (title: string, source: string, similarity: string) => void;
+  /** 案例库溯源（sourceType=case）：标题 + 来源 + 相似度百分比 */
+  onCaseSource?: (title: string, source: string, similarity: string) => void;
   onMeta?: (conversationId: string) => void;
   onEvent?: (type: string, data: Record<string, unknown>) => void;
 }
@@ -61,10 +73,14 @@ function buildFetchOptions(options: SseConnectOptions, controller: AbortControll
   };
   const token = getToken();
   if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+  // SSE 是 POST：Cookie 认证时后端要求 CSRF 双提交
+  if (!headers['X-CSRF-Token']) Object.assign(headers, csrfHeader());
+  if (!headers['X-Trace-Id']) headers['X-Trace-Id'] = `web-${crypto.randomUUID()}`;
   return {
     method: options.method || 'POST',
     headers,
     signal,
+    credentials: 'same-origin',
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   };
 }
@@ -181,23 +197,40 @@ export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks):
       case 'collect_update':
         callbacks.onCollectUpdate?.((event.content as string) || (event.module as string) || '');
         break;
-      case 'source':
-        callbacks.onSource?.(
-          (event.reportId as string) || '',
-          (event.reportTitle as string) || '',
-          (event.grainIds as string) || '',
-          (event.grainTags as string) || '',
-          event.grainCount != null ? Number(event.grainCount) : 0,
-          (event.avgScore as string) || '',
-          (event.avgSimilarity as string) || '',
-          (event.sourceNames as string) || '',
-        );
+      case 'source': {
+        // 三类溯源按 sourceType 路由：undefined=经验（旧格式），knowledge/case 走独立回调
+        const sourceType = event.sourceType as string | undefined;
+        if (sourceType === 'knowledge') {
+          callbacks.onKnowledgeSource?.(
+            (event.sourceTitle as string) || '',
+            (event.sourceNames as string) || '',
+            (event.avgSimilarity as string) || '',
+          );
+        } else if (sourceType === 'case') {
+          callbacks.onCaseSource?.(
+            (event.sourceTitle as string) || '',
+            (event.sourceNames as string) || '',
+            (event.avgSimilarity as string) || '',
+          );
+        } else {
+          callbacks.onSource?.(
+            (event.reportId as string) || '',
+            (event.reportTitle as string) || '',
+            (event.grainIds as string) || '',
+            (event.grainTags as string) || '',
+            event.grainCount != null ? Number(event.grainCount) : 0,
+            (event.avgScore as string) || '',
+            (event.avgSimilarity as string) || '',
+            (event.sourceNames as string) || '',
+          );
+        }
         break;
+      }
       case 'meta':
         callbacks.onMeta?.((event.conversationId as string) || '');
         break;
       case 'error':
-        callbacks.onError?.((event.message as string) || '');
+        callbacks.onError?.((event.message as string) || '', (event.code as string) || undefined);
         break;
       default:
         callbacks.onEvent?.(type, (event.data as Record<string, unknown>) || event);

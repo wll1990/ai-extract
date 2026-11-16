@@ -1,6 +1,7 @@
 package com.aiextract.service;
 
 import com.aiextract.config.RolePermissions;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
@@ -47,6 +48,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final OssService ossService;
+    private final UserSecurityService userSecurityService;
 
     /**
      * 用户登录
@@ -60,7 +62,13 @@ public class AuthService {
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
         UUID companyId;
-        if (request.getCompanyCode() != null && !request.getCompanyCode().isBlank()) {
+        if (request.getInviteToken() != null && !request.getInviteToken().isBlank()) {
+            try {
+                companyId = jwtUtil.parseInviteToken(request.getInviteToken());
+            } catch (Exception e) {
+                throw new BusinessException(400, "邀请令牌无效或已过期，请刷新页面重试");
+            }
+        } else if (request.getCompanyCode() != null && !request.getCompanyCode().isBlank()) {
             // 通过注册码解析企业
             CompanyRegisterCode c = registerCodeRepository.findByCode(
                 request.getCompanyCode().trim().toUpperCase())
@@ -73,23 +81,24 @@ public class AuthService {
             }
             companyId = c.getCompanyId();
         } else if (request.getCompanyId() != null && !request.getCompanyId().isBlank()) {
-            // 降级：直接传 companyId
+            // 内部/QA 跨租户登录：直接指定企业 ID；登录页仍强制企业注册码
             companyId = UUID.fromString(request.getCompanyId());
         } else {
             throw new BusinessException(400, "请提供企业注册码");
         }
 
         // 查询用户
-        User user = userRepository.findByCompanyIdAndAccount(companyId, request.getAccount())
+        // 账号不存在与密码错误统一返回 401，避免按状态码枚举账号
+        User user = userRepository.findByCompanyIdAndAccount(companyId, request.getAccount().trim())
                 .orElseThrow(() -> {
-                    log.warn("用户不存在, companyId: {}, account: {}", companyId, request.getAccount());
-                    return new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.USER_NOT_FOUND);
+                    log.warn("登录失败（账号不存在）, companyId: {}, account: {}", companyId, request.getAccount());
+                    return new BusinessException(HttpStatus.UNAUTHORIZED.value(), "账号或密码错误");
                 });
 
         // 验证密码
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            log.warn("密码错误, userId: {}", user.getId());
-            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), ErrorMessages.PASSWORD_WRONG);
+            log.warn("登录失败（密码错误）, userId: {}", user.getId());
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "账号或密码错误");
         }
 
         // 检查账户是否激活
@@ -98,8 +107,10 @@ public class AuthService {
             throw new BusinessException(HttpStatus.LOCKED.value(), ErrorMessages.ACCOUNT_DISABLED);
         }
 
-        // 生成Token
-        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole());
+        // 生成Token（带安全版本号：改权限后旧 token 立即失效）
+        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
+                jwtUtil.getDefaultExpirationMillis(), versionOf(user),
+                Boolean.TRUE.equals(user.getMustChangePassword()));
 
         // 查询企业名称
         Company company = companyRepository.findById(user.getCompanyId())
@@ -128,11 +139,17 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public LoginResponse register(RegisterRequest request) {
+        validatePasswordStrength(request.getPassword());
         UUID companyId = UUID.fromString(request.getCompanyId());
+        String account = request.getAccount() == null ? "" : request.getAccount().trim();
+        if (account.isEmpty()) {
+            throw new BusinessException(400, "账号不能为空");
+        }
 
-        // 校验账号在企业内唯一
-        if (userRepository.existsByCompanyIdAndAccount(companyId, request.getAccount())) {
-            log.warn("账号已存在, companyId: {}, account: {}", companyId, request.getAccount());
+        // 账号是全局唯一索引：先查全局，避免跨企业同名账号在 commit 时撞约束变成 500
+        if (userRepository.existsByAccount(account)
+                || userRepository.existsByCompanyIdAndAccount(companyId, account)) {
+            log.warn("账号已存在, companyId: {}, account: {}", companyId, account);
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), ErrorMessages.ACCOUNT_EXISTS);
         }
 
@@ -149,7 +166,7 @@ public class AuthService {
                 .id(UUID.randomUUID())
                 .companyId(companyId)
                 .name(request.getName())
-                .account(request.getAccount())
+                .account(account)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .source(User.SOURCE_ENTERPRISE)
@@ -158,7 +175,12 @@ public class AuthService {
                 .updatedAt(now)
                 .build();
 
-        userRepository.save(user);
+        try {
+            // 显式 flush：并发双提交撞全局唯一约束时在事务内转成 400，而不是提交阶段 500
+            userRepository.saveAndFlush(user);
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), ErrorMessages.ACCOUNT_EXISTS);
+        }
 
         // 所有 B 端角色注册时自动创建个人空间（H5 邀请访谈需要）
         com.aiextract.model.Space space = com.aiextract.model.Space.builder()
@@ -173,8 +195,9 @@ public class AuthService {
         spaceRepository.save(space);
         log.info("注册自动创建空间, userId: {}, role: {}, spaceId: {}", user.getId(), request.getRole(), space.getId());
 
-        // 生成Token
-        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole());
+        // 生成Token（带安全版本号：改权限后旧 token 立即失效）
+        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
+                jwtUtil.getDefaultExpirationMillis(), versionOf(user));
 
         // 构建响应
         UserInfoResponse userInfo = buildUserInfoResponse(user, company.getName());
@@ -184,6 +207,55 @@ public class AuthService {
                 .build();
 
         log.info("用户注册成功, userId: {}, account: {}", user.getId(), user.getAccount());
+        return response;
+    }
+
+    /**
+     * 使用企业注册码注册（公开接口）。
+     *
+     * <p>角色只认注册码的 {@code defaultRole}，请求方无法指定，防止员工码提权。
+     * 整个方法在一个事务内：先创建用户，再原子消费注册码；消费失败（并发超发/刚被停用）
+     * 会回滚用户创建，不会出现「注册成功但码未扣」。</p>
+     *
+     * @param companyCode 企业注册码
+     * @param account     登录账号
+     * @param password    初始密码
+     * @param name        姓名
+     * @return Token 及用户信息
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public LoginResponse registerWithCode(String companyCode, String account, String password, String name) {
+        validatePasswordStrength(password);
+        CompanyRegisterCode code = registerCodeRepository.findByCode(companyCode)
+                .orElseThrow(() -> new BusinessException(HttpStatus.BAD_REQUEST.value(), "注册码无效"));
+
+        LocalDateTime now = LocalDateTime.now();
+        if (Boolean.FALSE.equals(code.getEnabled())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "注册码已停用");
+        }
+        if (code.getExpiresAt() != null && code.getExpiresAt().isBefore(now)) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "注册码已过期，请联系管理员重新生成");
+        }
+        if (code.getMaxUses() != null && code.getMaxUses() > 0 && code.getUsedCount() >= code.getMaxUses()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "注册码已达使用上限");
+        }
+
+        // 角色以注册码为准，请求体不能覆盖；不在可注册角色内时降级为员工
+        String role = code.getDefaultRole() != null && RolePermissions.REGISTRABLE_ROLES.contains(code.getDefaultRole())
+                ? code.getDefaultRole() : RolePermissions.EMPLOYEE;
+
+        RegisterRequest request = RegisterRequest.builder()
+                .companyId(code.getCompanyId().toString())
+                .account(account).password(password).name(name)
+                .role(role).build();
+        LoginResponse response = register(request);
+
+        UUID userId = UUID.fromString(response.getUser().getId());
+        int rows = registerCodeRepository.consume(code.getId(), userId, now);
+        if (rows == 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "注册码已失效，请重新获取");
+        }
+        log.info("注册码注册成功, codeId: {}, userId: {}, role: {}", code.getId(), userId, role);
         return response;
     }
 
@@ -225,8 +297,8 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.USER_NOT_FOUND));
 
-        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
-        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
+        String extension = com.aiextract.common.UploadValidator.requireImage(file, 2 * 1024 * 1024);
+        String safeName = System.currentTimeMillis() + extension;
         String objectKey = "avatars/users/" + userId + "/" + safeName;
         String avatarUrl = ossService.upload(objectKey, file);
 
@@ -244,6 +316,11 @@ public class AuthService {
      * @param companyName 企业名称
      * @return UserInfoResponse
      */
+    /** 安全版本号（历史数据可能为 null，按 0 处理） */
+    private static long versionOf(User user) {
+        return user.getTokenVersion() == null ? 0L : user.getTokenVersion();
+    }
+
     private UserInfoResponse buildUserInfoResponse(User user, String companyName) {
         // 注意：此方法被 login/register 复用，彼时 SecurityContext 尚未建立，
         // 故从 role 映射表派生（与 JwtUtil 签发时的 permissions claim 同源）。
@@ -255,6 +332,100 @@ public class AuthService {
                 .companyId(user.getCompanyId() != null ? user.getCompanyId().toString() : null)
                 .companyName(companyName)
                 .permissions(new ArrayList<>(RolePermissions.getPermissions(user.getRole())))
+                .mustChangePassword(Boolean.TRUE.equals(user.getMustChangePassword()))
                 .build();
+    }
+
+    // ==================== 密码生命周期 / 账号停用 ====================
+
+    /** 注册密码强度：统一走 PasswordPolicy，与 C 端注册同源 */
+    private void validatePasswordStrength(String password) {
+        com.aiextract.common.PasswordPolicy.validate(password);
+    }
+
+    /**
+     * 修改自己的密码：校验旧密码，更新后提升 tokenVersion（其他会话立即失效），返回新 token。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public String changePassword(UUID userId, String oldPassword, String newPassword) {
+        validatePasswordStrength(newPassword);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
+        if (oldPassword == null || !passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new BusinessException(400, "原密码不正确");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new BusinessException(400, "新密码不能与原密码相同");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setMustChangePassword(false);
+        // 走统一入口：自增安全版本号并在事务提交后刷新 Redis 缓存，
+        // 否则缓存里仍是旧版本，新签发的 token 会被判过期
+        userSecurityService.onAuthoritiesChanged(user);
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+        log.info("用户修改密码 userId={}", userId);
+        return jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
+                jwtUtil.getDefaultExpirationMillis(), versionOf(user));
+    }
+
+    /** 管理端停用/启用账号：不允许操作自己、超管，以及其他企业的用户 */
+    @Transactional(rollbackFor = Exception.class)
+    public void setUserActive(UUID targetUserId, boolean active) {
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
+        UUID operatorCompany = TokenContext.getCompanyId();
+        boolean superAdmin = com.aiextract.config.CompanyScopeService.isSuperAdminStatic();
+        if (!superAdmin && !java.util.Objects.equals(operatorCompany, target.getCompanyId())) {
+            throw new BusinessException(404, ErrorMessages.USER_NOT_FOUND);
+        }
+        if (RolePermissions.SUPER_ADMIN.equals(target.getRole())) {
+            throw new BusinessException(403, "不能停用平台超级管理员");
+        }
+        if (java.util.Objects.equals(TokenContext.get(), targetUserId)) {
+            throw new BusinessException(400, "不能停用自己的账号");
+        }
+        target.setIsActive(active);
+        if (!active) {
+            // 停用即让该用户所有已签发 token 失效（同时刷新版本缓存）
+            userSecurityService.onAuthoritiesChanged(target);
+        }
+        target.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(target);
+        log.info("用户状态变更 userId={} active={}", targetUserId, active);
+    }
+
+    /** 管理端重置密码：生成一次性密码，要求下次登录修改，并让旧 token 失效 */
+    @Transactional(rollbackFor = Exception.class)
+    public String resetPassword(UUID targetUserId) {
+        User target = userRepository.findById(targetUserId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
+        UUID operatorCompany = TokenContext.getCompanyId();
+        boolean superAdmin = com.aiextract.config.CompanyScopeService.isSuperAdminStatic();
+        if (!superAdmin && !java.util.Objects.equals(operatorCompany, target.getCompanyId())) {
+            throw new BusinessException(404, ErrorMessages.USER_NOT_FOUND);
+        }
+        if (RolePermissions.SUPER_ADMIN.equals(target.getRole())
+                && !java.util.Objects.equals(TokenContext.get(), targetUserId)) {
+            throw new BusinessException(403, "不能重置平台超级管理员的密码");
+        }
+        String temporary = randomPassword(10);
+        target.setPasswordHash(passwordEncoder.encode(temporary));
+        target.setMustChangePassword(true);
+        userSecurityService.onAuthoritiesChanged(target);
+        target.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(target);
+        log.info("管理员重置密码 userId={}", targetUserId);
+        return temporary;
+    }
+
+    private static String randomPassword(int length) {
+        String chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder(length);
+        for (int i = 0; i < length; i++) {
+            sb.append(chars.charAt(random.nextInt(chars.length())));
+        }
+        return sb.toString();
     }
 }

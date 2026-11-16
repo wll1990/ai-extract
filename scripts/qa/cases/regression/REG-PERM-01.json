@@ -1,0 +1,28 @@
+[
+  {
+    "id": "REG-PERM-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "manage",
+    "roles": ["anonymous"],
+    "llm": false,
+    "sourceBug": "P0-2 匿名注册可指定 companyId",
+    "steps": [
+      {
+        "role": "anonymous",
+        "api": "POST /auth/register",
+        "body": {
+          "companyId": "0a000000-0000-0000-0000-000000000001",
+          "name": "REG-${runId}-匿名",
+          "account": "REG-${runId}-anon",
+          "password": "QaTest!2026",
+          "role": "employee"
+        },
+        "expect": { "status": [400, 403] }
+      }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from \"user\" where account = 'REG-' || :runId || '-anon'", "expect": "0" }
+    ]
+  }
+]

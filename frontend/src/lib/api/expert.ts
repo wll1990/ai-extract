@@ -7,8 +7,8 @@
 import { apiClient } from './client';
 
 export interface ExpertAvailable { id: string; name: string; type: string; styleTags?: string[]; industryTags?: string[]; }
-export interface ExpertSkill { id: string; name: string; sourceType: string; domain?: string; styleTags: string[]; industryTags: string[]; seniority: string; grainCount: number; documentCount?: number; status: string; }
-export interface ExpertDetail { id: string; name: string; grainGroups: GrainGroup[]; documents: DocumentInfo[]; status: string; }
+export interface ExpertSkill { id: string; name: string; sourceType: string; domain?: string; styleTags: string[]; industryTags: string[]; seniority: string; grainCount: number; documentCount?: number; status: string; retryCount?: number; failureReason?: string | null; }
+export interface ExpertDetail { id: string; name: string; grainGroups: GrainGroup[]; documents: DocumentInfo[]; status: string; retryCount?: number; failureReason?: string | null; }
 export interface GrainGroup { category: string; grains: GrainInfo[]; }
 export interface GrainInfo { id: string; category: string; knowledgeContent: string; applicationRule: string; priority: number; consensusType: string; status: string; }
 export interface DocumentInfo { id: string; fileName: string; fileType: string; fileSize: number; status: string; }
@@ -41,7 +41,14 @@ export const activateExpert = (id: string) => apiClient<void>(`/admin/experts/${
 
 export const retryExpert = (id: string) => apiClient<void>(`/admin/experts/${id}/retry`, { method: 'POST' });
 
-export const regenerateComposite = () => apiClient<void>('/admin/experts/composite/regenerate', { method: 'POST' });
+/** 人工补录文档文字（图片/音频无法自动解析时） */
+export const updateExpertDocument = (docId: string, parsedContent: string) =>
+  apiClient<void>(`/admin/experts/documents/${docId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ parsedContent, status: 'parsed' }),
+  });
+
+export const regenerateComposite = () => apiClient<CompositeInfo>('/admin/experts/composite/regenerate', { method: 'POST' });
 
 export const getCompositeDetail = () => apiClient<CompositeInfo>('/admin/experts/composite');
 

@@ -2,6 +2,7 @@ package com.aiextract.service;
 
 import java.util.concurrent.CompletableFuture;
 
+import com.aiextract.common.AiErrorMapper;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.common.TraceContext;
 import com.aiextract.dto.PracticeRespondRequest;
@@ -39,6 +40,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.OptionalDouble;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -82,12 +85,25 @@ public class ChatStreamService {
     private final GrainRecommendationService grainRec;
     private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
     private final OrganizationSkillService orgSkillService;
+    private final KnowledgeCaseRetriever knowledgeCaseRetriever;
+    private final KcScopeResolver kcScopeResolver;
+    private final com.aiextract.repository.KnowledgeCaseRetrieveLogRepository retrieveLogRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @Value("${app.chat.timeout-seconds:120}")
     private int chatTimeoutSeconds;
 
     @Value("${app.rag.top-k:8}")
     private int ragTopK;
+
+    @Value("${app.rag.kc-top-k:3}")
+    private int kcTopK;
+
+    @Value("${app.rag.kc-knowledge-min-similarity:0.35}")
+    private double kcKnowledgeMinSimilarity;
+
+    @Value("${app.rag.kc-case-min-similarity:0.50}")
+    private double kcCaseMinSimilarity;
 
     // ============================================================
     // 分身问答（QA / Talk）
@@ -126,8 +142,9 @@ public class ChatStreamService {
         log.info("═══ 分身问答开始 ═══ skillId={} userId={} msg={}",
             skillId, userId, msg.substring(0, Math.min(50, msg.length())));
 
-        boolean isAdmin = userRepository.findById(userId)
-            .map(u -> RolePermissions.hasPermission(u.getRole(), Permission.SKILL_MANAGE)).orElse(false);
+        User chatUser = userRepository.findById(userId).orElse(null);
+        boolean isAdmin = chatUser != null
+            && RolePermissions.hasPermission(chatUser.getRole(), Permission.SKILL_MANAGE);
         boolean isOwner = spaceRepository.findById(skill.getSpaceId())
             .map(s -> userId.equals(s.getUserId())).orElse(false);
         boolean canChat = isAdmin || isOwner
@@ -152,20 +169,43 @@ public class ChatStreamService {
 
         UUID convId = record ? convPersistence.upsertConversation(skillId, userId, request, mode, now, skill) : UUID.randomUUID();
 
+        // OPS-03 幂等：同一 clientMessageId 已有 AI 回复时直接重放，不再跑 RAG/模型
+        Flux<ChatChunk> replay = replayIfDuplicate(record, convId, request.getClientMessageId());
+        if (replay != null) {
+            return replay;
+        }
+
         // RAG — 委托 RagPipelineService
         String ragHistory = record ? ragPipelineService.buildRagHistory(convId) : request.getHistory();
         String domain = domainConfigLoader.resolveDomain(skill);
         String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, skill.getId());
-        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(skill.getId(), convId, request.getMessage());
-        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, skill.getSpaceId(), ragTopK, domain, ragCtx, "skillId=" + skillId);
+        // 知识/案例检索范围——同企业用私有库+公共库，跨企业/匿名只用公共库
+        final KcScopeResolver.KcScope kcScope = kcScopeResolver.resolve(
+                skill, chatUser != null ? chatUser.getCompanyId() : null);
+        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(
+                skill.getId(), convId, request.getMessage(), kcScope.external());
+        // 先查知识/案例：命中时不记知识缺口（否则 KC-only 命中会被误报为缺口）
+        final KnowledgeCaseRetriever.KnowledgeCaseHits kcHits = getKcSafely(
+            ragQuery, kcScope.companyId(), kcTopK, "skillId=" + skillId);
+        final boolean kcHit = !kcHits.knowledge().isEmpty() || !kcHits.cases().isEmpty();
+        final boolean recordGap = !Boolean.TRUE.equals(request.getIsTest()) && !kcHit;
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, skill.getSpaceId(), ragTopK, domain, ragCtx, "skillId=" + skillId, recordGap);
+        // 未发布分身只做临时试聊，不写引用日志；组织调度可能没有单一 skillId，仍要记录引用
+        if (record) {
+            logKcReferences(skillId, convId, kcHits, kcScope, "skill_chat");
+        }
 
         final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
         final UUID persistedReportId = grains.grains().stream()
             .map(ExperienceGrain::getReportId)
             .filter(id -> id != null).findFirst().orElse(null);
+        final String persistedGrainIds = grains.grains().stream().limit(3)
+            .map(g -> g.getId().toString()).collect(Collectors.joining(","));
+        final Double persistedAvgSimilarity = avgSimilarityOf(grains);
 
         String systemPrompt = promptAssembly.buildSkillSystemPrompt(
-            skill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel());
+            skill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel())
+            + buildKnowledgeCaseContext(kcHits);
         log.info("③ SystemPrompt构建完成 {}chars", systemPrompt.length());
         List<Map<String, String>> messages = promptAssembly.buildChatMessages(systemPrompt, request.getMessage(),
             convId, request.getHistory());
@@ -198,14 +238,18 @@ public class ChatStreamService {
                 long aiMs = System.currentTimeMillis() - tAiStart;
                 log.info("④ AI流式完成 {}ms contentLen={}", aiMs, aiContent.length());
                 convPersistence.saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, skill,
-                    persistedGrainId, persistedReportId);
+                    persistedGrainId, persistedReportId, persistedGrainIds, persistedAvgSimilarity,
+                    request.getClientMessageId(), sourceRefsJson(kcHits));
             })
             .timeout(Duration.ofSeconds(chatTimeoutSeconds))
             .doOnError(e -> {
                 hasStreamError.set(true);
                 log.error("SSE流超时或异常", e);
             })
-            .onErrorResume(err -> Flux.just(ChatChunk.error(ErrorMessages.AI_SERVICE_UNAVAILABLE)));
+            .onErrorResume(err -> {
+                    AiErrorMapper.AiError aiError = AiErrorMapper.map(err);
+                    return Flux.just(ChatChunk.error(aiError.code(), aiError.message()));
+                });
 
         Flux<ChatChunk> postStream = Flux.defer(() -> {
             long totalMs = System.currentTimeMillis() - t0;
@@ -223,8 +267,10 @@ public class ChatStreamService {
                 }
             }
             return Flux.concat(
-                Flux.just(ChatChunk.meta(finalConvId.toString())),
+                // 未发布分身的预览对话不落库，不下发临时 conversationId，避免前端存幽灵会话
+                record ? Flux.just(ChatChunk.meta(finalConvId.toString())) : Flux.empty(),
                 buildSourceChunkFlux(skill.getSpaceId(), grains.grains(), grains.similarities()),
+                buildKcSourceFlux(kcHits),
                 suggestedFlux
             );
         });
@@ -242,12 +288,16 @@ public class ChatStreamService {
                         .id(UUID.randomUUID())
                         .skillId(skill.getId())
                         .skillType("individual")
+                        .companyId(kcScope.skillCompanyId())
                         .conversationId(finalConvId)
                         .userId(userId)
                         .mode(finalMode)
                         .ragHighCount((int) grains.tiers().values().stream().filter("high"::equals).count())
                         .ragRefCount((int) grains.tiers().values().stream().filter("ref"::equals).count())
-                        .ragNoneCount(grains.grains().isEmpty() ? 1 : 0)
+                        .ragNoneCount(grains.grains().isEmpty() && kcHits.knowledge().isEmpty()
+                                && kcHits.cases().isEmpty() ? 1 : 0)
+                        .kcKnowledgeCount(kcHits.knowledge().size())
+                        .kcCaseCount(kcHits.cases().size())
                         .ragAvgSimilarity(avgSim)
                         .errorType(errorType)
                         .isTest(Boolean.TRUE.equals(request.getIsTest()))
@@ -297,20 +347,39 @@ public class ChatStreamService {
 
         UUID convId = convPersistence.upsertConversation(orgSkillId, userId, request, mode, now, null);
 
+        Flux<ChatChunk> replay = replayIfDuplicate(record, convId, request.getClientMessageId());
+        if (replay != null) {
+            return replay;
+        }
+
         // RAG — 多 space 语义检索
         String ragHistory = record ? ragPipelineService.buildRagHistory(convId) : request.getHistory();
         String domain = orgSkill.getDomain() != null ? orgSkill.getDomain() : "sales";
         String ragQuery = ragPipelineService.rewriteQuery(request.getMessage(), ragHistory, domain, orgSkillId);
-        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(orgSkillId, convId, request.getMessage());
-        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, spaceIds, ragTopK, domain, ragCtx, "org");
+        final UUID orgCallerCompanyId = userRepository.findById(userId)
+                .map(User::getCompanyId).orElse(null);
+        final KcScopeResolver.KcScope orgKcScope = kcScopeResolver.resolve(orgSkill, orgCallerCompanyId);
+        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(
+                orgSkillId, convId, request.getMessage(), orgKcScope.external());
+        // Phase B：先查知识/案例；命中时不记知识缺口
+        final KnowledgeCaseRetriever.KnowledgeCaseHits kcHits = getKcSafely(
+                ragQuery, orgKcScope.companyId(), kcTopK, "org");
+        logKcReferences(orgSkillId, convId, kcHits, orgKcScope, "org_chat");
+        final boolean kcHit = !kcHits.knowledge().isEmpty() || !kcHits.cases().isEmpty();
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, spaceIds, ragTopK, domain, ragCtx, "org",
+                !Boolean.TRUE.equals(request.getIsTest()) && !kcHit);
 
         final UUID persistedGrainId = grains.grains().isEmpty() ? null : grains.grains().get(0).getId();
         final UUID persistedReportId = grains.grains().stream()
                 .map(ExperienceGrain::getReportId)
                 .filter(id -> id != null).findFirst().orElse(null);
+        final String persistedGrainIds = grains.grains().stream().limit(3)
+                .map(g -> g.getId().toString()).collect(Collectors.joining(","));
+        final Double persistedAvgSimilarity = avgSimilarityOf(grains);
 
         String systemPrompt = promptAssembly.buildOrgSkillSystemPrompt(
-                orgSkill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel());
+                orgSkill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel())
+                + buildKnowledgeCaseContext(kcHits);
         log.info("③ 组织分身SystemPrompt构建完成 {}chars", systemPrompt.length());
         List<Map<String, String>> messages = promptAssembly.buildChatMessages(systemPrompt, request.getMessage(),
                 convId, request.getHistory());
@@ -336,21 +405,26 @@ public class ChatStreamService {
                     long aiMs = System.currentTimeMillis() - tAiStart;
                     log.info("④ 组织分身AI流式完成 {}ms contentLen={}", aiMs, aiContent.length());
                     convPersistence.saveAiMessage(finalConvId, record, aiContent.toString(), finalMode, now, null,
-                            persistedGrainId, persistedReportId);
+                            persistedGrainId, persistedReportId, persistedGrainIds, persistedAvgSimilarity,
+                            request.getClientMessageId(), sourceRefsJson(kcHits));
                 })
                 .timeout(Duration.ofSeconds(chatTimeoutSeconds))
                 .doOnError(e -> {
                     hasStreamError.set(true);
                     log.error("组织分身SSE流超时或异常", e);
                 })
-                .onErrorResume(err -> Flux.just(ChatChunk.error(ErrorMessages.AI_SERVICE_UNAVAILABLE)));
+                .onErrorResume(err -> {
+                    AiErrorMapper.AiError aiError = AiErrorMapper.map(err);
+                    return Flux.just(ChatChunk.error(aiError.code(), aiError.message()));
+                });
 
         Flux<ChatChunk> postStream = Flux.defer(() -> {
             long totalMs = System.currentTimeMillis() - t0;
             log.info("✅ 组织分身问答完成 total={}ms", totalMs);
             return Flux.concat(
                     Flux.just(ChatChunk.meta(finalConvId.toString())),
-                    buildMultiSpaceSourceChunkFlux(spaceIds, grains.grains(), grains.similarities())
+                    buildMultiSpaceSourceChunkFlux(spaceIds, grains.grains(), grains.similarities()),
+                    buildKcSourceFlux(kcHits)
             );
         });
 
@@ -364,12 +438,16 @@ public class ChatStreamService {
                                 .id(UUID.randomUUID())
                                 .skillId(orgSkillId)
                                 .skillType("organization")
+                                .companyId(orgKcScope.skillCompanyId())
                                 .conversationId(finalConvId)
                                 .userId(userId)
                                 .mode(finalMode)
                                 .ragHighCount((int) grains.tiers().values().stream().filter("high"::equals).count())
                                 .ragRefCount((int) grains.tiers().values().stream().filter("ref"::equals).count())
-                                .ragNoneCount(grains.grains().isEmpty() ? 1 : 0)
+                                .ragNoneCount(grains.grains().isEmpty() && kcHits.knowledge().isEmpty()
+                                        && kcHits.cases().isEmpty() ? 1 : 0)
+                                .kcKnowledgeCount(kcHits.knowledge().size())
+                                .kcCaseCount(kcHits.cases().size())
                                 .ragAvgSimilarity(avgSim)
                                 .errorType(errorType)
                                 .isTest(Boolean.TRUE.equals(request.getIsTest()))
@@ -472,6 +550,8 @@ public class ChatStreamService {
                         .userId(userId)
                         .ragHighCount(request.getSceneTag() != null ? 1 : 0)
                         .ragNoneCount(request.getSceneTag() != null ? 0 : 1)
+                        // 培训陪练不计入分身互动统计（SkillStatsScheduler 只统计 is_test=false）
+                        .isTest(Boolean.TRUE.equals(request.getTrainingMode()))
                         .createdAt(LocalDateTime.now())
                         .build());
                 } catch (Exception e) {
@@ -479,7 +559,10 @@ public class ChatStreamService {
                 }
             })
             .timeout(Duration.ofSeconds(chatTimeoutSeconds))
-            .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
+            .onErrorResume(err -> {
+                AiErrorMapper.AiError aiError = AiErrorMapper.map(err);
+                return Flux.just(ChatChunk.error(aiError.code(), aiError.message()));
+            });
     }
 
     // ============================================================
@@ -508,8 +591,16 @@ public class ChatStreamService {
         String domain = "sales.b2b_enterprise";
         String ragQuery = ragPipelineService.rewriteQuery(query, null, domain, null);
         UUID pseudoConvId = UUID.randomUUID();
-        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(null, pseudoConvId, query);
-        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, companySpaceIds, ragTopK, domain, ragCtx, "enterprise");
+        RagPipelineService.RagContext ragCtx = new RagPipelineService.RagContext(
+                null, pseudoConvId, query, false);
+        // Phase B：先查知识/案例；命中时不记知识缺口
+        final KcScopeResolver.KcScope enterpriseScope = kcScopeResolver.forCompany(companyId);
+        final KnowledgeCaseRetriever.KnowledgeCaseHits kcHits = getKcSafely(
+                ragQuery, enterpriseScope.companyId(), kcTopK, "enterprise");
+        logKcReferences(null, pseudoConvId, kcHits, enterpriseScope, "enterprise_chat");
+        final boolean kcHit = !kcHits.knowledge().isEmpty() || !kcHits.cases().isEmpty();
+        final RagPipelineService.GrainResult grains = getGrainsSafely(ragQuery, companySpaceIds, ragTopK, domain, ragCtx, "enterprise",
+                !Boolean.TRUE.equals(request.getIsTest()) && !kcHit);
 
         // 组装 prompt + 流式
         final long tAiStart = System.currentTimeMillis();
@@ -517,7 +608,8 @@ public class ChatStreamService {
         final java.util.concurrent.atomic.AtomicBoolean hasStreamError = new java.util.concurrent.atomic.AtomicBoolean(false);
 
         String systemPrompt = promptAssembly.buildEnterpriseSystemPromptV2(
-                ragQuery, grains.grains(), grains.tiers(), grains.similarities(), companySpaceIds, domain);
+                ragQuery, grains.grains(), grains.tiers(), grains.similarities(), companySpaceIds, domain)
+                + buildKnowledgeCaseContext(kcHits);
         List<Map<String, String>> messages = List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", query)
@@ -536,14 +628,18 @@ public class ChatStreamService {
                     hasStreamError.set(true);
                     log.error("企业调度SSE流异常", e);
                 })
-                .onErrorResume(err -> Flux.just(ChatChunk.error(ErrorMessages.AI_SERVICE_UNAVAILABLE)));
+                .onErrorResume(err -> {
+                    AiErrorMapper.AiError aiError = AiErrorMapper.map(err);
+                    return Flux.just(ChatChunk.error(aiError.code(), aiError.message()));
+                });
 
         Flux<ChatChunk> postStream = Flux.defer(() -> {
             long totalMs = System.currentTimeMillis() - t0;
             log.info("✅ 企业调度完成 total={}ms grains={}", totalMs, grains.grains().size());
             return Flux.concat(
                     Flux.just(ChatChunk.meta(pseudoConvId.toString())),
-                    buildEnterpriseSourceChunkFlux(grains.grains(), grains.similarities())
+                    buildEnterpriseSourceChunkFlux(grains.grains(), grains.similarities()),
+                    buildKcSourceFlux(kcHits)
             );
         });
 
@@ -557,12 +653,16 @@ public class ChatStreamService {
                                 .id(UUID.randomUUID())
                                 .skillId(companyId)
                                 .skillType("enterprise")
+                                .companyId(companyId)
                                 .conversationId(pseudoConvId)
-                                .userId(UUID.randomUUID())
+                                .userId(com.aiextract.config.TokenContext.get())
                                 .mode("enterprise")
                                 .ragHighCount((int) grains.tiers().values().stream().filter("high"::equals).count())
                                 .ragRefCount((int) grains.tiers().values().stream().filter("ref"::equals).count())
-                                .ragNoneCount(grains.grains().isEmpty() ? 1 : 0)
+                                .ragNoneCount(grains.grains().isEmpty() && kcHits.knowledge().isEmpty()
+                                        && kcHits.cases().isEmpty() ? 1 : 0)
+                                .kcKnowledgeCount(kcHits.knowledge().size())
+                                .kcCaseCount(kcHits.cases().size())
                                 .ragAvgSimilarity(avgSim)
                                 .errorType(errorType)
                                 .isTest(false)
@@ -617,7 +717,10 @@ public class ChatStreamService {
             })
             .doOnComplete(() -> persistEvaluation(skillUuid, accumulated.toString(), name, userId))
             .timeout(Duration.ofSeconds(chatTimeoutSeconds))
-            .onErrorResume(err -> Flux.just(ChatChunk.error("服务异常")));
+            .onErrorResume(err -> {
+                AiErrorMapper.AiError aiError = AiErrorMapper.map(err);
+                return Flux.just(ChatChunk.error(aiError.code(), aiError.message()));
+            });
     }
 
     /**
@@ -711,6 +814,39 @@ public class ChatStreamService {
         return buildMultiSpaceSourceChunkFlux(spaceIds, grains, similarities);
     }
 
+    /**
+     * OPS-03 幂等重放：同一会话内 clientMessageId 已有 AI 回复时，直接回放已存内容，
+     * 不再重复跑 RAG / 模型，也不重复落库。返回 null 表示不是重复请求。
+     */
+    private Flux<ChatChunk> replayIfDuplicate(boolean record, UUID convId, String clientMessageId) {
+        if (!record || clientMessageId == null || clientMessageId.isBlank()) {
+            return null;
+        }
+        return skillMessageRepository
+                .findFirstByConversationIdAndClientMessageIdAndRole(convId, clientMessageId.trim(), "assistant")
+                .map(msg -> {
+                    log.info("幂等命中，重放已存回复 convId={} clientMessageId={}", convId, clientMessageId);
+                    return Flux.concat(
+                            Flux.just(ChatChunk.meta(convId.toString())),
+                            Flux.just(ChatChunk.content(msg.getContent())),
+                            Flux.just(ChatChunk.done()));
+                })
+                .orElse(null);
+    }
+
+    /** 持久化用的平均相似度（0-100）；无相似度数据时返回 null，而不是伪造 0 */
+    private Double avgSimilarityOf(RagPipelineService.GrainResult grains) {
+        if (grains.grains().isEmpty() || grains.similarities() == null || grains.similarities().isEmpty()) {
+            return null;
+        }
+        OptionalDouble avg = grains.grains().stream().limit(3)
+                .map(g -> grains.similarities().get(g.getId()))
+                .filter(Objects::nonNull)
+                .mapToDouble(Double::doubleValue)
+                .average();
+        return avg.isPresent() ? avg.getAsDouble() * 100 : null;
+    }
+
     private Flux<ChatChunk> buildSourceChunkFlux(UUID spaceId, List<ExperienceGrain> grains,
                                                    Map<UUID, Double> similarities) {
         try {
@@ -777,21 +913,168 @@ public class ChatStreamService {
         }
     }
 
-    private RagPipelineService.GrainResult getGrainsSafely(String query, UUID spaceId, int topK, String domain, RagPipelineService.RagContext ragCtx, String label) {
+    private RagPipelineService.GrainResult getGrainsSafely(String query, UUID spaceId, int topK, String domain,
+                                                          RagPipelineService.RagContext ragCtx, String label,
+                                                          boolean recordKnowledgeGap) {
         try {
-            return ragPipelineService.retrieveGrainsWithScores(query, spaceId, topK, domain, ragCtx);
+            return ragPipelineService.retrieveGrainsWithScores(query, spaceId, topK, domain, ragCtx, recordKnowledgeGap);
         } catch (Exception e) {
             log.warn("RAG检索失败({})，降级为空: {}", label, e.getMessage());
             return new RagPipelineService.GrainResult(List.of(), Map.of(), Map.of());
         }
     }
 
-    private RagPipelineService.GrainResult getGrainsSafely(String query, List<UUID> spaceIds, int topK, String domain, RagPipelineService.RagContext ragCtx, String label) {
+    private RagPipelineService.GrainResult getGrainsSafely(String query, List<UUID> spaceIds, int topK, String domain,
+                                                          RagPipelineService.RagContext ragCtx, String label,
+                                                          boolean recordKnowledgeGap) {
         try {
-            return ragPipelineService.retrieveGrainsWithScores(query, spaceIds, topK, domain, ragCtx);
+            return ragPipelineService.retrieveGrainsWithScores(query, spaceIds, topK, domain, ragCtx, recordKnowledgeGap);
         } catch (Exception e) {
             log.warn("RAG检索失败({})，降级为空: {}", label, e.getMessage());
             return new RagPipelineService.GrainResult(List.of(), Map.of(), Map.of());
         }
+    }
+
+    // ============================================================
+    // 知识/案例检索追加（Phase B，独立于 grain 主路径）
+    // ============================================================
+
+    /** 安全检索知识 + 案例，任何异常降级为空（不影响主对话）。 */
+    private KnowledgeCaseRetriever.KnowledgeCaseHits getKcSafely(String query, UUID companyId, int topK, String label) {
+        if (query == null || query.isBlank()) {
+            return new KnowledgeCaseRetriever.KnowledgeCaseHits(List.of(), List.of());
+        }
+        try {
+            // 无数据预检：企业维度下没有任何 active 知识/案例时跳过嵌入，避免拖慢既有对话
+            if (!knowledgeCaseRetriever.hasAnyActive(companyId)) {
+                return new KnowledgeCaseRetriever.KnowledgeCaseHits(List.of(), List.of());
+            }
+            return knowledgeCaseRetriever.retrieve(query, companyId, topK, kcKnowledgeMinSimilarity, kcCaseMinSimilarity);
+        } catch (Exception e) {
+            log.warn("知识/案例检索失败({})，降级为空: {}", label, e.getMessage());
+            return new KnowledgeCaseRetriever.KnowledgeCaseHits(List.of(), List.of());
+        }
+    }
+
+    /**
+     * 记录知识/案例引用（供详情页「被引用」与废弃影响面）。写日志失败不影响对话。
+     * 组织总调度可能没有单一 skillId，仍记录（skill_id 允许为空）；未发布分身由调用方跳过。
+     */
+    private void logKcReferences(UUID skillId, UUID conversationId,
+                                 KnowledgeCaseRetriever.KnowledgeCaseHits hits,
+                                 KcScopeResolver.KcScope scope, String usageType) {
+        if (hits.knowledge().isEmpty() && hits.cases().isEmpty()) {
+            return;
+        }
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            String effectiveUsage = scope.external() ? "public_chat" : usageType;
+            List<com.aiextract.model.KnowledgeCaseRetrieveLog> rows = new java.util.ArrayList<>();
+            for (var k : hits.knowledge()) {
+                rows.add(com.aiextract.model.KnowledgeCaseRetrieveLog.builder()
+                        .id(UUID.randomUUID()).knowledgeId(k.id()).skillId(skillId)
+                        .companyId(scope.skillCompanyId()).usageType(effectiveUsage)
+                        .usageRefId(conversationId).conversationId(conversationId)
+                        .similarity(k.similarity()).createdAt(now).build());
+            }
+            for (var c : hits.cases()) {
+                rows.add(com.aiextract.model.KnowledgeCaseRetrieveLog.builder()
+                        .id(UUID.randomUUID()).caseId(c.id()).skillId(skillId)
+                        .companyId(scope.skillCompanyId()).usageType(effectiveUsage)
+                        .usageRefId(conversationId).conversationId(conversationId)
+                        .similarity(c.similarity()).createdAt(now).build());
+            }
+            retrieveLogRepository.saveAll(rows);
+        } catch (Exception e) {
+            log.warn("写知识/案例引用日志失败 skillId={}: {}", skillId, e.getMessage());
+        }
+    }
+
+    /**
+     * 知识/案例参考快照（持久化到 assistant 消息），用于刷新历史后仍能展示来源。
+     * 旧消息没有该字段，前端按空数组兼容。
+     */
+    private String sourceRefsJson(KnowledgeCaseRetriever.KnowledgeCaseHits hits) {
+        if (hits.knowledge().isEmpty() && hits.cases().isEmpty()) {
+            return null;
+        }
+        try {
+            java.util.Map<String, Object> root = new java.util.LinkedHashMap<>();
+            root.put("schemaVersion", 1);
+            root.put("knowledge", hits.knowledge().stream().map(k -> {
+                java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("id", k.id().toString());
+                m.put("title", k.title());
+                m.put("source", k.source());
+                m.put("similarity", k.similarity());
+                return m;
+            }).toList());
+            root.put("cases", hits.cases().stream().map(c -> {
+                java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+                m.put("id", c.id().toString());
+                m.put("title", c.title());
+                m.put("source", c.source());
+                m.put("similarity", c.similarity());
+                return m;
+            }).toList());
+            return objectMapper.writeValueAsString(root);
+        } catch (Exception e) {
+            log.warn("构建知识/案例参考快照失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /** 将知识/案例命中拼接为追加到 SystemPrompt 末尾的上下文块（空则返回空串）。 */
+    private String buildKnowledgeCaseContext(KnowledgeCaseRetriever.KnowledgeCaseHits hits) {
+        if (hits.knowledge().isEmpty() && hits.cases().isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        if (!hits.knowledge().isEmpty()) {
+            sb.append("\n\n## 【知识库 · 事实参考】\n")
+              .append("以下为企业知识库检索到的权威事实（产品/价格/合规/术语/方法论），可据实引用，但不得与经验区冲突、不得编造数字。\n");
+            for (var k : hits.knowledge()) {
+                sb.append("- 【").append(k.category()).append("】").append(k.title())
+                  .append("：").append(truncate(k.content(), 200)).append("\n");
+            }
+        }
+        if (!hits.cases().isEmpty()) {
+            sb.append("\n\n## 【案例库 · 实战参考】\n")
+              .append("以下为真实案例，可引用其过程与结果作为佐证，不编造案例细节。\n");
+            for (var c : hits.cases()) {
+                sb.append("- ").append(c.title());
+                if (c.sceneTag() != null && !c.sceneTag().isBlank()) sb.append("（").append(c.sceneTag()).append("）");
+                if (c.keyActions() != null && !c.keyActions().isBlank())
+                    sb.append("｜关键动作：").append(truncate(c.keyActions(), 150));
+                if (c.objection() != null && !c.objection().isBlank())
+                    sb.append("｜核心异议：").append(truncate(c.objection(), 120));
+                if (c.scripts() != null && !c.scripts().isBlank())
+                    sb.append("｜话术：").append(truncate(c.scripts(), 200));
+                if (c.reusablePoints() != null && !c.reusablePoints().isBlank())
+                    sb.append("｜可复用点：").append(truncate(c.reusablePoints(), 150));
+                if (c.failurePoints() != null && !c.failurePoints().isBlank())
+                    sb.append("｜失败点：").append(truncate(c.failurePoints(), 120));
+                if (c.result() != null && !c.result().isBlank())
+                    sb.append("｜结果：").append(c.result());
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
+
+    /** 知识/案例溯源 SSE —— 每条命中一个 source 事件（sourceType=knowledge/case，旧前端忽略）。 */
+    private Flux<ChatChunk> buildKcSourceFlux(KnowledgeCaseRetriever.KnowledgeCaseHits hits) {
+        List<ChatChunk> chunks = new java.util.ArrayList<>();
+        for (var k : hits.knowledge()) {
+            chunks.add(ChatChunk.knowledgeSource(k.id(), k.title(), k.source(), k.similarity()));
+        }
+        for (var c : hits.cases()) {
+            chunks.add(ChatChunk.caseSource(c.id(), c.title(), c.source(), c.similarity()));
+        }
+        return chunks.isEmpty() ? Flux.empty() : Flux.fromIterable(chunks);
+    }
+
+    /** 截断超长文本，保留前 maxChars 字符，超长加 "…" */
+    private String truncate(String text, int maxChars) {
+        if (text == null || text.length() <= maxChars) return text;
+        return text.substring(0, maxChars) + "…";
     }
 }

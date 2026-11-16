@@ -1,0 +1,22 @@
+[
+  {
+    "id": "GOLD-PUBLISH-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/skills/0a000000-0000-0000-0000-000000000033/publish",
+        "body": { "action": "publish" },
+        "expect": { "status": 200, "json": { "data.passed": false } }
+      }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select status from skill where id='0a000000-0000-0000-0000-000000000033'", "expect": "generating" }
+    ]
+  }
+]

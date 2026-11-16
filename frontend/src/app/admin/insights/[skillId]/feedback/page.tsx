@@ -32,20 +32,29 @@ export default function FeedbackReviewPage() {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!skillId) return;
     setLoading(true);
+    setError('');
     const ratingParam = filter !== 'all' ? `&rating=${filter}` : '';
     fetch(`${API_BASE}/admin/insights/${skillId}/feedback-logs?page=${page}&size=20${ratingParam}`, {
       headers: authHeaders(),
-    }).then(res => res.json())
+    }).then(async res => {
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || `加载失败 (${res.status})`);
+      return json;
+    })
       .then(json => {
         setItems(json.data?.content || json.data || []);
         setTotalPages(json.data?.totalPages || 0);
         setTotalElements(json.data?.totalElements || 0);
       })
-      .catch(() => {})
+      .catch((e: unknown) => {
+        setItems([]);
+        setError(e instanceof Error ? e.message : '反馈列表加载失败');
+      })
       .finally(() => setLoading(false));
   }, [skillId, filter, page]);
 
@@ -68,6 +77,13 @@ export default function FeedbackReviewPage() {
       </div>
 
       <h2 className="mb-6 text-xl font-bold text-foreground">📋 反馈审查</h2>
+
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => location.reload()} className="text-xs underline">重试</button>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="rounded-[12px] bg-surface-2 p-8 text-center">

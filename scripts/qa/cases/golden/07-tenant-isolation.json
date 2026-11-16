@@ -1,0 +1,17 @@
+[
+  {
+    "id": "GOLD-TENANT-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "manage",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      { "as": "company_admin", "api": "GET /admin/skills/0b000000-0000-0000-0000-000000000031/materials?page=1&size=5", "expect": { "status": [403, 404] } }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from skill where id='0b000000-0000-0000-0000-000000000031' and company_id='0a000000-0000-0000-0000-000000000001'", "expect": "0" }
+    ]
+  }
+]

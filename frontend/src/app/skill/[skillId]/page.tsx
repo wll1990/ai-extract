@@ -14,6 +14,7 @@ import ShareModal from '@/components/admin/ShareModal';
 import { TraceabilityDrawer } from '@/components/skill/TraceabilityDrawer';
 import SceneTagBar from '@/components/skill/SceneTagBar';
 import { getOrCreateSkillShare, toggleSkillShare, createInternalShare } from '@/lib/api/skill';
+import { getCurrentUser } from '@/lib/api/auth';
 import type { SkillShareInfo } from '@/lib/api/admin';
 import { TrustBadge, StatBadge, DefaultAvatar, PortraitCard, ChatAvatar, MODE_GUIDE, TALK_NAME_CARD } from '@aiextract/shared-ui';
 
@@ -36,8 +37,9 @@ export default function SkillChatPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const skillId = (params.skillId as string) || '';
-  const ownerName = searchParams.get('name') || 'AI分身';
-  const ownerTitle = searchParams.get('title') || '';
+  // URL 参数只作首屏占位，详情返回后以服务端为准，直链打开也能显示真实姓名
+  const [ownerName, setOwnerName] = useState(searchParams.get('name') || 'AI分身');
+  const [ownerTitle, setOwnerTitle] = useState(searchParams.get('title') || '');
   const initial = (ownerName || '?')[0];
 
   const contentRef = useRef<HTMLDivElement>(null);
@@ -71,12 +73,28 @@ export default function SkillChatPage() {
   const [sceneCount, setSceneCount] = useState(0);
   const [skillTags, setSkillTags] = useState<string[]>([]);
   const [traceGrainIds, setTraceGrainIds] = useState('');
+  const [traceAvgSim, setTraceAvgSim] = useState<number | undefined>(undefined);
   const [isOrgSkill, setIsOrgSkill] = useState(false);
+
+  // 知识/案例引用 chip：有管理权限可跳详情，其他用户只弹「检索参考」说明
+  const [canManageKc, setCanManageKc] = useState(false);
+  const [citationInfo, setCitationInfo] = useState<{
+    type: 'knowledge' | 'case'; title: string; source: string; similarity?: string | number;
+  } | null>(null);
+
+  useEffect(() => {
+    getCurrentUser()
+      .then(u => setCanManageKc((u.permissions || []).includes('KNOWLEDGE_MANAGE')))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!skillId) return;
     apiClient(`/skills/${skillId}/detail`).then((d: any) => {
         if (d?.type === 'organization') setIsOrgSkill(true);
+        if (d?.ownerName) setOwnerName(d.ownerName);
+        if (d?.displayName) setOwnerName(d.displayName);
+        if (d?.ownerTitle) setOwnerTitle(d.ownerTitle);
         if (d?.openingMessage) setOpeningMessage(d.openingMessage);
         setAvatarUrl(d?.avatarUrl || null);
         if (d?.stats) setSkillStats(d.stats);
@@ -107,6 +125,8 @@ export default function SkillChatPage() {
           onClose={() => qa.setShowHistory(false)}
           onSwitch={(id) => { qa.switchConversation(id); if (chatMode === 'practice') { setChatMode('qa'); resetPractice(); } }}
           onDelete={qa.handleDeleteConversation}
+          onRename={qa.handleRenameConversation}
+          onExport={qa.handleExportConversation}
           onNew={() => { qa.setCurrentConvId(''); qa.setMessages([]); if (chatMode === 'practice') { setChatMode('qa'); resetPractice(); } }}
         />
       )}
@@ -128,7 +148,7 @@ export default function SkillChatPage() {
           <div className="flex-1" />
 
           {/* 模式 tabs — 三模式始终可见 */}
-          <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5">
+          <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5" data-tour="skill-mode-tabs">
             {[
               { key: 'qa' as ChatMode, icon: '💬', label: '经验请教' },
               { key: 'talk' as ChatMode, icon: '☕', label: '轻松交流' },
@@ -407,9 +427,16 @@ export default function SkillChatPage() {
                 {/* ── 聊天气泡 ── */}
                 {qa.messages.map((msg) => {
                   const isAi = msg.role === 'ai' || msg.role === 'assistant';
-                  const sim = msg.avgSimilarity ? Number(msg.avgSimilarity) : 0;
-                  const matchLevel = sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
-                  const hasTrace = !!(msg.grainTags && msg.grainCount);
+                  const rawSim = msg.avgSimilarity;
+                  const hasSim = rawSim !== undefined && rawSim !== null && rawSim !== ''
+                    && !Number.isNaN(Number(rawSim));
+                  const sim = hasSim ? Number(rawSim) : 0;
+                  // 有颗粒就算可溯源；不能因为 sceneTag 为空而隐藏
+                  const hasTrace = !!(msg.grainCount && (msg.grainIds || msg.grainId));
+                  // 历史消息可能没有相似度：有颗粒时按「关联」展示，不能误判成综合画像
+                  const matchLevel = !hasSim
+                    ? (hasTrace ? 'related' : 'synthetic')
+                    : sim >= 50 ? 'precise' : sim >= 30 ? 'related' : 'synthetic';
                   // 拆分正文和溯源分析区
                   const sepIndex = (msg.content || '').indexOf('━━━━━━');
                   const mainText = sepIndex >= 0 ? (msg.content || '').substring(0, sepIndex).trim() : (msg.content || '');
@@ -471,7 +498,11 @@ export default function SkillChatPage() {
 
                               {/* 溯源按钮 — synthetic 不展示 */}
                               {hasTrace && matchLevel !== 'synthetic' && (
-                                <button onClick={() => setTraceGrainIds(msg.grainIds || msg.grainId || '')}
+                                <button onClick={() => {
+                                  setTraceGrainIds(msg.grainIds || msg.grainId || '');
+                                  setTraceAvgSim(msg.avgSimilarity != null ? Number(msg.avgSimilarity) : undefined);
+                                }}
+                                  data-tour="skill-trace"
                                   className="inline-flex items-center gap-1 text-[11px] text-[#94A3B8] hover:text-[#64748B] transition-colors">
                                   溯源 · {msg.grainCount} 条 →
                                 </button>
@@ -495,6 +526,42 @@ export default function SkillChatPage() {
                                   }`}>👎</button>
                               </div>
                             </div>
+
+                            {/* 知识库/案例库溯源（Phase B，独立于经验溯源） */}
+                            {(msg.knowledgeSources?.length || msg.caseSources?.length) ? (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-1.5 ml-1">
+                                {msg.knowledgeSources?.map((k, i) => (
+                                  <button key={`k-${i}`} type="button"
+                                    onClick={() => {
+                                      if (canManageKc && k.id) {
+                                        router.push(`/admin/knowledge/${k.id}`);
+                                      } else {
+                                        setCitationInfo({ type: 'knowledge', title: k.title,
+                                          source: k.source, similarity: k.similarity });
+                                      }
+                                    }}
+                                    title={`${k.source || ''}${canManageKc && k.id ? ' · 点击查看知识详情' : ''}`}
+                                    className="inline-flex items-center gap-1 rounded-md border border-[#D7E3F8] bg-[#F1F5FB] px-2 py-0.5 text-[11px] text-[#475569] hover:bg-[#E4EDFA]">
+                                    📖 {k.title}
+                                  </button>
+                                ))}
+                                {msg.caseSources?.map((c, i) => (
+                                  <button key={`c-${i}`} type="button"
+                                    onClick={() => {
+                                      if (canManageKc && c.id) {
+                                        router.push(`/admin/cases/${c.id}`);
+                                      } else {
+                                        setCitationInfo({ type: 'case', title: c.title,
+                                          source: c.source, similarity: c.similarity });
+                                      }
+                                    }}
+                                    title={`${c.source || ''}${canManageKc && c.id ? ' · 点击查看案例详情' : ''}`}
+                                    className="inline-flex items-center gap-1 rounded-md border border-[#FDE68A]/60 bg-[#FFFBEB] px-2 py-0.5 text-[11px] text-[#92400E] hover:bg-[#FEF3C7]">
+                                    🎞️ {c.title}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null}
 
                           </div>
                         </div>
@@ -534,8 +601,43 @@ export default function SkillChatPage() {
         </div>
 
         {traceGrainIds && (
-          <TraceabilityDrawer grainIds={traceGrainIds} open={!!traceGrainIds} orgSkillId={isOrgSkill ? skillId : undefined}
-            onClose={() => setTraceGrainIds('')} />
+          <TraceabilityDrawer grainIds={traceGrainIds} avgSimilarity={traceAvgSim}
+            open={!!traceGrainIds} orgSkillId={isOrgSkill ? skillId : undefined}
+            skillId={isOrgSkill ? undefined : skillId}
+            onClose={() => { setTraceGrainIds(''); setTraceAvgSim(undefined); }} />
+        )}
+
+        {/* 引用说明弹层：普通用户不暴露知识/案例正文，只说明「检索参考」 */}
+        {citationInfo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-6"
+            onClick={() => setCitationInfo(null)}>
+            <div className="w-full max-w-[420px] rounded-xl bg-surface p-5 shadow-xl"
+              onClick={e => e.stopPropagation()}>
+              <div className="mb-1 text-xs text-muted-foreground">
+                {citationInfo.type === 'knowledge' ? '📖 知识库' : '🎞️ 案例库'}
+              </div>
+              <h3 className="mb-2 text-base font-semibold text-foreground">{citationInfo.title}</h3>
+              {citationInfo.source && (
+                <p className="mb-1 text-xs text-muted-foreground">来源：{citationInfo.source}</p>
+              )}
+              {citationInfo.similarity != null && citationInfo.similarity !== '' && (
+                <p className="mb-1 text-xs text-muted-foreground">
+                  相似度：{typeof citationInfo.similarity === 'number'
+                    ? citationInfo.similarity.toFixed(2)
+                    : citationInfo.similarity}
+                </p>
+              )}
+              <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+                这是本次回答的检索参考（模型可能未采用）；正文仅对本企业知识管理员开放。
+              </p>
+              <div className="mt-4 flex justify-end">
+                <button onClick={() => setCitationInfo(null)}
+                  className="rounded-full border border-border px-4 py-1.5 text-sm text-foreground hover:bg-primary-light">
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Practice 底部返回按钮 */}

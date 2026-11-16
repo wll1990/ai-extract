@@ -127,11 +127,17 @@ function GrainsTab({ skillId, router }: { skillId: string; router: ReturnType<ty
 function GapsTab({ skillId, router, spaceId }: { skillId: string; router: ReturnType<typeof useRouter>; spaceId: string }) {
   const [gaps, setGaps] = useState<KnowledgeGapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoading(true);
+    setError('');
     getKnowledgeGaps(skillId)
       .then(setGaps)
-      .catch(() => {})
+      .catch((e: unknown) => {
+        setGaps([]);
+        setError(e instanceof Error ? e.message : '知识缺口加载失败');
+      })
       .finally(() => setLoading(false));
   }, [skillId]);
 
@@ -150,6 +156,15 @@ function GapsTab({ skillId, router, spaceId }: { skillId: string; router: Return
 
   if (loading) return <LoadingSpinner />;
 
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-center text-sm text-red-600">
+        {error}
+        <button onClick={() => location.reload()} className="ml-3 underline">重试</button>
+      </div>
+    );
+  }
+
   return (
     <KnowledgeGapPanel gaps={gaps}
       onGapClick={() => router.push(`/admin/grains/new?skillId=${skillId}&spaceId=${spaceId}`)}
@@ -161,17 +176,35 @@ function GapsTab({ skillId, router, spaceId }: { skillId: string; router: Return
 function FeedbackTab({ skillId, router }: { skillId: string; router: ReturnType<typeof useRouter> }) {
   const [items, setItems] = useState<Array<{ id: string; rating: string; query?: string; grainId?: string; grainTitle?: string; createdAt: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
+    setError('');
     fetch(`${API_BASE}/admin/insights/${skillId}/feedback-logs?page=0&size=5`, {
       headers: authHeaders(),
-    }).then(res => res.json())
+    }).then(async res => {
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.message || `加载失败 (${res.status})`);
+      return json;
+    })
       .then(json => setItems(json.data?.content || []))
-      .catch(() => {})
+      .catch((e: unknown) => {
+        setItems([]);
+        setError(e instanceof Error ? e.message : '反馈加载失败');
+      })
       .finally(() => setLoading(false));
   }, [skillId]);
 
   if (loading) return <LoadingSpinner />;
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-sm text-red-600">
+        {error}
+        <button onClick={() => location.reload()} className="ml-3 underline">重试</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

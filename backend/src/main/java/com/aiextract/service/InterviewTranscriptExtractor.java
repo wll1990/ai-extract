@@ -1,5 +1,6 @@
 package com.aiextract.service;
 
+import com.aiextract.common.AiErrorMapper;
 import com.aiextract.config.DomainConfig;
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.model.ExperienceGrain;
@@ -52,6 +53,7 @@ public class InterviewTranscriptExtractor {
     private final MaterialCleaningService cleaningService;
     private final MaterialCleaningScheduler cleaningScheduler;
     private final DomainConfigLoader domainConfigLoader;
+    private final InterviewExtractionStateService extractionStateService;
 
     /**
      * 从访谈转录文本中提取经验颗粒。
@@ -83,10 +85,15 @@ public class InterviewTranscriptExtractor {
             return;
         }
 
+        boolean previouslyFailed =
+                InterviewExtractionStateService.FAILED.equals(session.getExtractionStatus());
+        extractionStateService.markExtracting(sessionId);
+
         List<InterviewMessage> messages = messageRepository
                 .findBySessionIdOrderByCreatedAtAsc(sessionId);
         if (messages.isEmpty()) {
             log.warn("访谈无消息, sessionId={}", sessionId);
+            extractionStateService.markFailed(sessionId, "访谈没有对话内容，无法萃取");
             return;
         }
 
@@ -94,6 +101,7 @@ public class InterviewTranscriptExtractor {
         String domain = session.getDomain();
         if (domain == null || domain.isBlank()) {
             log.error("InterviewSession.domain 为空, sessionId={}", sessionId);
+            extractionStateService.markFailed(sessionId, "访谈缺少领域配置，无法萃取");
             return;
         }
         // 预加载 domain 配置的 role_label，避免在 stream 内每条消息加载一次
@@ -110,22 +118,30 @@ public class InterviewTranscriptExtractor {
         Skill skill = skillRepository.findBySpaceId(session.getSpaceId()).orElse(null);
         if (skill == null) {
             log.warn("空间无Skill, spaceId={}", session.getSpaceId());
+            extractionStateService.markFailed(sessionId, "空间下没有分身，无法写入颗粒");
             return;
         }
 
         // 5. 幂等/重试守卫：同一会话只对应一个访谈素材（forceComplete 可重复触发）
         String virtualUrl = "interview://" + sessionId;
         SkillMaterial material = materialRepository.findByFileUrl(virtualUrl).orElse(null);
+        // 补充访谈后再次完成：finishedAt 晚于上次萃取时间，说明有新内容，必须重跑
+        boolean newContentAfterExtraction = session.getExtractedAt() == null
+                || (session.getFinishedAt() != null
+                && session.getFinishedAt().isAfter(session.getExtractedAt()));
+        // 上次萃取失败（含 0 颗粒）或本次有新内容时，即使素材行已是 analyzed/extracted 也允许覆盖重跑
         boolean retryable = material != null
-                && ("failed".equals(material.getStatus()) || "rejected".equals(material.getStatus()));
+                && ("failed".equals(material.getStatus()) || "rejected".equals(material.getStatus())
+                || previouslyFailed || newContentAfterExtraction);
         if (material != null && !retryable) {
             log.warn("访谈素材已提取过，跳过, sessionId={}, materialId={}, status={}",
                     sessionId, material.getId(), material.getStatus());
+            extractionStateService.markDone(sessionId);
             return;
         }
         if (retryable) {
             // 上次 failed/rejected → 复用原行重试：用最新重拼的转录覆盖后重跑管道
-            material.setParsedContent(transcript);
+            material.setParsedContent(PiiMasker.mask(transcript));
             material.setStatus("uploaded");
             material.setAnalysisNotes(null);
             material.setRetryCount(0);
@@ -138,7 +154,7 @@ public class InterviewTranscriptExtractor {
                     .fileName("【访谈】" + session.getTopic())
                     .fileType("text/plain")
                     .fileUrl(virtualUrl)
-                    .parsedContent(transcript)
+                    .parsedContent(PiiMasker.mask(transcript))
                     // clean() 只读这个字段
                     .uploadedBy(UUID.fromString("00000000-0000-0000-0000-000000000000"))
                     .materialType("interview")
@@ -156,6 +172,7 @@ public class InterviewTranscriptExtractor {
             if (grainCount == 0) {
                 log.warn("访谈素材未产出颗粒（准入拒绝或内容不足）, sessionId={}, materialId={}",
                         sessionId, materialId);
+                extractionStateService.markFailed(sessionId, "访谈内容未产出颗粒（内容不足或重复），可补充后再重试");
                 return;
             }
 
@@ -170,6 +187,7 @@ public class InterviewTranscriptExtractor {
 
             log.info("访谈颗粒提取完成, sessionId={}, grainCount={}",
                     sessionId, grains.size());
+            extractionStateService.markDone(sessionId);
             // 报告已由 processMaterial 内部标脏，2 分钟内合并生成
 
         } catch (Exception e) {
@@ -178,8 +196,9 @@ public class InterviewTranscriptExtractor {
             // 短事务按 DB 真实 id 标 failed（REQUIRES_NEW 跨 Bean 代理生效），
             // 转录不丢，可经 forceComplete 重试
             try {
-                cleaningService.updateMaterialStatus(materialId, "failed",
-                        "访谈转录清洗失败: " + e.getMessage());
+                String reason = "访谈转录清洗失败: " + AiErrorMapper.describe(e);
+                cleaningService.updateMaterialStatus(materialId, "failed", reason);
+                extractionStateService.markFailed(sessionId, reason);
             } catch (Exception statusEx) {
                 log.error("失败状态落库失败, materialId={}", materialId, statusEx);
             }

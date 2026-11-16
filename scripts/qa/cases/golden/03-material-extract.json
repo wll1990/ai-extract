@@ -1,0 +1,29 @@
+[
+  {
+    "id": "GOLD-MAT-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "skillId": "0a000000-0000-0000-0000-000000000031",
+          "title": "QA-${runId}-素材",
+          "text": "去年一家制造业客户在签约前说价格比竞品高百分之二十，预算还没批下来。我没有直接降价，先请对接人约了财务负责人，问清三件事：预算卡在哪个审批节点、谁最终签字、评审会什么时候开。确认后发现不是预算不够，而是财务担心回款周期。于是我把方案拆成两期交付，第一期收百分之四十，第二期验收后收尾款，并给出同行三个案例的回收周期数据。评审会前我又和对接人预演了一遍可能被问到的问题，把法务关心的合同条款提前发给对方。最后客户在两周内完成立项，合同金额没有减少。这个方法的边界是：如果客户确实没有预算，就不要用分期硬推，而是约定下一年度预算窗口。编号${shortId}。"
+        },
+        "expect": { "status": 200 },
+        "save": { "materialId": "data.results[0].materialId" }
+      }
+    ],
+    "assertions": [
+      { "type": "dbPoll", "sql": "select status from skill_material where id=:materialId", "until": ["extracted", "rejected", "parse_failed", "cleaning_failed"], "maxAttempts": 60, "intervalMs": 5000 },
+      { "type": "db", "sql": "select status from skill_material where id=:materialId", "expect": "extracted" },
+      { "type": "db", "sql": "select count(*) from experience_grain where source_material_id=:materialId and status='active'", "op": "gte", "expect": "1" }
+    ]
+  }
+]

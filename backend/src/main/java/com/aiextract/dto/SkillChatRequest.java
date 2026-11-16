@@ -51,4 +51,10 @@ public class SkillChatRequest {
 
     /** Admin 测试对话标记（统计时过滤，可选，默认 false） */
     private Boolean isTest;
+
+    /**
+     * 客户端消息幂等键（可选，建议 UUID）。同一会话内重试/双击复用同一个值，
+     * 后端据此跳过重复落库；已有 AI 回复时直接重放，不再调用模型。
+     */
+    private String clientMessageId;
 }

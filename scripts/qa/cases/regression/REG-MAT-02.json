@@ -1,0 +1,26 @@
+[
+  {
+    "id": "REG-MAT-02",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "M2 空间已有分身时重复建 Skill 导致唯一索引 500",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "spaceId": "0a000000-0000-0000-0000-000000000021",
+          "title": "QA-${runId}-reuse",
+          "text": "客户说价格太高，预算还没有批下来。我先确认预算归属和决策链，再准备对比材料。编号${shortId}。"
+        },
+        "expect": { "status": 200, "json": { "data.results[0].skillCreated": false } }
+      }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from skill where space_id='0a000000-0000-0000-0000-000000000021'", "expect": "1" }
+    ]
+  }
+]

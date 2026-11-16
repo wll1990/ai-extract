@@ -14,6 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +41,7 @@ public class ConversationService {
     private final UserRepository userRepository;
     private final ExperienceGrainRepository grainRepository;
     private final ReportRepository reportRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     /**
      * 校验会话属主。非属主且非超级管理员时抛出 403。
@@ -83,7 +85,9 @@ public class ConversationService {
         assertConversationOwner(conversationId, userId);
         var messages = skillMessageRepository.findByConversationIdOrderByCreatedAtAsc(UUID.fromString(conversationId));
 
-        var grainIds = messages.stream().map(m -> m.getGrainId()).filter(Objects::nonNull).distinct().toList();
+        var grainIds = messages.stream()
+                .flatMap(m -> grainIdsOf(m).stream())
+                .distinct().toList();
         var reportIds = messages.stream().map(m -> m.getReportId()).filter(Objects::nonNull).distinct().toList();
 
         var grainMap = grainIds.isEmpty() ? Collections.<UUID, ExperienceGrain>emptyMap()
@@ -97,18 +101,30 @@ public class ConversationService {
             item.put("role", m.getRole());
             item.put("content", m.getContent());
             item.put("createdAt", m.getCreatedAt() != null ? m.getCreatedAt().toString() : null);
-            item.put("grainId", m.getGrainId() != null ? m.getGrainId().toString() : null);
+            var msgGrainIds = grainIdsOf(m);
+            item.put("grainId", msgGrainIds.isEmpty() ? null : msgGrainIds.get(0).toString());
+            item.put("grainIds", msgGrainIds.stream().map(UUID::toString).toList());
             item.put("reportId", m.getReportId() != null ? m.getReportId().toString() : null);
-            if (m.getGrainId() != null) {
-                var grain = grainMap.get(m.getGrainId());
-                item.put("grainTags", grain != null ? grain.getSceneTag() : null);
-                item.put("avgScore", grain != null && grain.getQualityScore() != null
-                        ? String.valueOf(grain.getQualityScore()) : null);
-            } else {
-                item.put("grainTags", null);
-                item.put("avgScore", null);
+            var tags = msgGrainIds.stream().map(grainMap::get).filter(Objects::nonNull)
+                    .map(ExperienceGrain::getSceneTag).filter(Objects::nonNull)
+                    .distinct().toList();
+            item.put("grainTags", tags.isEmpty() ? null : String.join(",", tags));
+            var topGrain = msgGrainIds.isEmpty() ? null : grainMap.get(msgGrainIds.get(0));
+            item.put("avgScore", topGrain != null && topGrain.getQualityScore() != null
+                    ? String.valueOf(topGrain.getQualityScore()) : null);
+            item.put("avgSimilarity", m.getAvgSimilarity());
+            item.put("grainCount", msgGrainIds.size());
+            // 知识/案例参考（新消息才有；旧消息返回空数组，前端兼容）
+            com.fasterxml.jackson.databind.JsonNode refs = null;
+            if (m.getSourceRefs() != null && !m.getSourceRefs().isBlank()) {
+                try {
+                    refs = objectMapper.readTree(m.getSourceRefs());
+                } catch (Exception ignored) {
+                    // 损坏的参考快照不影响消息读取
+                }
             }
-            item.put("grainCount", m.getGrainId() != null ? 1 : 0);
+            item.put("knowledgeSources", refs == null ? java.util.List.of() : refs.path("knowledge"));
+            item.put("caseSources", refs == null ? java.util.List.of() : refs.path("cases"));
             if (m.getReportId() != null) {
                 var report = reportMap.get(m.getReportId());
                 item.put("reportTitle", report != null ? report.getTitle() : null);
@@ -119,6 +135,49 @@ public class ConversationService {
             }
             return item;
         }).collect(Collectors.toList());
+    }
+
+    /** 历史消息的颗粒列表：优先新字段，旧数据回退单条 grainId */
+    private List<UUID> grainIdsOf(com.aiextract.model.SkillMessage m) {
+        if (m.getGrainIds() != null && !m.getGrainIds().isBlank()) {
+            return Arrays.stream(m.getGrainIds().split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .flatMap(s -> {
+                        try { return java.util.stream.Stream.of(UUID.fromString(s)); }
+                        catch (IllegalArgumentException e) {
+                            log.warn("历史消息包含非法 grainId，已跳过: {}", s);
+                            return java.util.stream.Stream.empty();
+                        }
+                    })
+                    .distinct().toList();
+        }
+        return m.getGrainId() != null ? List.of(m.getGrainId()) : List.of();
+    }
+
+    /**
+     * 重命名会话（属主或超管）。标题去空白后 1-200 字，空标题回退为「未命名对话」。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public Map<String, Object> renameConversation(String conversationId, String title, UUID userId) {
+        assertConversationOwner(conversationId, userId);
+        String clean = title == null ? "" : title.trim();
+        if (clean.isEmpty()) {
+            throw new BusinessException(400, "标题不能为空");
+        }
+        if (clean.length() > 200) {
+            throw new BusinessException(400, "标题不能超过 200 字");
+        }
+        var conv = conversationRepository.findById(UUID.fromString(conversationId))
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SESSION_NOT_FOUND));
+        conv.setTitle(clean);
+        conv.setUpdatedAt(java.time.LocalDateTime.now());
+        conversationRepository.save(conv);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", conv.getId().toString());
+        m.put("title", conv.getTitle());
+        m.put("mode", conv.getMode());
+        m.put("updatedAt", conv.getUpdatedAt() != null ? conv.getUpdatedAt().toString() : null);
+        return m;
     }
 
     /**

@@ -33,6 +33,33 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
      * @return 统计数量
      */
     long countBySkillIdAndSceneTag(@Param("skillId") UUID skillId, @Param("sceneTag") String sceneTag);
+
+    /** 允许 skillId/sceneTag 为空（企业总调度缺口）。 */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT COUNT(g) FROM KnowledgeGap g
+            WHERE ((:skillId IS NULL AND g.skillId IS NULL) OR g.skillId = :skillId)
+              AND ((:sceneTag IS NULL AND g.sceneTag IS NULL) OR g.sceneTag = :sceneTag)
+            """)
+    long countBySkillAndSceneNullable(@Param("skillId") UUID skillId, @Param("sceneTag") String sceneTag);
+
+    /**
+     * 同一 (skillId, spaceId, sceneTag) 的 open 缺口 — 用于 upsert，避免每次 miss 新建一行。
+     *
+     * <p>企业总调度没有 skillId，必须再按 spaceId 限定；否则两家企业的同类问题
+     * 会被合并到同一行，提问原文在另一家企业的缺口列表里出现。</p>
+     */
+    @org.springframework.data.jpa.repository.Query("""
+            SELECT g FROM KnowledgeGap g
+            WHERE g.status = 'open'
+              AND ((:skillId IS NULL AND g.skillId IS NULL) OR g.skillId = :skillId)
+              AND ((:spaceId IS NULL AND g.spaceId IS NULL) OR g.spaceId = :spaceId)
+              AND ((:sceneTag IS NULL AND g.sceneTag IS NULL) OR g.sceneTag = :sceneTag)
+            ORDER BY g.updatedAt DESC
+            """)
+    List<KnowledgeGap> findOpenMatches(@Param("skillId") UUID skillId,
+                                       @Param("spaceId") UUID spaceId,
+                                       @Param("sceneTag") String sceneTag,
+                                       org.springframework.data.domain.Pageable pageable);
     /**
      * 统计（Skill,Id,Status）。
      * @param skillId skillId
@@ -101,5 +128,10 @@ public interface KnowledgeGapRepository extends JpaRepository<KnowledgeGap, UUID
     @Query(value = "SELECT 1 - (k1.embedding <=> k2.embedding) FROM knowledge_gap k1, knowledge_gap k2 WHERE k1.id = :idA AND k2.id = :idB", nativeQuery = true)
     Double cosineDistance(@Param("idA") UUID idA, @Param("idB") UUID idB);
 
+    /** 企业范围内待处理缺口（space 已按企业隔离，调用方只传本企业 spaceId） */
+    List<KnowledgeGap> findBySpaceIdInAndStatusOrderByAttemptedQueryCountDesc(
+            java.util.Collection<UUID> spaceIds, String status, Pageable pageable);
 
+    /** 企业待处理缺口总数（AI 培训需求聚合与效果视图共用） */
+    long countBySpaceIdInAndStatus(java.util.Collection<UUID> spaceIds, String status);
 }

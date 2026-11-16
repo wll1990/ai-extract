@@ -450,6 +450,14 @@ public class GrainRetriever {
             .applicableCondition(rs.getString("applicable_condition"))
             .weight(rs.getDouble("weight"))
             .status(rs.getString("status"))
+            .qualityScore(rs.getObject("quality_score") != null
+                ? rs.getDouble("quality_score") : null)
+            .sourceType(rs.getString("source_type"))
+            .sourceMaterialId(rs.getObject("source_material_id", UUID.class))
+            .sourceInterviewId(rs.getObject("source_interview_id", UUID.class))
+            .helpfulCount(rs.getObject("helpful_count") != null ? rs.getInt("helpful_count") : 0)
+            .unhelpfulCount(rs.getObject("unhelpful_count") != null ? rs.getInt("unhelpful_count") : 0)
+            .difficultyLevel(rs.getString("difficulty_level"))
             .createdAt(rs.getTimestamp("created_at") != null
                 ? rs.getTimestamp("created_at").toLocalDateTime() : null)
             .build();

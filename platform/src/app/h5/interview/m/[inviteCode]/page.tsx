@@ -10,6 +10,7 @@ interface InviteInfo {
   companyId?: string;
   companyName?: string;
   inviterName?: string;
+  registerToken?: string;
 }
 
 function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
@@ -128,7 +129,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
     setAuthLoading(true); setAuthError(null);
     try {
       const r = await fetch('/api/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: bAccount.trim(), password: bPassword, companyId: info?.companyId }) });
+        body: JSON.stringify({ account: bAccount.trim(), password: bPassword, inviteToken: info?.registerToken }) });
       const d = await r.json();
       if (d.code === 200) { localStorage.setItem('token', d.data.token); setAuthed(true); setShowLogin(false); }
       else setAuthError(d.message || '登录失败');
@@ -140,7 +141,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
     setAuthLoading(true); setAuthError(null);
     try {
       const r = await fetch('/api/v1/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: info?.companyId, name: bRegName.trim(), account: bRegAccount.trim(), password: bRegPassword, role: 'employee' }) });
+        body: JSON.stringify({ inviteToken: info?.registerToken, name: bRegName.trim(), account: bRegAccount.trim(), password: bRegPassword, role: 'employee' }) });
       const d = await r.json();
       if (d.code === 200) { localStorage.setItem('token', d.data.token); setAuthed(true); setShowLogin(false); }
       else setAuthError(d.message || '注册失败');

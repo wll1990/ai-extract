@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { apiClient } from '@/lib/api/client';
+import { apiClient, authHeaders} from '@/lib/api/client';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
 
@@ -60,7 +60,7 @@ export default function H5ReportPage() {
   const checkReport = useCallback(async () => {
     try {
       const r = await fetch(`/api/v1/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { ...authHeaders() },
       });
       setLastCheck(new Date());
       setPollCount(c => c + 1);

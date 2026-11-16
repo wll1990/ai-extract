@@ -385,11 +385,9 @@ export default function MobileChatShell({
                     <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
-                      <p className="text-[14px] text-foreground leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: MODE_GUIDE.qa.replace(/\n/g, '<br/>'),
-                        }}
-                      />
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-line">
+                        {MODE_GUIDE.qa}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -400,13 +398,9 @@ export default function MobileChatShell({
                     <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
-                      <p className="text-[14px] text-foreground leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: MODE_GUIDE.talk
-                            .replace('{name}', name)
-                            .replace(/\n/g, '<br/>'),
-                        }}
-                      />
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-line">
+                        {MODE_GUIDE.talk.replace('{name}', name)}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -510,6 +504,23 @@ export default function MobileChatShell({
                         </div>
                       </div>
                     )}
+
+                    {(m.knowledgeSources?.length || m.caseSources?.length) ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {m.knowledgeSources?.map((k, i) => (
+                          <span key={`k-${i}`} title={k.source || ''}
+                            className="inline-flex items-center gap-1 rounded-md border border-[#D7E3F8] bg-[#F1F5FB] px-2 py-0.5 text-[11px] text-[#475569]">
+                            📖 {k.title}
+                          </span>
+                        ))}
+                        {m.caseSources?.map((c, i) => (
+                          <span key={`c-${i}`} title={c.source || ''}
+                            className="inline-flex items-center gap-1 rounded-md border border-[#FDE68A]/60 bg-[#FFFBEB] px-2 py-0.5 text-[11px] text-[#92400E]">
+                            🎞️ {c.title}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               );

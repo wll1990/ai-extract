@@ -23,9 +23,11 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # 手工建表的历史库（无 flyway 历史）从 V50 起基线，只补 V51+；
+    # 空库仍会从 V1 全量执行。已有 flyway 历史的库按 pending 版本继续。
     baseline-on-migrate: true
-    baseline-version: 1
-    validate-on-migrate: false   # 关闭校验，避免 CI 环境 provider 差异告警
+    baseline-version: 50
+    validate-on-migrate: false   # 历史库存在已删除迁移，关闭校验避免启动失败
 
   # ---- Redis（分布式锁 / 缓存） ----
   data:
@@ -39,6 +41,13 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+
+  # ---- FreeMarker（报告 HTML/Word 渲染） ----
+  # 开启 HTML 自动转义：报告内容来自用户素材与 AI，未转义会形成存储型 XSS
+  freemarker:
+    settings:
+      # FreeMarker 2.3.29 没有 auto_escaping 设置项；output_format=HTML 即可开启自动转义
+      '[output_format]': HTML
 
   # ---- AI 大模型（DeepSeek） ----
   ai:
@@ -64,8 +73,17 @@ spring:
         distance-type: cosine_distance
         dimensions: 1024          # DashScope text-embedding-v4 输出维度
 
-  # ---- @Async 线程池（向量化 / AI 调用） ----
+  # ---- @Scheduled 线程池 ----
+  # 默认池只有 1 个线程：评测 Worker 的 tick 可能跑几十秒，会把心跳任务饿死，
+  # 导致租约过期后被别的实例重复领取。至少 2 个线程（tick + heartbeat）。
   task:
+    scheduling:
+      thread-name-prefix: sched-
+      pool:
+        # P3 新增导出 worker 与待复核滞留扫描，4 线程容易互相饿死（长 tick 会挤掉心跳）
+        size: 8
+
+  # ---- @Async 线程池（向量化 / AI 调用） ----
     execution:
       pool:
         core-size: 2
@@ -114,14 +132,14 @@ jwt:
 
 # ---- 合作方对接 ----
 partner:
-  aes-key: ${PARTNER_AES_KEY:v0zCxOESUMnpHFP6t6JtIxgghkUEBpXg2DiTNNLmZ24=}
+  # 必须由环境变量提供 32 字节 Base64 密钥；缺失时启动失败
+  aes-key: ${PARTNER_AES_KEY:}
 
-# ---- 文件存储（local / oss / s3） ----
+# ---- 文件存储（唯一写目标：阿里云 OSS） ----
 storage:
-  type: local
+  # 仅用于读取/迁移存量本地文件，新上传不再写入
   local:
     path: ./data/files
-  # 阿里云 OSS（头像专用）
   oss:
     endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
     bucket: ${OSS_BUCKET:ai-extract}
@@ -132,6 +150,25 @@ storage:
 # 业务配置
 # ============================================================
 app:
+  # ---- 企业模型端点 ----
+  ai:
+    # 本地开发放行 http://localhost（生产保持 false）
+    allow-local-base-url: ${AI_ALLOW_LOCAL_BASE_URL:false}
+    # 本地部署模型白名单（逗号分隔的域名/IP 后缀）：命中才允许 http/私网端点，
+    # 留空则 Ollama / vLLM 等本地厂商一律不可配置，避免借企业 Key 探测内网
+    local-model-hosts: ${AI_LOCAL_MODEL_HOSTS:}
+
+  # ---- 鉴权 ----
+  auth:
+    query-token:
+      mode: enforce          # enforce=仅 SSE 白名单路径接受 ?token=；log=灰度放行并告警
+    rate-limit:
+      # 固定窗口：账号 60 次/15 分钟、IP 300 次/15 分钟。
+      # 原 10/30 会把正常 QA 回归和办公室 NAT 误伤成 429，且账号维度仍能挡住暴力破解。
+      login-per-account: 60
+      login-per-ip: 300
+      register-per-ip: 30
+
   # ---- CORS 跨域白名单 ----
   cors:
     allowed-origins:
@@ -146,7 +183,16 @@ app:
     upload:
       max-file-size: 50MB                  # 单文件最大大小，需与上方 spring.servlet.multipart.max-file-size 保持一致
       max-text-length: 100000              # 解析后文本最大字数，约 3-4 小时访谈或 200 页文档，超过建议拆分为多个文件分批上传
-      supported-formats: docx,pdf,txt,md,pptx,xlsx,csv,mp3,wav,html,ppt,xls,jpg,png,jpeg  # 与 ai-service parse-file 支持格式一致
+      # 只列 ai-service 真正能解析的格式；.doc/.xls/.xlsx/.ppt/.m4a 无对应解析器，不要承诺
+      supported-formats: txt,md,csv,html,htm,pdf,docx,pptx,png,jpg,jpeg,mp3,wav
+
+  # ---- 知识与案例上传限制 ----
+  # 单文件上限由 spring.servlet.multipart 统一控制（50MB）；这里限制解析后的文本量，
+  # 避免一份几百页的产品说明书产出上千次 AI 调用、烧光预算还拖垮任务队列。
+  knowledge:
+    max-text-chars: 500000      # 解析后正文上限：约 500 页文档；超出请按章节拆分
+  case:
+    max-text-chars: 300000      # 案例文档上限：案例信息密度低，超过多半是无关叙述
 
     # ---- 报告生成 ----
     report:
@@ -201,10 +247,82 @@ app:
     guest-create-per-ip-hour: 20  # 单 IP 每小时可创建的游客数（防批量薅额度）
     guest-msg-per-min: 6          # 单游客每分钟可发送的消息数（防脚本刷 AI 成本）
 
-  # ---- 实战对练模式 ----
+  # ---- 实战对练 / 评测中心 ----
   evaluation:
     auto-evaluate-turns: 12       # 自动评估前需完成的对话轮数
     auto-demo-rounds: 10          # ProductDemoModal 自动演示轮数
+    # 单题评分与复核策略（EvaluationJudgeService）
+    pass-threshold: 60            # 及格线（0-100）
+    review-conf-threshold: 0.60   # AI 置信度低于此值必转人工复核
+    review-band: 5                # 总分与及格线差值 ≤ band 视为临界分，必转人工复核
+    # 执行器（EvaluationWorker）
+    worker-enabled: true
+    worker-interval-ms: 5000      # 两轮调度间隔（fixedDelay，上一轮结束才开始计时）
+    worker-initial-delay-ms: 20000
+    worker-runs-per-tick: 5       # 每轮最多推进的批次数
+    worker-items-per-tick: 2      # 每批次每轮最多领取的题数
+    lease-seconds: 900            # 单题租约时长，需覆盖一次答题+评分
+    heartbeat-interval-ms: 60000  # 租约续租间隔
+
+  # ---- 销售复盘（W2） ----
+  sales:
+    review:
+      enabled: true
+      worker-id: ""                 # 空 = hostname-pid
+      worker-interval-ms: 5000
+      worker-initial-delay-ms: 15000
+      batch-size: 2
+      max-attempts: 3
+      lease-minutes: 10
+      max-transcript-chars: 30000
+      chat:
+        max-total-per-session: 40
+        max-per-minute: 10
+    reminder:
+      enabled: true
+      interval-ms: 600000           # 10 分钟扫一次
+      initial-delay-ms: 60000
+      batch-size: 200
+
+  # ---- 新人培训评分（T5） ----
+  training:
+    grading:
+      pass-threshold: 60            # 任务未配置 pass_criteria 时的默认及格线
+      review-conf-threshold: 0.60   # AI 置信度低于此值必转人工复核
+      review-band: 5                # 总分与及格线差值 ≤ band 视为临界分，必转人工复核
+      max-attempts: 3               # 单次尝试最多评分次数（含首次），防死循环重试
+      worker-enabled: true
+      worker-interval-ms: 5000
+      worker-initial-delay-ms: 20000
+      batch-size: 5                 # 每轮最多领取的尝试数
+      lease-seconds: 900            # 租约时长，需覆盖一次考试多题判分
+      heartbeat-interval-ms: 60000
+      heartbeat-initial-delay-ms: 30000
+    practice:
+      max-messages-per-attempt: 40  # 单次陪练最多发言条数，防无限触发 LLM
+      max-hints-per-attempt: 10     # 单次陪练最多提示次数（Redis 计数）
+    deadline:
+      enabled: true
+      interval-ms: 60000            # 扫描间隔（fixedDelay）
+      initial-delay-ms: 30000
+      batch-size: 50                # 每类（考试/陪练）每轮最多处理条数
+    remediation:
+      max-rounds: 10                # 同一任务最多补训轮次（含首轮之后的追加）
+    pending-review:
+      enabled: true
+      threshold-hours: 24           # 待复核/评分失败超过该时长提醒导师
+      interval-ms: 300000           # 5 分钟扫一次
+      initial-delay-ms: 60000
+      batch-size: 50
+    export:
+      enabled: true
+      worker-interval-ms: 15000
+      worker-initial-delay-ms: 15000
+      batch-size: 3
+      lease-seconds: 900
+      max-attempts: 3               # 领取超过该次数仍失败则直接置 failed，停止重试
+      max-rows: 100000
+      presign-seconds: 900          # OSS 下载地址有效期（PII，不要用头像的 365 天）
 
   # ---- RAG 检索配置 ----
   rag:
@@ -212,7 +330,17 @@ app:
       enabled: true               # 多轮对话指代消解
     min-similarity: 0.25          # 颗粒最低相似度阈值，低于此值不进 LLM（触发边界规则）
     top-k: 5                      # 单次检索最大返回颗粒数
-    context-max-tokens: 8192      # LLM 上下文窗口大小（token 预检用）
+    kc-top-k: 3                   # 知识/案例追加检索每类最大返回数（Phase B）
+    kc-knowledge-min-similarity: 0.35  # 知识命中最低相似度阈值（事实型，分布尖锐）
+    kc-case-min-similarity: 0.50       # 案例命中最低相似度阈值（叙事型，挡掉「泛销售」基底噪音）
+    # 上下文预检：预算 = (context-max-tokens - output-reserve-tokens) × safety-ratio
+    # DeepSeek 真实窗口 64K；多厂商接入后由 ProviderCatalog 按模型覆盖
+    context-max-tokens: 65536
+    output-reserve-tokens: 8192   # 为模型输出预留
+    safety-ratio: 0.9             # 估算误差与协议开销余量
+    min-keep-messages: 6          # 裁剪后至少保留的最近消息数（含当前问题）
+    chars-per-token: 1.5          # 初始系数；运行期用真实 Usage 校准
+    max-system-prompt-chars: 24000 # 系统提示词硬上限，超出保留头尾
     hybrid-search:
       enabled: true               # Hybrid Search (Dense + BM25 → RRF)混合检索
 

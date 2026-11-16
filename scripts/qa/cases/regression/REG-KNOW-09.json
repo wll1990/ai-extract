@@ -1,0 +1,26 @@
+[
+  {
+    "id": "REG-KNOW-09",
+    "set": "regression",
+    "priority": "P2",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "知识库没有检索调试入口，管理员无法确认某条知识是否能被召回",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/retrieval-test",
+        "body": { "query": "报价", "topK": 3 },
+        "expect": {
+          "status": 200,
+          "json": {
+            "data.query": "报价",
+            "data.topK": 3
+          }
+        }
+      }
+    ],
+    "assertions": []
+  }
+]

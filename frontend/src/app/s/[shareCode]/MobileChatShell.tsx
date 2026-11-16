@@ -375,11 +375,9 @@ export default function MobileChatShell({
                     <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
-                      <p className="text-[14px] text-foreground leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: MODE_GUIDE.qa.replace(/\n/g, '<br/>'),
-                        }}
-                      />
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-line">
+                        {MODE_GUIDE.qa}
+                      </p>
                     </div>
                   </div>
                 )}
@@ -390,13 +388,9 @@ export default function MobileChatShell({
                     <ChatAvatar role="ai" src={info.avatarUrl || undefined} size={28} />
                     <div className="max-w-[82%] rounded-2xl rounded-tl-sm bg-[#f8f7ff] border border-[#e8e6ff] px-4 py-3">
                       <p className="text-[11px] text-muted-foreground mb-1">{name}</p>
-                      <p className="text-[14px] text-foreground leading-relaxed"
-                        dangerouslySetInnerHTML={{
-                          __html: MODE_GUIDE.talk
-                            .replace('{name}', name)
-                            .replace(/\n/g, '<br/>'),
-                        }}
-                      />
+                      <p className="text-[14px] text-foreground leading-relaxed whitespace-pre-line">
+                        {MODE_GUIDE.talk.replace('{name}', name)}
+                      </p>
                     </div>
                   </div>
                 )}

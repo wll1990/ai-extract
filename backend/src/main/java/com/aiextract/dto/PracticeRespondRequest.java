@@ -65,4 +65,12 @@ public class PracticeRespondRequest {
      * 场景标签（用于加载对练颗粒做溯源展示，可选）
      */
     private String sceneTag;
+
+    /**
+     * 是否培训陪练（服务端内部标记）。
+     *
+     * <p>培训陪练复用分身对练链路，但**不能污染分身的互动统计**：
+     * 置 true 后写入的 conversation_stats 会带 is_test=true，被统计查询排除。</p>
+     */
+    private Boolean trainingMode;
 }

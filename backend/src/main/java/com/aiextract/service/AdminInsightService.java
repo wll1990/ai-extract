@@ -1,10 +1,13 @@
 package com.aiextract.service;
 
+import com.aiextract.common.PageResponse;
 import com.aiextract.config.CompanyScopeService;
+import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.Skill;
 import com.aiextract.repository.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.Executor;
@@ -27,8 +30,10 @@ public class AdminInsightService {
     private final KnowledgeGapRepository knowledgeGapRepository;
     private final ExperienceGrainRepository grainRepository;
     private final SkillRepository skillRepository;
+    private final GrainRetrieveLogRepository grainRetrieveLogRepository;
     private final Executor taskExecutor;
     private final CompanyScopeService companyScopeService;
+    private final AnswerCorrectionRepository correctionRepository;
 
     public AdminInsightService(
             ConversationStatsRepository conversationStatsRepository,
@@ -36,15 +41,36 @@ public class AdminInsightService {
             KnowledgeGapRepository knowledgeGapRepository,
             ExperienceGrainRepository grainRepository,
             SkillRepository skillRepository,
+            GrainRetrieveLogRepository grainRetrieveLogRepository,
             @Qualifier("embeddingExecutor") Executor taskExecutor,
-            CompanyScopeService companyScopeService) {
+            CompanyScopeService companyScopeService,
+            AnswerCorrectionRepository correctionRepository) {
         this.conversationStatsRepository = conversationStatsRepository;
         this.feedbackLogRepository = feedbackLogRepository;
         this.knowledgeGapRepository = knowledgeGapRepository;
         this.grainRepository = grainRepository;
         this.skillRepository = skillRepository;
+        this.grainRetrieveLogRepository = grainRetrieveLogRepository;
         this.taskExecutor = taskExecutor;
         this.companyScopeService = companyScopeService;
+        this.correctionRepository = correctionRepository;
+    }
+
+    /**
+     * 保存回答矫正并批量衰减颗粒权重。
+     *
+     * <p>放在 Service 的事务里：要么矫正记录与全部权重一起成功，要么都不写。</p>
+     */
+    @org.springframework.transaction.annotation.Transactional(rollbackFor = Exception.class)
+    public int applyCorrection(com.aiextract.model.AnswerCorrection correction,
+                               List<ExperienceGrain> grains) {
+        correctionRepository.save(correction);
+        for (ExperienceGrain grain : grains) {
+            double oldWeight = grain.getWeight() != null ? grain.getWeight() : 1.0;
+            grain.setWeight(Math.max(0.1, oldWeight * 0.7));
+            grainRepository.save(grain);
+        }
+        return grains.size();
     }
 
     /** 单分身概览（同步，复用现有查询） */
@@ -97,7 +123,7 @@ public class AdminInsightService {
         // ① 已发布分身列表（1 次 SQL），按企业过滤
         List<Skill> skills;
         List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-        if (!companyScopeService.isSuperAdmin()) {
+        if (!companyScopeService.isUnrestrictedDataScope()) {
             // company_admin — 只取本企业已发布分身
             skills = companySkillIds.isEmpty() ? List.of() : skillRepository.findByIdInAndStatus(companySkillIds, "published");
         } else {
@@ -155,15 +181,19 @@ public class AdminInsightService {
 
         // ④ 全局汇总（从批量结果中聚合，不再查 DB）
         long totalConversations = 0, totalUsers = 0, totalHigh = 0, totalRef = 0, totalNone = 0;
+        long totalKcKnowledge = 0, totalKcCase = 0;
         for (Object[] ss : statsBySkill.values()) {
             totalConversations += ss[1] != null ? (Long) ss[1] : 0;
             totalUsers += ss[2] != null ? (Long) ss[2] : 0;
             totalHigh += ss[3] != null ? (Long) ss[3] : 0;
             totalRef += ss[4] != null ? (Long) ss[4] : 0;
             totalNone += ss[5] != null ? (Long) ss[5] : 0;
+            totalKcKnowledge += ss.length > 7 && ss[7] != null ? (Long) ss[7] : 0;
+            totalKcCase += ss.length > 8 && ss[8] != null ? (Long) ss[8] : 0;
         }
-        long totalRag = totalHigh + totalRef + totalNone;
-        double hitRate = totalRag > 0 ? Math.round((double) (totalHigh + totalRef) / totalRag * 1000.0) / 10.0 : 0;
+        long totalHit = totalHigh + totalRef + totalKcKnowledge + totalKcCase;
+        long totalRag = totalHit + totalNone;
+        double hitRate = totalRag > 0 ? Math.round((double) totalHit / totalRag * 1000.0) / 10.0 : 0;
 
         // 全局满意率（也可以从 batch 结果汇总，这里走专用查询更快）
         long totalUp = 0, totalFeedback = 0;
@@ -191,11 +221,14 @@ public class AdminInsightService {
             long sHigh = ss != null && ss[3] != null ? (Long) ss[3] : 0;
             long sRef = ss != null && ss[4] != null ? (Long) ss[4] : 0;
             long sNone = ss != null && ss[5] != null ? (Long) ss[5] : 0;
-            long sRagTotal = sHigh + sRef + sNone;
+            long sKcKnowledge = ss != null && ss.length > 7 && ss[7] != null ? (Long) ss[7] : 0;
+            long sKcCase = ss != null && ss.length > 8 && ss[8] != null ? (Long) ss[8] : 0;
+            long sHit = sHigh + sRef + sKcKnowledge + sKcCase;
+            long sRagTotal = sHit + sNone;
             String lastActive = ss != null && ss[6] != null ? ss[6].toString().substring(0, 16) : null;
             row.put("conversations", convs);
             row.put("users", ss != null && ss[2] != null ? (Long) ss[2] : 0);
-            row.put("hitRate", sRagTotal > 0 ? Math.round((double) (sHigh + sRef) / sRagTotal * 100) : 0);
+            row.put("hitRate", sRagTotal > 0 ? Math.round((double) sHit / sRagTotal * 100) : 0);
             row.put("lastActive", lastActive);
 
             Object[] sSat = satBySkill.get(skill.getId());
@@ -247,6 +280,89 @@ public class AdminInsightService {
         result.put("skills", topSkillRows);
 
         return result;
+    }
+
+    /** 场景提问 TOP5 — 检索日志按场景标签聚合 */
+    public List<Map<String, Object>> getSceneTop(UUID skillId) {
+        List<Object[]> rows = grainRetrieveLogRepository.countBySkillIdGroupBySceneTag(skillId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows.stream().limit(5).toList()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("scene", row[0] != null ? row[0] : "未知");
+            m.put("count", row[1]);
+            result.add(m);
+        }
+        return result;
+    }
+
+    /** RAG 匹配分布 — 高匹配 / 参考 / 无匹配 合计 */
+    public Map<String, Object> getRagDistribution(UUID skillId) {
+        List<Object[]> rows = conversationStatsRepository.ragDistribution(skillId);
+        long high = 0, ref = 0, none = 0, kcKnowledge = 0, kcCase = 0;
+        if (!rows.isEmpty() && rows.get(0)[0] != null) {
+            high = (Long) rows.get(0)[0];
+            ref = rows.get(0)[1] != null ? (Long) rows.get(0)[1] : 0;
+            none = rows.get(0)[2] != null ? (Long) rows.get(0)[2] : 0;
+            kcKnowledge = rows.get(0).length > 3 && rows.get(0)[3] != null ? (Long) rows.get(0)[3] : 0;
+            kcCase = rows.get(0).length > 4 && rows.get(0)[4] != null ? (Long) rows.get(0)[4] : 0;
+        }
+        long total = high + ref + kcKnowledge + kcCase + none;
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("high", high);
+        result.put("ref", ref);
+        result.put("kcKnowledge", kcKnowledge);
+        result.put("kcCase", kcCase);
+        result.put("none", none);
+        result.put("total", total);
+        result.put("highPct", total > 0 ? Math.round((double) high / total * 100) : 0);
+        result.put("refPct", total > 0 ? Math.round((double) ref / total * 100) : 0);
+        result.put("kcKnowledgePct", total > 0 ? Math.round((double) kcKnowledge / total * 100) : 0);
+        result.put("kcCasePct", total > 0 ? Math.round((double) kcCase / total * 100) : 0);
+        result.put("nonePct", total > 0 ? Math.round((double) none / total * 100) : 0);
+        return result;
+    }
+
+    /** 👍/👎 颗粒排行榜 */
+    public List<Map<String, Object>> getGrainsTop(UUID skillId, String sort) {
+        Skill skill = skillRepository.findById(skillId).orElseThrow(() ->
+                new com.aiextract.exception.BusinessException(404, "分身不存在"));
+        PageRequest top = PageRequest.of(0, 10);
+        List<ExperienceGrain> grains = "best".equals(sort)
+                ? grainRepository.findTopBySpaceIdOrderByHelpfulCountDesc(skill.getSpaceId(), top)
+                : grainRepository.findTopBySpaceIdOrderByUnhelpfulCountDesc(skill.getSpaceId(), top);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ExperienceGrain g : grains) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", g.getId().toString());
+            m.put("description", g.getSceneDescription() != null ? g.getSceneDescription()
+                    : g.getSceneTag() != null ? g.getSceneTag() : "未命名");
+            m.put("sceneTag", g.getSceneTag());
+            m.put("helpful", g.getHelpfulCount());
+            m.put("unhelpful", g.getUnhelpfulCount());
+            m.put("qualityScore", g.getQualityScore());
+            result.add(m);
+        }
+        return result;
+    }
+
+    /** 知识缺口列表 — 按次数降序分页 */
+    public Map<String, Object> getKnowledgeGaps(UUID skillId, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size);
+        var gapPage = knowledgeGapRepository
+                .findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(skillId, "open", pageable);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (var g : gapPage.getContent()) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", g.getId().toString());
+            m.put("query", g.getQuery());
+            m.put("sceneTag", g.getSceneTag());
+            m.put("count", g.getAttemptedQueryCount());
+            m.put("lastSeen", g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : null);
+            m.put("status", g.getStatus());
+            m.put("note", g.getNote());
+            result.add(m);
+        }
+        return PageResponse.of(result, gapPage, page, size);
     }
 
     private Map<String, Object> emptyOverview() {

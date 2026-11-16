@@ -1,0 +1,102 @@
+[
+  {
+    "id": "GOLD-EVAL-02",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets",
+        "body": { "name": "QA-${runId}-运行题集", "purpose": "acceptance", "description": "评测运行→复核→定稿" },
+        "expect": { "status": 200 },
+        "save": { "datasetId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/items",
+        "body": {
+          "question": "客户在签约前突然要求账期从 30 天延长到 90 天，且不接受预付，如何处理？",
+          "expectedPoints": "[\"先确认对方财务流程与真实诉求\",\"用分阶段交付或银行保理替代纯账期\"]",
+          "sceneTag": "付款条件",
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/submit",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/review",
+        "body": { "action": "approve" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/publish",
+        "expect": { "status": 200, "json": { "data.status": "published" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/runs",
+        "body": {
+          "datasetId": "${datasetId}",
+          "datasetVersion": 1,
+          "skillId": "0a000000-0000-0000-0000-000000000032",
+          "idempotencyKey": "QA-${runId}-run"
+        },
+        "expect": { "status": 200 },
+        "save": { "runId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/evaluations/runs/${runId}/items?page=1&size=10",
+        "await": {
+          "sql": "select case when status in ('completed','partial_failed') then 'done' else status end from public.evaluation_run where id = :runId",
+          "until": ["done"],
+          "maxAttempts": 36,
+          "intervalMs": 5000
+        },
+        "expect": { "status": 200 },
+        "save": { "runItemId": "data.content[0].id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/results/${runItemId}/reviews",
+        "body": { "action": "confirm", "reason": "QA 自动化复核确认" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/runs/${runId}/finalize",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/evaluations/runs/${runId}",
+        "expect": { "status": 200, "json": { "data.reviewStatus": "finalized" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "dbPoll",
+        "sql": "select case when status in ('completed','partial_failed') then 'done' else status end from public.evaluation_run where id = :runId",
+        "until": ["done"],
+        "maxAttempts": 36,
+        "intervalMs": 5000
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.evaluation_run_item where run_id = :runId and status = 'completed'",
+        "op": "gte",
+        "expect": "1"
+      }
+    ]
+  }
+]

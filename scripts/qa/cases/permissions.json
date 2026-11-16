@@ -1,0 +1,551 @@
+[
+  {
+    "id": "PERM-AUTH-01",
+    "role": "anonymous",
+    "method": "GET",
+    "path": "/auth/me",
+    "expect": [
+      401
+    ],
+    "note": "无 token 必须 401，前端据此跳登录"
+  },
+  {
+    "id": "PERM-AUTH-02",
+    "role": "anonymous",
+    "method": "GET",
+    "path": "/config/nav",
+    "expect": [
+      401
+    ]
+  },
+  {
+    "id": "PERM-AUTH-03",
+    "role": "anonymous",
+    "method": "GET",
+    "path": "/admin/skills?page=1&size=5",
+    "expect": [
+      401
+    ]
+  },
+  {
+    "id": "PERM-CORE-01",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/auth/me",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-02",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/config/nav",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-03",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/skills/list?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-04",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/admin/skills/picker",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-05",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/admin/users?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-06",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/admin/companies",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-07",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/admin/partners",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-CORE-08",
+    "role": "super_admin",
+    "method": "GET",
+    "path": "/im/channels",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-01",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/auth/me",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-02",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/config/nav",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-03",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/skills/picker",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-04",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/users?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-05",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/grains?skillId=0a000000-0000-0000-0000-000000000031&page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-06",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/knowledge?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-07",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/cases?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-08",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/evaluations/datasets?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-09",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/training/plans?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-10",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/sales/reviews?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-11",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/sales/leads?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-12",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/conversations",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-13",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/token-usage/summary",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-14",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/company/ai-model",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-15",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/companies",
+    "expect": [
+      403
+    ],
+    "note": "平台域仅超管"
+  },
+  {
+    "id": "PERM-ADMIN-16",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/admin/partners",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-ADMIN-17",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/im/channels",
+    "expect": [
+      200
+    ],
+    "note": "企业管理员可管理本企业 IM 渠道（IM-01）"
+  },
+  {
+    "id": "PERM-ADMIN-18",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/spaces?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-01",
+    "role": "employee",
+    "method": "GET",
+    "path": "/auth/me",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-02",
+    "role": "employee",
+    "method": "GET",
+    "path": "/config/nav",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-03",
+    "role": "employee",
+    "method": "GET",
+    "path": "/skills/list?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-04",
+    "role": "employee",
+    "method": "GET",
+    "path": "/interviews/active",
+    "expect": [
+      200
+    ],
+    "note": "员工有 INTERVIEW_USE"
+  },
+  {
+    "id": "PERM-EMP-05",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/skills/0a000000-0000-0000-0000-000000000033/materials?page=1&size=5",
+    "expect": [
+      200
+    ],
+    "note": "员工可上传自己的素材"
+  },
+  {
+    "id": "PERM-EMP-06",
+    "role": "employee",
+    "method": "GET",
+    "path": "/sales/reviews?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-07",
+    "role": "employee",
+    "method": "GET",
+    "path": "/sales/leads?page=1&size=5",
+    "expect": [
+      200
+    ]
+  },
+  {
+    "id": "PERM-EMP-08",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/skills?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-09",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/users?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-10",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/grains?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-11",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/knowledge?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-12",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/evaluations/datasets?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-13",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/training/plans?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-14",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/token-usage/summary",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-15",
+    "role": "employee",
+    "method": "GET",
+    "path": "/admin/company/ai-model",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-EMP-16",
+    "role": "employee",
+    "method": "GET",
+    "path": "/spaces?page=1&size=5",
+    "expect": [
+      200
+    ],
+    "note": "「我的空间」入口需要 SPACE_OWN，员工必须能列自己的空间；只返回本人空间（见 REG-PERM-04）"
+  },
+  {
+    "id": "PERM-EMP-17",
+    "role": "employee",
+    "method": "GET",
+    "path": "/me/training/assignments?page=1&size=5",
+    "expect": [
+      200
+    ],
+    "note": "员工是学员，必须有 TRAINING_LEARN"
+  },
+  {
+    "id": "PERM-C-01",
+    "role": "c_guest",
+    "method": "GET",
+    "path": "/skills/list?page=1&size=5",
+    "expect": [
+      200
+    ],
+    "note": "C 端可浏览公开目录，但只能看到已发布分身"
+  },
+  {
+    "id": "PERM-C-02",
+    "role": "c_guest",
+    "method": "GET",
+    "path": "/interviews/active",
+    "expect": [
+      403
+    ],
+    "note": "游客无 INTERVIEW_USE"
+  },
+  {
+    "id": "PERM-C-03",
+    "role": "c_user",
+    "method": "GET",
+    "path": "/interviews/active",
+    "expect": [
+      200
+    ],
+    "note": "注册 C 用户可发起访谈"
+  },
+  {
+    "id": "PERM-C-04",
+    "role": "c_user",
+    "method": "GET",
+    "path": "/admin/evaluations/datasets?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-C-05",
+    "role": "c_partner",
+    "method": "GET",
+    "path": "/admin/partners?page=1&size=5",
+    "expect": [
+      403
+    ]
+  },
+  {
+    "id": "PERM-C-06",
+    "role": "c_user",
+    "method": "GET",
+    "path": "/skills/0a000000-0000-0000-0000-000000000031/detail",
+    "expect": [
+      403
+    ],
+    "note": "未发布分身：C 端非属主必须拒绝"
+  },
+  {
+    "id": "PERM-C-07",
+    "role": "c_user",
+    "method": "GET",
+    "path": "/skills/0a000000-0000-0000-0000-000000000032/detail",
+    "expect": [
+      200
+    ],
+    "note": "已发布分身：公开可读"
+  },
+  {
+    "id": "PERM-C-08",
+    "role": "c_user",
+    "method": "GET",
+    "path": "/me/notifications/unread-count",
+    "expect": [
+      200
+    ],
+    "note": "NT-01：C 端用户无企业归属也能读站内信"
+  },
+  {
+    "id": "PERM-C-09",
+    "role": "c_guest",
+    "method": "GET",
+    "path": "/me/notifications/unread-count",
+    "expect": [
+      200
+    ],
+    "note": "游客账号也能读自己的收件箱（无企业归属不影响）"
+  },
+  {
+    "id": "PERM-AUTH-08",
+    "role": "anonymous",
+    "method": "GET",
+    "path": "/sales/insights/common-issues?days=90",
+    "expect": [
+      401
+    ],
+    "note": "团队共性问题不允许匿名访问"
+  },
+  {
+    "id": "PERM-ADMIN-19",
+    "role": "company_admin",
+    "method": "GET",
+    "path": "/sales/insights/common-issues?days=90",
+    "expect": [
+      200
+    ],
+    "note": "企业管理员可看团队共性问题"
+  },
+  {
+    "id": "PERM-EMP-18",
+    "role": "employee",
+    "method": "GET",
+    "path": "/sales/insights/common-issues?days=90",
+    "expect": [
+      403
+    ],
+    "note": "员工只能看自己的复盘，不能看团队聚合"
+  },
+  {
+    "id": "PERM-EMP-19",
+    "role": "employee",
+    "method": "POST",
+    "path": "/sales/insights/common-issues/price/knowledge?days=90",
+    "expect": [
+      403
+    ],
+    "note": "员工不能把共性问题生成培训主题（未写库前即拦截）"
+  }
+]

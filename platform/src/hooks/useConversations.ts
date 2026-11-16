@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react';
 import {
   listConversations, getConversationMessages, deleteConversation as deleteConvApi,
+  renameConversation as renameConvApi,
   type ConversationItem, type ConversationMessage,
 } from '@/lib/api/skill';
 
@@ -45,8 +46,17 @@ export function useConversations(skillId: string) {
     }
   }, [currentConvId]);
 
+  const renameConversation = useCallback(async (id: string, title: string) => {
+    try {
+      const updated = await renameConvApi(id, title);
+      setConversations(prev => prev.map(c => (c.id === id ? { ...c, title: updated.title } : c)));
+    } catch {
+      // silent — rename is non-critical
+    }
+  }, []);
+
   return {
     conversations, currentConvId, setCurrentConvId,
-    loadList, loadMessages, switchConversation, startNew, deleteConversation,
+    loadList, loadMessages, switchConversation, startNew, deleteConversation, renameConversation,
   };
 }

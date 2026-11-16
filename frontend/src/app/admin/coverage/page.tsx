@@ -19,11 +19,13 @@ const COVERAGE_CONFIG: Record<string, { bar: string; bg: string; label: string }
 export default function CoveragePage() {
   const [scenes, setScenes] = useState<SceneItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     getSceneCoverage()
       .then(d => { if (d.scenes) setScenes(d.scenes); })
-      .catch(() => {}).finally(() => setLoading(false));
+      .catch((e: unknown) => setError(e instanceof Error && e.message ? e.message : '场景数据加载失败'))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -36,6 +38,12 @@ export default function CoveragePage() {
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
       <div className="mx-auto max-w-[960px]">
+        {error && (
+          <div className="mb-4 flex items-center justify-between rounded-xl border border-danger bg-danger-bg px-4 py-3 text-sm text-danger">
+            <span>{error}</span>
+            <button onClick={() => window.location.reload()} className="text-xs underline">重试</button>
+          </div>
+        )}
         <h1 className="text-2xl font-bold text-foreground mb-1">场景地图</h1>
         <p className="text-sm text-muted-foreground mb-6">
           {scenes.length} 个场景 · {sufficient} 充足 · {moderate} 一般 · {empty} 空白
@@ -78,6 +86,12 @@ export default function CoveragePage() {
                     <span className={`text-xs rounded-full px-2 py-0.5 flex-shrink-0 ${cfg.bg}`}>
                       {cfg.label}
                     </span>
+                    {scene.coverage === 'empty' && (
+                      <a href={`/admin/grains/new?scene=${encodeURIComponent(scene.name)}`}
+                        className="flex-shrink-0 text-xs text-primary hover:underline">
+                        去补充颗粒
+                      </a>
+                    )}
                   </div>
                 );
               })}

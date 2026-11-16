@@ -124,6 +124,9 @@ public class StructureAnalyzer {
     private int countCounterpartyChars(String text, String counterpartyLabel) {
         int count = 0;
         String[] lines = text.split("\n");
+        if (counterpartyLabel == null || counterpartyLabel.isBlank()) {
+            return 0;
+        }
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.startsWith(counterpartyLabel)) {
@@ -137,10 +140,12 @@ public class StructureAnalyzer {
      * 匹配当前行的角色。优先级：配置的 counterpartyLabel → 配置的 roleLabel → "我" → 正则回退。
      */
     private String matchRole(String trimmed, String counterpartyLabel, String roleLabel) {
-        // 对方角色
-        if (trimmed.startsWith(counterpartyLabel)) return "counterparty";
+        // 对方角色（领域配置可能没有角色标签，不能直接 startsWith(null)）
+        if (counterpartyLabel != null && !counterpartyLabel.isBlank()
+                && trimmed.startsWith(counterpartyLabel)) return "counterparty";
         // 专家角色
-        if (trimmed.startsWith(roleLabel) || trimmed.startsWith("我")) {
+        if ((roleLabel != null && !roleLabel.isBlank() && trimmed.startsWith(roleLabel))
+                || trimmed.startsWith("我")) {
             return "expert";
         }
         // 正则回退：匹配 "xxx：" 格式的任意角色名

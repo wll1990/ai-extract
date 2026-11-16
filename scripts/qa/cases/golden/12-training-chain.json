@@ -1,0 +1,104 @@
+[
+  {
+    "id": "GOLD-TRAIN-02",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin", "employee"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-培训全链路", "description": "计划→批次→学习→认证" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "reading",
+          "phaseNo": 1,
+          "phaseName": "认知",
+          "title": "QA-${runId}-必读任务",
+          "resourceType": "knowledge",
+          "resourceId": "0a000000-0000-0000-0000-000000000042",
+          "isRequired": true,
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/cohorts",
+        "body": { "planId": "${planId}", "planVersion": 1, "name": "QA-${runId}-批次" },
+        "expect": { "status": 200 },
+        "save": { "cohortId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/batch",
+        "body": { "cohortId": "${cohortId}", "learnerIds": ["0a000000-0000-0000-0000-000000000012"] },
+        "expect": { "status": 200, "json": { "data.assigned": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments?page=1&size=20",
+        "expect": { "status": 200 },
+        "save": { "assignmentId": "data.content[0].id" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments/${assignmentId}/tasks",
+        "expect": { "status": 200 },
+        "save": { "recordId": "data.tasks[0].recordId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/start",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/acknowledge",
+        "expect": { "status": 200, "json": { "data.status": "passed" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/cohorts/${cohortId}/progress",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/${assignmentId}/certify",
+        "body": { "note": "QA 自动化认证" },
+        "expect": { "status": 200, "json": { "data.status": "certified" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/${assignmentId}/certification/revoke",
+        "body": { "reason": "QA 自动化撤销认证验证" },
+        "expect": { "status": 200, "json": { "data.status": "pending_certification" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.training_assignment where id=:assignmentId",
+        "expect": "pending_certification"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.training_certification where assignment_id=:assignmentId and status='confirmed'",
+        "expect": "0"
+      }
+    ]
+  }
+]

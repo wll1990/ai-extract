@@ -24,5 +24,9 @@ public class ExpertSkillListResponse {
     private Integer grainCount;
     private Integer documentCount;
     private String status;
+    /** 自动分析失败重试次数（上限 3） */
+    private Integer retryCount;
+    /** 最近一次失败原因 */
+    private String failureReason;
     private String createdAt;
 }

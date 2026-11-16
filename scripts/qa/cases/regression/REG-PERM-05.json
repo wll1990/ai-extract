@@ -1,0 +1,20 @@
+[
+  {
+    "id": "REG-PERM-05",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "production",
+    "roles": ["c_user"],
+    "llm": false,
+    "sourceBug": "A11 C 端可对任意已发布分身调 status 接口",
+    "steps": [
+      {
+        "as": "c_user",
+        "api": "PUT /skills/0a000000-0000-0000-0000-000000000032/status",
+        "body": { "status": "published" },
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": []
+  }
+]

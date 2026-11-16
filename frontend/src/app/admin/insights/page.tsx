@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getGlobalOverview, getDiscoveries, getDiscoveryDetail, approveCandidateGrain, rejectCandidateGrain, resolveDiscovery, type GlobalOverview, type SkillHealth, type AutoInsight, type CandidateGrain } from '@/lib/api/admin-insights';
+import { getGlobalOverview, getDiscoveries, getDiscoveryCandidates, approveCandidateGrain, rejectCandidateGrain, resolveDiscovery, type GlobalOverview, type SkillHealth, type AutoInsight, type CandidateGrain } from '@/lib/api/admin-insights';
 import { KpiHero, type KpiItem } from '@/components/admin/KpiHero';
 import { Card } from '@/components/admin/Card';
 import { SkillCard } from '@/components/admin/SkillCard';
@@ -67,7 +67,7 @@ export default function AdminInsightsPage() {
   const allAlerts = data.skills.flatMap(s => s.alerts.map(a => ({ skill: s, alert: a })));
 
   return (
-    <div className="px-6 py-8 max-w-[1200px] mx-auto space-y-8">
+    <div className="px-6 py-8 max-w-[1200px] mx-auto space-y-8" data-tour="insights-overview">
       {/* ── KPI Hero ── */}
       <KpiHero items={kpiItems} />
 
@@ -194,31 +194,35 @@ function DiscoveryTab() {
   const [insights, setInsights] = useState<AutoInsight[]>([]);
   const [candidateGrainsMap, setCandidateGrainsMap] = useState<Record<string, CandidateGrain[]>>({});
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     setLoading(true);
-    const params: Record<string, string> = {};
+    setError('');
+    const params: { severity?: string; page: number; size: number } = { page, size: 20 };
     if (filter !== 'all') params.severity = filter;
     getDiscoveries(params)
-      .then(async (list) => {
-        setInsights(list);
-        // 加载每条洞察的候选颗粒
-        const map: Record<string, CandidateGrain[]> = {};
-        await Promise.all(list.map(async (insight) => {
-          try {
-            const detail = await getDiscoveryDetail(insight.id);
-            if (detail.candidateGrains && detail.candidateGrains.length > 0) {
-              map[insight.id] = detail.candidateGrains;
-            }
-          } catch (err) { console.error('加载洞察详情失败', insight.id, err); }
-        }));
+      .then(async (res) => {
+        setInsights(res.content);
+        setTotal(res.total);
+        setTotalPages(Math.max(1, res.totalPages));
+        // 一次批量取候选颗粒，避免逐条请求（N+1）
+        const map = await getDiscoveryCandidates(res.content.map(i => i.id)).catch(() => ({}));
         setCandidateGrainsMap(map);
       })
-      .catch(err => { console.error('加载自动发现失败', err); })
+      .catch((err: unknown) => {
+        setInsights([]);
+        setError(err instanceof Error ? err.message : '自动发现加载失败，请稍后重试');
+      })
       .finally(() => setLoading(false));
-  }, [filter]);
+  }, [filter, page]);
+
+  useEffect(() => { setPage(1); }, [filter]);
 
   const handleApprove = async (grainId: string) => {
     setActionLoading(grainId);
@@ -279,6 +283,15 @@ function DiscoveryTab() {
 
   if (loading) {
     return <div className="flex h-64 items-center justify-center"><LoadingSpinner /></div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-center text-sm text-red-600">
+        {error}
+        <button onClick={() => location.reload()} className="ml-3 underline">重试</button>
+      </div>
+    );
   }
 
   const filterCounts = {
@@ -353,6 +366,16 @@ function DiscoveryTab() {
           />
         ))}
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 text-sm">
+          <button disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}
+            className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">上一页</button>
+          <span className="text-muted-foreground">{page} / {totalPages}（共 {total} 条）</span>
+          <button disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)}
+            className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">下一页</button>
+        </div>
+      )}
     </div>
   );
 }

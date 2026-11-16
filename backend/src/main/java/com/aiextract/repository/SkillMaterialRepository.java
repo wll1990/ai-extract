@@ -31,6 +31,15 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      */
     List<SkillMaterial> findBySkillIdAndStatus(UUID skillId, String status);
     /**
+     * 只取 ID，避免整体重试时把每条素材的 parsed_content TEXT 全量读进内存。
+     * @param skillId skillId
+     * @param statuses 可重试状态集合
+     * @return 素材 ID 列表
+     */
+    @Query("select m.id from SkillMaterial m where m.skillId = :skillId and m.status in :statuses")
+    List<UUID> findIdsBySkillIdAndStatusIn(@Param("skillId") UUID skillId,
+                                           @Param("statuses") java.util.Collection<String> statuses);
+    /**
      * 查询（Skill,Id）。
      * @param skillId skillId
      * @return 结果列表
@@ -53,6 +62,12 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
     @Query("SELECT COUNT(sm) FROM SkillMaterial sm WHERE sm.skillId IN :skillIds")
     long countBySkillIdIn(@Param("skillIds") List<UUID> skillIds);
 
+    /** 导航红点：统计指定状态 + 指定分身列表的素材数 */
+    long countByStatusInAndSkillIdIn(List<String> statuses, List<UUID> skillIds);
+
+    /** 后台任务健康检查：最近窗口内失败素材数 */
+    long countByStatusInAndUpdatedAtAfter(java.util.Collection<String> statuses, java.time.LocalDateTime after);
+
     /** 素材管道漏斗 — 按 status 分组计数 */
     @Query("SELECT sm.status, COUNT(sm) FROM SkillMaterial sm WHERE sm.skillId IN :skillIds GROUP BY sm.status")
     List<Object[]> pipelineFunnel(@Param("skillIds") List<UUID> skillIds);
@@ -62,15 +77,18 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
      * @param timeout timeout
      * @return 结果列表
      */
-    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('uploaded', 'parse_failed') AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
-    List<SkillMaterial> findPendingParseTasks(@Param("timeout") LocalDateTime timeout);
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('uploaded', 'parse_failed') "
+        + "AND (sm.analysisNotes IS NULL OR sm.analysisNotes NOT LIKE '%需人工补充文字内容%') "
+        + "AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
+    List<SkillMaterial> findPendingParseTasks(@Param("timeout") LocalDateTime timeout, Pageable pageable);
     /**
      * 查询（Pending,Cleaning,Tasks）。
      * @param timeout timeout
      * @return 结果列表
      */
-    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('parsed', 'cleaning_failed') AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
-    List<SkillMaterial> findPendingCleaningTasks(@Param("timeout") LocalDateTime timeout);
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.status IN ('parsed', 'cleaning_failed', 'cleaning', 'analyzing') "
+        + "AND (sm.lockedAt IS NULL OR sm.lockedAt < :timeout)")
+    List<SkillMaterial> findPendingCleaningTasks(@Param("timeout") LocalDateTime timeout, Pageable pageable);
     /**
      * 查询（File,Url）。
      * @param fileUrl fileUrl
@@ -87,13 +105,18 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
     @Query("SELECT sm FROM SkillMaterial sm WHERE sm.skillId = :skillId AND (sm.materialType <> :excludeType OR sm.materialType IS NULL) ORDER BY sm.createdAt DESC")
     Page<SkillMaterial> findBySkillIdExcludingType(@Param("skillId") UUID skillId, @Param("excludeType") String excludeType, Pageable pageable);
 
-    /** 从一批 skillId 中找出至少有一条非 interview 素材的。NULL materialType 视为用户上传。 */
-    @Query("SELECT DISTINCT sm.skillId FROM SkillMaterial sm WHERE sm.skillId IN :skillIds AND (sm.materialType <> 'interview' OR sm.materialType IS NULL)")
+    /** 从一批 skillId 中找出至少有一条可用非 interview 素材的。NULL materialType 视为用户上传。 */
+    @Query("SELECT DISTINCT sm.skillId FROM SkillMaterial sm WHERE sm.skillId IN :skillIds "
+        + "AND (sm.materialType <> 'interview' OR sm.materialType IS NULL) "
+        + "AND sm.status NOT IN ('rejected', 'discarded')")
     List<UUID> findSkillIdsWithRealMaterials(@Param("skillIds") List<UUID> skillIds);
 
+    /** 抢占锁。条件必须与 findPending*Tasks 的过期判断一致，否则崩溃残留的锁永远抢不到。 */
     @Modifying
-    @Query("UPDATE SkillMaterial sm SET sm.lockedBy = :workerId, sm.lockedAt = CURRENT_TIMESTAMP WHERE sm.id = :id AND sm.lockedBy IS NULL")
-    int tryLock(@Param("id") UUID id, @Param("workerId") String workerId);
+    @Query("UPDATE SkillMaterial sm SET sm.lockedBy = :workerId, sm.lockedAt = :now "
+        + "WHERE sm.id = :id AND (sm.lockedBy IS NULL OR sm.lockedAt < :timeout)")
+    int tryLock(@Param("id") UUID id, @Param("workerId") String workerId,
+                @Param("now") LocalDateTime now, @Param("timeout") LocalDateTime timeout);
     /**
      * release（Lock）。
      * @param id id

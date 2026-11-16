@@ -40,7 +40,7 @@ export function testChannel(channelId: string): Promise<{ success: boolean; mess
 }
 
 // ============================================================
-// 飞书机器人（1 分身 = 1 bot）
+// IM 机器人（1 分身 = 每渠道 1 bot）
 // ============================================================
 
 /** 已发布机器人 */
@@ -51,32 +51,55 @@ export interface ImBot {
   appId: string;
   skillId: string;
   skillName: string | null;
-  status: string;
+  status: string; // publishing / published / failed / disabled
   enabled: boolean;
   connected: string | null;
+  /** 最近一次发布/重连失败原因 */
+  lastError?: string | null;
   createdAt: string;
 }
 
-/** 发布扫码授权结果 */
-export interface FeishuPublishResult {
-  registerToken: string;
-  qrUrl: string;
-  expireIn: number;
+/** 发布结果：飞书返回扫码授权二维码；企微/钉钉返回 bridgeBotId */
+export interface ImPublishResult {
+  registerToken?: string;
+  qrUrl?: string;
+  expireIn?: number;
+  bridgeBotId?: string;
 }
 
+/** 兼容旧命名 */
+export type FeishuPublishResult = ImPublishResult;
+
 /** 发布配置（扫码前可编辑机器人名称/描述/头像，缺省回退分身资料） */
-export interface FeishuPublishConfig {
+export interface ImPublishConfig {
   name?: string;
   description?: string;
   avatar?: string;
+  /** 企微/钉钉凭据（飞书忽略） */
+  credentials?: Record<string, string>;
 }
 
-/** 发起「发布到飞书」，返回扫码授权二维码 */
-export function publishFeishu(skillId: string, config?: FeishuPublishConfig): Promise<FeishuPublishResult> {
-  return apiClient<FeishuPublishResult>('/im/channels/feishu/publish', {
+export type FeishuPublishConfig = ImPublishConfig;
+
+/**
+ * 发布分身到指定渠道。
+ * feishu：返回 qrUrl，前端展示二维码并轮询；
+ * wecom/dingtalk：后端校验凭据后立即绑定，返回 bridgeBotId。
+ */
+export function publishToChannel(
+  channelType: 'feishu' | 'wecom' | 'dingtalk',
+  skillId: string,
+  config?: ImPublishConfig,
+): Promise<ImPublishResult> {
+  return apiClient<ImPublishResult>(`/im/channels/${channelType}/publish`, {
     method: 'POST',
     body: JSON.stringify({ skillId, ...(config || {}) }),
   });
+}
+
+/** 发起「发布到飞书」，返回扫码授权二维码 */
+export function publishFeishu(skillId: string, config?: ImPublishConfig): Promise<ImPublishResult> {
+  return publishToChannel('feishu', skillId, config);
 }
 
 /** 本企业已发布机器人列表 */
@@ -85,6 +108,38 @@ export function listImBots(): Promise<ImBot[]> {
 }
 
 /** 下线机器人 */
+/** 重连机器人（桥连接失败后重试） */
+export function reconnectImBot(botId: string): Promise<void> {
+  return apiClient<void>(`/im/channels/bots/${botId}/reconnect`, { method: 'POST' });
+}
+
 export function unpublishImBot(botId: string): Promise<void> {
   return apiClient<void>(`/im/channels/bots/${botId}`, { method: 'DELETE' });
+}
+
+// ==================== 通知绑定（我的 IM） ====================
+
+export interface ImBinding {
+  id: string;
+  channelType: string;
+  botId: string;
+  displayName: string | null;
+  chatId: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+}
+
+/** 生成一次性绑定码（10 分钟有效） */
+export function createImBindCode(): Promise<{
+  code: string; expiresAt: string; instruction: string;
+}> {
+  return apiClient('/me/im/bind-code', { method: 'POST' });
+}
+
+export function listMyImBindings(): Promise<ImBinding[]> {
+  return apiClient<ImBinding[]>('/me/im/bindings');
+}
+
+export function unbindIm(id: string): Promise<void> {
+  return apiClient<void>(`/me/im/bindings/${id}`, { method: 'DELETE' });
 }

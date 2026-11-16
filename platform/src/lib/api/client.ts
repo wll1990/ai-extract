@@ -8,6 +8,7 @@
  */
 
 import { clearAuth, getToken } from '@/lib/storage';
+import { csrfHeader, isUnsafeMethod } from '@/lib/csrf';
 
 function resolveBaseUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
@@ -61,7 +62,18 @@ export async function apiClient<T>(
     if (token) headers['Authorization'] = `Bearer ${token}`;
   }
 
+  // Cookie 认证的写请求需要 CSRF 双提交；Bearer 场景后端不校验
+  if (isUnsafeMethod(options.method) && !headers['X-CSRF-Token']) {
+    Object.assign(headers, csrfHeader());
+  }
+
+  // OBS-02：前端生成 traceId，Nginx / 后端日志按它串联
+  if (!headers['X-Trace-Id']) {
+    headers['X-Trace-Id'] = `web-${crypto.randomUUID()}`;
+  }
+
   const res = await fetch(`${API_BASE}${path}`, {
+    credentials: 'same-origin',
     ...options,
     headers,
   });

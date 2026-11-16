@@ -22,9 +22,9 @@ else
     echo "ai-service    :8000  -       未运行"
 fi
 
-# frontend / platform / feishu-bot — 用 ss 查端口映射到 pid
+# frontend / platform / im-bridge — 用 ss 查端口映射到 pid
 for port in 3000 3001 3010; do
-    case $port in 3000) name=frontend ;; 3001) name=platform ;; 3010) name=feishu-bot ;; esac
+    case $port in 3000) name=frontend ;; 3001) name=platform ;; 3010) name=im-bridge ;; esac
     pid=$(ss -tlnp 2>/dev/null | grep ":$port " | grep -oP 'pid=\K[0-9]+' | head -1)
     if [ -n "$pid" ]; then
         t=$(ps -p $pid -o lstart= 2>/dev/null | xargs)

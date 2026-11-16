@@ -1,12 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { listSkills, type SkillInfo } from '@/lib/api/skill';
+import { apiClient } from '@/lib/api/client';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+
+import { SKILL_STATUS_LABELS } from '@/lib/skill-status';
 
 export default function AdminGrainsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const skillId = searchParams.get('skillId');
   const [skills, setSkills] = useState<SkillInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -17,6 +22,8 @@ export default function AdminGrainsPage() {
       .catch(() => setError('加载失败，请确认有管理权限'))
       .finally(() => setLoading(false));
   }, []);
+
+  if (skillId) return <SkillGrainList skillId={skillId} />;
 
   if (loading) return <LoadingSpinner />;
 
@@ -69,18 +76,117 @@ export default function AdminGrainsPage() {
                   <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
                     s.status === 'published' ? 'bg-success-bg text-success' : 'bg-warning-bg text-warning-text'
                   }`}>
-                    {s.status === 'published' ? '已发布' : s.status === 'draft' ? '待审核' : s.status}
+                    {SKILL_STATUS_LABELS[s.status] || s.status}
                   </span>
                 </span>
                 <span className="text-sm text-foreground">{s.grainCount ?? 0}</span>
                 <button
-                  onClick={() => router.push(`/admin/insights/${s.id}`)}
+                  onClick={() => router.push(`/admin/grains?skillId=${s.id}`)}
                   className="text-sm text-primary font-medium hover:underline text-left"
                 >
-                  审核颗粒 →
+                  查看颗粒 →
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface GrainRow {
+  id: string;
+  sceneDescription?: string;
+  sceneTag?: string;
+  qualityScore?: number;
+  weight?: number;
+  status?: string;
+  helpfulCount?: number;
+  unhelpfulCount?: number;
+}
+
+/** 单个分身的颗粒列表（从「查看颗粒」进入，K27） */
+function SkillGrainList({ skillId }: { skillId: string }) {
+  const router = useRouter();
+  const [grains, setGrains] = useState<GrainRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [sort, setSort] = useState('helpful');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const size = 50;
+
+  useEffect(() => {
+    setLoading(true);
+    setError('');
+    apiClient<{ content: GrainRow[]; totalPages?: number }>(
+      `/admin/grains?skillId=${skillId}&sort=${sort}&page=${page}&size=${size}`)
+      .then(d => {
+        setGrains(d.content || []);
+        setTotalPages(Math.max(1, d.totalPages || 1));
+      })
+      .catch((e: unknown) => {
+        setGrains([]);
+        setError(e instanceof Error && e.message ? e.message : '颗粒列表加载失败');
+      })
+      .finally(() => setLoading(false));
+  }, [skillId, sort, page]);
+
+  if (loading) return <LoadingSpinner />;
+
+  return (
+    <div className="min-h-screen bg-surface px-6 py-8">
+      <div className="mx-auto max-w-[960px]">
+        <button onClick={() => router.push('/admin/grains')}
+          className="mb-4 text-sm text-primary hover:underline">← 返回分身列表</button>
+        <div className="mb-4 flex items-center justify-between">
+          <h1 className="text-[24px] font-bold text-foreground">颗粒列表</h1>
+          <select value={sort} onChange={e => { setSort(e.target.value); setPage(1); }}
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
+            <option value="helpful">👍 最有用</option>
+            <option value="unhelpful">👎 需改进</option>
+            <option value="recent">📅 最新</option>
+          </select>
+        </div>
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+            <button onClick={() => location.reload()} className="ml-3 underline">重试</button>
+          </div>
+        )}
+        {!error && grains.length === 0 && (
+          <div className="rounded-xl border border-border bg-surface-2 px-4 py-10 text-center text-sm text-muted-foreground">
+            这个分身还没有颗粒
+          </div>
+        )}
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
+          {grains.map(g => (
+            <div key={g.id} className="grid grid-cols-6 items-center gap-3 border-b border-border/60 px-4 py-3 last:border-0">
+              <span className="col-span-2 truncate text-sm text-foreground">{g.sceneDescription || g.sceneTag || '未命名'}</span>
+              <span className="text-xs text-muted-foreground">{g.sceneTag || '未分类'}</span>
+              <span className="text-xs text-muted-foreground">
+                质量 {g.qualityScore != null ? `${g.qualityScore}/5` : '未评分'} · 权重 {g.weight ?? '-'}
+              </span>
+              <span className="text-xs">
+                <span className={g.status === 'active' ? 'text-green-600' : 'text-gray-400'}>
+                  {g.status === 'active' ? '生效中' : g.status === 'deprecated' ? '已废弃' : (g.status || '-')}
+                </span>
+                <span className="ml-2 text-muted-foreground">👍{g.helpfulCount ?? 0} 👎{g.unhelpfulCount ?? 0}</span>
+              </span>
+              <button onClick={() => router.push(`/admin/grains/${g.id}/edit`)}
+                className="text-right text-sm text-primary hover:underline">编辑 →</button>
+            </div>
+          ))}
+        </div>
+        {totalPages > 1 && (
+          <div className="mt-4 flex items-center justify-center gap-3 text-sm">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
+              className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">上一页</button>
+            <span className="text-muted-foreground">第 {page} / {totalPages} 页</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
+              className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">下一页</button>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 package com.aiextract.config;
 
+import com.aiextract.common.AiErrorMapper;
 import com.aiextract.model.ChatChunk;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -23,6 +24,12 @@ import java.time.Duration;
 public final class SseAdapter {
 
     private SseAdapter() { /* 工具类，禁止实例化 */ }
+
+    /** 兜底错误事件：把供应商异常映射成带 code 的可读错误，前端可按码提示 */
+    private static String toErrorChunk(Throwable error) {
+        AiErrorMapper.AiError aiError = AiErrorMapper.map(error);
+        return ChatChunk.error(aiError.code(), aiError.message()).toSseJson();
+    }
 
     /** 默认超时（3 分钟），安全网 — 主控超时在 ChatStreamService 的 Flux.timeout */
     private static final Duration DEFAULT_TIMEOUT = Duration.ofMinutes(3);
@@ -62,7 +69,7 @@ public final class SseAdapter {
                     try {
                         emitter.send(SseEmitter.event()
                             .name("message")
-                            .data(ChatChunk.error("AI服务异常，请稍后重试").toSseJson()));
+                            .data(toErrorChunk(error)));
                     } catch (IOException ignored) { /* 客户端可能已断开 */ }
                     emitter.complete();
                 },

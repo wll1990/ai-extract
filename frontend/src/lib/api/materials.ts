@@ -20,6 +20,19 @@ export function listMaterials(skillId: string, page = 1, size = 20): Promise<{ c
   return apiClient(`/admin/skills/${skillId}/materials?page=${page}&size=${size}`);
 }
 
+/** 管理员手动重试失败素材 */
+export function retryMaterial(materialId: string): Promise<void> {
+  return apiClient(`/admin/materials/${materialId}/retry`, { method: 'PUT' });
+}
+
+/** 放弃素材 / 恢复已放弃素材（status: discarded | uploaded） */
+export function updateMaterialStatus(skillId: string, materialId: string, status: 'discarded' | 'uploaded'): Promise<void> {
+  return apiClient(`/admin/skills/${skillId}/materials/${materialId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
+}
+
 export function deleteMaterial(skillId: string, materialId: string): Promise<void> {
   return apiClient(`/admin/skills/${skillId}/materials/${materialId}`, { method: 'DELETE' });
 }

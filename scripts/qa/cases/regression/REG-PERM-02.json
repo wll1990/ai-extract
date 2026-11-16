@@ -1,0 +1,16 @@
+[
+  {
+    "id": "REG-PERM-02",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "manage",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "K8 员工路径权限被放大",
+    "steps": [
+      { "as": "employee", "api": "GET /admin/users?page=1&size=5", "expect": { "status": 403 } },
+      { "as": "employee", "api": "GET /admin/skills/picker", "expect": { "status": 200 } }
+    ],
+    "assertions": []
+  }
+]

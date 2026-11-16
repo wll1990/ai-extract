@@ -42,6 +42,7 @@ public class AdminInsightController {
     private final CandidateGrainRepository candidateGrainRepository;
     private final com.aiextract.service.DashScopeEmbeddingService embeddingService;
     private final CompanyScopeService companyScopeService;
+    private final com.aiextract.service.AdminGrainService adminGrainService;
     private final AnswerCorrectionRepository correctionRepository;
     private final AdminAuditLogRepository auditLogRepository;
 
@@ -54,28 +55,7 @@ public class AdminInsightController {
         companyScopeService.assertSkillOwnership(id);
         skillRepository.findById(id).orElseThrow(() ->
             new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
-
-        // 对话量 + 用户数（从 conversation_stats 聚合）
-        List<Object[]> stats = conversationStatsRepository
-            .statsOverview(id, LocalDateTime.now().minusDays(7), LocalDateTime.now());
-        long conversations = stats.isEmpty() || stats.get(0)[0] == null ? 0 : (Long) stats.get(0)[0];
-        long activeUsers = stats.isEmpty() || stats.get(0)[1] == null ? 0 : (Long) stats.get(0)[1];
-
-        // 满意率（从 feedback_log 聚合）
-        List<Object[]> satStats = feedbackLogRepository.satisfactionStats(id);
-        long upCount = 0, totalFeedback = 0;
-        if (!satStats.isEmpty() && satStats.get(0)[0] != null) {
-            upCount = (Long) satStats.get(0)[0];
-            totalFeedback = (Long) satStats.get(0)[1];
-        }
-        double satisfactionRate = totalFeedback > 0 ? (double) upCount / totalFeedback * 100 : 0;
-
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("conversations", conversations);
-        result.put("activeUsers", activeUsers);
-        result.put("satisfactionRate", Math.round(satisfactionRate * 10.0) / 10.0);
-        result.put("totalFeedback", totalFeedback);
-        return ApiResponse.success(result);
+        return ApiResponse.success(adminInsightService.getSkillOverview(id));
     }
 
     /**
@@ -85,14 +65,7 @@ public class AdminInsightController {
     public ApiResponse<List<Map<String, Object>>> getSceneTop(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
         companyScopeService.assertSkillOwnership(id);
-        List<Object[]> rows = grainRetrieveLogRepository.countBySkillIdGroupBySceneTag(id);
-        List<Map<String, Object>> result = rows.stream().limit(5).map(row -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("scene", row[0] != null ? row[0] : "未知");
-            m.put("count", row[1]);
-            return m;
-        }).collect(Collectors.toList());
-        return ApiResponse.success(result);
+        return ApiResponse.success(adminInsightService.getSceneTop(id));
     }
 
     /**
@@ -102,23 +75,7 @@ public class AdminInsightController {
     public ApiResponse<Map<String, Object>> getRagDistribution(@PathVariable String skillId) {
         UUID id = UUID.fromString(skillId);
         companyScopeService.assertSkillOwnership(id);
-        List<Object[]> rows = conversationStatsRepository.ragDistribution(id);
-        long high = 0, ref = 0, none = 0;
-        if (!rows.isEmpty() && rows.get(0)[0] != null) {
-            high = (Long) rows.get(0)[0];
-            ref = rows.get(0)[1] != null ? (Long) rows.get(0)[1] : 0;
-            none = rows.get(0)[2] != null ? (Long) rows.get(0)[2] : 0;
-        }
-        long total = high + ref + none;
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("high", high);
-        result.put("ref", ref);
-        result.put("none", none);
-        result.put("total", total);
-        result.put("highPct", total > 0 ? Math.round((double) high / total * 100) : 0);
-        result.put("refPct", total > 0 ? Math.round((double) ref / total * 100) : 0);
-        result.put("nonePct", total > 0 ? Math.round((double) none / total * 100) : 0);
-        return ApiResponse.success(result);
+        return ApiResponse.success(adminInsightService.getRagDistribution(id));
     }
 
     /**
@@ -131,26 +88,7 @@ public class AdminInsightController {
             @PathVariable String skillId, @RequestParam(defaultValue = "best") String sort) {
         UUID id = UUID.fromString(skillId);
         companyScopeService.assertSkillOwnership(id);
-        var skill = skillRepository.findById(id).orElseThrow(() ->
-            new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
-        List<ExperienceGrain> grains = "best".equals(sort)
-            ? grainRepository.findTopBySpaceIdOrderByHelpfulCountDesc(
-                skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 10))
-            : grainRepository.findTopBySpaceIdOrderByUnhelpfulCountDesc(
-                skill.getSpaceId(), org.springframework.data.domain.PageRequest.of(0, 10));
-
-        List<Map<String, Object>> result = grains.stream().map(g -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", g.getId().toString());
-            m.put("description", g.getSceneDescription() != null ? g.getSceneDescription()
-                : g.getSceneTag() != null ? g.getSceneTag() : "未命名");
-            m.put("sceneTag", g.getSceneTag());
-            m.put("helpful", g.getHelpfulCount());
-            m.put("unhelpful", g.getUnhelpfulCount());
-            m.put("qualityScore", g.getQualityScore());
-            return m;
-        }).collect(Collectors.toList());
-        return ApiResponse.success(result);
+        return ApiResponse.success(adminInsightService.getGrainsTop(id, sort));
     }
 
     /**
@@ -163,20 +101,7 @@ public class AdminInsightController {
             @RequestParam(defaultValue = "20") int size) {
         UUID id = UUID.fromString(skillId);
         companyScopeService.assertSkillOwnership(id);
-        var pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        var gapPage = knowledgeGapRepository.findBySkillIdAndStatusOrderByAttemptedQueryCountDesc(id, "open", pageable);
-        List<Map<String, Object>> result = gapPage.getContent().stream().map(g -> {
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", g.getId().toString());
-            m.put("query", g.getQuery());
-            m.put("sceneTag", g.getSceneTag());
-            m.put("count", g.getAttemptedQueryCount());
-            m.put("lastSeen", g.getUpdatedAt() != null ? g.getUpdatedAt().toString() : null);
-            m.put("status", g.getStatus());
-            m.put("note", g.getNote());
-            return m;
-        }).collect(Collectors.toList());
-        return ApiResponse.success(PageResponse.of(result, gapPage, page, size));
+        return ApiResponse.success(adminInsightService.getKnowledgeGaps(id, page, size));
     }
 
     /**
@@ -285,55 +210,83 @@ public class AdminInsightController {
      * 自动发现洞察列表 —— 支持按分身、严重程度、状态筛选。
      */
     @GetMapping("/discoveries")
-    public ApiResponse<List<Map<String, Object>>> getDiscoveries(
+    public ApiResponse<Map<String, Object>> getDiscoveries(
             @RequestParam(required = false) String skillId,
             @RequestParam(required = false) String severity,
             @RequestParam(defaultValue = "active") String status,
-            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        var pageable = org.springframework.data.domain.PageRequest.of(page, size);
-        List<AutoInsight> insights;
+        int safePage = Math.max(1, page);
+        int safeSize = Math.min(Math.max(size, 1), 100);
+        var pageable = org.springframework.data.domain.PageRequest.of(safePage - 1, safeSize);
+        org.springframework.data.domain.Page<AutoInsight> insights;
 
         if (skillId != null && !skillId.isEmpty()) {
             UUID sid = UUID.fromString(skillId);
             companyScopeService.assertSkillOwnership(sid);
-            if (severity != null && !severity.isEmpty()) {
-                insights = autoInsightRepository.findBySkillIdAndSeverityAndStatusOrderByCreatedAtDesc(
-                    sid, severity, status, pageable);
-            } else {
-                insights = autoInsightRepository.findBySkillIdAndStatusOrderByCreatedAtDesc(
-                    sid, status, pageable);
-            }
+            insights = (severity != null && !severity.isEmpty())
+                    ? autoInsightRepository.findBySkillIdAndSeverityAndStatus(sid, severity, status, pageable)
+                    : autoInsightRepository.findBySkillIdAndStatus(sid, status, pageable);
         } else {
             UUID companyId = TokenContext.getCompanyId();
             List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-            if (!companyScopeService.isSuperAdmin()) {
+            if (!companyScopeService.isUnrestrictedDataScope()) {
                 // company_admin — 只返回本企业分身的洞察
                 if (companySkillIds.isEmpty()) {
-                    return ApiResponse.success(List.of());
+                    return ApiResponse.success(PageResponse.of(
+                            org.springframework.data.domain.Page.empty(pageable), safePage, safeSize));
                 }
-                if (severity != null && !severity.isEmpty()) {
-                    insights = autoInsightRepository.findBySeverityAndStatusOrderByCreatedAtDesc(
-                        severity, status, pageable).stream()
-                        .filter(i -> i.getSkillId() != null && companySkillIds.contains(i.getSkillId()))
-                        .collect(Collectors.toList());
-                } else {
-                    insights = autoInsightRepository.findByStatusOrderByCreatedAtDesc(status, pageable).stream()
-                        .filter(i -> i.getSkillId() != null && companySkillIds.contains(i.getSkillId()))
-                        .collect(Collectors.toList());
-                }
+                insights = (severity != null && !severity.isEmpty())
+                        ? autoInsightRepository.findBySkillIdInAndSeverityAndStatus(
+                                companySkillIds, severity, status, pageable)
+                        : autoInsightRepository.findBySkillIdInAndStatus(companySkillIds, status, pageable);
             } else {
-                if (severity != null && !severity.isEmpty()) {
-                    insights = autoInsightRepository.findBySeverityAndStatusOrderByCreatedAtDesc(
-                        severity, status, pageable);
-                } else {
-                    insights = autoInsightRepository.findByStatusOrderByCreatedAtDesc(status, pageable);
-                }
+                insights = (severity != null && !severity.isEmpty())
+                        ? autoInsightRepository.findBySeverityAndStatus(severity, status, pageable)
+                        : autoInsightRepository.findByStatus(status, pageable);
             }
         }
 
-        List<Map<String, Object>> result = insights.stream().map(this::toInsightMap).collect(Collectors.toList());
+        List<Map<String, Object>> result = insights.getContent().stream()
+                .map(this::toInsightMap).collect(Collectors.toList());
+        return ApiResponse.success(PageResponse.of(result, insights, safePage, safeSize));
+    }
+
+    /** 批量取洞察的候选颗粒（列表页一次请求，避免逐条 N+1）。 */
+    @GetMapping("/discoveries/candidates")
+    public ApiResponse<Map<String, List<Map<String, Object>>>> getDiscoveryCandidates(
+            @RequestParam String insightIds) {
+        List<UUID> ids;
+        try {
+            ids = Arrays.stream(insightIds.split(","))
+                    .map(String::trim).filter(s -> !s.isEmpty())
+                    .map(UUID::fromString).distinct().limit(100).toList();
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(400, "insightIds 格式不正确");
+        }
+        Map<String, List<Map<String, Object>>> result = new LinkedHashMap<>();
+        if (ids.isEmpty()) {
+            return ApiResponse.success(result);
+        }
+        // 平台视角不限制；企业视角一次性取出可读分身集合，避免逐条查库
+        Set<UUID> companySkillIds = companyScopeService.isUnrestrictedDataScope()
+                ? null
+                : new HashSet<>(companyScopeService.getCompanySkillIds(TokenContext.getCompanyId()));
+        for (CandidateGrain g : candidateGrainRepository.findBySourceInsightIdIn(ids)) {
+            if (g.getSourceInsightId() == null) continue;
+            if (!isCandidateVisible(g, companySkillIds)) continue;
+            result.computeIfAbsent(g.getSourceInsightId().toString(), k -> new ArrayList<>())
+                    .add(toCandidateGrainMap(g));
+        }
         return ApiResponse.success(result);
+    }
+
+    /** 候选颗粒对企业是否可见：无分身归属的只允许平台视角查看 */
+    private boolean isCandidateVisible(CandidateGrain candidate, Set<UUID> companySkillIds) {
+        if (companySkillIds == null) {
+            return true;
+        }
+        return candidate.getSkillId() != null && companySkillIds.contains(candidate.getSkillId());
     }
 
     /**
@@ -344,9 +297,7 @@ public class AdminInsightController {
         UUID insightId = UUID.fromString(id);
         var insight = autoInsightRepository.findById(insightId)
             .orElseThrow(() -> new BusinessException(404, "洞察不存在"));
-        if (insight.getSkillId() != null) {
-            companyScopeService.assertSkillOwnership(insight.getSkillId());
-        }
+        assertInsightAccess(insight);
 
         Map<String, Object> result = toInsightMap(insight);
 
@@ -374,21 +325,15 @@ public class AdminInsightController {
         UUID grainId = UUID.fromString(id);
         var candidate = candidateGrainRepository.findById(grainId)
             .orElseThrow(() -> new BusinessException(404, "候选颗粒不存在"));
-        if (candidate.getSkillId() != null) {
-            companyScopeService.assertSkillOwnership(candidate.getSkillId());
-        }
+        assertCandidateAccess(candidate);
 
         if (!CandidateGrain.STATUS_PENDING_REVIEW.equals(candidate.getStatus())) {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
         }
 
-        // 标记已通过
-        candidate.setStatus(CandidateGrain.STATUS_APPROVED);
-        candidate.setReviewedAt(LocalDateTime.now());
-        if (body != null && body.containsKey(KEY_NOTE)) {
-            candidate.setNote(body.get(KEY_NOTE));
+        if (candidate.getSkillId() == null) {
+            throw new BusinessException(400, "候选颗粒未关联分身，无法写入经验库");
         }
-        candidateGrainRepository.save(candidate);
 
         // 写入 experience_grain + 向量化
         Skill skill = skillRepository.findById(candidate.getSkillId())
@@ -408,28 +353,27 @@ public class AdminInsightController {
                 .helpfulCount(0).unhelpfulCount(0)
                 .createdAt(LocalDateTime.now())
                 .build();
-        grainRepository.save(grain);
 
-        // 向量化
-        String text = (grain.getExpertThought() != null ? grain.getExpertThought() : "")
-                + " " + (grain.getStandardScript() != null ? grain.getStandardScript() : "");
-        if (!text.trim().isEmpty()) {
-            try {
-                float[] vec = embeddingService.embed(text);
-                grainRepository.updateEmbedding(grain.getId(), new PGvector(vec).toString());
-                log.info("候选颗粒已写入并向量化 grainId={} sceneTag={}", grain.getId(), candidate.getSceneTag());
-            } catch (Exception e) {
-                log.error("候选颗粒向量化失败 grainId={}", grain.getId(), e);
-            }
+        // 只做本地文本校验；向量化下沉到后台线程，HTTP 线程不调外部服务
+        String text = embeddingService.grainToText(grain);
+        if (text == null || text.isBlank() || "未分类".equals(text)) {
+            text = ((grain.getExpertThought() != null ? grain.getExpertThought() : "")
+                + " " + (grain.getStandardScript() != null ? grain.getStandardScript() : "")).trim();
+        }
+        if (text.isEmpty()) {
+            throw new BusinessException(400, "候选颗粒缺少可用于检索的场景描述或话术");
         }
 
-        log.info("候选颗粒已审核通过 grainId={} sceneTag={}", id, candidate.getSceneTag());
+        String note = body != null && body.containsKey(KEY_NOTE) ? body.get(KEY_NOTE) : null;
+        adminGrainService.approveCandidateAsync(grain, grainId, note);
+
+        log.info("候选颗粒已受理，后台向量化中 grainId={} sceneTag={}", id, candidate.getSceneTag());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", candidate.getId().toString());
         result.put("grainId", grain.getId().toString());
-        result.put("status", candidate.getStatus());
-        result.put("message", "候选颗粒已写入经验库并完成向量化");
+        result.put("status", "indexing");
+        result.put("message", "已受理，正在后台向量化，稍后刷新即可检索");
         return ApiResponse.success(result);
     }
 
@@ -443,9 +387,7 @@ public class AdminInsightController {
         UUID grainId = UUID.fromString(id);
         var candidate = candidateGrainRepository.findById(grainId)
             .orElseThrow(() -> new BusinessException(404, "候选颗粒不存在"));
-        if (candidate.getSkillId() != null) {
-            companyScopeService.assertSkillOwnership(candidate.getSkillId());
-        }
+        assertCandidateAccess(candidate);
 
         if (!CandidateGrain.STATUS_PENDING_REVIEW.equals(candidate.getStatus())) {
             throw new BusinessException(400, "只能审核待处理的候选颗粒，当前状态: " + candidate.getStatus());
@@ -475,9 +417,7 @@ public class AdminInsightController {
         UUID insightId = UUID.fromString(id);
         var insight = autoInsightRepository.findById(insightId)
             .orElseThrow(() -> new BusinessException(404, "洞察不存在"));
-        if (insight.getSkillId() != null) {
-            companyScopeService.assertSkillOwnership(insight.getSkillId());
-        }
+        assertInsightAccess(insight);
         String newStatus = body.getOrDefault("status", "resolved");
         if (!List.of("resolved", "ignored").contains(newStatus)) {
             throw new BusinessException(400, "状态只能为 resolved 或 ignored");
@@ -537,15 +477,48 @@ public class AdminInsightController {
      */
     @PostMapping("/corrections")
     public ApiResponse<Map<String, Object>> submitCorrection(@RequestBody Map<String, Object> body) {
-        UUID skillId = UUID.fromString((String) body.get("skillId"));
+        UUID skillId;
+        try {
+            skillId = UUID.fromString((String) body.get("skillId"));
+        } catch (RuntimeException e) {
+            throw new BusinessException(400, "skillId 格式不正确");
+        }
+        companyScopeService.assertSkillOwnership(skillId);
+        Skill correctionSkill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
         String originalQuery = (String) body.get("originalQuery");
         String badResponse = (String) body.get("badResponse");
         String correctedResponse = (String) body.get("correctedResponse");
+        if (correctedResponse == null || correctedResponse.isBlank()) {
+            throw new BusinessException(400, "修正答案不能为空");
+        }
         String correctedBy = (String) body.getOrDefault("correctedBy", "admin");
         @SuppressWarnings("unchecked")
         List<String> grainIdList = (List<String>) body.get("grainIds");
 
-        // 1. 保存矫正记录
+        // 1. 先校验全部颗粒归属，任何越权都在写库前失败
+        List<ExperienceGrain> ownedGrains = new java.util.ArrayList<>();
+        int decayed = 0;
+        if (grainIdList != null) {
+            for (String gid : grainIdList) {
+                UUID grainId;
+                try {
+                    grainId = UUID.fromString(gid);
+                } catch (RuntimeException e) {
+                    throw new BusinessException(400, "颗粒 ID 格式不正确：" + gid);
+                }
+                ExperienceGrain grain = grainRepository.findById(grainId)
+                        .orElseThrow(() -> new BusinessException(404, "颗粒不存在：" + gid));
+                // 颗粒必须属于本次矫正的分身，防止跨企业/跨分身衰减权重
+                if (correctionSkill.getSpaceId() == null
+                        || !correctionSkill.getSpaceId().equals(grain.getSpaceId())) {
+                    throw new BusinessException(403, "颗粒不属于该分身：" + gid);
+                }
+                ownedGrains.add(grain);
+            }
+        }
+
+        // 2. 保存矫正记录并衰减权重（校验通过后才写）
         var correction = AnswerCorrection.builder()
                 .id(UUID.randomUUID())
                 .skillId(skillId)
@@ -560,29 +533,20 @@ public class AdminInsightController {
                 .grainIds(grainIdList != null ? grainIdList.toString() : null)
                 .createdAt(LocalDateTime.now())
                 .build();
-        correctionRepository.save(correction);
-
-        // 2. 关联颗粒 weight × 0.7 衰减
-        int decayed = 0;
-        if (grainIdList != null) {
-            for (String gid : grainIdList) {
-                grainRepository.findById(UUID.fromString(gid)).ifPresent(g -> {
-                    double oldW = g.getWeight() != null ? g.getWeight() : 1.0;
-                    g.setWeight(Math.max(0.1, oldW * 0.7));
-                    grainRepository.save(g);
-                });
-                decayed++;
-            }
-        }
+        // 矫正记录 + 全部权重更新在同一事务，避免部分写入
+        decayed = adminInsightService.applyCorrection(correction, ownedGrains);
 
         // 3. 写审计日志
         try {
             auditLogRepository.save(AdminAuditLog.builder()
                 .id(UUID.randomUUID())
                 .action("correct_answer")
-                .detail(String.format("skillId=%s by=%s query=%s grains=%d", skillId, correctedBy,
+                .detail(String.format("skillId=%s by=%s query=%s grains=%d%s", skillId, correctedBy,
                     originalQuery != null ? originalQuery.substring(0, Math.min(50,
-                        originalQuery.length())) : "", decayed))
+                        originalQuery.length())) : "", decayed,
+                    TokenContext.getActingCompanyId() != null
+                            ? " actingCompanyId=" + TokenContext.getActingCompanyId()
+                            : ""))
                 .createdAt(LocalDateTime.now())
                 .build());
         } catch (Exception e) {
@@ -591,6 +555,31 @@ public class AdminInsightController {
 
         log.info("回答矫正完成 skillId={} decayed={} grains", skillId, decayed);
         return ApiResponse.success(Map.of("corrected", true, "decayedGrains", decayed));
+    }
+
+    /**
+     * 洞察归属校验。历史数据可能 skill_id 为空（来自无分身归属的聚类），
+     * 这类记录只允许平台处理，企业管理员按「不存在」处理，避免按 ID 越权读写。
+     */
+    private void assertInsightAccess(AutoInsight insight) {
+        if (insight.getSkillId() == null) {
+            if (!companyScopeService.isUnrestrictedDataScope()) {
+                throw new BusinessException(404, "洞察不存在");
+            }
+            return;
+        }
+        companyScopeService.assertSkillOwnership(insight.getSkillId());
+    }
+
+    /** 候选颗粒归属校验，规则同洞察：无 skill 归属的只允许平台处理 */
+    private void assertCandidateAccess(CandidateGrain candidate) {
+        if (candidate.getSkillId() == null) {
+            if (!companyScopeService.isUnrestrictedDataScope()) {
+                throw new BusinessException(404, "候选颗粒不存在");
+            }
+            return;
+        }
+        companyScopeService.assertSkillOwnership(candidate.getSkillId());
     }
 
 }

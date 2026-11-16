@@ -104,6 +104,28 @@ export function getTokenDaily(days: number = 30): Promise<DailyTokenRow[]> {
   return apiClient<DailyTokenRow[]>(`/admin/token-usage/daily?days=${days}`);
 }
 
+export interface ModelTokenRow {
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+export interface CompanyTokenRow {
+  companyId: string;
+  companyName: string;
+  inputTokens: number;
+  outputTokens: number;
+  count: number;
+}
+/** 按模型分布 */
+export function getTokenByModel(days: number = 30): Promise<ModelTokenRow[]> {
+  return apiClient<ModelTokenRow[]>(`/admin/token-usage/by-model?days=${days}`);
+}
+/** 企业用量排行（超管） */
+export function getTokenByCompany(days: number = 30): Promise<CompanyTokenRow[]> {
+  return apiClient<CompanyTokenRow[]>(`/admin/token-usage/by-company?days=${days}`);
+}
+
 /** 分页明细 */
 export function getTokenLogs(page: number = 0, size: number = 20): Promise<{ items: TokenLogItem[]; page: number; size: number; total: number }> {
   return apiClient(`/admin/token-usage/logs?page=${page}&size=${size}`);

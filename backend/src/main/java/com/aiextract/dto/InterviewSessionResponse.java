@@ -86,6 +86,15 @@ public class InterviewSessionResponse {
      */
     private String avatarUrl;
 
+    /** 颗粒萃取状态：pending/extracting/done/failed */
+    private String extractionStatus;
+
+    /** 最近一次萃取失败原因 */
+    private String extractionError;
+
+    /** 最近一次萃取成功时间 */
+    private String extractedAt;
+
     /**
      * 阶段信息内部类
      */

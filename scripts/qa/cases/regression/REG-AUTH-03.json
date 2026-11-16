@@ -1,0 +1,54 @@
+[
+  {
+    "id": "REG-AUTH-03",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "platform",
+    "roles": ["super_admin", "anonymous"],
+    "llm": false,
+    "sourceBug": "企业管理员注册码 maxUses=0，码外流后可无限次创建企业管理员；usedCount 读-改-写并发下可超发",
+    "steps": [
+      {
+        "as": "super_admin",
+        "api": "POST /admin/companies/0a000000-0000-0000-0000-000000000001/codes",
+        "body": { "defaultRole": "company_admin" },
+        "expect": { "status": 200, "json": { "data.maxUses": 1, "data.defaultRole": "company_admin" } },
+        "save": { "code": "data.code" }
+      },
+      {
+        "as": "anonymous",
+        "api": "POST /auth/register/with-code",
+        "body": {
+          "companyCode": "${code}",
+          "account": "QA-${runId}-adm1",
+          "password": "Qa123456!",
+          "name": "QA-第一管理员"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "anonymous",
+        "api": "POST /auth/register/with-code",
+        "body": {
+          "companyCode": "${code}",
+          "account": "QA-${runId}-adm2",
+          "password": "Qa123456!",
+          "name": "QA-第二人"
+        },
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select used_count || '/' || max_uses from public.company_register_code where code = :code",
+        "expect": "1/1"
+      },
+      {
+        "type": "db",
+        "sql": "select (last_used_by is not null)::text from public.company_register_code where code = :code",
+        "expect": "true"
+      }
+    ]
+  }
+]

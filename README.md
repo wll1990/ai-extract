@@ -47,6 +47,8 @@ cp .env.example .env
 ```env
 DEEPSEEK_API_KEY=sk-your-real-api-key-here
 JWT_SECRET=your-strong-random-secret
+# 32 字节 Base64：openssl rand -base64 32（缺失时后端拒绝启动）
+PARTNER_AES_KEY=your-32-byte-base64-key
 ```
 
 **AI服务 `.env`**（Python FastAPI 使用）：

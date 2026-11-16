@@ -1,0 +1,125 @@
+import { ANCHORS, type TourChapter } from './types';
+
+/**
+ * 自助轨道追加章节：分享接入、教练补充、评测、数据看板。
+ * 仅 onboarding 轨道使用。
+ */
+export const FULL_CHAPTERS: TourChapter[] = [
+  {
+    id: 'share',
+    tracks: ['onboarding'],
+    title: '分享与接入',
+    summary: '把分身发出去：分享链接，发布到飞书 / 企业微信 / 钉钉。',
+    permission: 'IM_MANAGE',
+    blockedBy: ['K7'],
+    steps: [
+      {
+        id: 'share-entry',
+        kind: 'spotlight',
+        route: '/admin/skills',
+        target: ANCHORS.shareEntry,
+        title: '分享分对内和对外',
+        body: '对外默认关闭，对内默认开启；每个渠道有独立的分享码。打开后对方用链接直接进入对话页，不需要培训。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/components/admin/ShareModal.tsx；ShareService.java:104-134',
+      },
+      {
+        id: 'share-im',
+        kind: 'spotlight',
+        route: '/admin/im-bots',
+        target: ANCHORS.imBots,
+        title: '日常在 IM 里就能问',
+        body: '分身可以发布到飞书、企业微信或钉钉，一个分身对应一个机器人。飞书/钉钉支持群聊 @ 提问，企业微信当前是应用单聊。发布到分身广场和发布到 IM 是两件事，需要分别操作。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/app/admin/im-bots/page.tsx；lib/api/im.ts:76-89',
+      },
+    ],
+  },
+  {
+    id: 'coach',
+    tracks: ['onboarding'],
+    title: '教练补充',
+    summary: 'AI 报告之外，加一句人的判断。',
+    permission: 'SALES_REVIEW',
+    blockedBy: ['R1'],
+    steps: [
+      {
+        id: 'coach-ledger',
+        kind: 'spotlight',
+        route: '/sales/coach/ledger',
+        target: ANCHORS.coachLedger,
+        title: '教练看到的是一份待办',
+        body: '教练台账默认看「复盘记录」历史表；切到「待我补充」才看到待处理的请求，点进去就能写补充。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/app/sales/coach/ledger/page.tsx:71-73',
+      },
+      {
+        id: 'coach-boundary',
+        kind: 'concept',
+        interaction: 'modal',
+        title: '补充是旁路，不改写 AI 结论',
+        body: '教练补充单独存在 review_coach_note 里，不改写原报告、不参与报告重新生成，也不会自动变成经验颗粒。它的价值是让销售看到「人怎么看这件事」，而不是污染 AI 的原始判断。',
+        estimatedSeconds: 35,
+        source: 'backend/src/main/java/com/aiextract/service/SalesCoachSupplementService.java:39-43',
+      },
+    ],
+  },
+  {
+    id: 'evaluation',
+    tracks: ['onboarding'],
+    title: '评测中心',
+    summary: '用固定问题集，量一次分身答得怎么样。',
+    permission: 'EVAL_MANAGE',
+    steps: [
+      {
+        id: 'eval-datasets',
+        kind: 'spotlight',
+        route: '/admin/evaluations',
+        target: ANCHORS.evalDatasets,
+        title: '先准备问题集',
+        body: '按「预期要点（金标）」和「禁止项（红线）」出题，跑同一套题才能比较两次改动。当前没有「应拒答」题型，也没有独立的拒答率指标。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/app/admin/evaluations/page.tsx:90-113',
+      },
+      {
+        id: 'eval-runs',
+        kind: 'spotlight',
+        route: '/admin/evaluations/runs',
+        target: ANCHORS.evalRuns,
+        title: '看命中，也看红线',
+        body: '运行结果给出命中与召回；红线问题命中即失败。当前没有独立的「拒答率」指标，讲的时候不要编。',
+        estimatedSeconds: 30,
+        source: 'backend/src/main/java/com/aiextract/service/EvaluationJudgeService.java:72-83',
+      },
+    ],
+  },
+  {
+    id: 'insights',
+    tracks: ['onboarding'],
+    title: '数据看板',
+    summary: '场景覆盖、检索命中、缺口分布。',
+    permission: 'DASHBOARD_VIEW',
+    steps: [
+      {
+        id: 'insights-global',
+        kind: 'spotlight',
+        route: '/admin/insights',
+        target: ANCHORS.insightsOverview,
+        title: '全局先看总量',
+        body: '全局页给 KPI、命中率、颗粒总数、缺口数和分身卡片；更细的场景提问 TOP5、RAG 匹配分布、缺口明细在单个分身的详情页。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/app/admin/insights/page.tsx:40-186',
+      },
+      {
+        id: 'insights-skill',
+        kind: 'spotlight',
+        route: '/admin/insights/{publishedSkillId}',
+        target: ANCHORS.insightsSkill,
+        title: '单个分身才看得到细节',
+        body: '场景提问 TOP5、RAG 匹配分布、最好/最差颗粒、待处理缺口都在这里。它回答的是「下一个该补什么」。',
+        estimatedSeconds: 30,
+        source: 'frontend/src/app/admin/insights/[skillId]/page.tsx:110-145',
+      },
+    ],
+  },
+];

@@ -38,6 +38,7 @@ public class AdminGrainController {
     @GetMapping
     public ApiResponse<Map<String, Object>> listGrains(
             @RequestParam UUID skillId,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "helpful") String sort,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -49,7 +50,9 @@ public class AdminGrainController {
             sort.equals("unhelpful") ? org.springframework.data.domain.Sort.by("unhelpfulCount").descending()
             : sort.equals("recent") ? org.springframework.data.domain.Sort.by("createdAt").descending()
             : org.springframework.data.domain.Sort.by("helpfulCount").descending());
-        var grainPage = grainRepository.findBySpaceId(skill.getSpaceId(), pageable);
+        var grainPage = (status == null || status.isBlank())
+            ? grainRepository.findBySpaceId(skill.getSpaceId(), pageable)
+            : grainRepository.findBySpaceIdAndStatus(skill.getSpaceId(), status, pageable);
 
         return ApiResponse.success(PageResponse.of(
             grainPage.getContent().stream().map(this::toMap).collect(Collectors.toList()),
@@ -77,10 +80,32 @@ public class AdminGrainController {
     /** 新增颗粒 — 委托 Service 处理 */
     @PostMapping
     public ApiResponse<Map<String, Object>> createGrain(@RequestBody Map<String, Object> body) {
-        UUID skillId = UUID.fromString((String) body.get("skillId"));
+        Object rawSkillId = body.get("skillId");
+        if (!(rawSkillId instanceof String skillIdStr) || skillIdStr.isBlank()) {
+            throw new BusinessException(400, "缺少 skillId");
+        }
+        UUID skillId;
+        try {
+            skillId = UUID.fromString(skillIdStr);
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(400, "skillId 格式不正确");
+        }
         companyScopeService.assertSkillOwnership(skillId);
         ExperienceGrain g = adminGrainService.createGrain(body);
         return ApiResponse.success(toMap(g));
+    }
+
+    /** 恢复已废弃颗粒（重新参与检索） */
+    @PostMapping("/{grainId}/restore")
+    public ApiResponse<Void> restoreGrain(@PathVariable UUID grainId) {
+        companyScopeService.assertGrainOwnership(grainId);
+        ExperienceGrain g = grainRepository.findById(grainId)
+            .orElseThrow(() -> new BusinessException(404, "颗粒不存在"));
+        if (!"deprecated".equals(g.getStatus())) {
+            throw new BusinessException(400, "只有已废弃的颗粒可以恢复");
+        }
+        adminGrainService.restoreGrain(grainId);
+        return ApiResponse.success(null);
     }
 
     /** 废弃颗粒 */
@@ -115,17 +140,55 @@ public class AdminGrainController {
      */
     @GetMapping("/traceability")
     public ApiResponse<List<Map<String, Object>>> getTraceability(@RequestParam String grainIds) {
-        List<UUID> ids = Arrays.stream(grainIds.split(","))
-            .map(String::trim).filter(s -> !s.isEmpty())
-            .map(UUID::fromString).toList();
+        List<UUID> ids;
+        try {
+            ids = Arrays.stream(grainIds.split(","))
+                .map(String::trim).filter(s -> !s.isEmpty())
+                .map(UUID::fromString).toList();
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(400, "grainIds 格式不正确");
+        }
+        if (ids.size() > 50) {
+            throw new BusinessException(400, "一次最多查询 50 个颗粒");
+        }
+        if (ids.isEmpty()) {
+            return ApiResponse.success(List.of());
+        }
+
+        // 批量取颗粒 + 批量取报告/素材，替代逐 ID findById 的 N+1
+        Map<UUID, ExperienceGrain> grainMap = grainRepository.findAllById(ids).stream()
+            .collect(Collectors.toMap(ExperienceGrain::getId, g -> g));
+        // 平台视角（未切换企业）不限制；企业视角用当前企业的空间集合做白名单
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        Set<UUID> allowedSpaceIds = unrestricted ? null
+                : companyScopeService.getSpaceIds(com.aiextract.config.TokenContext.getCompanyId());
+        Map<UUID, com.aiextract.model.Report> reportMap = new LinkedHashMap<>();
+        Map<UUID, com.aiextract.model.SkillMaterial> materialMap = new LinkedHashMap<>();
+        List<UUID> reportIds = new ArrayList<>();
+        List<UUID> materialIds = new ArrayList<>();
+        for (UUID gid : ids) {
+            var g = grainMap.get(gid);
+            if (g == null) continue;
+            if (!unrestricted && (g.getSpaceId() == null || !allowedSpaceIds.contains(g.getSpaceId()))) {
+                throw new BusinessException(403, "无权访问该颗粒");
+            }
+            if (g.getReportId() != null) reportIds.add(g.getReportId());
+            if (g.getSourceMaterialId() != null) materialIds.add(g.getSourceMaterialId());
+        }
+        if (!reportIds.isEmpty()) {
+            reportRepository.findAllById(reportIds).forEach(r -> reportMap.put(r.getId(), r));
+        }
+        if (!materialIds.isEmpty()) {
+            skillMaterialRepository.findAllById(materialIds).forEach(m -> materialMap.put(m.getId(), m));
+        }
+
         List<Map<String, Object>> result = new ArrayList<>();
         for (UUID gid : ids) {
-            companyScopeService.assertGrainOwnership(gid);
-            var grain = grainRepository.findById(gid).orElse(null);
+            var grain = grainMap.get(gid);
             if (grain == null) continue;
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("grainId", gid.toString());
-            item.put("spaceId", grain.getSpaceId().toString());
+            item.put("spaceId", grain.getSpaceId() != null ? grain.getSpaceId().toString() : null);
             item.put("sceneDescription", grain.getSceneDescription());
             item.put("expertThought", grain.getExpertThought());
             item.put("standardScript", grain.getStandardScript());
@@ -133,19 +196,21 @@ public class AdminGrainController {
             item.put("qualityScore", grain.getQualityScore());
             item.put("difficultyLevel", grain.getDifficultyLevel());
             if (grain.getReportId() != null) {
-                reportRepository.findById(grain.getReportId()).ifPresent(r -> {
+                var r = reportMap.get(grain.getReportId());
+                if (r != null) {
                     item.put("reportTitle", r.getTitle());
                     item.put("reportId", r.getId().toString());
-                });
+                }
             }
             if (grain.getSourceMaterialId() != null) {
-                skillMaterialRepository.findById(grain.getSourceMaterialId()).ifPresent(m -> {
+                var m = materialMap.get(grain.getSourceMaterialId());
+                if (m != null) {
                     item.put("sourceName", m.getFileName());
                     item.put("sourceType", "file_upload");
                     String content = m.getParsedContent();
                     item.put("sourceSnippet", content != null && content.length() > 500
                         ? content.substring(0, 500) + "…" : content);
-                });
+                }
             }
             result.add(item);
         }

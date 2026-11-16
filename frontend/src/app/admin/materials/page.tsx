@@ -10,9 +10,13 @@ export default function MaterialsOverviewPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    apiClient<any[]>('/admin/skills/picker').then(d => setSkills(d || [])).catch(() => {}).finally(() => setLoading(false));
+    apiClient<any[]>('/admin/skills/picker')
+      .then(d => setSkills(d || []))
+      .catch((e: unknown) => setError(e instanceof Error && e.message ? e.message : '加载失败，请稍后重试'))
+      .finally(() => setLoading(false));
   }, []);
 
   if (loading) return <LoadingSpinner />;
@@ -28,7 +32,12 @@ export default function MaterialsOverviewPage() {
           </button>
         </div>
 
-        {skills.length === 0 ? (
+        {error ? (
+          <div className="rounded-xl border border-danger bg-danger-bg px-4 py-3 text-sm text-danger">
+            <p>{error}</p>
+            <button onClick={() => window.location.reload()} className="mt-2 text-xs underline">重试</button>
+          </div>
+        ) : skills.length === 0 ? (
           <div className="py-16 text-center text-muted-foreground-2">
             <p className="text-4xl mb-2">📁</p>
             <p>暂无分身，请先上传素材创建分身</p>

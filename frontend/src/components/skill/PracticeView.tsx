@@ -30,10 +30,20 @@ export interface PracticeMessage {
   grainCount?: number;
 }
 
+export interface PracticeRound {
+  round: number;
+  score?: number;
+  problem?: string;
+  suggestion?: string;
+  quote?: string;
+}
+
 export interface PracticeEval {
   score?: number;
   strengths: Array<{ point: string; quote: string }>;
   improvements: Array<{ point: string; quote: string; suggestion: string }>;
+  /** 逐轮反馈（TR-04） */
+  rounds?: PracticeRound[];
   demo_script: string;
   next_advice: string;
 }
@@ -70,7 +80,7 @@ export interface PracticeViewProps {
   /** 继续下一轮（下一个角度） */
   onAdvanceRound?: () => void;
   /** 点击溯源按钮 */
-  onTraceClick?: (grainIds: string) => void;
+  onTraceClick?: (grainIds: string, avgSimilarity?: number) => void;
   inputValue: string;
   onInputChange: (v: string) => void;
   footer?: React.ReactNode;
@@ -154,7 +164,7 @@ export function PracticeView({
                           </span>
                         )}
                         {hasTrace && (
-                          <button onClick={() => onTraceClick?.(msg.grainIds!)} className="text-[10px] text-muted-foreground hover:text-primary transition-colors">
+                          <button onClick={() => onTraceClick?.(msg.grainIds!, msg.avgSimilarity ? Number(msg.avgSimilarity) : undefined)} className="text-[10px] text-muted-foreground hover:text-primary transition-colors">
                             溯源 · {msg.grainCount} 条 →
                           </button>
                         )}
@@ -344,6 +354,33 @@ export function PracticeView({
           {currentScene?.scene?.title || '对练'} · 共 {messages.filter(m => m.role === 'user').length} 轮回应
         </p>
       </div>
+
+      {evaluation.rounds && evaluation.rounds.length > 0 && (
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground mb-3">
+            <span>🔁</span><span>逐轮反馈</span>
+          </h3>
+          <div className="space-y-2">
+            {evaluation.rounds.map((r, i) => (
+              <div key={i} className="rounded-xl border border-border bg-surface-2 p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-muted-foreground">第 {r.round} 轮</span>
+                  {r.score != null && (
+                    <span className="text-xs font-medium text-primary">{r.score}/10</span>
+                  )}
+                </div>
+                {r.quote && (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    你说：&ldquo;<span className="text-foreground">{r.quote}</span>&rdquo;
+                  </p>
+                )}
+                {r.problem && <p className="mt-1 text-sm text-foreground">问题：{r.problem}</p>}
+                {r.suggestion && <p className="mt-1 text-sm text-primary">→ {r.suggestion}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {hasWeaknesses && (
         <div>

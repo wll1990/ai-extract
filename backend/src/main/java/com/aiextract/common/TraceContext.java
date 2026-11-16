@@ -37,6 +37,22 @@ public class TraceContext {
         return traceId;
     }
 
+    /**
+     * 复用调用方（前端 / 网关）传入的 traceId，实现前端→Nginx→后端全链路关联。
+     * 非法值（过长/含特殊字符）直接忽略，退化为后端生成。
+     */
+    public static String start(String incomingTraceId) {
+        if (incomingTraceId != null) {
+            String candidate = incomingTraceId.trim();
+            if (candidate.matches("[A-Za-z0-9._-]{8,64}")) {
+                MDC.put(MDC_KEY, candidate);
+                START_TIME.set(System.currentTimeMillis());
+                return candidate;
+            }
+        }
+        return init(UUID.randomUUID());
+    }
+
     /** 获取当前 traceId */
     public static String get() {
         String id = MDC.get(MDC_KEY);

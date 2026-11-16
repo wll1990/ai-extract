@@ -1,0 +1,51 @@
+[
+  {
+    "id": "REG-NOTIF-01",
+    "set": "regression",
+    "priority": "P2",
+    "domain": "platform",
+    "roles": ["c_user", "employee"],
+    "llm": false,
+    "sourceBug": "NT-01 C 端用户 companyId 为空时站内信被丢弃；NT-04 通知不能删除",
+    "steps": [
+      {
+        "dbExec": {
+          "sql": "INSERT INTO public.user_notification (id, company_id, user_id, type, title, content, created_at) SELECT '0d000000-0000-0000-0000-000000000001', NULL, id, 'qa', 'QA 站内信', 'C 端站内信验证', now() FROM public.\"user\" WHERE account = 'qa_c_user' ON CONFLICT (id) DO NOTHING"
+        }
+      },
+      {
+        "as": "c_user",
+        "api": "GET /me/notifications?page=1&size=5",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "c_user",
+        "api": "GET /me/notifications/unread-count",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "DELETE /me/notifications/0d000000-0000-0000-0000-000000000001",
+        "expect": { "status": 404 },
+        "note": "别人的通知按不存在处理"
+      },
+      {
+        "as": "c_user",
+        "api": "POST /me/notifications/0d000000-0000-0000-0000-000000000001/read",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "c_user",
+        "api": "DELETE /me/notifications/0d000000-0000-0000-0000-000000000001",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.user_notification where id = '0d000000-0000-0000-0000-000000000001'",
+        "expect": "0"
+      }
+    ]
+  }
+]

@@ -8,7 +8,7 @@ import React from 'react';
  */
 export function MaterialUploadGuide() {
   return (
-    <div className="space-y-4 text-sm text-foreground">
+    <div className="space-y-4 text-sm text-foreground" data-tour="upload-guide">
       {/* 接收什么 */}
       <section>
         <h4 className="font-semibold text-foreground mb-2">✅ 我们接收什么</h4>
@@ -58,33 +58,30 @@ export function MaterialUploadGuide() {
         <h4 className="font-semibold text-foreground mb-2">📁 支持的文件格式</h4>
 
         <p className="text-xs text-muted-foreground mb-1.5">
-          <span className="text-green-500 font-medium">● 即时处理</span> — 上传后直接预检，无需等待
+          <span className="text-blue-500 font-medium">● 自动解析</span> — 上传后异步解析，完成即可萃取
         </p>
         <div className="flex flex-wrap gap-1.5 mb-2">
-          {['.txt', '.md', '.csv', '.html', '.json', '.xml'].map(f =>
-            <span key={f} className="rounded-full bg-green-50 border border-green-200 px-2.5 py-0.5 text-xs text-green-700">{f}</span>
-          )}
-        </div>
-
-        <p className="text-xs text-muted-foreground mb-1.5">
-          <span className="text-blue-500 font-medium">● AI 解析</span> — 异步处理，完成后可萃取
-        </p>
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {['.pdf', '.docx', '.doc', '.xlsx', '.xls'].map(f =>
+          {['.txt', '.md', '.csv', '.html', '.htm', '.pdf', '.docx', '.pptx'].map(f =>
             <span key={f} className="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs text-blue-700">{f}</span>
           )}
         </div>
 
         <p className="text-xs text-muted-foreground mb-1.5">
-          <span className="text-orange-500 font-medium">● 需人工补充</span> — 图片/音频解析后需手动添加文字描述
+          <span className="text-orange-500 font-medium">● 需人工补充</span> — 图片/音频上传后需手动补录文字
         </p>
         <div className="flex flex-wrap gap-1.5">
-          {['.png', '.jpg', '.jpeg', '.mp3', '.wav', '.m4a'].map(f =>
+          {['.png', '.jpg', '.jpeg', '.mp3', '.wav'].map(f =>
             <span key={f} className="rounded-full bg-orange-50 border border-orange-200 px-2.5 py-0.5 text-xs text-orange-700">{f}</span>
           )}
         </div>
 
-        <p className="text-xs text-muted-foreground-2 mt-2">单个文件 ≤ 100MB，每次最多 5 个文件</p>
+        <p className="text-xs text-muted-foreground-2 mt-2">
+          单个文件 ≤ 20MB，最多 5 个文件。
+          不支持 .doc / .xls / .xlsx / .ppt，请另存为新格式后上传。
+        </p>
+        <p className="mt-2 text-xs text-muted-foreground-2">
+          合同模板、制度文件、产品说明书等参考资料不属于素材，系统会直接拒绝并提示改走知识库。
+        </p>
       </section>
 
       {/* 硬性要求 */}

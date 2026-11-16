@@ -1,0 +1,22 @@
+[
+  {
+    "id": "REG-PERM-04",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "manage",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "K8 误判：员工 GET /spaces 返回 200 是设计如此（「我的空间」入口需要 SPACE_OWN），不是权限放大；本用例锁定数据范围",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /spaces?page=1&size=20&userId=0a000000-0000-0000-0000-000000000011&keyword=%E7%AE%A1%E7%90%86%E5%91%98",
+        "expect": {
+          "status": 200,
+          "json": { "data.total": 0 }
+        }
+      }
+    ],
+    "assertions": []
+  }
+]

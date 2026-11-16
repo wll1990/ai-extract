@@ -15,7 +15,7 @@
 | `frontend/` | Next.js 14 | B 端管理后台 + 分身广场主应用 |
 | `platform/` | Next.js 14 | C 端平台「MindForge」（发现专家/我的分身/分享页） |
 | `ai-service/` | Python FastAPI | **只剩文件解析**（txt/docx/pdf/pptx/xlsx/csv/html/图片/音频→文本） |
-| `feishu-bot/` | Node.js | 飞书桥接（WebSocket 长连接 + HMAC 验签，转发后端） |
+| `im-bridge/` | Node.js | IM 桥：飞书（扫码 + WebSocket）、企业微信（自建应用回调）、钉钉（Stream 长连接），HMAC 验签转发后端 |
 
 > ⚠️ **与 README 的偏差**：README 声称 ai-service 提供 `/internal/chat`、报告生成、访谈引擎——**这些已全部迁回 backend**（Spring AI 直连 DeepSeek）。ai-service 现在只有 `/internal/parse-file`（[internal.py](ai-service/routers/internal.py)，179 行，`services/` 为空）。后端 `client/` 目录空置。
 
@@ -34,7 +34,7 @@ ai-extract/
 ├── frontend/src/     # B 端：app/(admin, skill/[skillId], interview, report, explore, space) + lib/(api, sse.ts)
 ├── platform/src/     # C 端 MindForge：app/(discover, chat, platform/my, s/[shareCode], h5)
 ├── ai-service/       # 文件解析服务（routers/internal.py → /internal/parse-file）
-├── feishu-bot/src/   # index.js/bridge.js/channel-manager.js/hmac.js
+├── im-bridge/src/    # index.js/bridge.js/registry.js/channels/{feishu,wecom,dingtalk}.js
 ├── prompts/          # 40+ 个 .md Prompt 模板（领域感知，PromptLoader 加载）
 └── docs/             # 30+ 设计/API/测试文档
 ```
@@ -97,7 +97,9 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 - 历史消息角色：前端用 `'ai'`，**DB 存 `'assistant'`**，渲染时两者都要匹配
 - 已发布分身 (`status='published'`) 才持久化对话，未发布分身使用临时 UUID
 - SSE 统一走 `frontend/src/lib/sse.ts`（逐行 JSON + raw 两种格式），禁止内联 fetch 手写解析
-- `feishu-bot` 与后端 `/internal/im/*` 之间 HMAC-SHA256 双向验签（`feishu-bot/src/hmac.js` ↔ `config/ImBridgeAuth`）
+- `im-bridge` 与后端 `/internal/im/*` 之间 HMAC-SHA256 双向验签（`im-bridge/src/hmac.js` ↔ `config/ImBridgeAuth`）
+- IM 渠道契约平台无关：`/internal/im/message` 收统一消息，`/internal/im/{channelType}/complete|active` 做生命周期；新增渠道只需加一个 `channels/*.js` 适配器
+- 企业微信回调走 `GET/POST /wecom/callback`（需公网 HTTPS 指向桥 3010）；钉钉走 Stream，无需公网回调
 
 ## 角色定位
 

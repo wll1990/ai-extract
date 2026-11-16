@@ -67,7 +67,7 @@ export function SkillChatView({
   return (
     <div className="flex-1 flex flex-col min-h-0">
       {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3" data-tour="skill-thread">
         {children}
         {isStreaming && !streamText && <ThinkingCard name={ownerName} />}
         <div ref={chatEndRef} />
@@ -88,6 +88,7 @@ export function SkillChatView({
                 </div>
               )}
               <textarea
+                data-tour="skill-input"
                 value={inputValue}
                 onChange={(e) => onInputChange(e.target.value)}
                 onKeyDown={handleKeyDown}

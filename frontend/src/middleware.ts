@@ -10,13 +10,13 @@ import type { NextRequest } from 'next/server';
  */
 
 // 无需登录即可访问的路径
-const PUBLIC_PATHS = ['/login', '/register'];
+const PUBLIC_PATHS = ['/login', '/register', '/portal'];
 
 // 公开路径前缀（C 端分享页 + H5 移动端 + 对内分享 + 公开报告分享，无需 B 端 cookie）
-const PUBLIC_PREFIXES = ['/s/', '/h5/', '/i/', '/public/'];
+const PUBLIC_PREFIXES = ['/s/', '/h5/', '/i/', '/public/', '/portal/'];
 
 // 静态资源和 API 路由不拦截
-const SKIP_PREFIXES = ['/_next', '/api', '/favicon.ico', '/robots.txt'];
+const SKIP_PREFIXES = ['/_next', '/api', '/assets', '/favicon.ico', '/robots.txt'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

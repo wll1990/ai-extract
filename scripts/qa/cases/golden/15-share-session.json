@@ -1,0 +1,50 @@
+[
+  {
+    "id": "GOLD-SHARE-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "daily",
+    "roles": ["anonymous", "c_guest"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "anonymous",
+        "api": "POST /public/share/skills/0a000000-0000-0000-0000-000000000032/guest",
+        "expect": { "status": 200, "json": { "data.status": "guest" } },
+        "save": { "guestToken": "data.token", "guestUserId": "data.userId" }
+      },
+      {
+        "tokenFrom": "guestToken",
+        "api": "GET /skills/0a000000-0000-0000-0000-000000000032/detail",
+        "expect": { "status": 200 }
+      },
+      {
+        "tokenFrom": "guestToken",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说价格太高，但又不肯说预算，我该怎么开口？",
+          "sessionId": "QA-${runId}-guest"
+        },
+        "expect": { "status": 200, "eventTypes": ["meta", "content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      }
+    ],
+    "assertions": [
+      {
+        "type": "dbPoll",
+        "sql": "select count(*) from public.skill_conversation where skill_id = '0a000000-0000-0000-0000-000000000032' and user_id = :guestUserId",
+        "until": ["1"],
+        "maxAttempts": 12,
+        "intervalMs": 3000
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_message where conversation_id in (select id from public.skill_conversation where user_id = :guestUserId)",
+        "op": "gte",
+        "expect": "2"
+      }
+    ]
+  }
+]

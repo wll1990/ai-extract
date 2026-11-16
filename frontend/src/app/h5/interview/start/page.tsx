@@ -9,6 +9,7 @@ export default function H5InterviewStartPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cUser, setCUser] = useState<{ userId: string; extractionRemaining?: number; extractionLimit?: number } | null>(null);
+  const [activeSession, setActiveSession] = useState<{ sessionId: string; topic: string } | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
@@ -23,6 +24,18 @@ export default function H5InterviewStartPage() {
             .then((r) => r.json())
             .then((d) => {
               if (d.code === 200) setCUser(d.data);
+            })
+            .catch(() => {});
+          // 已有进行中的访谈：直接给「继续」入口，而不是等创建时撞 409
+          fetch('/api/v1/interviews/active', {
+            headers: { Authorization: `Bearer ${session.token}` },
+          })
+            .then((r) => r.json())
+            .then((d) => {
+              const first = d?.data?.sessions?.[0];
+              if (first?.sessionId) {
+                setActiveSession({ sessionId: first.sessionId, topic: first.topic || '未命名访谈' });
+              }
             })
             .catch(() => {});
         }
@@ -69,6 +82,16 @@ export default function H5InterviewStartPage() {
       <div className="w-full max-w-sm">
         <h1 className="text-xl font-bold text-[#10162f] mb-1">AI 经验萃取师</h1>
         <p className="text-sm text-[#747f9e] mb-8">发现你未被看见的价值</p>
+
+        {activeSession && (
+          <div className="mb-3 flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm">
+            <span className="min-w-0 truncate text-amber-800">进行中：{activeSession.topic}</span>
+            <button onClick={() => router.push(`/h5/interview/chat/${activeSession.sessionId}`)}
+              className="ml-2 flex-none rounded-lg bg-amber-500 px-3 py-1 text-white">
+              继续
+            </button>
+          </div>
+        )}
 
         {authChecked && cUser && cUser.extractionRemaining !== undefined && (
           <div className="mb-4 px-4 py-2.5 rounded-xl bg-white border border-[#dfe6ff] text-sm text-[#10162f]">

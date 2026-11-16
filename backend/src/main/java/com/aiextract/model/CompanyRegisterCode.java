@@ -68,4 +68,12 @@ public class CompanyRegisterCode {
     /** 此注册码创建的用户的默认角色（employee / company_admin） */
     @Column(name = "default_role", length = 20)
     private String defaultRole;
+
+    /** 最近一次使用该注册码注册的用户ID */
+    @Column(name = "last_used_by")
+    private UUID lastUsedBy;
+
+    /** 最近一次使用该注册码的时间 */
+    @Column(name = "last_used_at")
+    private LocalDateTime lastUsedAt;
 }

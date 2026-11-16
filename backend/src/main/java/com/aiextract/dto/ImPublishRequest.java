@@ -32,4 +32,11 @@ public class ImPublishRequest {
 
     /** 机器人头像 URL（可选，需公网 URL） */
     private String avatar;
+
+    /**
+     * 应用凭据（企微/钉钉必填，飞书扫码发布忽略）。
+     * <p>企微：corpId / agentId / secret / token / encodingAesKey<br>
+     * 钉钉：appKey / appSecret（robotCode 可选）</p>
+     */
+    private java.util.Map<String, String> credentials;
 }

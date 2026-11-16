@@ -23,6 +23,7 @@ export default function PracticeChatSection({ skillId, initialSceneTag, setChatM
   // Practice 自有输入状态，不与 QA 共享
   const [practiceInput, setPracticeInput] = useState('');
   const [traceGrainIds, setTraceGrainIds] = useState('');
+  const [traceAvgSim, setTraceAvgSim] = useState<number | undefined>(undefined);
 
   const practice = usePracticeFlow({ skillId, setChatMode, abortRef, authToken, onLimit });
 
@@ -113,13 +114,15 @@ export default function PracticeChatSection({ skillId, initialSceneTag, setChatM
             }}
             onAdvanceRound={practice.advanceRound}
             onBackToQa={handleBackToQa}
-            onTraceClick={(grainIds) => setTraceGrainIds(grainIds)}
+            onTraceClick={(grainIds, avg) => { setTraceGrainIds(grainIds); setTraceAvgSim(avg); }}
             inputValue={practiceInput}
             onInputChange={setPracticeInput}
           />
         </div>
       </SkillChatView>
-      <TraceabilityDrawer grainIds={traceGrainIds} avgSimilarity={0} open={!!traceGrainIds} onClose={() => setTraceGrainIds('')} />
+      <TraceabilityDrawer grainIds={traceGrainIds} avgSimilarity={traceAvgSim}
+        open={!!traceGrainIds} skillId={skillId}
+        onClose={() => { setTraceGrainIds(''); setTraceAvgSim(undefined); }} />
 
       {practice.showEndConfirm && (
         <EndConfirmModal

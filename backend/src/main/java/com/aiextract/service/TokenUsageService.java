@@ -21,12 +21,21 @@ public class TokenUsageService {
 
     private final TokenUsageLogRepository repository;
 
+    /** 旧签名：保留，companyId 从 TokenContext 取 */
     @Async("tokenLogExecutor")
     public void log(UUID userId, String modelType, String modelName, int inputTokens, int outputTokens,
                     int promptChars, int completionChars) {
+        log(userId, com.aiextract.config.TokenContext.getCompanyId(), modelType, modelName,
+                inputTokens, outputTokens, promptChars, completionChars);
+    }
+
+    @Async("tokenLogExecutor")
+    public void log(UUID userId, UUID companyId, String modelType, String modelName,
+                    int inputTokens, int outputTokens, int promptChars, int completionChars) {
         try {
             repository.save(TokenUsageLog.builder()
                 .userId(userId)
+                .companyId(companyId)
                 .usageDate(LocalDate.now())
                 .modelType(modelType)
                 .modelName(modelName)
@@ -37,8 +46,8 @@ public class TokenUsageService {
                 .createdAt(LocalDateTime.now())
                 .build());
         } catch (Exception e) {
-            log.warn("Token 用量记录失败 userId={} model={} input={} output={} promptChars={} completionChars={}",
-                userId, modelName, inputTokens, outputTokens, promptChars, completionChars, e);
+            log.warn("Token 用量记录失败 userId={} companyId={} model={} input={} output={}",
+                userId, companyId, modelName, inputTokens, outputTokens, e);
         }
     }
 }

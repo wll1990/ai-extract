@@ -58,9 +58,11 @@ public class SpaceController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String tag,
             @RequestParam(required = false) UUID userId,
             @RequestParam(required = false, defaultValue = "createdAt") String sort) {
+        // 分页参数收敛，避免 size 无上限拖垮查询
+        page = Math.max(1, page);
+        size = Math.max(1, Math.min(size, 100));
         // 权限判定
         boolean isAdmin = isAdmin();
         UUID currentUserId = getCurrentUserId();
@@ -78,9 +80,13 @@ public class SpaceController {
             if (companyUserIds.isEmpty()) {
                 return ApiResponse.success(Map.of("content", List.of(), "page", page, "size", size, "total", 0L, "totalPages", 0));
             }
+            // 管理员传 userId 时，只能查本企业用户，防止按 ID 跨企业枚举
+            if (userId != null && !companyUserIds.contains(userId)) {
+                throw new com.aiextract.exception.BusinessException(403, "无权查看该用户的空间");
+            }
         }
 
-        PageRequest pr = PageRequest.of(page - 1, size);
+        PageRequest pr = PageRequest.of(Math.max(0, page - 1), size);
         Page<Space> sp;
 
         // userId 优先，其次 company 过滤，super_admin 全量
@@ -168,8 +174,8 @@ public class SpaceController {
         UUID spId = UUID.fromString(spaceId);
         Space space = spaceRepository.findById(spId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
-        // super_admin: 无限制
-        if (isSuperAdmin()) {
+        // 平台视角（超管且未切换企业）：无限制；切换后按所选企业收敛
+        if (companyScopeService.isUnrestrictedDataScope()) {
             return ApiResponse.success(spaceService.getSpaceDetail(spaceId, reportPage, reportSize, reportSort));
         }
         // company_admin: 只能看本公司
@@ -229,10 +235,7 @@ public class SpaceController {
     public ApiResponse<Map<String, Object>> updateSpace(@PathVariable String spaceId, @RequestBody Map<String, Object> body) {
         Space s = spaceRepository.findById(UUID.fromString(spaceId))
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
-        // 仅 super_admin 或本人可修改，company_admin 无权
-        if (!isSuperAdmin() && !getCurrentUserId().equals(s.getUserId())) {
-            throw new BusinessException(403, "无权修改他人的空间");
-        }
+        assertSpaceWritable(s);
         { if (body.containsKey("title")) s.setTitle((String) body.get("title")); }
         { if (body.containsKey("description")) s.setDescription((String) body.get("description")); }
         { if (body.containsKey("tags")) s.setTags(toJson(body.get("tags"))); }
@@ -242,6 +245,41 @@ public class SpaceController {
         data.put("id", s.getId().toString());
         data.put("title", s.getTitle());
         return ApiResponse.success(data);
+    }
+
+    /** 空间归档/恢复：只改状态，不删除任何素材与报告 */
+    @PatchMapping("/{spaceId}/status")
+    public ApiResponse<Map<String, Object>> updateSpaceStatus(@PathVariable String spaceId,
+                                                              @RequestBody Map<String, Object> body) {
+        Space s = spaceRepository.findById(UUID.fromString(spaceId))
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SPACE_NOT_FOUND));
+        assertSpaceWritable(s);
+        String status = body.get("status") instanceof String v ? v : null;
+        if (!"active".equals(status) && !"archived".equals(status)) {
+            throw new BusinessException(400, "status 只能为 active 或 archived");
+        }
+        s.setStatus(status);
+        s.setUpdatedAt(LocalDateTime.now());
+        spaceRepository.save(s);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("id", s.getId().toString());
+        data.put("status", s.getStatus());
+        return ApiResponse.success(data);
+    }
+
+    /** 平台视角、本人、或本企业管理员可写；跨企业一律拒绝 */
+    private void assertSpaceWritable(Space s) {
+        boolean self = getCurrentUserId().equals(s.getUserId());
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        boolean companyAdmin = false;
+        if (!self && !unrestricted) {
+            UUID companyId = TokenContext.getCompanyId();
+            companyAdmin = companyId != null && isAdmin()
+                    && companyScopeService.getSpaceIds(companyId).contains(s.getId());
+        }
+        if (!self && !companyAdmin && !unrestricted) {
+            throw new BusinessException(403, "无权修改他人的空间");
+        }
     }
 
     @SuppressWarnings("unchecked")

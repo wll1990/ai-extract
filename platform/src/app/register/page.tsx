@@ -3,7 +3,6 @@
 import { useState, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { register } from '@/lib/api/auth';
 import { setAuth } from '@/lib/storage';
 
 type RegTab = 'enterprise' | 'personal';
@@ -14,7 +13,7 @@ export default function RegisterPage() {
   const [tab, setTab] = useState<RegTab>('enterprise');
 
   // 企业注册
-  const [companyId, setCompanyId] = useState('');
+  const [companyCode, setCompanyCode] = useState('');
   const [bName, setBName] = useState('');
   const [bAccount, setBAccount] = useState('');
   const [bPassword, setBPassword] = useState('');
@@ -31,18 +30,24 @@ export default function RegisterPage() {
 
   const handleEnterpriseRegister = async (e: FormEvent) => {
     e.preventDefault();
-    if (!companyId.trim() || !bName.trim() || !bAccount.trim() || !bPassword.trim()) {
+    if (!companyCode.trim() || !bName.trim() || !bAccount.trim() || !bPassword.trim()) {
       setError('请填写所有字段');
       return;
     }
     if (bPassword.length < 6) { setError('密码至少 6 位'); return; }
     setLoading(true); setError('');
     try {
-      const result = await register({
-        companyId: companyId.trim(), name: bName.trim(),
-        account: bAccount.trim(), password: bPassword, role: 'employee',
+      const r = await fetch('/api/v1/auth/register/with-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyCode: companyCode.trim(), name: bName.trim(),
+          account: bAccount.trim(), password: bPassword,
+        }),
       });
-      setAuth(result.token, result.user as Record<string, unknown>);
+      const d = await r.json();
+      if (d.code !== 200) throw new Error(d.message || '注册失败');
+      setAuth(d.data.token, d.data.user as Record<string, unknown>);
       router.push('/discover');
     } catch (err) {
       setError(err instanceof Error ? err.message : '注册失败');
@@ -149,9 +154,9 @@ export default function RegisterPage() {
           {tab === 'enterprise' && (
             <>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 6 }}>企业 ID</label>
-                <input type="text" value={companyId} onChange={(e) => setCompanyId(e.target.value)}
-                  placeholder="你的企业唯一标识"
+                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-mid)', display: 'block', marginBottom: 6 }}>企业注册码</label>
+                <input type="text" value={companyCode} onChange={(e) => setCompanyCode(e.target.value)}
+                  placeholder="管理员提供的注册码"
                   style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: '1.5px solid var(--border-subtle)', background: 'var(--s1)', fontSize: 13, outline: 'none', fontFamily: 'inherit', color: 'var(--fg-high)', boxSizing: 'border-box' }} />
               </div>
               <div style={{ marginBottom: 14 }}>

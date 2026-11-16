@@ -70,6 +70,16 @@ export function updateSkillStatus(skillId: string, status: string): Promise<void
   return apiClient<void>(`/skills/${skillId}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
 }
 
+/** 恢复已废弃分身（30 天内），恢复后进入 reviewing */
+export function restoreSkill(skillId: string): Promise<void> {
+  return apiClient<void>(`/skills/${skillId}/restore`, { method: 'POST' });
+}
+
+/** 分身卡在 generating：把失败/未处理素材重新放回管线 */
+export function retrySkillPipeline(skillId: string): Promise<{ reset: number; total: number }> {
+  return apiClient<{ reset: number; total: number }>(`/admin/skills/${skillId}/retry-pipeline`, { method: 'POST' });
+}
+
 /** 推荐问题 */
 export function fetchRecommendedQuestions(skillId: string, sceneTag?: string, authToken?: string): Promise<string[]> {
   const params = sceneTag ? `?sceneTag=${encodeURIComponent(sceneTag)}` : '';
@@ -77,13 +87,19 @@ export function fetchRecommendedQuestions(skillId: string, sceneTag?: string, au
 }
 
 /** 分身问答（SSE流式） */
-export function chat(skillId: string, message: string, callbacks: SseCallbacks, conversationId?: string, channel?: string, mode?: string, history?: string, authToken?: string): AbortController {
-  return connectSse({ url: `${API_BASE}/skills/${skillId}/chat`, method: 'POST', body: { message, conversationId, channel, mode, history }, headers: bearer(authToken) }, callbacks);
+export function chat(skillId: string, message: string, callbacks: SseCallbacks, conversationId?: string, channel?: string, mode?: string, history?: string, authToken?: string, clientMessageId?: string): AbortController {
+  return connectSse({ url: `${API_BASE}/skills/${skillId}/chat`, method: 'POST', body: { message, conversationId, channel, mode, history, clientMessageId }, headers: bearer(authToken) }, callbacks);
 }
 
 /** 会话历史 */
 export interface ConversationItem { id: string; title: string; mode: string; updatedAt: string; }
-export interface ConversationMessage { id: string; role: string; content: string; createdAt: string; grainId?: string; reportId?: string; reportTitle?: string; grainTags?: string; grainCount?: number; avgScore?: string; }
+export interface ConversationMessage {
+  id: string; role: string; content: string; createdAt: string;
+  grainId?: string; grainIds?: string[]; reportId?: string; reportTitle?: string;
+  grainTags?: string; grainCount?: number; avgScore?: string; avgSimilarity?: number | null;
+  knowledgeSources?: Array<{ id?: string; title: string; source: string; similarity: number }>;
+  caseSources?: Array<{ id?: string; title: string; source: string; similarity: number }>;
+}
 
 export function listConversations(skillId: string, authToken?: string): Promise<ConversationItem[]> {
   return apiClient<ConversationItem[]>(`/skills/${skillId}/conversations`, { headers: bearer(authToken) });
@@ -93,6 +109,11 @@ export function getConversationMessages(conversationId: string, authToken?: stri
 }
 export function deleteConversation(conversationId: string, authToken?: string): Promise<void> {
   return apiClient<void>(`/skills/conversations/${conversationId}`, { method: 'DELETE', headers: bearer(authToken) });
+}
+export function renameConversation(conversationId: string, title: string, authToken?: string): Promise<ConversationItem> {
+  return apiClient<ConversationItem>(`/skills/conversations/${conversationId}`, {
+    method: 'PATCH', body: JSON.stringify({ title }), headers: bearer(authToken),
+  });
 }
 
 /** 开始实战对练 */

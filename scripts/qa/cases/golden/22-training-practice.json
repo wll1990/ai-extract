@@ -1,0 +1,115 @@
+[
+  {
+    "id": "GOLD-TRAIN-04",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "note": "陪练任务路径：计划→分配→开练→对话→交卷→评分到终态（不区分通过/待复核）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-陪练计划", "description": "陪练任务全链路" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "practice",
+          "phaseNo": 1,
+          "phaseName": "实战",
+          "title": "QA-${runId}-陪练任务",
+          "resourceType": "skill",
+          "resourceId": "0a000000-0000-0000-0000-000000000032",
+          "isRequired": true,
+          "orderNo": 1,
+          "maxAttempts": 2,
+          "sceneTag": "价格谈判"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/cohorts",
+        "body": { "planId": "${planId}", "planVersion": 1, "name": "QA-${runId}-陪练批次" },
+        "expect": { "status": 200 },
+        "save": { "cohortId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/batch",
+        "body": { "cohortId": "${cohortId}", "learnerIds": ["0a000000-0000-0000-0000-000000000012"] },
+        "expect": { "status": 200, "json": { "data.assigned": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments?page=1&size=20",
+        "expect": { "status": 200 },
+        "save": { "assignmentId": "data.content[0].id" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments/${assignmentId}/tasks",
+        "expect": { "status": 200 },
+        "save": { "recordId": "data.tasks[0].recordId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/attempts",
+        "expect": { "status": 200 },
+        "save": { "attemptId": "data.attempt.id" }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /me/training/attempts/${attemptId}/messages",
+        "body": {
+          "message": "王总，我理解您对预算有顾虑。我们先确认内部评审和决策流程，再按投入产出拆解方案，分期付款降低首付压力。",
+          "roundNumber": 1,
+          "totalAngles": 1
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/attempts/${attemptId}/submit",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/attempts/${attemptId}/result",
+        "await": {
+          "sql": "select case when status in ('finalized','pending_review') then 'done' else status end from public.training_attempt where id = :attemptId",
+          "until": ["done"],
+          "maxAttempts": 60,
+          "intervalMs": 10000
+        },
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select case when status in ('passed','failed','pending_review') then 'done' else status end from public.training_task_record where id = :recordId",
+        "expect": "done"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_message where conversation_id = (select conversation_id from public.training_attempt where id = :attemptId)",
+        "op": "gte",
+        "expect": "2"
+      }
+    ]
+  }
+]

@@ -1,0 +1,73 @@
+[
+  {
+    "id": "GOLD-TRAIN-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-培训计划", "description": "QA 培训计划状态机链路" },
+        "expect": { "status": 200, "json": { "data.status": "draft", "data.currentVersion": 1 } },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "reading",
+          "phaseNo": 1,
+          "phaseName": "认知",
+          "title": "QA-${runId}-阅读任务",
+          "resourceType": "knowledge",
+          "resourceId": "0a000000-0000-0000-0000-000000000042",
+          "isRequired": true,
+          "orderNo": 1
+        },
+        "expect": { "status": 200 },
+        "save": { "taskId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200, "json": { "data.status": "published" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}",
+        "expect": { "status": 200, "json": { "data.status": "published", "data.latestPublishedVersion": 1 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/retire",
+        "expect": { "status": 200, "json": { "data.status": "retired" } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /admin/training/plans/${planId}",
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.training_plan where id=:planId",
+        "expect": "retired"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.training_task where plan_id=:planId and title like 'QA-' || :runId || '-%'",
+        "expect": "1"
+      }
+    ]
+  }
+]

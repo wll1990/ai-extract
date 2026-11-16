@@ -1,0 +1,51 @@
+[
+  {
+    "id": "REG-AUTH-04",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "platform",
+    "roles": ["super_admin", "anonymous"],
+    "llm": false,
+    "sourceBug": "生成注册码时 expiresAt 恒为 null，码永不过期；过期校验也没有独立错误提示",
+    "steps": [
+      {
+        "as": "super_admin",
+        "api": "POST /admin/companies/0a000000-0000-0000-0000-000000000001/codes",
+        "body": { "defaultRole": "employee", "expiresInDays": 7 },
+        "expect": { "status": 200 },
+        "save": { "code": "data.code", "codeId": "data.id" }
+      },
+      {
+        "dbExec": {
+          "sql": "update public.company_register_code set expires_at = now() - interval '1 day' where id = :codeId"
+        }
+      },
+      {
+        "as": "anonymous",
+        "api": "POST /auth/register/with-code",
+        "body": {
+          "companyCode": "${code}",
+          "account": "QA-${runId}-expired",
+          "password": "Qa123456!",
+          "name": "QA-过期码"
+        },
+        "expect": {
+          "status": 400,
+          "json": { "message": "注册码已过期，请联系管理员重新生成" }
+        }
+      },
+      {
+        "as": "super_admin",
+        "api": "GET /admin/companies/0a000000-0000-0000-0000-000000000001/codes",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select used_count from public.company_register_code where id = :codeId",
+        "expect": "0"
+      }
+    ]
+  }
+]

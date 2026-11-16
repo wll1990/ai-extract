@@ -1,0 +1,19 @@
+[
+  {
+    "id": "GOLD-SALES-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "sales",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": null,
+    "steps": [
+      { "as": "employee", "api": "GET /sales/reviews/0a000000-0000-0000-0000-000000000071", "expect": { "status": 200 } },
+      { "as": "employee", "api": "GET /sales/reviews?page=1&size=5", "expect": { "status": 200 } },
+      { "as": "employee", "api": "GET /sales/leads?page=1&size=5", "expect": { "status": 200 } }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from review_session where id='0a000000-0000-0000-0000-000000000071' and company_id='0a000000-0000-0000-0000-000000000001'", "expect": "1" }
+    ]
+  }
+]

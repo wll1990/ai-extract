@@ -1,0 +1,29 @@
+[
+  {
+    "id": "REG-OPS-01",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "ops",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "后台任务持续失败没有可观测入口，只能靠用户反馈发现（OPS 告警）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "GET /admin/health/background-jobs?hours=24",
+        "expect": { "status": 200, "json": { "data.windowHours": 24 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/health/background-jobs?hours=0",
+        "expect": { "status": 200, "json": { "data.windowHours": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /admin/health/background-jobs",
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": []
+  }
+]

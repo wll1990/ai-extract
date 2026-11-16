@@ -1,0 +1,92 @@
+[
+  {
+    "id": "REG-TRAIN-04",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "sales",
+    "roles": ["company_admin", "employee"],
+    "llm": false,
+    "sourceBug": "T6 阅读任务标记已读后，分配状态进 pending_certification 但 completed/passed/required_passed 计数仍为 0（进度条与列表显示 0/1）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-计数回归", "description": "阅读完成计数" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "reading",
+          "phaseNo": 1,
+          "phaseName": "认知",
+          "title": "QA-${runId}-计数阅读",
+          "resourceType": "knowledge",
+          "resourceId": "0a000000-0000-0000-0000-000000000042",
+          "isRequired": true,
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/cohorts",
+        "body": { "planId": "${planId}", "planVersion": 1, "name": "QA-${runId}-计数批次" },
+        "expect": { "status": 200 },
+        "save": { "cohortId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/batch",
+        "body": { "cohortId": "${cohortId}", "learnerIds": ["0a000000-0000-0000-0000-000000000012"] },
+        "expect": { "status": 200, "json": { "data.assigned": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments?page=1&size=20",
+        "expect": { "status": 200 },
+        "save": { "assignmentId": "data.content[0].id" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments/${assignmentId}/tasks",
+        "expect": { "status": 200 },
+        "save": { "recordId": "data.tasks[0].recordId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/start",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/acknowledge",
+        "expect": { "status": 200, "json": { "data.status": "passed" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select completed_tasks || '/' || passed_tasks || '/' || required_passed from public.training_assignment where id = :assignmentId",
+        "expect": "1/1/1"
+      },
+      {
+        "type": "db",
+        "sql": "select status from public.training_assignment where id = :assignmentId",
+        "expect": "pending_certification"
+      },
+      {
+        "type": "db",
+        "sql": "select (started_at is not null and finished_at is not null)::text from public.training_task_record where id = :recordId",
+        "expect": "true"
+      }
+    ]
+  }
+]

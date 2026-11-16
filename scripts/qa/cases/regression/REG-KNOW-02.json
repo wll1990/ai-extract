@@ -1,0 +1,55 @@
+[
+  {
+    "id": "REG-KNOW-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "知识列表只有标题无法查看全文；AI 整理生成新版本后没有详情/对比/采用入口",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-详情回归",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "第一版内容：适用于新客户首次拜访，先确认预算与决策链，再给方案。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}",
+        "expect": { "status": 200, "json": { "data.supersedesId": null } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}/revisions",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}",
+        "expect": { "status": 200, "json": { "data.status": "active" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select content from public.knowledge_entry where id = :knowledgeId",
+        "op": "contains",
+        "expect": "第一版内容"
+      }
+    ]
+  }
+]

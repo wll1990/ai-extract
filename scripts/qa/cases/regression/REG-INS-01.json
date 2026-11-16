@@ -1,0 +1,27 @@
+[
+  {
+    "id": "REG-INS-01",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "insights",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "自动发现列表无分页/总数，前端逐条请求详情形成 N+1（OPS-07）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "GET /admin/insights/discoveries?status=active&page=1&size=5",
+        "expect": {
+          "status": 200,
+          "json": { "data.page": 1, "data.size": 5 }
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/insights/discoveries/candidates?insightIds=00000000-0000-0000-0000-000000000000",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": []
+  }
+]

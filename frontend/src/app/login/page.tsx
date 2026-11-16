@@ -21,7 +21,8 @@ export default function LoginPage() {
     try {
       const result = await login({ companyCode: companyCode.trim().toUpperCase(), account, password });
       setAuth(result.token, result.user);
-      router.push('/');
+      // 管理员重置/首次登录：先改密，服务端也只放行改密接口
+      router.push(result.user.mustChangePassword ? '/change-password' : '/');
     } catch (err) { setError(err instanceof Error ? err.message : '网络错误，请检查连接'); }
     finally { setLoading(false); }
   }, [companyCode, account, password, router]);

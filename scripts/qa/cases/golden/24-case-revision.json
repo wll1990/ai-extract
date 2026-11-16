@@ -1,0 +1,68 @@
+[
+  {
+    "id": "GOLD-CASE-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-案例AI整理",
+          "customerProfile": "{\"industry\":\"制造业\",\"budget\":\"80万\",\"decisionChain\":\"采购+财务+业务负责人\"}",
+          "funnelStage": "proposal",
+          "sceneTag": "价格异议",
+          "objection": "客户认为报价比竞品高 20%，预算还没批。",
+          "keyActions": "拆两期交付，第一期收 40%，第二期验收后收尾款。",
+          "scripts": "先用年度收益做锚点，再倒推价格区间。",
+          "result": "win",
+          "reusablePoints": "分期交付可以化解预算审批压力。",
+          "failurePoints": "没有提前确认财务回款周期。",
+          "source": "QA 黄金链路",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "caseId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/suggest-revision",
+        "body": { "instruction": "不要修改标题。补充一条面对客户价格异议时的应对话术，保持事实不变。" },
+        "expect": { "status": 200, "json": { "data.version": 2, "data.status": "draft" } },
+        "save": { "draftId": "data.id" },
+        "timeout": 120000
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases/${draftId}",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${draftId}/approve",
+        "expect": { "status": 200, "json": { "data.status": "active" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "deprecated"
+      },
+      {
+        "type": "db",
+        "sql": "select status || '/' || version || '/' || (supersedes_id = :caseId)::text from public.industry_case where id = :draftId",
+        "expect": "active/2/true"
+      }
+    ]
+  }
+]

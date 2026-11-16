@@ -1,0 +1,45 @@
+[
+  {
+    "id": "REG-KNOW-06",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "恢复接口未做状态校验时，可能把任意状态改成 active",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-恢复守卫回归",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "恢复守卫回归：只有已废弃内容可以恢复。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/restore",
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id = :knowledgeId and status = 'active'",
+        "op": "gte",
+        "expect": 1
+      }
+    ]
+  }
+]

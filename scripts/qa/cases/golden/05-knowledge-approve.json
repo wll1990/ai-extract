@@ -1,0 +1,31 @@
+[
+  {
+    "id": "GOLD-KNOW-01",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-知识",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "QA-${runId}-知识：客户预算未批时，先确认决策链，再准备对比材料。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      { "as": "company_admin", "api": "POST /admin/knowledge/${knowledgeId}/approve", "expect": { "status": 200 } }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select status from knowledge_entry where id=:knowledgeId", "expect": "active" }
+    ]
+  }
+]

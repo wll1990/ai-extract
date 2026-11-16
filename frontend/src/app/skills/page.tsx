@@ -20,10 +20,12 @@ export default function SkillsGalleryPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [upgradeNudge, setUpgradeNudge] = useState(false);
+  const [error, setError] = useState('');
   const userId = (getUser() as any)?.id as string | undefined;
 
   const load = (p: number) => {
     setLoading(true);
+    setError('');
     setPage(p);
     const status = tab === 'published' ? 'published' : undefined;
     const ownerId = tab === 'mine' ? userId : undefined;
@@ -34,7 +36,10 @@ export default function SkillsGalleryPage() {
         setTotalPages(d.totalPages);
         setUpgradeNudge((d as any).upgradeNudge === true);
       })
-      .catch(e => console.error('加载分身列表失败:', e)).finally(() => setLoading(false));
+      .catch((e: unknown) => {
+        setSkills([]);
+        setError(e instanceof Error && e.message ? e.message : '分身列表加载失败，请稍后重试');
+      }).finally(() => setLoading(false));
   };
 
   useEffect(() => { load(1); }, [tab, subTab]);
@@ -51,12 +56,12 @@ export default function SkillsGalleryPage() {
         <h1 className="mb-2 text-2xl font-bold text-foreground">分身广场</h1>
 
         {/* Top-level Tab 切换 */}
-        <div className="mb-3 flex rounded-lg bg-primary-light p-0.5 w-fit">
-          <button onClick={() => { setTab('published'); setPage(1); }}
+        <div className="mb-3 flex rounded-lg bg-primary-light p-0.5 w-fit" data-tour="skills-tabs">
+          <button onClick={() => { setTab('published'); setSubTab('individual'); setPage(1); }}
             className={`rounded-md px-4 py-1.5 text-sm font-medium ${tab === 'published' ? 'bg-surface-2 text-foreground shadow-sm' : 'text-muted-foreground'}`}>
             已发布
           </button>
-          <button onClick={() => { setTab('mine'); setPage(1); }}
+          <button onClick={() => { setTab('mine'); setSubTab('individual'); setPage(1); }}
             className={`rounded-md px-4 py-1.5 text-sm font-medium ${tab === 'mine' ? 'bg-surface-2 text-foreground shadow-sm' : 'text-muted-foreground'}`}>
             我的分身
           </button>
@@ -103,19 +108,34 @@ export default function SkillsGalleryPage() {
           </div>
         )}
 
-        {skills.length === 0 && (
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600 flex items-center justify-between">
+            <span>{error}</span>
+            <button onClick={() => load(page)} className="text-xs font-medium underline">重试</button>
+          </div>
+        )}
+
+        {!error && skills.length === 0 && (
           <div className="rounded-2xl bg-surface-2 p-12 text-center shadow-sm">
-            <span className="text-4xl">{subTab === 'org' ? '🏢' : '🤖'}</span>
+            <span className="text-4xl">{subTab === 'org' ? '🏢' : tab === 'mine' ? '📝' : '🤖'}</span>
             <p className="mt-4 text-muted-foreground">
-              {subTab === 'org' ? '暂无组织分身' : '暂无已发布的 AI 分身'}
+              {subTab === 'org'
+                ? '暂无组织分身'
+                : tab === 'mine'
+                  ? '你还没有创建分身'
+                  : '暂无已发布的 AI 分身'}
             </p>
             <p className="text-sm text-muted-foreground-2">
-              {subTab === 'org' ? '管理员创建组织分身后，将在此展示' : '管理员审核通过后，分身将在此展示'}
+              {subTab === 'org'
+                ? '管理员创建组织分身后，将在此展示'
+                : tab === 'mine'
+                  ? '上传素材并通过审核后，你的分身会出现在这里'
+                  : '管理员审核通过后，分身将在此展示'}
             </p>
           </div>
         )}
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3" data-tour="skills-list">
           {skills.map(s => (
             subTab === 'org' ? (
               <button key={s.id}

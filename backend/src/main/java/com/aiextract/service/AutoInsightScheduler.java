@@ -161,6 +161,10 @@ public class AutoInsightScheduler {
             double bestDist = Double.MAX_VALUE;
 
             for (GapCluster cluster : clusters) {
+                // 跨空间/跨企业的缺口不能聚在一起，否则洞察证据会混入他企业提问
+                if (!java.util.Objects.equals(cluster.spaceId, gap.getSpaceId())) {
+                    continue;
+                }
                 for (KnowledgeGap member : cluster.members) {
                     double dist = cosineDistance(gap, member);
                     if (dist < bestDist) {
@@ -173,13 +177,18 @@ public class AutoInsightScheduler {
             if (bestCluster != null && bestDist < clusterThreshold) {
                 bestCluster.members.add(gap);
                 bestCluster.totalAttempts += gap.getAttemptedQueryCount();
-                bestCluster.skillIds.add(gap.getSkillId());
+                if (gap.getSkillId() != null) {
+                    bestCluster.skillIds.add(gap.getSkillId());
+                }
             } else {
                 // 新建簇
                 GapCluster newCluster = new GapCluster();
+                newCluster.spaceId = gap.getSpaceId();
                 newCluster.members.add(gap);
                 newCluster.totalAttempts = gap.getAttemptedQueryCount();
-                newCluster.skillIds.add(gap.getSkillId());
+                if (gap.getSkillId() != null) {
+                    newCluster.skillIds.add(gap.getSkillId());
+                }
                 clusters.add(newCluster);
             }
         }
@@ -221,6 +230,7 @@ public class AutoInsightScheduler {
             .collect(Collectors.joining("\n"));
 
         String skillIdsText = cluster.skillIds.stream()
+            .filter(java.util.Objects::nonNull)
             .limit(5)
             .map(UUID::toString)
             .collect(Collectors.joining(","));
@@ -469,6 +479,7 @@ public class AutoInsightScheduler {
     // ==================== inner classes ====================
 
     static class GapCluster {
+        UUID spaceId;
         List<KnowledgeGap> members = new ArrayList<>();
         int totalAttempts = 0;
         Set<UUID> skillIds = new HashSet<>();

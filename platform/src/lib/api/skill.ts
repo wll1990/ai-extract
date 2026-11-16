@@ -131,7 +131,8 @@ export function listConversations(skillId: string, authToken?: string): Promise<
 
 export interface ConversationMessage {
   id: string; role: string; content: string; createdAt: string;
-  grainId?: string; reportId?: string; reportTitle?: string; grainTags?: string; grainCount?: number; avgScore?: string;
+  grainId?: string; grainIds?: string[]; reportId?: string; reportTitle?: string;
+  grainTags?: string; grainCount?: number; avgScore?: string; avgSimilarity?: number | null;
 }
 
 export function getConversationMessages(conversationId: string, authToken?: string): Promise<ConversationMessage[]> {
@@ -140,6 +141,12 @@ export function getConversationMessages(conversationId: string, authToken?: stri
 
 export function deleteConversation(conversationId: string, authToken?: string): Promise<void> {
   return apiClient(`/skills/conversations/${conversationId}`, { method: 'DELETE', headers: bearer(authToken) });
+}
+
+export function renameConversation(conversationId: string, title: string, authToken?: string) {
+  return apiClient<ConversationItem>(`/skills/conversations/${conversationId}`, {
+    method: 'PATCH', body: JSON.stringify({ title }), headers: bearer(authToken),
+  });
 }
 
 /** 推荐问题 */
@@ -152,11 +159,12 @@ export function fetchRecommendedQuestions(skillId: string, sceneTag?: string, au
 export function chat(
   skillId: string, message: string, callbacks: SseCallbacks,
   conversationId?: string, channel?: string, mode?: string, history?: string, authToken?: string,
+  clientMessageId?: string,
 ): AbortController {
   return connectSse({
     url: `${API_BASE}/skills/${skillId}/chat`,
     method: 'POST',
-    body: { message, conversationId, channel: channel || 'web', mode, history },
+    body: { message, conversationId, channel: channel || 'web', mode, history, clientMessageId },
     headers: bearer(authToken),
   }, callbacks);
 }

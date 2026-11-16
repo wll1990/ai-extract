@@ -33,6 +33,7 @@ public class AdminTokenUsageController {
     private final TokenUsageLogRepository repository;
     private final CompanyScopeService companyScopeService;
     private final com.aiextract.repository.UserRepository userRepository;
+    private final com.aiextract.repository.CompanyRepository companyRepository;
 
     /** 汇总卡片：今日 / 本月 / 总计 */
     @GetMapping("/summary")
@@ -40,29 +41,31 @@ public class AdminTokenUsageController {
         LocalDate today = LocalDate.now();
         LocalDate monthStart = today.withDayOfMonth(1);
         UUID companyId = TokenContext.getCompanyId();
-        boolean isSuper = companyScopeService.isSuperAdmin();
-        List<UUID> userIds = companyScopeService.getUserIds(companyId);
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        if (!unrestricted && companyId == null) {
+            return ApiResponse.success(emptySummary());
+        }
 
-        List<Object[]> todayList = !isSuper
-                ? repository.sumByDateAndUserIdIn(today, userIds)
-                : repository.sumByDate(today);
+        List<Object[]> todayList = unrestricted
+                ? repository.sumByDate(today)
+                : repository.sumByDateAndCompanyId(today, companyId);
         Object[] todaySum = todayList.isEmpty() ? new Object[]{0L, 0L, 0L} : todayList.get(0);
         long todayInput = ((Number) todaySum[0]).longValue();
         long todayOutput = ((Number) todaySum[1]).longValue();
         long todayCount = ((Number) todaySum[2]).longValue();
 
         // 本月：从月初到今天逐日聚合
-        List<Object[]> monthRows = !isSuper
-                ? repository.sumByDateSinceAndUserIdIn(monthStart, userIds)
-                : repository.sumByDateSince(monthStart);
+        List<Object[]> monthRows = unrestricted
+                ? repository.sumByDateSince(monthStart)
+                : repository.sumByDateSinceAndCompanyId(monthStart, companyId);
         long monthInput = monthRows.stream().mapToLong(r -> ((Number) r[1]).longValue()).sum();
         long monthOutput = monthRows.stream().mapToLong(r -> ((Number) r[2]).longValue()).sum();
         long monthCount = monthRows.stream().mapToLong(r -> ((Number) r[3]).longValue()).sum();
 
         // 总计：单次 SUM 聚合，无需 GROUP BY
-        List<Object[]> totalList = !isSuper
-                ? repository.sumTotalByUserIdIn(userIds)
-                : repository.sumTotal();
+        List<Object[]> totalList = unrestricted
+                ? repository.sumTotal()
+                : repository.sumTotalByCompanyId(companyId);
         Object[] totalSum = totalList.isEmpty() ? new Object[]{0L, 0L, 0L} : totalList.get(0);
         long totalInput = ((Number) totalSum[0]).longValue();
         long totalOutput = ((Number) totalSum[1]).longValue();
@@ -78,17 +81,74 @@ public class AdminTokenUsageController {
     @GetMapping("/daily")
     public ApiResponse<List<Map<String, Object>>> daily(@RequestParam(defaultValue = "30") int days) {
         int clampedDays = Math.max(MIN_DAYS, Math.min(MAX_DAYS, days));
-        LocalDate since = LocalDate.now().minusDays(clampedDays);
+        // 含今天共 N 天：今天 - (N-1)，否则「近 7 天」实际取 8 天
+        LocalDate since = LocalDate.now().minusDays(clampedDays - 1L);
         UUID companyId = TokenContext.getCompanyId();
-        boolean isSuper = companyScopeService.isSuperAdmin();
-        List<UUID> userIds = companyScopeService.getUserIds(companyId);
-        List<Object[]> rows = !isSuper
-                ? repository.sumByDateSinceAndUserIdIn(since, userIds)
-                : repository.sumByDateSince(since);
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        if (!unrestricted && companyId == null) {
+            return ApiResponse.success(List.of());
+        }
+        List<Object[]> rows = unrestricted
+                ? repository.sumByDateSince(since)
+                : repository.sumByDateSinceAndCompanyId(since, companyId);
         List<Map<String, Object>> result = new ArrayList<>();
         for (Object[] row : rows) {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("date", row[0].toString());
+            item.put("inputTokens", ((Number) row[1]).longValue());
+            item.put("outputTokens", ((Number) row[2]).longValue());
+            item.put("count", ((Number) row[3]).longValue());
+            result.add(item);
+        }
+        return ApiResponse.success(result);
+    }
+
+    /** 按模型分布（最近 N 天）：用于「谁在消耗 token」的直观占比图 */
+    @GetMapping("/by-model")
+    public ApiResponse<List<Map<String, Object>>> byModel(@RequestParam(defaultValue = "30") int days) {
+        int clampedDays = Math.max(MIN_DAYS, Math.min(MAX_DAYS, days));
+        LocalDate since = LocalDate.now().minusDays(clampedDays - 1L);
+        UUID companyId = TokenContext.getCompanyId();
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        if (!unrestricted && companyId == null) {
+            return ApiResponse.success(List.of());
+        }
+        List<Object[]> rows = unrestricted
+                ? repository.sumByModelSince(since)
+                : repository.sumByModelSinceAndCompanyId(since, companyId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("model", row[0]);
+            item.put("inputTokens", ((Number) row[1]).longValue());
+            item.put("outputTokens", ((Number) row[2]).longValue());
+            item.put("count", ((Number) row[3]).longValue());
+            result.add(item);
+        }
+        return ApiResponse.success(result);
+    }
+
+    /** 企业用量排行（仅超管；按所选时间窗取前 5） */
+    @GetMapping("/by-company")
+    public ApiResponse<List<Map<String, Object>>> byCompany(@RequestParam(defaultValue = "30") int days) {
+        int clampedDays = Math.max(MIN_DAYS, Math.min(MAX_DAYS, days));
+        LocalDate since = LocalDate.now().minusDays(clampedDays - 1L);
+        if (!companyScopeService.isUnrestrictedDataScope()) {
+            return ApiResponse.success(List.of());
+        }
+        List<Object[]> rows = repository.topCompaniesSince(since, PageRequest.of(0, 5));
+        List<UUID> ids = rows.stream().map(r -> (UUID) r[0]).toList();
+        Map<UUID, String> names = new HashMap<>();
+        if (!ids.isEmpty()) {
+            companyRepository.findAllById(ids)
+                    .forEach(c -> names.put(c.getId(), c.getName()));
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object[] row : rows) {
+            UUID id = (UUID) row[0];
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("companyId", id.toString());
+            item.put("companyName", names.getOrDefault(id, id.toString().substring(0, 8)));
             item.put("inputTokens", ((Number) row[1]).longValue());
             item.put("outputTokens", ((Number) row[2]).longValue());
             item.put("count", ((Number) row[3]).longValue());
@@ -104,15 +164,22 @@ public class AdminTokenUsageController {
         int clampedPage = Math.max(0, page);
         int clampedSize = Math.max(MIN_SIZE, Math.min(MAX_SIZE, size));
         UUID companyId = TokenContext.getCompanyId();
-        boolean isSuper = companyScopeService.isSuperAdmin();
-        List<UUID> userIds = companyScopeService.getUserIds(companyId);
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
+        if (!unrestricted && companyId == null) {
+            Map<String, Object> empty = new LinkedHashMap<>();
+            empty.put("items", List.of());
+            empty.put("page", clampedPage);
+            empty.put("size", clampedSize);
+            empty.put("total", 0L);
+            return ApiResponse.success(empty);
+        }
 
-        List<TokenUsageLog> list = !isSuper
-                ? repository.findRecentByUserIdIn(userIds, PageRequest.of(clampedPage, clampedSize))
-                : repository.findRecent(PageRequest.of(clampedPage, clampedSize));
-        long total = !isSuper
-                ? repository.countByUserIdIn(userIds)
-                : repository.countAll();
+        List<TokenUsageLog> list = unrestricted
+                ? repository.findRecent(PageRequest.of(clampedPage, clampedSize))
+                : repository.findRecentByCompanyId(companyId, PageRequest.of(clampedPage, clampedSize));
+        long total = unrestricted
+                ? repository.countAll()
+                : repository.countByCompanyId(companyId);
 
         // 批量查用户名
         List<UUID> distinctUserIds = list.stream()
@@ -144,5 +211,14 @@ public class AdminTokenUsageController {
         result.put("size", clampedSize);
         result.put("total", total);
         return ApiResponse.success(result);
+    }
+
+    private Map<String, Object> emptySummary() {
+        Map<String, Object> zero = Map.of("inputTokens", 0L, "outputTokens", 0L, "count", 0L);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("today", zero);
+        result.put("month", zero);
+        result.put("total", Map.of("inputTokens", 0L, "outputTokens", 0L));
+        return result;
     }
 }

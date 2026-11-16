@@ -1,0 +1,63 @@
+[
+  {
+    "id": "GOLD-ORG-01",
+    "set": "golden",
+    "priority": "P2",
+    "domain": "production",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/organization-skills",
+        "body": {
+          "name": "QA-${runId}-组织分身",
+          "description": "多成员聚合组织分身",
+          "memberSkillIds": ["0a000000-0000-0000-0000-000000000032"]
+        },
+        "expect": { "status": 200 },
+        "save": { "orgId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/organization-skills/${orgId}/status",
+        "body": { "status": "published" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/organization-skills/${orgId}",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${orgId}/detail",
+        "expect": { "status": 200, "json": { "data.status": "published" } }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/${orgId}/chat",
+        "body": {
+          "message": "你们团队在价格谈判上一般怎么做？",
+          "sessionId": "QA-${runId}-org-chat"
+        },
+        "expect": { "status": 200, "eventTypes": ["meta", "content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "company_admin",
+        "api": "DELETE /admin/organization-skills/${orgId}",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill where id = :orgId",
+        "expect": "0"
+      }
+    ]
+  }
+]

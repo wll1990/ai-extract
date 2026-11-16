@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-AUTH-02",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "daily",
+    "roles": ["anonymous"],
+    "llm": false,
+    "sourceBug": "A3 过期/伪造 token 未统一返回 401，前端无法区分未登录",
+    "steps": [
+      {
+        "token": "eyJhbGciOiJIUzI1NiJ9.invalid.signature",
+        "api": "GET /auth/me",
+        "expect": { "status": 401 }
+      },
+      {
+        "token": "not-a-jwt",
+        "api": "GET /config/nav",
+        "expect": { "status": 401 }
+      }
+    ],
+    "assertions": []
+  }
+]

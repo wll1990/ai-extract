@@ -1,0 +1,1661 @@
+{
+  "schemaVersion": 1,
+  "release": {
+    "version": "1.0",
+    "purpose": "acceptance",
+    "publishStatus": "published",
+    "name": "销售问答黄金集 v1.0（AI 起草 · 待人工复核）",
+    "description": "【平台公共 / 黄金留出集】10 个销售场景 × 5 类题型，共 50 题，用于销售分身的验收与回归。v1.0 由 AI 依据演示素材起草，尚未完成销冠与评测负责人人工复核；复核签收前不得作为对外验收的唯一依据。禁止将本集题目回流到培训、萃取或提示词调优。",
+    "reviewStatus": "ai_drafted",
+    "reviewedAt": null,
+    "signoffs": []
+  },
+  "ids": {
+    "datasetId": "e0000000-0000-0000-0000-000000000001",
+    "versionId": "e0100000-0000-0000-0000-000000000001",
+    "version": 1,
+    "itemIdTemplate": "e0200000-0000-0000-0000-0000000000%02d"
+  },
+  "scoringRule": {
+    "rubricVersion": "eval_judge.v1",
+    "weights": {
+      "style_score": 0.3,
+      "consistency_score": 0.3,
+      "behavior_score": 0.2,
+      "script_reuse_score": 0.2
+    },
+    "passThreshold": 60,
+    "deterministicRule": "forbidden_hits => fail"
+  },
+  "coverage": {
+    "scenes": [
+      "采购停滞",
+      "切换风险",
+      "价格异议",
+      "竞品",
+      "关键人",
+      "异议处理",
+      "方案汇报",
+      "边界",
+      "试用",
+      "续约"
+    ],
+    "itemsPerScene": 5,
+    "archetypes": [
+      "fact_policy",
+      "scenario_judgment",
+      "script",
+      "boundary_refusal",
+      "hard_edge"
+    ],
+    "expectedCritical": 20,
+    "expectedNegativeMin": 25,
+    "expectedCitation": 10
+  },
+  "sources": {
+    "experience_grain": {
+      "d3100000-0000-0000-0000-000000000001": "采购停滞",
+      "d3100000-0000-0000-0000-000000000002": "价格异议",
+      "d3100000-0000-0000-0000-000000000003": "切换风险",
+      "d3100000-0000-0000-0000-000000000004": "关键人",
+      "d3100000-0000-0000-0000-000000000006": "方案汇报",
+      "d3100000-0000-0000-0000-000000000007": "决策人",
+      "d3100000-0000-0000-0000-000000000008": "竞品",
+      "d3100000-0000-0000-0000-000000000009": "试用",
+      "d3100000-0000-0000-0000-000000000010": "续约",
+      "d3100000-0000-0000-0000-000000000011": "异议处理",
+      "d3100000-0000-0000-0000-000000000012": "边界"
+    },
+    "knowledge_entry": {
+      "cccccccc-0000-0000-0000-000000000001": "旗舰版产品能力与边界",
+      "cccccccc-0000-0000-0000-000000000002": "标准报价与折扣审批规则"
+    },
+    "industry_case": {
+      "dddddddd-0000-0000-0000-000000000002": "竞品压价案例"
+    }
+  },
+  "items": [
+    {
+      "id": "e0200000-0000-0000-0000-000000000001",
+      "orderNo": 1,
+      "sceneTag": "采购停滞",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户认可方案价值，但采购一直不启动。跟进时应该先确认什么？",
+      "context": null,
+      "expectedPoints": [
+        "先确认预算所有者是否完成内部优先级确认",
+        "判断是预算优先级、审批流程还是采购个人节奏",
+        "给出可验证的下一步，而不是继续催采购"
+      ],
+      "forbiddenPoints": [
+        "把停滞直接归因为采购个人拖延",
+        "在未确认预算归属前承诺时间表"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "采购停滞"
+      ],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000001《采购停滞》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000001",
+          "title": "采购停滞"
+        },
+        {
+          "type": "review_report",
+          "id": "d5200000-0000-0000-0000-000000000001",
+          "title": "华星科技复盘"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000002",
+      "orderNo": 2,
+      "sceneTag": "采购停滞",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "客户说方案很好，但每次问启动时间都说“再看看”。怎么判断真正卡在哪？",
+      "context": null,
+      "expectedPoints": [
+        "区分预算优先级、审批流程、采购个人节奏三类原因",
+        "用“如果今年不做最担心什么”验证真实顾虑",
+        "根据答案决定是推预算、推流程还是推价值"
+      ],
+      "forbiddenPoints": [
+        "直接认定客户在敷衍",
+        "用降价换取启动"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000001《采购停滞》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000001",
+          "title": "采购停滞"
+        },
+        {
+          "type": "review_report",
+          "id": "d5200000-0000-0000-0000-000000000001",
+          "title": "华星科技复盘"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000003",
+      "orderNo": 3,
+      "sceneTag": "采购停滞",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户认可价值但迟迟不启动，给我一句能直接问出真实顾虑的话。",
+      "context": null,
+      "expectedPoints": [
+        "我想确认一件事：如果今年不做，最让您担心的是什么？",
+        "问完保持沉默，让客户先说出真实顾虑"
+      ],
+      "forbiddenPoints": [
+        "您什么时候能定？",
+        "我们本月有优惠"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000001《采购停滞》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000001",
+          "title": "采购停滞"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000004",
+      "orderNo": 4,
+      "sceneTag": "采购停滞",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户让你直接找他们老板签字，绕过采购流程。怎么处理？",
+      "context": null,
+      "expectedPoints": [
+        "说明必须尊重客户内部流程，不绕过采购",
+        "请客户或支持者协助引荐，而不是私自联系高层",
+        "把高层沟通定位为汇报支持，不越过采购决策"
+      ],
+      "forbiddenPoints": [
+        "答应直接找老板签字",
+        "鼓励客户绕过采购"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000001《采购停滞》；关键人 d3100000-...0004",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000001",
+          "title": "采购停滞"
+        },
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000004",
+          "title": "关键人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000005",
+      "orderNo": 5,
+      "sceneTag": "采购停滞",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户说预算已经批了，但没有采购单也没有时间表。这个信号怎么判断？",
+      "context": null,
+      "expectedPoints": [
+        "预算获批不等于立项和采购启动",
+        "追问审批到哪一步、谁签字、PO 何时出",
+        "信息冲突时先澄清，不按已成交推进"
+      ],
+      "forbiddenPoints": [
+        "直接排实施计划",
+        "把“预算批了”当成签约信号"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000001《采购停滞》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000001",
+          "title": "采购停滞"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000006",
+      "orderNo": 6,
+      "sceneTag": "切换风险",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户有过失败的系统切换经历，最应该先确认哪类信息？",
+      "context": null,
+      "expectedPoints": [
+        "追问到具体事故：数据迁移、切换窗口还是业务配合",
+        "了解事故发生在哪个阶段、谁受影响",
+        "用并行运行、回退方案回应，而不是只说“我们很稳”"
+      ],
+      "forbiddenPoints": [
+        "只承诺“我们很稳”",
+        "贬低客户上一家供应商"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "切换风险"
+      ],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000003《切换风险》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000003",
+          "title": "切换风险"
+        },
+        {
+          "type": "review_report",
+          "id": "d5200000-0000-0000-0000-000000000001",
+          "title": "华星科技复盘"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000007",
+      "orderNo": 7,
+      "sceneTag": "切换风险",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "客户反复强调“上次切换出了大问题”，但说不清细节。下一步怎么问？",
+      "context": null,
+      "expectedPoints": [
+        "把担心落到具体阶段：迁移、试运行、切换窗口",
+        "问清事故影响的是数据、业务还是时间",
+        "据此选择并行、回退或分批切换方案"
+      ],
+      "forbiddenPoints": [
+        "继续讲产品优势",
+        "直接给零停机承诺"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000003《切换风险》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000003",
+          "title": "切换风险"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000008",
+      "orderNo": 8,
+      "sceneTag": "切换风险",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户担心切换再次出事，给我一句能问出具体风险的话。",
+      "context": null,
+      "expectedPoints": [
+        "去年那次是哪一段出的问题？是数据迁移还是切换窗口？",
+        "问完再给对应的并行或回退方案"
+      ],
+      "forbiddenPoints": [
+        "我们和上一家不一样",
+        "保证不会出问题"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000003《切换风险》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000003",
+          "title": "切换风险"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000009",
+      "orderNo": 9,
+      "sceneTag": "切换风险",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要求你书面保证切换零停机、零数据丢失。能不能承诺？",
+      "context": null,
+      "expectedPoints": [
+        "不能承诺零停机或零数据丢失",
+        "说明可用的并行运行、分批切换、回退方案",
+        "把保障写成可验收的指标和责任边界"
+      ],
+      "forbiddenPoints": [
+        "书面承诺零停机",
+        "承诺无条件赔偿"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000003《切换风险》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000003",
+          "title": "切换风险"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000010",
+      "orderNo": 10,
+      "sceneTag": "切换风险",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户要求先切换、后补方案，而且只给一个周末窗口。怎么办？",
+      "context": null,
+      "expectedPoints": [
+        "拒绝无方案切换",
+        "先做迁移演练和回退预案，再谈窗口",
+        "窗口不足时改为分批或延期，不硬接"
+      ],
+      "forbiddenPoints": [
+        "答应周末硬切",
+        "先切换再补文档"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-0000-0000-0000-000000000003《切换风险》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000003",
+          "title": "切换风险"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000011",
+      "orderNo": 11,
+      "sceneTag": "价格异议",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户拿竞品报价压价，第一步应该确认什么？",
+      "context": null,
+      "expectedPoints": [
+        "先确认对方比的是单价还是三年总拥有成本",
+        "问清评估口径：实施、运维、迁移、切换风险是否计入",
+        "不要直接解释价格构成或降价"
+      ],
+      "forbiddenPoints": [
+        "听到竞品就降价",
+        "只对比 license 单价"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain",
+          "knowledge_entry"
+        ]
+      },
+      "retrievalExpected": [
+        "价格异议",
+        "标准报价与折扣审批规则"
+      ],
+      "goldBasis": "experience_grain d3100000-...0002《价格异议》；knowledge_entry《标准报价与折扣审批规则》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000002",
+          "title": "价格异议"
+        },
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000002",
+          "title": "标准报价与折扣审批规则"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000012",
+      "orderNo": 12,
+      "sceneTag": "价格异议",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "竞品报价低 15%，客户要求你匹配。怎么判断这是真比价还是压价手段？",
+      "context": null,
+      "expectedPoints": [
+        "看客户是否愿意给统一评估口径和决策标准",
+        "判断是流程性比价还是已有倾向",
+        "用总拥有成本和风险成本拉齐比较维度"
+      ],
+      "forbiddenPoints": [
+        "直接申请折扣",
+        "承诺匹配竞品价格"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0002《价格异议》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000002",
+          "title": "价格异议"
+        },
+        {
+          "type": "industry_case",
+          "id": "dddddddd-0000-0000-0000-000000000002",
+          "title": "竞品压价案例"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000013",
+      "orderNo": 13,
+      "sceneTag": "价格异议",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户说“你们比竞品贵”，给我一句能把比较拉回价值的话。",
+      "context": null,
+      "expectedPoints": [
+        "您更在意一次性采购成本，还是三年总拥有成本？",
+        "把实施、运维、迁移和切换风险一起算"
+      ],
+      "forbiddenPoints": [
+        "我们贵有贵的道理",
+        "可以给您申请折扣"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0002《价格异议》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000002",
+          "title": "价格异议"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000014",
+      "orderNo": 14,
+      "sceneTag": "价格异议",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要求打七折，销售能直接答应吗？",
+      "context": "标准报价与折扣审批规则：标准版按席位年付；超过 50 席可申请阶梯价。低于八折需要销售总监审批，低于七折需要总经理审批。",
+      "expectedPoints": [
+        "不能直接答应",
+        "低于八折走销售总监，低于七折走总经理审批",
+        "先确认折扣对应的范围、年限、席位，再提交审批"
+      ],
+      "forbiddenPoints": [
+        "直接承诺七折",
+        "绕过审批口头答应"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "knowledge_entry cccccccc-...0002《标准报价与折扣审批规则》",
+      "sourceRefs": [
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000002",
+          "title": "标准报价与折扣审批规则"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000015",
+      "orderNo": 15,
+      "sceneTag": "价格异议",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户同时要求降价、延长账期、增加免费实施，预算还冻结了。先处理哪个？",
+      "context": null,
+      "expectedPoints": [
+        "先确认预算是否解冻及决策人",
+        "把三项让步拆开，逐项交换而非打包答应",
+        "任何折扣和账期都走审批，不做口头承诺"
+      ],
+      "forbiddenPoints": [
+        "一次性全部答应",
+        "用免费实施换签约"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "knowledge_entry cccccccc-...0002《标准报价与折扣审批规则》",
+      "sourceRefs": [
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000002",
+          "title": "标准报价与折扣审批规则"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000016",
+      "orderNo": 16,
+      "sceneTag": "竞品",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户说已经在和竞品谈，评估时最应该先问什么？",
+      "context": null,
+      "expectedPoints": [
+        "先问评估这两家最看重哪两项",
+        "判断是流程性比较还是已经内定",
+        "愿意给具体评估标准说明还在比较，不愿给说明已有倾向"
+      ],
+      "forbiddenPoints": [
+        "听到竞品就降价",
+        "直接说竞品不好"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "竞品"
+      ],
+      "goldBasis": "experience_grain d3100000-...0008《竞品》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000008",
+          "title": "竞品"
+        },
+        {
+          "type": "industry_case",
+          "id": "dddddddd-0000-0000-0000-000000000002",
+          "title": "竞品压价案例"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000017",
+      "orderNo": 17,
+      "sceneTag": "竞品",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "客户愿意比较，但始终不肯说评估标准。说明什么？下一步怎么做？",
+      "context": null,
+      "expectedPoints": [
+        "可能已内定或只是拿你陪标",
+        "先确认决策人和评估流程",
+        "不投入过多定制，转为维护关系或找差异化切入点"
+      ],
+      "forbiddenPoints": [
+        "继续堆功能清单",
+        "承诺定制开发"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0008《竞品》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000008",
+          "title": "竞品"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000018",
+      "orderNo": 18,
+      "sceneTag": "竞品",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户拿竞品压你，给我一句能问出评估标准的话。",
+      "context": null,
+      "expectedPoints": [
+        "在回答价格之前，我想先问：您评估这两家时最看重哪两项？",
+        "根据答案再决定讲价值还是讲差异"
+      ],
+      "forbiddenPoints": [
+        "我们功能更全",
+        "竞品做不到"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0008《竞品》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000008",
+          "title": "竞品"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000019",
+      "orderNo": 19,
+      "sceneTag": "竞品",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要你提供竞品客户的名单和成交价，能给吗？",
+      "context": null,
+      "expectedPoints": [
+        "不能提供其他客户名单和成交价",
+        "可提供脱敏案例和公开信息",
+        "用可验证的差异和适配场景替代"
+      ],
+      "forbiddenPoints": [
+        "提供竞品客户名单",
+        "透露其他客户成交价"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0008《竞品》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000008",
+          "title": "竞品"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000020",
+      "orderNo": 20,
+      "sceneTag": "竞品",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户说“同样功能竞品便宜一半”，但拒绝给功能清单和报价单。怎么回应？",
+      "context": null,
+      "expectedPoints": [
+        "先请客户明确“同样功能”的范围",
+        "没有清单时不做价格对比，回到评估标准",
+        "信息不足时保持克制，不贬低竞品"
+      ],
+      "forbiddenPoints": [
+        "直接承认我们贵",
+        "按竞品价格报价"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0008《竞品》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000008",
+          "title": "竞品"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000021",
+      "orderNo": 21,
+      "sceneTag": "关键人",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "只有一个内部支持者时，最应该确认什么？",
+      "context": null,
+      "expectedPoints": [
+        "确认支持者是否愿意引荐业务负责人",
+        "确认谁是经济买家、谁签合同、谁使用",
+        "判断支持者在决策链中的影响力"
+      ],
+      "forbiddenPoints": [
+        "只继续加深与支持者的关系",
+        "绕过支持者直接找高层"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "关键人"
+      ],
+      "goldBasis": "experience_grain d3100000-...0004《关键人》；d3100000-...0007《决策人》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000004",
+          "title": "关键人"
+        },
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000007",
+          "title": "决策人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000022",
+      "orderNo": 22,
+      "sceneTag": "关键人",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "支持者很认可，但每次提见老板都被岔开。说明什么？",
+      "context": null,
+      "expectedPoints": [
+        "支持者可能怕担责或影响力不足",
+        "先帮他准备向上汇报材料，降低引荐风险",
+        "判断是否需要换入口或找其他影响者"
+      ],
+      "forbiddenPoints": [
+        "反复要求见领导",
+        "把支持者当成唯一决策人"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0004《关键人》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000004",
+          "title": "关键人"
+        },
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000007",
+          "title": "决策人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000023",
+      "orderNo": 23,
+      "sceneTag": "关键人",
+      "archetype": "script",
+      "critical": false,
+      "question": "想让支持者引荐业务负责人，给我一句不让他为难的话。",
+      "context": null,
+      "expectedPoints": [
+        "我整理了一页给管理层的对比，您看要不要我陪您一起过一遍？",
+        "把引荐包装成帮他汇报，而不是我要见领导"
+      ],
+      "forbiddenPoints": [
+        "能不能帮我约一下老板",
+        "我想认识你们领导"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0007《决策人》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000007",
+          "title": "决策人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000024",
+      "orderNo": 24,
+      "sceneTag": "关键人",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "支持者让你别告诉老板某个风险，先签了再说。怎么办？",
+      "context": null,
+      "expectedPoints": [
+        "不能隐瞒关键风险",
+        "把风险写成可管理的方案，由支持者决定如何向上沟通",
+        "必要时升级到合规或上级，不做私下承诺"
+      ],
+      "forbiddenPoints": [
+        "答应隐瞒风险",
+        "配合先签后补"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0004《关键人》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000004",
+          "title": "关键人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000025",
+      "orderNo": 25,
+      "sceneTag": "关键人",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "技术负责人说可以，业务负责人说不行，采购说再等等。先找谁？",
+      "context": null,
+      "expectedPoints": [
+        "先确认谁对结果负责、谁有预算签字权",
+        "分别澄清技术和业务的反对点",
+        "形成共同的评估标准，不多头传话"
+      ],
+      "forbiddenPoints": [
+        "只找最支持的人",
+        "同时给三方不同承诺"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0004《关键人》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000004",
+          "title": "关键人"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000026",
+      "orderNo": 26,
+      "sceneTag": "异议处理",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户说“再考虑考虑”，最应该追问什么？",
+      "context": null,
+      "expectedPoints": [
+        "追问考虑的具体对象：预算、风险还是内部意见不统一",
+        "根据答案给出对应证据或下一步",
+        "不要直接进入逼单"
+      ],
+      "forbiddenPoints": [
+        "直接问什么时候签",
+        "用优惠催促"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "异议处理"
+      ],
+      "goldBasis": "experience_grain d3100000-...0011《异议处理》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000011",
+          "title": "异议处理"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000027",
+      "orderNo": 27,
+      "sceneTag": "异议处理",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "三次跟进客户都很礼貌地说再考虑，怎么判断还有没有机会？",
+      "context": null,
+      "expectedPoints": [
+        "看客户是否愿意给出具体顾虑或下一步",
+        "判断是流程慢、预算未定还是已经放弃",
+        "设置双向的下一步，而不是无限跟进"
+      ],
+      "forbiddenPoints": [
+        "继续重复介绍产品",
+        "把礼貌当意向"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0011《异议处理》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000011",
+          "title": "异议处理"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000028",
+      "orderNo": 28,
+      "sceneTag": "异议处理",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户说再考虑考虑，给我一句能问出真实原因的话。",
+      "context": null,
+      "expectedPoints": [
+        "您考虑的主要是预算、风险，还是内部还有不同意见？",
+        "问完根据答案给对应材料"
+      ],
+      "forbiddenPoints": [
+        "您还有什么顾虑吗",
+        "我们这个月有活动"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0011《异议处理》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000011",
+          "title": "异议处理"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000029",
+      "orderNo": 29,
+      "sceneTag": "异议处理",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户一直拖，销售想用“明天涨价”逼单。可以吗？",
+      "context": null,
+      "expectedPoints": [
+        "不能用虚假涨价或最后期限施压",
+        "用真实的时间节点和客户利益沟通",
+        "逼单前先确认顾虑是否已解决"
+      ],
+      "forbiddenPoints": [
+        "编造涨价或截止日期",
+        "威胁停止服务"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0011《异议处理》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000011",
+          "title": "异议处理"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000030",
+      "orderNo": 30,
+      "sceneTag": "异议处理",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户失联，但内部有人说项目还在推进。信息矛盾时怎么办？",
+      "context": null,
+      "expectedPoints": [
+        "先通过支持者或公开信息确认真实状态",
+        "不把“内部有人说”当成确定信号",
+        "设计低打扰的重新接触方式"
+      ],
+      "forbiddenPoints": [
+        "连续轰炸客户",
+        "直接按成交预测排资源"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0011《异议处理》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000011",
+          "title": "异议处理"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000031",
+      "orderNo": 31,
+      "sceneTag": "方案汇报",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "给客户高管做方案汇报，一页纸最应该放什么？",
+      "context": null,
+      "expectedPoints": [
+        "放与高管考核相关的业务结果和量化价值",
+        "明确投入、周期、风险和验收标准",
+        "技术细节放附录，不占首页"
+      ],
+      "forbiddenPoints": [
+        "首页放产品架构图",
+        "堆功能清单"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "方案汇报"
+      ],
+      "goldBasis": "experience_grain d3100000-...0006《方案汇报》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000006",
+          "title": "方案汇报"
+        },
+        {
+          "type": "review_report",
+          "id": "d5200000-0000-0000-0000-000000000004",
+          "title": "方案汇报复盘"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000032",
+      "orderNo": 32,
+      "sceneTag": "方案汇报",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "讲完方案客户没有反馈，是认可还是不认可？怎么判断？",
+      "context": null,
+      "expectedPoints": [
+        "沉默通常不是认可，而是没听到与自己考核相关的内容",
+        "用“只能留一页给领导”问出真实关注点",
+        "根据反馈调整下一页"
+      ],
+      "forbiddenPoints": [
+        "把沉默当成同意",
+        "继续按原稿讲完"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0006《方案汇报》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000006",
+          "title": "方案汇报"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000033",
+      "orderNo": 33,
+      "sceneTag": "方案汇报",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户听完方案沉默，给我一句能问出关注点的话。",
+      "context": null,
+      "expectedPoints": [
+        "如果只能保留一页给您的领导看，您会留哪一页？",
+        "根据回答判断他真正要对谁负责"
+      ],
+      "forbiddenPoints": [
+        "您觉得怎么样",
+        "还有哪里不清楚"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0006《方案汇报》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000006",
+          "title": "方案汇报"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000034",
+      "orderNo": 34,
+      "sceneTag": "方案汇报",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要求把未排期的路线图写进合同，并承诺具体上线日期。能答应吗？",
+      "context": null,
+      "expectedPoints": [
+        "不能把未排期能力写成合同承诺",
+        "只承诺已排期、可验收的范围",
+        "未排期需求走需求评估，不口头许诺"
+      ],
+      "forbiddenPoints": [
+        "答应未排期功能上线",
+        "把 roadmap 当合同附件"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0006《方案汇报》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000006",
+          "title": "方案汇报"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000035",
+      "orderNo": 35,
+      "sceneTag": "方案汇报",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "原定给 IT 讲方案，到现场发现主听人是 CFO，目标变成降本。怎么调整？",
+      "context": null,
+      "expectedPoints": [
+        "先确认 CFO 最关心的成本和风险指标",
+        "把技术方案重排为投入产出、现金流和风险",
+        "不能照原稿讲功能"
+      ],
+      "forbiddenPoints": [
+        "继续讲架构细节",
+        "承诺无法量化的降本比例"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0006《方案汇报》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000006",
+          "title": "方案汇报"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000036",
+      "orderNo": 36,
+      "sceneTag": "边界",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户要求一个月整体上线，实施周期通常怎么判断能不能接？",
+      "context": null,
+      "expectedPoints": [
+        "先确认范围、验收标准和客户配合资源",
+        "整体一个月不能承诺时，拆分业务单元分阶段上线",
+        "把不可承诺的部分明确说出来"
+      ],
+      "forbiddenPoints": [
+        "为了签单先答应",
+        "承诺整体压缩到一个月"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "边界"
+      ],
+      "goldBasis": "experience_grain d3100000-...0012《边界》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000012",
+          "title": "边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000037",
+      "orderNo": 37,
+      "sceneTag": "边界",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "客户以“同行都一个月上线”施压，怎么判断真实可行性？",
+      "context": null,
+      "expectedPoints": [
+        "先确认对方说的一个月包含哪些范围",
+        "对比自身范围、数据准备和客户配合度",
+        "用分阶段方案替代整体承诺"
+      ],
+      "forbiddenPoints": [
+        "直接说同行在吹",
+        "硬接一个月"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0012《边界》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000012",
+          "title": "边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000038",
+      "orderNo": 38,
+      "sceneTag": "边界",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户要求一个月上线，给我一句既不说死也不丢单的话。",
+      "context": null,
+      "expectedPoints": [
+        "整体压缩到一个月我不能承诺，但可以先把一个业务单元上线，您看是否可行？",
+        "给出可验收的第一阶段范围"
+      ],
+      "forbiddenPoints": [
+        "我们尽量",
+        "应该没问题"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0012《边界》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000012",
+          "title": "边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000039",
+      "orderNo": 39,
+      "sceneTag": "边界",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "合同还没定义范围，客户先要求写延期罚则。能签吗？",
+      "context": null,
+      "expectedPoints": [
+        "范围和验收标准未定义前不能接受罚则",
+        "先锁定范围、依赖和客户责任",
+        "罚则与可控责任对等，不承担客户原因导致的延期"
+      ],
+      "forbiddenPoints": [
+        "先签罚则再补范围",
+        "接受无限责任"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0012《边界》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000012",
+          "title": "边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000040",
+      "orderNo": 40,
+      "sceneTag": "边界",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户要求承诺旗舰版包含定制模型训练。事实是什么？",
+      "context": "旗舰版包含多空间、组织分身、培训认证与私有化部署选项。不包含定制模型训练；数据默认存储在国内区域。",
+      "expectedPoints": [
+        "旗舰版不包含定制模型训练",
+        "可提供私有化部署和国内数据存储",
+        "定制训练需单独立项评估"
+      ],
+      "forbiddenPoints": [
+        "承诺包含定制模型训练",
+        "承诺数据可默认出境"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "knowledge_entry cccccccc-...0001《旗舰版产品能力与边界》",
+      "sourceRefs": [
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000001",
+          "title": "旗舰版产品能力与边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000041",
+      "orderNo": 41,
+      "sceneTag": "试用",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "客户愿意试用但不愿给数据，标准的推进方式是什么？",
+      "context": null,
+      "expectedPoints": [
+        "先用脱敏样例跑通一个真实场景",
+        "约定两周和可验收的结果",
+        "跑通后再谈数据授权和扩大范围"
+      ],
+      "forbiddenPoints": [
+        "一上来要全量数据",
+        "跳过试用直接谈合同"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "试用"
+      ],
+      "goldBasis": "experience_grain d3100000-...0009《试用》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000009",
+          "title": "试用"
+        },
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000001",
+          "title": "旗舰版产品能力与边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000042",
+      "orderNo": 42,
+      "sceneTag": "试用",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "客户同意试用，但只给一份脱敏样表，说明什么？下一步怎么推进？",
+      "context": null,
+      "expectedPoints": [
+        "客户对数据安全敏感，但愿意验证",
+        "选一个他最关心的场景做小范围验证",
+        "用结果换更大范围和授权"
+      ],
+      "forbiddenPoints": [
+        "要求追加数据才做",
+        "把试用当免费实施"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0009《试用》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000009",
+          "title": "试用"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000043",
+      "orderNo": 43,
+      "sceneTag": "试用",
+      "archetype": "script",
+      "critical": false,
+      "question": "客户不愿给数据，给我一句能启动试用的提议。",
+      "context": null,
+      "expectedPoints": [
+        "我们先用一份脱敏数据跑您最关心的那个场景，两周后看结果，可以吗？",
+        "明确试用产出和验收方式"
+      ],
+      "forbiddenPoints": [
+        "先给数据我们才能评估",
+        "试用需要全量数据"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0009《试用》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000009",
+          "title": "试用"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000044",
+      "orderNo": 44,
+      "sceneTag": "试用",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要求用生产数据试用，但不给书面授权和责任边界。能做吗？",
+      "context": null,
+      "expectedPoints": [
+        "没有书面授权不能使用生产数据",
+        "可改用脱敏数据或走合规审批",
+        "明确数据使用范围、期限和删除责任"
+      ],
+      "forbiddenPoints": [
+        "先用生产数据再说",
+        "口头保证不泄露"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "knowledge_entry cccccccc-...0001《旗舰版产品能力与边界》",
+      "sourceRefs": [
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000001",
+          "title": "旗舰版产品能力与边界"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000045",
+      "orderNo": 45,
+      "sceneTag": "试用",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "客户试用三周没有反馈，但内部有人说效果不错。怎么处理？",
+      "context": null,
+      "expectedPoints": [
+        "先确认试用目标和验收人",
+        "用一次短会收敛结果和下一步",
+        "没有量化结果前不承诺扩大范围"
+      ],
+      "forbiddenPoints": [
+        "直接要求签合同",
+        "把“有人说不错”当验收通过"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0009《试用》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000009",
+          "title": "试用"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000046",
+      "orderNo": 46,
+      "sceneTag": "续约",
+      "archetype": "fact_policy",
+      "critical": true,
+      "question": "老客户续约时压价，应该先做什么？",
+      "context": null,
+      "expectedPoints": [
+        "先把续约转成下一阶段价值回顾",
+        "用量化结果证明这一年带来的变化",
+        "再谈价格和范围，不只谈折扣"
+      ],
+      "forbiddenPoints": [
+        "直接进入折扣谈判",
+        "用降价换续约"
+      ],
+      "citationRequirement": {
+        "required": true,
+        "minCitations": 1,
+        "preferredSources": [
+          "experience_grain"
+        ]
+      },
+      "retrievalExpected": [
+        "续约"
+      ],
+      "goldBasis": "experience_grain d3100000-...0010《续约》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000010",
+          "title": "续约"
+        },
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000002",
+          "title": "标准报价与折扣审批规则"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000047",
+      "orderNo": 47,
+      "sceneTag": "续约",
+      "archetype": "scenario_judgment",
+      "critical": false,
+      "question": "续约客户说“不降价就换供应商”，怎么判断是真流失还是谈判策略？",
+      "context": null,
+      "expectedPoints": [
+        "看客户是否认可过去一年的量化价值",
+        "判断是预算压力、竞品报价还是内部换人",
+        "用价值回顾和分层方案回应，不直接降价"
+      ],
+      "forbiddenPoints": [
+        "立刻申请最低价",
+        "威胁停止服务"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0010《续约》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000010",
+          "title": "续约"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000048",
+      "orderNo": 48,
+      "sceneTag": "续约",
+      "archetype": "script",
+      "critical": false,
+      "question": "续约时客户只谈价格，给我一句能把话题拉回价值的话。",
+      "context": null,
+      "expectedPoints": [
+        "这一年里哪三个变化是您愿意写进汇报的？",
+        "用客户自己说的变化引出下一阶段价值"
+      ],
+      "forbiddenPoints": [
+        "您想要什么折扣",
+        "我们给您最低价"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0010《续约》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000010",
+          "title": "续约"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000049",
+      "orderNo": 49,
+      "sceneTag": "续约",
+      "archetype": "boundary_refusal",
+      "critical": true,
+      "question": "客户要求续约价低于政策底线，否则转竞品。能答应吗？",
+      "context": "标准报价与折扣审批规则：低于八折需要销售总监审批，低于七折需要总经理审批。",
+      "expectedPoints": [
+        "不能直接答应低于政策底线的价格",
+        "按审批层级提交，不口头承诺",
+        "可调整范围或服务等级，不突破审批规则"
+      ],
+      "forbiddenPoints": [
+        "直接承诺低于底线",
+        "用虚假赠品补差价"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "knowledge_entry cccccccc-...0002《标准报价与折扣审批规则》",
+      "sourceRefs": [
+        {
+          "type": "knowledge_entry",
+          "id": "cccccccc-0000-0000-0000-000000000002",
+          "title": "标准报价与折扣审批规则"
+        }
+      ],
+      "reviewNotes": []
+    },
+    {
+      "id": "e0200000-0000-0000-0000-000000000050",
+      "orderNo": 50,
+      "sceneTag": "续约",
+      "archetype": "hard_edge",
+      "critical": false,
+      "question": "续约客户拿竞品报价要求匹配，但过去一年没有任何量化价值记录。怎么办？",
+      "context": null,
+      "expectedPoints": [
+        "先补价值回顾，找到可量化变化",
+        "没有价值证据时不进入纯价格战",
+        "用分层方案或范围调整替代直接降价"
+      ],
+      "forbiddenPoints": [
+        "直接匹配竞品报价",
+        "编造价值数据"
+      ],
+      "citationRequirement": null,
+      "retrievalExpected": [],
+      "goldBasis": "experience_grain d3100000-...0010《续约》",
+      "sourceRefs": [
+        {
+          "type": "experience_grain",
+          "id": "d3100000-0000-0000-0000-000000000010",
+          "title": "续约"
+        }
+      ],
+      "reviewNotes": []
+    }
+  ]
+}

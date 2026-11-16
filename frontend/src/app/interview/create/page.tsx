@@ -233,6 +233,7 @@ export default function CreateInterviewPage() {
 
           <button
             type="button"
+            data-tour="interview-create-cta"
             onClick={handleStartClick}
             disabled={!h.topicInput.trim() || !h.spaceId || h.loading}
             className="rounded-lg bg-primary px-6 sm:px-8 py-3 text-sm font-semibold text-white transition-all hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 min-h-[44px]"

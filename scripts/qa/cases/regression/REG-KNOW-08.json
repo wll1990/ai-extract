@@ -1,0 +1,50 @@
+[
+  {
+    "id": "REG-KNOW-08",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "删除/废弃知识前看不到影响面，也没有「被引用」面板（KN-05）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-引用面板回归",
+          "category": "product",
+          "sourceType": "tenant",
+          "content": "引用面板回归：即使最近没有命中，接口也必须稳定返回 200 和数组。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}/references",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}/references?days=0",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_case_retrieve_log where knowledge_id = :knowledgeId",
+        "op": "gte",
+        "expect": 0
+      }
+    ]
+  }
+]

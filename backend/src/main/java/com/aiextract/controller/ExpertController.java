@@ -1,6 +1,7 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.common.PageResponse;
 import com.aiextract.dto.*;
 import com.aiextract.model.ExpertDocument;
 import com.aiextract.service.ExpertService;
@@ -40,10 +41,14 @@ public class ExpertController {
 
     /** ---- 管理接口 ---- */
     @GetMapping("/admin/experts")
-    public ApiResponse<Page<ExpertSkillListResponse>> getExperts(
+    public ApiResponse<Map<String, Object>> getExperts(
             @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String keyword, @RequestParam(required = false) String status) {
-        return ApiResponse.success(expertService.getExperts(page, size, keyword, status));
+        // 分页参数显式收敛：page<1 或 size 超大都不能透传给 PageRequest
+        int safePage = Math.max(1, page);
+        int safeSize = Math.max(1, Math.min(size, 100));
+        Page<ExpertSkillListResponse> result = expertService.getExperts(safePage, safeSize, keyword, status);
+        return ApiResponse.success(PageResponse.of(result, safePage, safeSize));
     }
 
     @GetMapping("/admin/experts/{expertId}")
@@ -73,6 +78,8 @@ public class ExpertController {
 
     @PostMapping("/admin/experts/{expertId}/extract")
     public ApiResponse<Void> extractGrains(@PathVariable String expertId) {
+        // 服务层方法同时被 Scheduler 调用，归属校验放在 HTTP 入口
+        expertService.assertExpertAccessible(expertId);
         expertService.extractGrains(expertId);
         return ApiResponse.success();
     }
@@ -132,14 +139,14 @@ public class ExpertController {
 
     @PostMapping("/admin/experts/{expertId}/analyze")
     public ApiResponse<Void> manualAnalyze(@PathVariable String expertId) {
+        expertService.assertExpertAccessible(expertId);
         expertService.analyzeMaterials(java.util.UUID.fromString(expertId));
         return ApiResponse.success();
     }
 
     @PostMapping("/admin/experts/composite/regenerate")
-    public ApiResponse<Void> regenerateComposite() {
-        expertService.regenerateComposite();
-        return ApiResponse.success();
+    public ApiResponse<ExpertCompositeResponse> regenerateComposite() {
+        return ApiResponse.success(expertService.regenerateComposite());
     }
 
     @GetMapping("/admin/experts/composite")

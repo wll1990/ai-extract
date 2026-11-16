@@ -17,6 +17,8 @@ export interface Message {
   avgScore?: string;
   avgSimilarity?: string;
   reportTitle?: string;
+  knowledgeSources?: Array<{ title: string; source: string; similarity: string }>;
+  caseSources?: Array<{ title: string; source: string; similarity: string }>;
 }
 
 interface SourceInfo {
@@ -26,6 +28,8 @@ interface SourceInfo {
   avgScore?: string;
   avgSimilarity?: string;
   reportTitle?: string;
+  knowledgeSources?: Array<{ title: string; source: string; similarity: string }>;
+  caseSources?: Array<{ title: string; source: string; similarity: string }>;
 }
 
 export type ChatPhase = 'entry' | 'streaming' | 'idle' | 'error';
@@ -173,6 +177,8 @@ export function useChat({ skillId, ownerName, enterprise, onLimit }: UseChatOpti
         ).join('\n');
 
     let sourceInfo: SourceInfo = {};
+    const knowledgeSources: Array<{ title: string; source: string; similarity: string }> = [];
+    const caseSources: Array<{ title: string; source: string; similarity: string }> = [];
 
     const callbacks: SseCallbacks = {
       onChunk: (content) => { dispatch({ type: 'CHUNK', content }); },
@@ -181,6 +187,12 @@ export function useChat({ skillId, ownerName, enterprise, onLimit }: UseChatOpti
         sourceRef.current = sourceInfo;
         dispatch({ type: 'SOURCE', info: sourceInfo });
       },
+      onKnowledgeSource: (title, source, similarity) => {
+        knowledgeSources.push({ title, source, similarity });
+      },
+      onCaseSource: (title, source, similarity) => {
+        caseSources.push({ title, source, similarity });
+      },
       onMeta: (conversationId) => {
         if (conversationId && !state.currentConvId) {
           dispatch({ type: 'META', conversationId });
@@ -188,7 +200,11 @@ export function useChat({ skillId, ownerName, enterprise, onLimit }: UseChatOpti
       },
       onDone: () => {
         if (limitReachedRef.current) { limitReachedRef.current = false; return; }
-        dispatch({ type: 'DONE', sourceInfo: sourceRef.current });
+        dispatch({ type: 'DONE', sourceInfo: {
+          ...sourceRef.current,
+          ...(knowledgeSources.length ? { knowledgeSources } : {}),
+          ...(caseSources.length ? { caseSources } : {}),
+        } });
       },
       onError: (msg) => { dispatch({ type: 'ERROR', message: msg }); },
       onEvent: (type, data) => {

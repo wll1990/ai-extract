@@ -21,6 +21,10 @@ import java.util.UUID;
  */
 @Repository
 public interface ExpertSkillRepository extends JpaRepository<ExpertSkill, UUID> {
+
+    /** 后台任务健康检查：最近窗口内失败萃取师数 */
+    long countByStatusAndUpdatedAtAfter(String status, LocalDateTime after);
+
     /**
      * 查询By Status。
      * @param status 参数
@@ -44,8 +48,16 @@ public interface ExpertSkillRepository extends JpaRepository<ExpertSkill, UUID> 
      * @param timeout timeout
      * @return 结果列表
      */
-    @Query("SELECT es FROM ExpertSkill es WHERE es.status = 'pending' AND (es.lockedAt IS NULL OR es.lockedAt < :timeout)")
+    @Query("SELECT es FROM ExpertSkill es WHERE (es.status = 'pending' "
+            + "OR (es.status = 'analyzing' AND es.lockedAt < :timeout)) "
+            + "AND (es.lockedAt IS NULL OR es.lockedAt < :timeout)")
     List<ExpertSkill> findPendingTasks(@Param("timeout") LocalDateTime timeout);
+
+    /** 回收超时未释放的锁，避免 worker 崩溃后任务永久卡在 analyzing */
+    @Modifying
+    @Query("UPDATE ExpertSkill es SET es.lockedBy = NULL, es.lockedAt = NULL "
+            + "WHERE es.lockedBy IS NOT NULL AND es.lockedAt < :timeout")
+    int releaseStaleLocks(@Param("timeout") LocalDateTime timeout);
     /**
      * try（Lock）。
      * @param id id
@@ -70,5 +82,19 @@ public interface ExpertSkillRepository extends JpaRepository<ExpertSkill, UUID> 
      */
     List<ExpertSkill> findByStatusAndDomain(String status, String domain);
 
+    // ==================== 企业隔离查询 ====================
+
+    /** 企业内分页列表（company_id 精确匹配，走 idx_expert_skill_company_status） */
+    Page<ExpertSkill> findByCompanyId(UUID companyId, Pageable pageable);
+
+    Page<ExpertSkill> findByCompanyIdAndStatus(UUID companyId, String status, Pageable pageable);
+
+    Page<ExpertSkill> findByCompanyIdAndNameContainingIgnoreCase(
+            UUID companyId, String keyword, Pageable pageable);
+
+    /** 企业内可用萃取师 */
+    List<ExpertSkill> findByCompanyIdAndStatus(UUID companyId, String status);
+
+    List<ExpertSkill> findByCompanyIdAndStatusAndDomain(UUID companyId, String status, String domain);
 
 }

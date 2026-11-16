@@ -1,0 +1,93 @@
+[
+  {
+    "id": "GOLD-INTERVIEW-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /spaces",
+        "body": { "title": "QA-${runId}-访谈空间", "description": "访谈→素材→颗粒→报告链路" },
+        "expect": { "status": 200 },
+        "save": { "spaceId": "data.id" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /interviews",
+        "body": {
+          "spaceId": "${spaceId}",
+          "topic": "QA-${runId}-价格谈判经验"
+        },
+        "expect": { "status": 200 },
+        "save": { "sessionId": "data.sessionId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /interviews/${sessionId}/chat",
+        "sse": true,
+        "timeout": 120000,
+        "body": {
+          "message": "客户说我们的报价比竞品高百分之二十。我一般不会直接降价，而是先确认对方的预算区间和最终决策人，再把我们的交付周期、实施团队和后续服务拆开算给客户看，同时用同行业已经交付的三个案例证明溢价部分的价值，最后给出分期付款和分阶段验收的方案。"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true }
+      },
+      {
+        "as": "employee",
+        "api": "POST /interviews/${sessionId}/chat",
+        "sse": true,
+        "timeout": 120000,
+        "body": {
+          "message": "我再讲一个具体案例。去年一家制造业客户在签约前突然要求账期从三十天延长到九十天，而且不接受预付。我先约了对方财务负责人，问清楚他们真实的现金流压力来自哪里，发现是季度末回款集中。于是我提出把合同拆成两期交付，第一期只收百分之四十，第二期在验收后收尾款，同时引入银行保理方案，让对方财务可以在不占用授信的情况下完成付款。最后客户接受了，合同金额没有减少，交付节奏也没有被打乱。"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true }
+      },
+      {
+        "as": "employee",
+        "api": "POST /interviews/${sessionId}/chat",
+        "sse": true,
+        "timeout": 120000,
+        "body": {
+          "message": "我把这套方法总结成四步。第一步先复述客户的顾虑，确认是不是预算、决策链或者交付风险；第二步请对接人画出内部评审流程，标出谁签字、谁使用、谁可能反对；第三步针对每个角色准备一页纸材料，财务看回报周期，法务看合同条款，业务看落地效果；第四步约定下一次动作和具体时间，不让事情停在口头。这四步做完，客户会觉得我们是在帮他推进内部流程，而不是单纯推销。"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true }
+      },
+      {
+        "as": "employee",
+        "api": "POST /interviews/${sessionId}/force-complete",
+        "timeout": 240000,
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /interviews/${sessionId}",
+        "expect": { "status": 200, "json": { "data.status": "completed" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "dbPoll",
+        "sql": "select status from public.skill_material where file_url = 'interview://' || :sessionId",
+        "until": ["extracted"],
+        "maxAttempts": 48,
+        "intervalMs": 5000
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.experience_grain where source_interview_id = :sessionId",
+        "op": "gte",
+        "expect": "1"
+      },
+      {
+        "type": "dbPoll",
+        "sql": "select (count(*) > 0)::text from public.report where space_id = :spaceId",
+        "until": ["true"],
+        "maxAttempts": 36,
+        "intervalMs": 5000
+      }
+    ]
+  }
+]

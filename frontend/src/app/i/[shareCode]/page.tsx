@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { authHeaders } from '@/lib/api/client';
 import { useParams } from 'next/navigation';
 import { getToken } from '@/lib/storage';
 import { useQaChat, type ChatMode } from '@/app/skill/[skillId]/hooks/useQaChat';
@@ -14,6 +15,7 @@ interface InternalShareInfo {
   companyName: string | null;
   ownerName: string;
   avatarUrl: string | null;
+  registerToken?: string;
   openingMessage?: string;
   ownerTitle?: string;
 }
@@ -61,7 +63,7 @@ export default function InternalSharePage() {
 
   // Check auth
   useEffect(() => {
-    fetch('/api/v1/auth/me', { headers: { Authorization: `Bearer ${getToken()}` } })
+    fetch('/api/v1/auth/me', { headers: { ...authHeaders() } })
       .then((r) => { if (r.ok) setIsLoggedIn(true); })
       .catch(() => {})
       .finally(() => setAuthChecked(true));
@@ -127,7 +129,7 @@ export default function InternalSharePage() {
       const r = await fetch('/api/v1/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account: bAccount.trim(), password: bPassword, companyId: info?.companyId }),
+        body: JSON.stringify({ account: bAccount.trim(), password: bPassword, inviteToken: info?.registerToken }),
       });
       const d = await r.json();
       if (d.code === 200) { localStorage.setItem('token', d.data.token); setIsLoggedIn(true); }
@@ -148,7 +150,7 @@ export default function InternalSharePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          companyId: info?.companyId,
+          inviteToken: info?.registerToken,
           name: regName.trim(),
           account: regAccount.trim(),
           password: regPassword,

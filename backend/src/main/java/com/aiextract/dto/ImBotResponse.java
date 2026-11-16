@@ -46,6 +46,9 @@ public class ImBotResponse {
     /** 连接状态：online / offline / reconnecting */
     private String connected;
 
+    /** 最近一次发布/重连失败原因（status=failed 时展示） */
+    private String lastError;
+
     /** 创建时间 */
     private String createdAt;
 }

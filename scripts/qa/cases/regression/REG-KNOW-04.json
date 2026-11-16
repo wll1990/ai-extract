@@ -1,0 +1,55 @@
+[
+  {
+    "id": "REG-KNOW-04",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "知识审批通过后向量索引失败只写日志，管理端看不到「已生效但检索不到」，也无法单条重建",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-索引状态回归",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "索引状态回归：审批后必须能查询 embeddingStatus，并支持单条重建索引。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/knowledge/${knowledgeId}",
+        "expect": { "status": 200 },
+        "await": {
+          "sql": "select embedding_status from public.knowledge_entry where id = :knowledgeId",
+          "until": ["indexed", "failed"],
+          "timeoutMs": 60000
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/reindex",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id = :knowledgeId and embedding_status in ('indexed','indexing','failed')",
+        "op": "gte",
+        "expect": 1
+      }
+    ]
+  }
+]

@@ -53,13 +53,33 @@ public class ImChannelRequest {
     @AllArgsConstructor
     public static class ImChannelConfig {
 
-        /** 应用ID */
+        /** 应用ID（飞书 cli_xxx / 钉钉 appKey） */
         private String appId;
 
-        /** 应用密钥 */
+        /** 应用密钥（飞书/钉钉），落库前加密进 secrets */
         private String appSecret;
 
         /** Webhook回调地址 */
         private String webhookUrl;
+
+        // ── 企业微信自建应用 ──
+        /** 企业 ID */
+        private String corpId;
+
+        /** 应用 AgentId */
+        private String agentId;
+
+        /** 应用 Secret */
+        private String secret;
+
+        /** 回调 Token（验签用） */
+        private String token;
+
+        /** 回调 EncodingAESKey（43 位） */
+        private String encodingAesKey;
+
+        // ── 钉钉 ──
+        /** 机器人编码（可选，默认取 appKey） */
+        private String robotCode;
     }
 }

@@ -2,18 +2,13 @@
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { listMaterials, deleteMaterial, submitManualText, type MaterialItem } from '@/lib/api/materials';
-
-const STATUS_LABELS: Record<string, string> = {
-  uploaded: '已上传', cleaning: '清洗中', analyzing: '分析中',
-  analyzed: '已分析', extracted: '已萃取', rejected: '已拒绝', discarded: '已废弃'
-};
-const STATUS_COLORS: Record<string, string> = {
-  uploaded: 'bg-primary-light text-muted-foreground', cleaning: 'bg-blue-100 text-blue-600',
-  analyzing: 'bg-yellow-100 text-yellow-700', analyzed: 'bg-green-100 text-green-700',
-  extracted: 'bg-emerald-100 text-emerald-700', rejected: 'bg-red-100 text-red-600',
-  discarded: 'bg-gray-200 text-gray-500'
-};
+import { listMaterials, deleteMaterial, submitManualText, retryMaterial, updateMaterialStatus, type MaterialItem } from '@/lib/api/materials';
+import {
+  MATERIAL_STATUS_LABELS as STATUS_LABELS,
+  MATERIAL_STATUS_COLORS as STATUS_COLORS,
+  MATERIAL_TERMINAL_STATUSES as TERMINAL_STATUSES,
+  MATERIAL_FILTER_STATUSES,
+} from '@/lib/material-status';
 
 export default function MaterialsPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,19 +24,34 @@ export default function MaterialsPage() {
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
-    const fetchData = () => {
-      listMaterials(id).then(d => {
-        setMaterials(d.content);
-        // 全部素材到达终端状态时停止轮询
-        const terminal = new Set(['extracted', 'rejected', 'discarded']);
-        const allTerminal = d.content.every(m => terminal.has(m.status));
-        if (allTerminal && timer) {
-          clearInterval(timer);
-          timer = null;
+    const startedAt = Date.now();
+    const MAX_POLL_MS = 10 * 60 * 1000;
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null; }
+    };
+    const fetchData = async () => {
+      if (Date.now() - startedAt > MAX_POLL_MS) {
+        stop();
+        return;
+      }
+      try {
+        // 一次取全部分页，避免只看到前 20 条
+        const first = await listMaterials(id, 1, 100);
+        let all = first.content;
+        for (let p = 2; p <= first.totalPages; p++) {
+          const next = await listMaterials(id, p, 100);
+          all = all.concat(next.content);
         }
-      }).catch((e) => {
+        setMaterials(all);
+        // 全部素材到达终态时停止轮询；否则每 3 秒刷新
+        if (all.length > 0 && all.every(m => TERMINAL_STATUSES.has(m.status))) {
+          stop();
+        }
+      } catch (e) {
         console.error('加载素材列表失败', e);
-      }).finally(() => setLoading(false));
+      } finally {
+        setLoading(false);
+      }
     };
     fetchData();
     timer = setInterval(fetchData, 3000);
@@ -67,7 +77,7 @@ export default function MaterialsPage() {
 
       {/* 状态筛选 */}
       <div className="flex gap-2 mb-4">
-        {['all','uploaded','cleaning','analyzing','analyzed','extracted','rejected','discarded'].map(s => (
+        {['all', ...MATERIAL_FILTER_STATUSES].map(s => (
           <button key={s} onClick={() => setFilter(s)}
             className={`px-3 py-1 rounded-full text-xs ${filter === s ? 'bg-primary text-white' : 'bg-primary-light text-muted-foreground hover:bg-border'}`}>
             {s === 'all' ? '全部' : STATUS_LABELS[s] || s}
@@ -79,10 +89,10 @@ export default function MaterialsPage() {
       {filtered.length === 0 ? (
         <div className="text-center py-20 text-muted-foreground-2">
           <p className="text-4xl mb-2">📁</p>
-          <p>暂无素材，请通过分身管理页上传</p>
+          <p>{filter === 'all' ? '这个分身还没有素材，去「素材上传」添加第一份' : '当前筛选条件下没有素材'}</p>
         </div>
       ) : (
-        <div className="bg-surface-2 rounded-lg border border-border overflow-hidden">
+        <div className="bg-surface-2 rounded-lg border border-border overflow-hidden" data-tour="materials-table">
           <table className="w-full text-sm">
             <thead className="bg-surface border-b">
               <tr>
@@ -109,11 +119,41 @@ export default function MaterialsPage() {
                   </td>
                   <td className="p-3 text-muted-foreground">{m.createdAt ? new Date(m.createdAt).toLocaleDateString('zh-CN') : '-'}</td>
                   <td className="p-3 text-right">
+                    {['parse_failed', 'cleaning_failed', 'rejected'].includes(m.status) && (
+                      <button onClick={() => {
+                        retryMaterial(m.id)
+                          .then(() => location.reload())
+                          .catch((e: unknown) => alert(e instanceof Error ? e.message : '重试失败'));
+                      }}
+                        className="text-primary hover:underline text-xs mr-2">重试</button>
+                    )}
                     {(m.analysisNotes && m.analysisNotes.includes('需人工补充')) && (
                       <button onClick={() => { setManualModal({ open: true, materialId: m.id, fileName: m.fileName }); setManualText(''); }}
                         className="text-primary hover:underline text-xs mr-2">✏️ 补录文字</button>
                     )}
-                    <button onClick={() => { if (confirm('确认删除？')) deleteMaterial(id, m.id).then(() => setMaterials(prev => prev.filter(x => x.id !== m.id))); }}
+                    {m.status !== 'discarded' && m.status !== 'extracted' && (
+                      <button onClick={() => {
+                        if (!confirm('放弃这个素材？放弃后不会参与萃取，可随时恢复。')) return;
+                        updateMaterialStatus(id, m.id, 'discarded')
+                          .then(() => location.reload())
+                          .catch((e: unknown) => alert(e instanceof Error ? e.message : '操作失败'));
+                      }}
+                        className="text-warning hover:underline text-xs mr-2">放弃</button>
+                    )}
+                    {m.status === 'discarded' && (
+                      <button onClick={() => {
+                        updateMaterialStatus(id, m.id, 'uploaded')
+                          .then(() => location.reload())
+                          .catch((e: unknown) => alert(e instanceof Error ? e.message : '恢复失败'));
+                      }}
+                        className="text-primary hover:underline text-xs mr-2">恢复</button>
+                    )}
+                    <button onClick={() => {
+                      if (!confirm('确认删除？')) return;
+                      deleteMaterial(id, m.id)
+                        .then(() => setMaterials(prev => prev.filter(x => x.id !== m.id)))
+                        .catch((e: unknown) => alert(e instanceof Error ? e.message : '删除失败，请稍后重试'));
+                    }}
                       className="text-red-500 hover:underline text-xs">删除</button>
                   </td>
                 </tr>

@@ -1,0 +1,104 @@
+[
+  {
+    "id": "GOLD-QA-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说我们的价格比竞品高 20%，而且预算还没批下来，我该怎么回应？"
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["meta", "content", "source", "done"],
+          "contentNonEmpty": true
+        },
+        "saveSse": { "from": "meta", "fields": { "conversationId": "conversationId" } },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "如果客户坚持必须先降价再谈，我上一轮说的分期交付方案还适用吗？需要补哪些前提？",
+          "conversationId": "${conversationId}"
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["content", "done"],
+          "contentNonEmpty": true
+        },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说他们内部还要走采购流程，大概两周，这段时间我该做什么来保持推进？",
+          "conversationId": "${conversationId}"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "如果竞品在这两周里给了更低报价，我怎么把讨论拉回价值而不是价格？",
+          "conversationId": "${conversationId}"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "帮我把前几轮聊的内容整理成一个跟进计划，按时间排一下。",
+          "conversationId": "${conversationId}"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "最后确认一下：第一轮说的预算还没批，现在如果客户说预算批了，方案要改哪几处？",
+          "conversationId": "${conversationId}"
+        },
+        "expect": { "status": 200, "eventTypes": ["content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/conversations/${conversationId}/messages",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) || '/' || count(*) filter (where role='user') || '/' || count(*) filter (where role='assistant') from public.skill_message where conversation_id = :conversationId",
+        "expect": "12/6/6"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_conversation where id = :conversationId",
+        "expect": "1"
+      }
+    ]
+  }
+]

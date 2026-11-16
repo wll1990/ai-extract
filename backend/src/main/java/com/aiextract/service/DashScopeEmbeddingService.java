@@ -45,6 +45,16 @@ public class DashScopeEmbeddingService {
         Constants.baseHttpApiUrl = url + "/api/v1";
     }
 
+    /**
+     * 显式注入 API key 到 SDK：SDK 默认只读 DASHSCOPE_API_KEY 环境变量，
+     * 这里接 Spring 属性 {@code ai.dashscope.api-key}（含 QWEN_API_KEY 回退），
+     * 避免环境变量缺失时向量化静默失败。
+     */
+    @Value("${ai.dashscope.api-key}")
+    public void setApiKey(String apiKey) {
+        Constants.apiKey = apiKey;
+    }
+
     /** 单条文本 → 向量 */
     public float[] embed(String text) {
         long t0 = System.currentTimeMillis();

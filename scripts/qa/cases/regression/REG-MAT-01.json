@@ -1,0 +1,38 @@
+[
+  {
+    "id": "REG-MAT-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "M1 判重包含自身导致新文本必被拒",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "skillId": "0a000000-0000-0000-0000-000000000031",
+          "title": "QA-${runId}-dup-A",
+          "text": "客户说价格太高，预算还没有批下来。我先请对接人帮我梳理内部评审流程，确认财务、法务和业务各自关心什么，再按清单准备对比材料，由对接人转给真正的决策人。卡住的时候不要急着往上冲，先找到愿意帮你递话的人。编号${shortId}。"
+        },
+        "expect": { "status": 200 },
+        "save": { "materialId": "data.results[0].materialId" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "skillId": "0a000000-0000-0000-0000-000000000031",
+          "title": "QA-${runId}-dup-B",
+          "text": "客户说价格太高，预算还没有批下来。我先请对接人帮我梳理内部评审流程，确认财务、法务和业务各自关心什么，再按清单准备对比材料，由对接人转给真正的决策人。卡住的时候不要急着往上冲，先找到愿意帮你递话的人。编号${shortId}。"
+        },
+        "expect": { "status": 200, "json": { "data.results[0].acceptance.rejectCode": "DUPLICATE" } }
+      }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select count(*) from skill_material where file_name like :prefix || 'dup-%'", "expect": "2" },
+      { "type": "db", "sql": "select count(*) from skill_material where file_name like :prefix || 'dup-A%' and status <> 'rejected'", "expect": "1" }
+    ]
+  }
+]

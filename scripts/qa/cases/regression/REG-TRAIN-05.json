@@ -1,0 +1,76 @@
+[
+  {
+    "id": "REG-TRAIN-05",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "sales",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "培训计划发布时只校验知识归属、不校验状态，引用已下线知识仍可发布；学员打开任务才 409「该知识已过期或已下线」，整页报错",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-待下线知识",
+          "category": "product",
+          "sourceType": "tenant",
+          "content": "这是一条用于验证发布门槛的知识，随后会被下线。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/deprecate",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-下线资源回归", "description": "引用已下线知识的计划" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "reading",
+          "phaseNo": 1,
+          "phaseName": "认知",
+          "title": "QA-${runId}-下线知识阅读",
+          "resourceType": "knowledge",
+          "resourceId": "${knowledgeId}",
+          "isRequired": true,
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.training_plan where id = :planId",
+        "expect": "draft"
+      },
+      {
+        "type": "db",
+        "sql": "select status from public.knowledge_entry where id = :knowledgeId",
+        "expect": "deprecated"
+      }
+    ]
+  }
+]

@@ -35,7 +35,8 @@ public class KnowledgeGap {
     private UUID id;
 
     /** 所属分身 ID */
-    @Column(name = "skill_id", nullable = false)
+    /** 企业总调度没有具体分身，允许为空 */
+    @Column(name = "skill_id")
     private UUID skillId;
 
     /** 所属空间 ID */

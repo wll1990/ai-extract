@@ -109,6 +109,12 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
     }
   }, [convs, chat]);
 
+  const handleRenameConversation = useCallback(async (id: string, currentTitle: string) => {
+    const title = window.prompt('重命名对话', currentTitle || '');
+    if (title === null || !title.trim()) return;
+    await convs.renameConversation(id, title.trim());
+  }, [convs]);
+
   const toggleHistory = useCallback(() => {
     const next = !showHistory;
     setShowHistory(next);
@@ -130,6 +136,7 @@ export function ChatView({ skill, enterprise, initialQuestion, initialMode }: Ch
           onClose={() => setShowHistory(false)}
           onSwitch={handleSwitchConversation}
           onDelete={handleDeleteConversation}
+          onRename={handleRenameConversation}
           onNew={handleNewChat}
         />
       )}

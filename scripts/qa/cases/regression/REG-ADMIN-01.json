@@ -1,0 +1,44 @@
+[
+  {
+    "id": "REG-ADMIN-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "platform",
+    "roles": ["super_admin", "company_admin", "employee"],
+    "llm": false,
+    "sourceBug": "超管无法按企业视角查看数据；角色字符串绕过导致 acting 后仍可跨企业读取；非法视角头被静默忽略",
+    "steps": [
+      {
+        "as": "super_admin",
+        "api": "GET /auth/me",
+        "headers": { "X-Acting-Company-Id": "not-a-uuid" },
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "super_admin",
+        "api": "GET /auth/me",
+        "headers": { "X-Acting-Company-Id": "0c000000-0000-0000-0000-0000000000ff" },
+        "expect": { "status": 403 }
+      },
+      {
+        "as": "super_admin",
+        "api": "GET /admin/training/plans?page=1&size=5",
+        "headers": { "X-Acting-Company-Id": "0b000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /auth/me",
+        "headers": { "X-Acting-Company-Id": "0b000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 403 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /auth/me",
+        "headers": { "X-Acting-Company-Id": "0b000000-0000-0000-0000-000000000001" },
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": []
+  }
+]

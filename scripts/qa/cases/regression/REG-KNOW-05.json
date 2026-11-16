@@ -1,0 +1,46 @@
+[
+  {
+    "id": "REG-KNOW-05",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "公共内容只能由平台创建，企业沉淀的通用知识没有提交入口",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-提交公共库回归",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "提交公共库回归：企业已生效知识可提交为公共待审候选，来源企业只做溯源。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/submit-public",
+        "expect": { "status": 200, "json": { "data.companyId": null, "data.status": "pending" } },
+        "save": { "publicId": "data.id" }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id = :publicId and company_id is null and source_company_id is not null and status = 'pending'",
+        "op": "gte",
+        "expect": 1
+      }
+    ]
+  }
+]

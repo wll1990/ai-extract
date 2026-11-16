@@ -1,7 +1,7 @@
 'use client';
 
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { API_BASE } from '@/lib/api/client';
+import { API_BASE, authHeaders} from '@/lib/api/client';
 import { getToken } from '@/lib/storage';
 
 import React, { useCallback, useRef, useState } from 'react';
@@ -72,7 +72,7 @@ export function SalesInterviewChat() {
     try {
       const res = await fetch(`${API_BASE}/interviews/${sessionId}/force-complete`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { ...authHeaders() },
       });
       const data = await res.json();
       if (data.code !== 200) {

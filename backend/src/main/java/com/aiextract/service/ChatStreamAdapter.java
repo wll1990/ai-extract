@@ -2,8 +2,10 @@ package com.aiextract.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SynchronousSink;
 
 import java.util.List;
 import java.util.Map;
@@ -62,6 +64,38 @@ public class ChatStreamAdapter {
     }
 
     /**
+     * 非流式调用（system + user 分离）。
+     *
+     * <p>判分类场景必须用这个重载：规则与金标放 system，待评材料放 user，
+     * 避免材料里的「指令」与系统规则混在同一条消息里执行。</p>
+     */
+    public String chat(String systemPrompt, String userPrompt) {
+        long t0 = System.currentTimeMillis();
+        log.debug("LLM REQ systemChars={} userChars={} userPreview={}",
+            systemPrompt == null ? 0 : systemPrompt.length(),
+            userPrompt == null ? 0 : userPrompt.length(),
+            userPrompt == null ? "" : userPrompt.substring(0, Math.min(300, userPrompt.length()))
+                .replace("\n", "\\n"));
+
+        String content = chatClient.prompt()
+            .system(systemPrompt == null ? "" : systemPrompt)
+            .user(userPrompt == null ? "" : userPrompt)
+            .call().content();
+        long elapsed = System.currentTimeMillis() - t0;
+
+        if (content != null) {
+            log.info("LLM RSP chars={} time={}ms preview={}",
+                content.length(), elapsed,
+                content.length() > 300
+                    ? content.substring(0, 300).replace("\n", "\\n") + "..."
+                    : content.replace("\n", "\\n"));
+        } else {
+            log.warn("LLM RSP null time={}ms", elapsed);
+        }
+        return content;
+    }
+
+    /**
      * 将消息列表转为 ChatClient 流式调用，输出格式兼容旧 SSE 事件。
      *
      * 每轮调用记录：
@@ -70,8 +104,9 @@ public class ChatStreamAdapter {
      */
     public Flux<Map<String, Object>> chatStream(List<Map<String, String>> messages,
                                                  Map<String, Object> context) {
-        // 将消息列表格式化为单个 prompt（去重连续相同消息）
-        StringBuilder prompt = new StringBuilder();
+        // system 规则与用户/材料分离：材料里的「指令」不能覆盖系统规则
+        StringBuilder systemPrompt = new StringBuilder();
+        StringBuilder userPrompt = new StringBuilder();
         String prevContent = null;
         String prevRole = null;
         for (Map<String, String> msg : messages) {
@@ -88,47 +123,61 @@ public class ChatStreamAdapter {
             prevContent = content;
             prevRole = role;
             if ("system".equals(role)) {
-                prompt.append("指令：").append(content).append("\n\n");
+                systemPrompt.append(content).append("\n\n");
             } else if ("user".equals(role)) {
-                prompt.append("用户：").append(content).append("\n");
+                userPrompt.append("用户：").append(content).append("\n");
             } else if ("assistant".equals(role)) {
-                prompt.append("助手：").append(content).append("\n");
+                userPrompt.append("助手：").append(content).append("\n");
             }
         }
-        prompt.append("\n助手：");
+        userPrompt.append("\n助手：");
 
-        String fullPrompt = prompt.toString();
+        String system = systemPrompt.toString();
+        String fullPrompt = userPrompt.toString();
         // 日志：发送给大模型的请求
         log.debug("LLM REQ chars={} preview={}",
             fullPrompt.length(),
             fullPrompt.length() > 500
                 ? fullPrompt.substring(0, 500).replace("\n", "\\n") + "..."
                 : fullPrompt.replace("\n", "\\n"));
-        // 完整 prompt 日志，用于诊断提示词大小和内容
-        log.info("LLM FULL_PROMPT chars={} \n{}", fullPrompt.length(), fullPrompt);
+        // 复盘追问的 prompt 含客户隐私，默认不打印全文；排障时用 DEBUG 看截断预览
+        log.debug("LLM REQ fullPrompt chars={} preview={}",
+            fullPrompt.length(),
+            fullPrompt.length() > 500
+                ? fullPrompt.substring(0, 500).replace("\n", "\\n") + "..."
+                : fullPrompt.replace("\n", "\\n"));
 
         AtomicInteger chunkCount = new AtomicInteger(0);
         AtomicLong totalChars = new AtomicLong(0);
         StringBuilder fullResponse = new StringBuilder();
 
         return chatClient.prompt()
+            .system(system)
             .user(fullPrompt)
             .stream()
             .chatResponse()
-            .map(response -> {
-                String content = response.getResult().getOutput().getContent();
-                if (content != null) {
-                    chunkCount.incrementAndGet();
-                    totalChars.addAndGet(content.length());
-                    fullResponse.append(content);
-                    // 日志：每个 chunk 的内容（长 chunk 截断）
-                    log.debug("LLM CHUNK #{} len={} content={}",
-                        chunkCount.get(), content.length(),
-                        content.length() > 200
-                            ? content.substring(0, 200).replace("\n", "\\n") + "..."
-                            : content.replace("\n", "\\n"));
+            // 注意：Reactor 的 map 不允许返回 null —— 映射函数一旦返回 null 就直接抛 NPE，
+            // 后面的 filter(nonNull) 根本接不到。而 DeepSeek 这类 OpenAI 兼容协议一定会发
+            // 没有 content 的 delta（首个带 role 的、结尾带 finish_reason 的），
+            // 所以这里必须用 handle 主动「跳过」，不能靠 map 返回 null。
+            .handle((ChatResponse response, SynchronousSink<Map<String, Object>> sink) -> {
+                if (response.getResult() == null || response.getResult().getOutput() == null) {
+                    return;
                 }
-                return Map.<String, Object>of("type", "content", "content", content);
+                String content = response.getResult().getOutput().getContent();
+                if (content == null || content.isEmpty()) {
+                    return;
+                }
+                chunkCount.incrementAndGet();
+                totalChars.addAndGet(content.length());
+                fullResponse.append(content);
+                // 日志：每个 chunk 的内容（长 chunk 截断）
+                log.debug("LLM CHUNK #{} len={} content={}",
+                    chunkCount.get(), content.length(),
+                    content.length() > 200
+                        ? content.substring(0, 200).replace("\n", "\\n") + "..."
+                        : content.replace("\n", "\\n"));
+                sink.next(Map.<String, Object>of("type", "content", "content", content));
             })
             .doOnComplete(() -> {
                 // 日志：完整响应摘要

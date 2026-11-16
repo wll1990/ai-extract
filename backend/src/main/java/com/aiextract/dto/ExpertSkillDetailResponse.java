@@ -23,6 +23,10 @@ public class ExpertSkillDetailResponse {
     private String skillFile;
     private Integer grainCount;
     private String status;
+    /** 自动分析失败重试次数（上限 3） */
+    private Integer retryCount;
+    /** 最近一次失败原因 */
+    private String failureReason;
     private List<ExpertGrainGroup> grainGroups;
     private List<ExpertDocumentInfo> documents;
     private String createdAt;

@@ -43,11 +43,10 @@ public class MaterialPreChecker {
      */
     public AcceptanceResult checkAcceptance(String text, String domain) {
         DomainConfig config = domainConfigLoader.load(domain);
-        DomainConfig.AcceptanceConfig accConfig = config.getAcceptance();
+        DomainConfig.AcceptanceConfig accConfig = config != null ? config.getAcceptance() : null;
         if (accConfig == null) {
-
+            // 未知领域不阻断素材入库，否则上传永远被预检异常拒绝
             return AcceptanceResult.pass();
-
         }
 
         // 内容过短
@@ -74,7 +73,7 @@ public class MaterialPreChecker {
     public AcceptanceResult checkDuplicate(String text, UUID spaceId, String domain,
                                            List<String> existingMaterialTexts) {
         DomainConfig config = domainConfigLoader.load(domain);
-        DomainConfig.AcceptanceConfig accConfig = config.getAcceptance();
+        DomainConfig.AcceptanceConfig accConfig = config != null ? config.getAcceptance() : null;
         double threshold = accConfig != null ? accConfig.getDuplicateSimilarityMax() : 0.90;
         if (spaceId == null) {
 
@@ -129,13 +128,15 @@ public class MaterialPreChecker {
      */
     public PreCheckResult evaluate(String text, String domain, UUID spaceId) {
         DomainConfig config = domainConfigLoader.load(domain);
-        DomainConfig.PreCheckConfig preConfig = config.getPrecheck();
+        DomainConfig.PreCheckConfig preConfig = config != null ? config.getPrecheck() : null;
         if (preConfig == null) {
             return new PreCheckResult(50, "warning", 0, 0, List.of(), List.of());
         }
 
-        String roleLabel = config.getDomain() != null ? config.getDomain().getRoleLabel() : "销冠";
-        String counterpartyLabel = config.getDomain() != null ? config.getDomain().getCounterpartyLabel() : "客户";
+        String roleLabel = config.getDomain() != null && config.getDomain().getRoleLabel() != null
+                ? config.getDomain().getRoleLabel() : "销冠";
+        String counterpartyLabel = config.getDomain() != null && config.getDomain().getCounterpartyLabel() != null
+                ? config.getDomain().getCounterpartyLabel() : "客户";
 
         List<CheckItem> allChecks = new ArrayList<>();
         allChecks.addAll(structureAnalyzer.analyze(text, preConfig, roleLabel, counterpartyLabel));
@@ -185,8 +186,10 @@ public class MaterialPreChecker {
         for (String line : text.split("\n")) {
             String t = line.trim();
             String role = null;
-            if (t.startsWith(counterpartyLabel)) role = "c";
-            else if (t.startsWith(roleLabel) || t.startsWith("我")) role = "s";
+            if (counterpartyLabel != null && !counterpartyLabel.isBlank()
+                    && t.startsWith(counterpartyLabel)) role = "c";
+            else if ((roleLabel != null && !roleLabel.isBlank() && t.startsWith(roleLabel))
+                    || t.startsWith("我")) role = "s";
             else if (t.matches("^[\\u4e00-\\u9fa5]{1,4}[：:].*")) role = "x";
             if (role != null && !role.equals(lastRole)) { count++; lastRole = role; }
         }

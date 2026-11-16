@@ -118,6 +118,19 @@ public class InterviewSession {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
+    /** 颗粒萃取状态：pending/extracting/done/failed */
+    @Builder.Default
+    @Column(name = "extraction_status", length = 20)
+    private String extractionStatus = "pending";
+
+    /** 最近一次萃取失败原因 */
+    @Column(name = "extraction_error", columnDefinition = "TEXT")
+    private String extractionError;
+
+    /** 最近一次萃取成功时间 */
+    @Column(name = "extracted_at")
+    private LocalDateTime extractedAt;
+
     /**
      * 更新前自动设置最后活跃时间
      */

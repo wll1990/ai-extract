@@ -3,9 +3,13 @@ package com.aiextract.service;
 import com.aiextract.model.ExpertSkill;
 import com.aiextract.model.InterviewMessage;
 import com.aiextract.model.InterviewSession;
+import com.aiextract.model.Space;
+import com.aiextract.model.User;
 import com.aiextract.repository.ExpertSkillRepository;
 import com.aiextract.repository.InterviewMessageRepository;
 import com.aiextract.repository.InterviewSessionRepository;
+import com.aiextract.repository.SpaceRepository;
+import com.aiextract.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -37,6 +41,8 @@ public class ExpertInterviewProcessor {
     private final InterviewSessionRepository sessionRepository;
     private final InterviewMessageRepository messageRepository;
     private final ExpertSkillRepository expertSkillRepository;
+    private final SpaceRepository spaceRepository;
+    private final UserRepository userRepository;
     private final MaterialNoiseCleaner noiseCleaner;
     private final BusinessNoiseFilter businessFilter;
     private final TextNormalizer normalizer;
@@ -85,6 +91,21 @@ public class ExpertInterviewProcessor {
             return;
         }
 
+        // 元访谈归属的企业：session.space_id → space.user_id → user.company_id
+        UUID ownerUserId = null;
+        UUID companyId = null;
+        if (session.getSpaceId() != null) {
+            Space space = spaceRepository.findById(session.getSpaceId()).orElse(null);
+            if (space != null) {
+                ownerUserId = space.getUserId();
+                companyId = userRepository.findById(ownerUserId)
+                        .map(User::getCompanyId).orElse(null);
+            }
+        }
+        if (companyId == null) {
+            log.warn("元访谈归属企业为空，萃取师将记为平台级（仅超管可见）, sessionId={}", sessionId);
+        }
+
         // 创建 ExpertSkill，status="pending"
         // ExpertAnalysisScheduler 30s 内自动扫描并处理
         ExpertSkill expert = ExpertSkill.builder()
@@ -98,6 +119,8 @@ public class ExpertInterviewProcessor {
                 .sourceContent(cleaned)
                 // P2-10: 清洗后的转录文本，scheduler 会读取
                 .domain(domain)
+                .companyId(companyId)
+                .createdBy(ownerUserId)
                 // 继承访谈的领域
                 .status("pending")
                 // scheduler 入口状态

@@ -1,0 +1,85 @@
+[
+  {
+    "id": "GOLD-MAT-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": null,
+    "note": "素材链路：多篇素材上传→异步清洗→颗粒落库；发布链路见 GOLD-PUBLISH-02",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /spaces",
+        "body": { "title": "QA-${runId}-素材空间", "description": "多素材萃取链路" },
+        "expect": { "status": 200 },
+        "save": { "spaceId": "data.id" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "spaceId": "${spaceId}",
+          "skillName": "QA-${runId}-素材分身",
+          "domain": "sales.b2b_enterprise",
+          "title": "QA-${runId}-价格与竞品",
+          "text": "客户说我们的报价比竞品高百分之二十，而且预算还没有批下来。我一般不会直接降价，先请对接人帮我梳理内部评审流程，确认财务、法务和业务各自关心什么，再按清单准备对比材料。对比时不只比单价，而是把实施周期、交付团队、售后响应和培训支持拆开算总拥有成本。如果客户仍然只看价格，我会提出分阶段验收和分期付款，把首付款比例降下来，同时约定达到效果后的尾款节点。竞品对比时我从不贬低对手，只讲我们多出来的交付能力和已经跑通的同行业案例，让客户自己判断溢价是否值得。"
+        },
+        "expect": { "status": 200, "json": { "data.uploaded": 1 } },
+        "save": { "skillId": "data.results[0].skillId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "spaceId": "${spaceId}",
+          "skillId": "${skillId}",
+          "title": "QA-${runId}-决策链与预算",
+          "text": "预算卡住的时候，先别急着找老板。我会先确认三件事：谁签字、谁使用、谁反对。通常对接人不是最终决策人，所以要请他帮忙梳理决策链，问清楚内部立项需要哪些材料、评审会在什么时间、财务关注回报周期还是现金流。然后我把方案拆成一页纸的价值摘要，包含投入、产出、回收周期和风险控制，让对接人可以直接转发。遇到法务卡合同，就提前准备标准条款和过往案例；遇到采购压价，就把服务范围和付款节点重新组合，而不是单纯降价。整个过程我会同步进度给客户，避免对方觉得被推销。"
+        },
+        "expect": { "status": 200, "json": { "data.uploaded": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "spaceId": "${spaceId}",
+          "skillId": "${skillId}",
+          "title": "QA-${runId}-异议与挽回",
+          "text": "客户提出异议时，我先把对方的原话复述一遍，确认我理解的是不是他的真实顾虑。常见异议有三类：担心效果、担心上线风险、担心团队不会用。担心效果就给同行业案例和试用范围；担心风险就提供分阶段上线和回滚方案；担心不会用就安排培训和陪跑，把使用指标写进验收标准。如果客户已经表达了不满，先处理情绪再处理事情，承认对方的时间成本，给出明确的时间表和责任人。挽回阶段不要重复推销，而是复盘上一次哪里没做好，用一个小承诺重新建立信任，再逐步推进下一步动作。"
+        },
+        "expect": { "status": 200, "json": { "data.uploaded": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${skillId}/detail",
+        "await": {
+          "sql": "select (count(*) = 3)::text from public.skill_material where skill_id = :skillId and status = 'extracted'",
+          "until": ["true"],
+          "maxAttempts": 90,
+          "intervalMs": 10000
+        },
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.experience_grain where space_id = :spaceId and status = 'active'",
+        "op": "gte",
+        "expect": "3"
+      },
+      {
+        "type": "db",
+        "sql": "select (count(distinct scene_tag) >= 2)::text from public.experience_grain where space_id = :spaceId and status = 'active' and scene_tag is not null and scene_tag <> ''",
+        "expect": "true"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_material where skill_id = :skillId and status = 'extracted'",
+        "expect": "3"
+      }
+    ]
+  }
+]

@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侧栏底部工具区 · 定稿方案</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --fg:#1e293b;
+    --muted:#64748b; --muted-2:#94a3b8; --border:#e2e8f0;
+    --primary:#2563eb; --primary-light:rgba(37,99,235,.10);
+    --success:#16a34a; --success-bg:#dcfce7;
+    --warning:#d97706; --warning-bg:#fef3c7;
+    --danger:#dc2626; --danger-bg:#fef2f2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#e9eef5;color:var(--fg);font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;padding:30px;-webkit-font-smoothing:antialiased}
+  .page-title{font-size:18px;font-weight:700;margin-bottom:4px}
+  .page-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+  .caption{font-size:12px;color:var(--muted);margin:20px 0 8px;font-weight:500}
+  .caption b{color:#334155}
+
+  .screen{width:1440px;height:900px;background:var(--surface);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(15,23,42,.12);border:1px solid #dfe6ef}
+  .topbar{height:56px;background:#fff;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0}
+  .brand{font-size:15px;font-weight:700;white-space:nowrap}
+  .domains{display:flex;align-items:center;gap:4px;margin-left:10px}
+  .domain{height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;gap:6px;font-size:13px;color:#475569;white-space:nowrap}
+  .domain.on{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .domain .dot{width:5px;height:5px;border-radius:50%;background:var(--danger)}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .ghost-btn{height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:12px;color:var(--muted);display:flex;align-items:center}
+  .icon-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);position:relative}
+  .icon-btn .bd{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--danger)}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#06b6d4,#3b82f6);color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
+
+  .app-body{flex:1;display:flex;min-height:0}
+  .sidebar{width:220px;flex-shrink:0;background:#fff;border-right:1px solid var(--border);display:flex;flex-direction:column}
+  .sb-title{padding:18px 18px 10px;font-size:11px;font-weight:600;color:var(--muted-2);letter-spacing:.08em}
+  .sb-nav{padding:0 10px;flex:1}
+  .nav-item{height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;font-size:13px;color:#475569;margin-bottom:2px}
+  .nav-item .ico{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+  .nav-item.on{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .nav-item .count{margin-left:auto;font-size:10px;font-weight:600;color:#b91c1c;background:var(--danger-bg);border-radius:6px;padding:1px 5px}
+
+  /* bottom-left utility zone */
+  .sb-utils{border-top:1px solid var(--border);padding:8px 10px 10px}
+  .util{height:32px;display:flex;align-items:center;gap:9px;padding:0 8px;border-radius:6px;font-size:12.5px;color:#475569}
+  .util:hover{background:#f8fafc}
+  .util svg{width:15px;height:15px;color:#94a3b8;flex-shrink:0}
+  .util .kbd{margin-left:auto;font-size:10px;color:var(--muted-2);border:1px solid var(--border);border-radius:4px;padding:1px 4px;line-height:12px}
+
+  .content{flex:1;overflow:hidden;padding:26px 30px}
+  .content-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+  .content-head h1{font-size:22px;font-weight:700}
+  .content-head p{margin-top:5px;font-size:13px;color:var(--muted)}
+  .primary-btn{height:34px;padding:0 14px;border-radius:7px;background:var(--primary);color:#fff;font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th{font-size:11px;color:var(--muted-2);font-weight:600;text-align:left;padding:11px 16px;background:#fafcff;border-bottom:1px solid var(--border)}
+  td{font-size:12.5px;color:#334155;padding:13px 16px;border-bottom:1px solid #f1f5f9}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:99px;font-size:10.5px;font-weight:600}
+  .pill.ok{background:var(--success-bg);color:#15803d}
+  .pill.run{background:#eff6ff;color:#1d4ed8}
+  .pill.wait{background:var(--warning-bg);color:#b45309}
+  .pill.bad{background:var(--danger-bg);color:#b91c1c}
+
+  /* detail cards */
+  .details{display:flex;gap:22px;margin-top:22px;justify-content:center}
+  .dcard{width:420px;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 8px 22px rgba(15,23,42,.06)}
+  .dcard h3{font-size:13px;font-weight:700;padding:14px 16px 4px}
+  .dcard .desc{font-size:12px;color:var(--muted);padding:0 16px 12px;line-height:1.6}
+  .stage{background:var(--surface);border-top:1px solid var(--border);padding:18px;display:flex;justify-content:center;min-height:170px}
+  .utils-zoom{background:#fff;border:1px solid var(--border);border-radius:10px;padding:8px;width:100%;align-self:flex-end}
+  .utils-zoom .util{height:34px}
+
+  .acct{position:relative;display:flex;justify-content:flex-end}
+  .acct-menu{width:190px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px rgba(15,23,42,.12);overflow:hidden;margin-top:8px}
+  .acct-head{padding:10px 12px;border-bottom:1px solid #f1f5f9}
+  .acct-head .nm{font-size:12.5px;font-weight:600}
+  .acct-head .rl{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .acct-item{height:34px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:12px;color:#475569}
+  .acct-item.danger{color:var(--danger)}
+  .acct-sep{height:1px;background:#f1f5f9}
+
+  /* icon proposals */
+  .icons{display:flex;gap:18px;margin-top:22px;justify-content:center}
+  .icard{width:300px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;box-shadow:0 8px 22px rgba(15,23,42,.05);position:relative}
+  .icard.rec{border-color:#bbf7d0;background:#f7fef9}
+  .icard .big{width:48px;height:48px;border-radius:12px;background:var(--surface);display:flex;align-items:center;justify-content:center;color:#475569;margin-bottom:12px}
+  .icard.rec .big{background:#dcfce7;color:#15803d}
+  .icard .big svg{width:26px;height:26px}
+  .icard h4{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .icard .badge{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d}
+  .icard .why{font-size:12px;color:var(--muted);line-height:1.7;margin-top:6px}
+  .icard .no{color:var(--danger);font-weight:600}
+
+  .notes{width:1440px;margin-top:22px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;font-size:13px;color:#475569;line-height:1.9}
+  .notes h2{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px}
+  .notes ul{padding-left:18px}
+  .notes b{color:#1e293b}
+  .notes .row{display:flex;gap:40px}
+  .notes .col{flex:1}
+</style>
+</head>
+<body>
+
+<div class="page-title">侧栏底部工具区 · 定稿方案</div>
+<div class="page-sub">工具放左下角，图标统一换成线性图标；产品导览不再用 🎬。</div>
+
+<div class="caption"><b>整体效果</b>：左下属工具区 + 顶栏头像菜单</div>
+<div class="screen">
+  <div class="topbar">
+    <div class="brand">💎 AI萃取平台</div>
+    <div class="domains">
+      <div class="domain">日常</div>
+      <div class="domain">销售</div>
+      <div class="domain on">分身生产<span class="dot"></span></div>
+      <div class="domain">知识</div>
+      <div class="domain">管理</div>
+    </div>
+    <div class="top-right">
+      <div class="ghost-btn">销冠门户</div>
+      <div class="icon-btn">🔔<span class="bd"></span></div>
+      <div class="avatar">管</div>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar">
+      <div class="sb-title">分身生产</div>
+      <nav class="sb-nav">
+        <div class="nav-item"><span class="ico">🧩</span>分身管理</div>
+        <div class="nav-item on"><span class="ico">📁</span>素材管理<span class="count">2</span></div>
+        <div class="nav-item"><span class="ico">💎</span>经验颗粒</div>
+        <div class="nav-item"><span class="ico">🎯</span>分身调优</div>
+        <div class="nav-item"><span class="ico">🏛️</span>组织分身</div>
+        <div class="nav-item"><span class="ico">🔌</span>IM 分身接入</div>
+      </nav>
+
+      <div class="sb-utils">
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg>
+          产品导览
+        </div>
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/></svg>
+          快捷入口<span class="kbd">⌘K</span>
+        </div>
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>
+          帮助与 FAQ
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="content-head">
+        <div>
+          <h1>素材管理</h1>
+          <p>上传录音、文档或粘贴文字，系统会自动解析、清洗、萃取经验颗粒</p>
+        </div>
+        <div class="primary-btn">＋ 上传素材</div>
+      </div>
+      <table>
+        <thead><tr><th>文件 / 来源</th><th>所属分身</th><th>大小</th><th>状态</th><th>上传时间</th></tr></thead>
+        <tbody>
+          <tr><td>华星科技-首次拜访.m4a</td><td>大客户拜访</td><td>18.2 MB</td><td><span class="pill ok">已萃取</span></td><td>11-01 14:22</td></tr>
+          <tr><td>预算异议处理.docx</td><td>大客户拜访</td><td>246 KB</td><td><span class="pill ok">已萃取</span></td><td>11-01 10:05</td></tr>
+          <tr><td>竞品对比话术.pdf</td><td>方案型销售</td><td>1.1 MB</td><td><span class="pill run">清洗中</span></td><td>11-02 09:12</td></tr>
+          <tr><td>粘贴文本 · 客户砍价场景</td><td>大客户拜访</td><td>—</td><td><span class="pill wait">待清洗</span></td><td>11-02 09:30</td></tr>
+          <tr><td>客户访谈录音-1127.mp3</td><td>方案型销售</td><td>32.4 MB</td><td><span class="pill bad">需人工补充</span></td><td>10-31 16:40</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+</div>
+
+<div class="details">
+  <div class="dcard">
+    <h3>① 侧栏底部工具区</h3>
+    <div class="desc">三行文字入口，不抢业务菜单；快捷键只在悬停时提示。</div>
+    <div class="stage">
+      <div class="utils-zoom">
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg>
+          产品导览
+        </div>
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6Z"/></svg>
+          快捷入口<span class="kbd">⌘K</span>
+        </div>
+        <div class="util">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>
+          帮助与 FAQ
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dcard">
+    <h3>② 顶栏头像菜单</h3>
+    <div class="desc">设置与退出登录放这里，不放工具区，避免误点。</div>
+    <div class="stage">
+      <div class="acct">
+        <div>
+          <div style="display:flex;justify-content:flex-end;gap:10px;align-items:center">
+            <div class="icon-btn">🔔</div>
+            <div class="avatar">管</div>
+          </div>
+          <div class="acct-menu">
+            <div class="acct-head"><div class="nm">王磊</div><div class="rl">企业管理员 · 华星科技</div></div>
+            <div class="acct-item">⚙️ 账号设置</div>
+            <div class="acct-item">📖 使用帮助</div>
+            <div class="acct-sep"></div>
+            <div class="acct-item danger">↩ 退出登录</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="caption" style="text-align:center;margin-top:26px"><b>产品导览图标候选</b>（产品经理 + 高级 UI 结论）</div>
+<div class="icons">
+  <div class="icard rec">
+    <div class="big">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg>
+    </div>
+    <h4>指南针 <span class="badge">推荐</span></h4>
+    <div class="why">「带路、指引」的语义最贴导览；和系统里其它线性图标同一套语言；不会让人误以为是视频或录屏。</div>
+  </div>
+
+  <div class="icard">
+    <div class="big">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4 4 6v14l5-2 6 2 5-2V4l-5 2-6-2Z"/><path d="M9 4v14M15 6v14"/></svg>
+    </div>
+    <h4>地图路线</h4>
+    <div class="why">强调「多条路线、章节路径」，适合导览中心页面本身；单独放侧栏时略像「场景地图」，容易和业务菜单混。</div>
+  </div>
+
+  <div class="icard">
+    <div class="big">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h4v4H4zM4 14h4v4H4z"/><path d="M11 8h9M11 16h9"/></svg>
+    </div>
+    <h4>分步清单</h4>
+    <div class="why">强调「按步骤走」，但更像任务清单/待办，和「我的工作台」语义打架。</div>
+  </div>
+
+  <div class="icard">
+    <div class="big" style="color:#b91c1c;background:#fef2f2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4V8Z"/></svg>
+    </div>
+    <h4>播放圆 <span class="no">排除</span></h4>
+    <div class="why">和 🎬 一样会让人以为是录屏/视频。我们的导览是真实页面上的聚光引导，不是播放录像，图标不能承诺错的东西。</div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>结论与理由</h2>
+  <div class="row">
+    <div class="col">
+      <ul>
+        <li><b>位置</b>：侧栏最底部三行，业务菜单之上不混工具项。</li>
+        <li><b>产品导览</b>：指南针线性图标 + 文字，保留「产品导览」四个字，不靠图标猜。</li>
+        <li><b>快捷入口</b>：⌘ 图标 + ⌘K 键帽，点击打开命令面板。</li>
+        <li><b>帮助</b>：问号圆环 + 「帮助与 FAQ」，和顶栏不再重复放。</li>
+      </ul>
+    </div>
+    <div class="col">
+      <ul>
+        <li><b>移除</b>：右下角悬浮坞、Token 用量常驻条、回到顶部按钮。</li>
+        <li><b>设置/退出</b>：留在头像菜单，工具区不放账号操作。</li>
+        <li><b>图标规范</b>：24×24 视框、1.6px 描边、圆角端点，与系统内线性图标一致；不混用 emoji。</li>
+        <li><b>导览运行时</b>：工具区正常显示，不隐藏——它本身就是导览入口。</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,39 @@
+[
+  {
+    "id": "REG-SPACE-01",
+    "set": "regression",
+    "priority": "P2",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "空间没有删除/归档入口，停用只能靠数据库",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /spaces",
+        "body": { "title": "QA-${runId}-空间归档回归", "description": "归档/恢复验证" },
+        "expect": { "status": 200 },
+        "save": { "spaceId": "data.id" }
+      },
+      {
+        "as": "employee",
+        "api": "PATCH /spaces/${spaceId}/status",
+        "body": { "status": "archived" },
+        "expect": { "status": 200, "json": { "data.status": "archived" } }
+      },
+      {
+        "as": "employee",
+        "api": "PATCH /spaces/${spaceId}/status",
+        "body": { "status": "active" },
+        "expect": { "status": 200, "json": { "data.status": "active" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.space where id = :spaceId",
+        "expect": "active"
+      }
+    ]
+  }
+]

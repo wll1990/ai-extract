@@ -1,0 +1,153 @@
+[
+  {
+    "id": "GOLD-TRAIN-03",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "note": "考试任务路径：题集→发布→考试任务→开考→答题→交卷→评分到终态；不区分通过/待复核，避免评分波动导致误报",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets",
+        "body": { "name": "QA-${runId}-考试题集", "purpose": "acceptance", "description": "培训考试路径" },
+        "expect": { "status": 200 },
+        "save": { "datasetId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/items",
+        "body": {
+          "question": "客户说预算没批、价格又比竞品高，销售第一步应该做什么？",
+          "expectedPoints": "[\"先确认决策链与预算审批流程\",\"用价值锚定和分阶段验收替代直接降价\"]",
+          "sceneTag": "价格与预算",
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/submit",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/review",
+        "body": { "action": "approve" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-考试计划", "description": "考试任务全链路" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "exam",
+          "phaseNo": 1,
+          "phaseName": "考核",
+          "title": "QA-${runId}-考试任务",
+          "examDatasetId": "${datasetId}",
+          "examDatasetVersion": 1,
+          "examItemCount": 1,
+          "examDurationMinutes": 30,
+          "isRequired": true,
+          "orderNo": 1,
+          "maxAttempts": 2
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/cohorts",
+        "body": { "planId": "${planId}", "planVersion": 1, "name": "QA-${runId}-考试批次" },
+        "expect": { "status": 200 },
+        "save": { "cohortId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/assignments/batch",
+        "body": { "cohortId": "${cohortId}", "learnerIds": ["0a000000-0000-0000-0000-000000000012"] },
+        "expect": { "status": 200, "json": { "data.assigned": 1 } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments?page=1&size=20",
+        "expect": { "status": 200 },
+        "save": { "assignmentId": "data.content[0].id" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/assignments/${assignmentId}/tasks",
+        "expect": { "status": 200 },
+        "save": { "recordId": "data.tasks[0].recordId" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/task-records/${recordId}/attempts",
+        "expect": { "status": 200 },
+        "save": { "attemptId": "data.attempt.id" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/attempts/${attemptId}",
+        "expect": { "status": 200 },
+        "save": { "questionId": "data.questions[0].itemId" }
+      },
+      {
+        "as": "employee",
+        "api": "PUT /me/training/attempts/${attemptId}/answers",
+        "body": {
+          "answers": {
+            "${questionId}": "先确认客户内部预算审批流程和最终决策人，再按投入产出拆解方案；用分阶段验收和分期付款降低首付压力，并用同行业案例证明溢价价值，而不是直接降价。"
+          }
+        },
+        "expect": { "status": 200, "json": { "data.saved": true } }
+      },
+      {
+        "as": "employee",
+        "api": "POST /me/training/attempts/${attemptId}/submit",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /me/training/attempts/${attemptId}/result",
+        "await": {
+          "sql": "select case when status in ('finalized','pending_review') then 'done' else status end from public.training_attempt where id = :attemptId",
+          "until": ["done"],
+          "maxAttempts": 60,
+          "intervalMs": 10000
+        },
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select (answers ? :questionId)::text from public.training_attempt where id = :attemptId",
+        "expect": "true"
+      },
+      {
+        "type": "db",
+        "sql": "select case when status in ('passed','failed','pending_review') then 'done' else status end from public.training_task_record where id = :recordId",
+        "expect": "done"
+      }
+    ]
+  }
+]

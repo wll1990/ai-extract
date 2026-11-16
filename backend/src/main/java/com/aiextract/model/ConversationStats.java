@@ -37,6 +37,10 @@ public class ConversationStats {
     @Column(name = "skill_id", nullable = false)
     private UUID skillId;
 
+    /** 归属企业（企业调度与组织分身用于统计隔离） */
+    @Column(name = "company_id")
+    private UUID companyId;
+
     /** 对话 ID（多轮对话中多条记录共享同一个 conversation_id） */
     @Column(name = "conversation_id", nullable = false)
     private UUID conversationId;
@@ -67,6 +71,16 @@ public class ConversationStats {
     /** 本轮 RAG 平均相似度（0~1） */
     @Column(name = "rag_avg_similarity")
     private Double ragAvgSimilarity;
+
+    /** 本轮命中的知识条数 */
+    @Builder.Default
+    @Column(name = "kc_knowledge_count", nullable = false)
+    private Integer kcKnowledgeCount = 0;
+
+    /** 本轮命中的案例条数 */
+    @Builder.Default
+    @Column(name = "kc_case_count", nullable = false)
+    private Integer kcCaseCount = 0;
 
     /** 本轮 👍 次数（对话结束后回填，初始为 0） */
     @Column(name = "feedback_up", nullable = false)

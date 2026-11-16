@@ -17,9 +17,9 @@ echo "=== 启动后端 (dev) :8080 ==="
 cd "$DIR/backend" && mvn clean spring-boot:run -q &
 sleep 18 && curl -s -o /dev/null -w "后端: HTTP %{http_code}\n" -X POST http://localhost:8080/api/v1/auth/login -H "Content-Type: application/json" -d '{"account":"admin","password":"123456","companyId":"c0000000-0000-0000-0000-000000000001"}'
 
-echo "=== 启动飞书桥 (dev) :3010 ==="
-cd "$DIR/feishu-bot" && [ -d node_modules ] || npm install && PORT=3010 BACKEND_URL=http://127.0.0.1:8080/api/v1 nohup node src/index.js > /tmp/feishu-bot.log 2>&1 &
-sleep 2 && curl -s -o /dev/null -w "飞书桥: HTTP %{http_code}\n" http://localhost:3010/health
+echo "=== 启动 IM 桥 (dev) :3010 ==="
+cd "$DIR/im-bridge" && [ -d node_modules ] || npm install && PORT=3010 BACKEND_URL=http://127.0.0.1:8080/api/v1 nohup node src/index.js > /tmp/im-bridge.log 2>&1 &
+sleep 2 && curl -s -o /dev/null -w "IM 桥: HTTP %{http_code}\n" http://localhost:3010/health
 
 echo "=== 启动前端管理后台 (dev) :3000 ==="
 cd "$DIR/frontend" && npm run dev &

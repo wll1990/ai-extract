@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Toast } from '@/components/ui/Toast';
 import { copyToClipboard } from '@/lib/clipboard';
-import { activateExpert, extractGrains, getExpertDetail, deleteExpert, deleteGrain, getCompositeDetail, retryExpert, uploadExpertMaterials, uploadDocumentFile, type CompositeInfo } from '@/lib/api/expert';
+import { activateExpert, extractGrains, getExpertDetail, deleteExpert, deleteGrain, getCompositeDetail, retryExpert, updateExpertDocument, uploadExpertMaterials, uploadDocumentFile, type CompositeInfo, type DocumentInfo } from '@/lib/api/expert';
 import { UploadExpertModal } from '@/components/modals/UploadExpertModal';
 import { ReviewGrainsModal } from '@/components/modals/ReviewGrainsModal';
 import type { GrainGroup } from '@/lib/api/expert';
@@ -18,6 +18,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }
   analyzing: { label: '分析中...', color: '#165DFF', bg: '#F2F3F5' },
   pending: { label: '待分析', color: '#86909C', bg: '#F2F3F5' },
   failed: { label: '失败', color: '#DC2626', bg: '#FEF0F0' },
+  manual_review: { label: '待人工补录', color: '#D97706', bg: '#FEF3C7' },
 };
 
 /** 来源文案 */
@@ -33,6 +34,53 @@ const SOURCE_LABELS: Record<string, string> = {
 export default function AdminExpertsPage() {
   const router = useRouter();
   const h = useExperts();
+  const [manualReview, setManualReview] = React.useState<{
+    expertId: string;
+    expertName: string;
+    docs: DocumentInfo[];
+    values: Record<string, string>;
+  } | null>(null);
+  const [manualSaving, setManualSaving] = React.useState(false);
+
+  const openManualReview = async (expert: { id: string; name: string }) => {
+    try {
+      const detail = await getExpertDetail(expert.id);
+      const docs = (detail.documents || []).filter(d => d.status !== 'parsed');
+      if (docs.length === 0) {
+        h.showToast('没有待补录的文档，直接重新分析');
+        await retryExpert(expert.id);
+        h.loadData();
+        return;
+      }
+      setManualReview({ expertId: expert.id, expertName: expert.name, docs,
+        values: Object.fromEntries(docs.map(d => [d.id, ''])) });
+    } catch (e) {
+      h.showToast(e instanceof Error ? e.message : '加载文档失败');
+    }
+  };
+
+  const saveManualReview = async () => {
+    if (!manualReview) return;
+    const filled = manualReview.docs.filter(d => (manualReview.values[d.id] || '').trim());
+    if (filled.length === 0) {
+      h.showToast('请至少补录一份文档的文字');
+      return;
+    }
+    setManualSaving(true);
+    try {
+      for (const doc of filled) {
+        await updateExpertDocument(doc.id, manualReview.values[doc.id].trim());
+      }
+      await retryExpert(manualReview.expertId);
+      h.showToast('补录已保存，已重新加入分析队列');
+      setManualReview(null);
+      h.loadData();
+    } catch (e) {
+      h.showToast(e instanceof Error ? e.message : '补录失败');
+    } finally {
+      setManualSaving(false);
+    }
+  };
 
   if (h.loading) {
     return <div className="flex items-center justify-center py-20"><LoadingSpinner fullScreen={false} /></div>;
@@ -41,6 +89,46 @@ export default function AdminExpertsPage() {
   return (
     <div>
       <Toast message={h.toast} onDone={() => h.setToast(null)} />
+
+      {manualReview && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-6">
+          <div className="w-full max-w-[640px] rounded-xl bg-surface p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-semibold text-foreground">
+              补录文档文字 · {manualReview.expertName}
+            </h3>
+            <p className="mb-4 text-xs text-muted-foreground">
+              图片/音频无法自动解析。把文档里的文字粘贴进来，保存后会重新加入分析队列。
+            </p>
+            <div className="space-y-4">
+              {manualReview.docs.map(doc => (
+                <div key={doc.id}>
+                  <div className="mb-1 text-sm font-medium text-foreground">
+                    {doc.fileName} <span className="text-xs font-normal text-muted-foreground">（{doc.status}）</span>
+                  </div>
+                  <textarea
+                    rows={5}
+                    value={manualReview.values[doc.id] || ''}
+                    onChange={e => setManualReview({
+                      ...manualReview,
+                      values: { ...manualReview.values, [doc.id]: e.target.value },
+                    })}
+                    placeholder="粘贴该文档的文字内容…"
+                    className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <button onClick={() => setManualReview(null)} disabled={manualSaving}
+                className="rounded-full border border-border px-4 py-2 text-sm">取消</button>
+              <button onClick={saveManualReview} disabled={manualSaving}
+                className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {manualSaving ? '保存中…' : '保存并重试'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 头部 */}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-foreground">萃取师经验库管理</h1>
@@ -60,6 +148,13 @@ export default function AdminExpertsPage() {
           </button>
         </div>
       </div>
+
+      {h.error && (
+        <div className="mb-4 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <span>{h.error}</span>
+          <button onClick={() => h.loadData(h.pageRef.current)} className="ml-3 underline">重试</button>
+        </div>
+      )}
 
       {/* 综合Skill管理 */}
       {h.composite && (
@@ -109,15 +204,18 @@ export default function AdminExpertsPage() {
           <option value="active">已激活</option><option value="extracting">待审核</option>
           <option value="analyzing">分析中</option><option value="pending">未生成</option>
           <option value="failed">失败</option>
+          <option value="manual_review">待人工补录</option>
         </select>
-        <select className="rounded-lg border border-border-strong px-3 py-2 text-sm">
-          <option>全部行业</option><option>金融</option><option>快消</option>
+        <select value={h.industryFilter} onChange={(e) => h.setIndustryFilter(e.target.value)}
+          className="rounded-lg border border-border-strong px-3 py-2 text-sm">
+          <option value="">全部行业</option>
+          {h.industries.map(tag => <option key={tag} value={tag}>{tag}</option>)}
         </select>
       </div>
 
       {/* 萃取师卡片网格 */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">
-        {h.experts.map((expert) => {
+        {h.filteredExperts.map((expert) => {
           const cfg = STATUS_CONFIG[expert.status] || STATUS_CONFIG.pending;
           return (
             <div key={expert.id} className="card p-5 hover:shadow-md transition-shadow">
@@ -133,6 +231,12 @@ export default function AdminExpertsPage() {
                   <span className="inline-block mt-1 ml-1 rounded-full px-2 py-0.5 text-xs bg-success-bg text-success">{expert.domain === 'sales.b2b_enterprise' ? '销售' : expert.domain === 'finance.secondary_market' ? '金融' : expert.domain}</span>
                 )}
               </div>
+              {(expert.status === 'failed' || expert.status === 'manual_review') && expert.failureReason && (
+                <p className="mb-2 rounded-md bg-danger-bg px-2 py-1 text-center text-[11px] text-danger" title={expert.failureReason}>
+                  {expert.failureReason}
+                  {expert.retryCount ? `（已重试 ${expert.retryCount} 次）` : ''}
+                </p>
+              )}
               <div className="flex flex-wrap justify-center gap-1 mb-2">
                 {expert.styleTags?.map((t) => (
                   <span key={t} className="rounded-full bg-primary-light px-2 py-0.5 text-xs text-primary">{t}</span>
@@ -168,8 +272,12 @@ export default function AdminExpertsPage() {
                   }}>审核法则</button>
                 </>)}
 
-                {expert.status === 'failed' && (
+                {(expert.status === 'failed' || expert.status === 'manual_review') && (
                   <button className="text-sm text-warning hover:underline" onClick={async () => {
+                    if (expert.status === 'manual_review') {
+                      await openManualReview(expert);
+                      return;
+                    }
                     h.setActionLoading(expert.id);
                     try {
                       await retryExpert(expert.id);
@@ -177,7 +285,7 @@ export default function AdminExpertsPage() {
                       h.loadData();
                     } catch(e) { h.showToast('重试失败'); }
                     finally { h.setActionLoading(null); }
-                  }}>{h.actionLoading === expert.id ? '重试中...' : '重试分析'}</button>
+                  }}>{h.actionLoading === expert.id ? '重试中...' : (expert.status === 'manual_review' ? '补录后重试' : '重试分析')}</button>
                 )}
 
                 {expert.status === 'active' && (<>
@@ -211,8 +319,12 @@ export default function AdminExpertsPage() {
             </div>
           );
         })}
-        {h.experts.length === 0 && (
-          <div className="py-16 text-center"><p className="text-sm text-muted-foreground-2">还没有萃取师经验，上传第一份材料吧</p></div>
+        {h.filteredExperts.length === 0 && (
+          <div className="py-16 text-center">
+            <p className="text-sm text-muted-foreground-2">
+              {h.experts.length === 0 ? '还没有萃取师经验，上传第一份材料吧' : '当前行业筛选下没有萃取师'}
+            </p>
+          </div>
         )}
 
         {/* 分页 */}
@@ -289,7 +401,13 @@ export default function AdminExpertsPage() {
               )}
               <div className="rounded bg-surface p-4">
                 <p className="font-semibold text-foreground">📋 包含萃取师</p>
-                <p className="mt-1 text-muted-foreground">张萃取师（追问型·金融）· 王萃取师（温和型·快消）</p>
+                <p className="mt-1 text-muted-foreground">
+                  {h.experts.filter(e => e.status === 'active').length === 0
+                    ? '暂无已激活的萃取师'
+                    : h.experts.filter(e => e.status === 'active')
+                      .map(e => `${e.name}${e.styleTags?.length ? `（${e.styleTags.join('/')}）` : ''}`)
+                      .join(' · ')}
+                </p>
               </div>
               <div className="rounded bg-surface p-4">
                 <p className="font-semibold text-foreground">⚙️ 综合Skill生成规则</p>
@@ -330,7 +448,7 @@ export default function AdminExpertsPage() {
             h.setReviewGrains(null);
             h.loadData();
           }}
-          onEditGrain={(grainId) => console.log('edit grain:', grainId)}
+          onEditGrain={(grainId) => router.push(`/admin/grains/${grainId}/edit`)}
           onDeleteGrain={async (grainId) => {
             if (h.reviewGrains) { const r = h.reviewGrains;
               const expert = h.experts.find(e => e.name === h.reviewGrains!.expertName);

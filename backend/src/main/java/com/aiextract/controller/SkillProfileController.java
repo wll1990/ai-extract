@@ -26,10 +26,12 @@ public class SkillProfileController {
 
 
     private final SkillProfileRepository profileRepository;
+    private final com.aiextract.config.CompanyScopeService companyScopeService;
 
     /** 获取分身画像 */
     @GetMapping("/admin/skills/{skillId}/profile")
     public ApiResponse<SkillProfile> getProfile(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         return ApiResponse.success(
             profileRepository.findBySkillId(skillId).orElse(null));
     }
@@ -39,6 +41,7 @@ public class SkillProfileController {
     public ApiResponse<SkillProfile> saveProfile(
             @PathVariable UUID skillId,
             @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         SkillProfile profile = profileRepository.findBySkillId(skillId)
             .orElse(SkillProfile.builder().skillId(skillId).build());
 

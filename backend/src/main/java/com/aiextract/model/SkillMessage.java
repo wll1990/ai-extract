@@ -67,6 +67,23 @@ public class SkillMessage {
     @Column(name = "grain_id")
     private UUID grainId;
 
+    /** 本次回答引用的全部颗粒 ID（逗号分隔，最多 3 条），用于历史消息重建溯源 */
+    @Column(name = "grain_ids", columnDefinition = "TEXT")
+    private String grainIds;
+
+    /** 本次回答的平均相似度（0-100），用于历史消息展示匹配等级 */
+    @Column(name = "avg_similarity")
+    private Double avgSimilarity;
+
+    /**
+     * 知识/案例检索参考（JSONB）：
+     * {"schemaVersion":1,"knowledge":[{id,title,source,similarity}],"cases":[...]}
+     * 旧消息为空，历史接口按空数组兼容。
+     */
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
+    @Column(name = "source_refs", columnDefinition = "jsonb")
+    private String sourceRefs;
+
     /**
      * 关联的报告ID
      */
@@ -78,4 +95,10 @@ public class SkillMessage {
      */
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    /**
+     * 客户端消息幂等键（同一会话内 user/assistant 各一条），用于重试/双击去重。
+     */
+    @Column(name = "client_message_id", length = 64)
+    private String clientMessageId;
 }

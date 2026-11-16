@@ -145,6 +145,31 @@ public class ExpertSkill {
     private LocalDateTime updatedAt;
 
     /**
+     * 所属企业；为空表示平台级（仅超管可见可维护）
+     */
+    @Column(name = "company_id")
+    private UUID companyId;
+
+    /**
+     * 创建人 user_id
+     */
+    @Column(name = "created_by")
+    private UUID createdBy;
+
+    /**
+     * 自动分析失败重试次数；达到上限 3 后停留 failed
+     */
+    @Builder.Default
+    @Column(name = "retry_count", nullable = false)
+    private Integer retryCount = 0;
+
+    /**
+     * 最近一次失败原因
+     */
+    @Column(name = "failure_reason", columnDefinition = "TEXT")
+    private String failureReason;
+
+    /**
      * 更新前自动设置更新时间
      */
     @PreUpdate

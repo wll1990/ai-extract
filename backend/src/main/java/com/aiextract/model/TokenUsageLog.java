@@ -31,6 +31,10 @@ public class TokenUsageLog {
     @Column(name = "user_id")
     private UUID userId;
 
+    /** 用量归属企业（平台 Key 与企业 Key 都记企业，便于成本归属） */
+    @Column(name = "company_id")
+    private UUID companyId;
+
     @Column(name = "usage_date", nullable = false)
     private LocalDate usageDate;
 

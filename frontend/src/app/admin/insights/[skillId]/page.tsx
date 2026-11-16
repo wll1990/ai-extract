@@ -32,24 +32,38 @@ export default function SkillInsightDetailPage() {
   const [worstGrains, setWorstGrains] = useState<GrainRankItem[]>([]);
   const [gaps, setGaps] = useState<KnowledgeGapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    Promise.all([
-      getSkillOverview(skillId).catch(() => null),
-      getSceneTop(skillId).catch(() => []),
-      getRagDistribution(skillId).catch(() => null),
-      getTopGrains(skillId, 'best').catch(() => []),
-      getTopGrains(skillId, 'worst').catch(() => []),
-      getKnowledgeGaps(skillId).catch(() => []),
-    ]).then(([ov, st, rd, bg, wg, kg]) => {
-      setOverview(ov);
-      setSceneTop(st);
-      setRagDist(rd);
-      setBestGrains(bg);
-      setWorstGrains(wg);
-      setGaps(kg);
-    }).finally(() => setLoading(false));
-  }, [skillId]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.allSettled([
+      getSkillOverview(skillId),
+      getSceneTop(skillId),
+      getRagDistribution(skillId),
+      getTopGrains(skillId, 'best'),
+      getTopGrains(skillId, 'worst'),
+      getKnowledgeGaps(skillId),
+    ]).then(results => {
+      if (cancelled) return;
+      const val = <T,>(i: number, fallback: T): T =>
+        results[i].status === 'fulfilled' ? (results[i] as PromiseFulfilledResult<T>).value : fallback;
+      setOverview(val<SkillOverview | null>(0, null));
+      setSceneTop(val<SceneTopItem[]>(1, []));
+      setRagDist(val<RagDistribution | null>(2, null));
+      setBestGrains(val<GrainRankItem[]>(3, []));
+      setWorstGrains(val<GrainRankItem[]>(4, []));
+      setGaps(val<KnowledgeGapItem[]>(5, []));
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed > 0) {
+        const first = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
+        setError(`${failed}/6 项数据加载失败${first?.reason instanceof Error ? `：${first.reason.message}` : ''}`);
+      }
+    }).finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [skillId, reloadKey]);
 
   if (loading) return <div className="flex h-64 items-center justify-center"><LoadingSpinner /></div>;
 
@@ -69,28 +83,28 @@ export default function SkillInsightDetailPage() {
   const kpiItems: KpiItem[] = [
     {
       label: '本周对话',
-      value: overview?.conversations?.toLocaleString() || '0',
+      value: overview ? (overview.conversations ?? 0).toLocaleString() : '—',
       color: 'blue',
     },
     {
       label: '满意率',
-      value: `${overview?.satisfactionRate || 0}%`,
+      value: overview ? `${overview.satisfactionRate ?? 0}%` : '—',
       color: 'green',
     },
     {
       label: '活跃用户',
-      value: overview?.activeUsers?.toLocaleString() || '0',
+      value: overview ? (overview.activeUsers ?? 0).toLocaleString() : '—',
       color: 'slate',
     },
     {
       label: '反馈总数',
-      value: overview?.totalFeedback?.toLocaleString() || '0',
+      value: overview ? (overview.totalFeedback ?? 0).toLocaleString() : '—',
       color: 'amber',
     },
   ];
 
   return (
-    <div className="px-6 py-8 max-w-[1200px] mx-auto space-y-8">
+    <div className="px-6 py-8 max-w-[1200px] mx-auto space-y-8" data-tour="insights-skill">
       {/* 顶栏 */}
       <div className="flex items-center justify-between">
         <button
@@ -107,6 +121,14 @@ export default function SkillInsightDetailPage() {
         </button>
       </div>
 
+      {error && (
+        <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <span>{error}（失败项显示为 —，不代表数值为 0）</span>
+          <button onClick={() => setReloadKey(k => k + 1)}
+            className="ml-3 underline hover:no-underline">重试</button>
+        </div>
+      )}
+
       {/* ── KPI Hero ── */}
       <KpiHero items={kpiItems} />
 
@@ -118,6 +140,8 @@ export default function SkillInsightDetailPage() {
           <RagPieChart
             high={ragDist.high} refCount={ragDist.ref} none={ragDist.none}
             highPct={ragDist.highPct} refPct={ragDist.refPct} nonePct={ragDist.nonePct}
+            kcKnowledge={ragDist.kcKnowledge} kcCase={ragDist.kcCase}
+            kcKnowledgePct={ragDist.kcKnowledgePct} kcCasePct={ragDist.kcCasePct}
           />
         )}
       </div>
@@ -139,7 +163,7 @@ export default function SkillInsightDetailPage() {
       <SectionHeader icon="🔴" title="知识缺口" />
       <KnowledgeGapPanel
         gaps={gaps}
-        onGapClick={id => router.push(`/admin/grains/new?skillId=${skillId}`)}
+        onGapClick={id => router.push(`/admin/grains/new?skillId=${skillId}&gapId=${id}`)}
         onResolve={handleResolveGap}
         onIgnore={handleIgnoreGap}
       />

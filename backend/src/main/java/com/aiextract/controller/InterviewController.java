@@ -153,6 +153,14 @@ public class InterviewController {
         return ApiResponse.success(result);
     }
 
+    /** 重新萃取颗粒 — 仅已完成且萃取失败的访谈可用 */
+    @PostMapping("/{sessionId}/retry-extraction")
+    public ApiResponse<Void> retryExtraction(@PathVariable String sessionId) {
+        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        interviewService.retryExtraction(sessionId, userId);
+        return ApiResponse.success();
+    }
+
     /**
      * 用户主动标记当前阶段完成，触发 AI 阶段小结 + 自然推进
      */

@@ -73,13 +73,14 @@ public class ImInboundController {
     @PostMapping("/{channelType}/complete")
     public Map<String, Object> complete(
             @PathVariable String channelType,
+            @RequestHeader(value = "X-Bridge-Id", required = false) String bridgeId,
             @RequestHeader(value = "X-Im-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-Im-Nonce", required = false) String nonce,
             @RequestHeader(value = "X-Im-Signature", required = false) String signature,
             @RequestBody String body) {
         verify(timestamp, nonce, body, signature);
         ImCompleteRequest req = parse(body, ImCompleteRequest.class);
-        imLifecycleService.completePublish(channelType, req);
+        imLifecycleService.completePublish(channelType, req, bridgeId);
         return Map.of("ok", true);
     }
 
@@ -89,11 +90,12 @@ public class ImInboundController {
     @GetMapping("/{channelType}/active")
     public List<ImActiveBotResponse> active(
             @PathVariable String channelType,
+            @RequestHeader(value = "X-Bridge-Id", required = false) String bridgeId,
             @RequestHeader(value = "X-Im-Timestamp", required = false) String timestamp,
             @RequestHeader(value = "X-Im-Nonce", required = false) String nonce,
             @RequestHeader(value = "X-Im-Signature", required = false) String signature) {
         verify(timestamp, nonce, "", signature);
-        return imLifecycleService.listActiveBots(channelType);
+        return imLifecycleService.listActiveBots(channelType, bridgeId);
     }
 
     private void verify(String timestamp, String nonce, String body, String signature) {

@@ -1,6 +1,7 @@
 package com.aiextract.repository;
 
 import com.aiextract.model.AutoInsight;
+import com.aiextract.model.CandidateGrain;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -38,6 +39,13 @@ public interface AutoInsightRepository extends JpaRepository<AutoInsight, UUID> 
      */
     List<AutoInsight> findBySkillIdAndSeverityAndStatusOrderByCreatedAtDesc(
             UUID skillId, String severity, String status, Pageable pageable);
+
+    /** 企业范围过滤必须在 SQL 里完成，先分页再内存过滤会漏数据（K22）。 */
+    List<AutoInsight> findBySkillIdInAndStatusOrderByCreatedAtDesc(
+            java.util.Collection<UUID> skillIds, String status, Pageable pageable);
+
+    List<AutoInsight> findBySkillIdInAndSeverityAndStatusOrderByCreatedAtDesc(
+            java.util.Collection<UUID> skillIds, String severity, String status, Pageable pageable);
     /**
      * 查询（Severity,Status,Created,At）。
      * @param severity severity
@@ -73,5 +81,24 @@ public interface AutoInsightRepository extends JpaRepository<AutoInsight, UUID> 
      */
     long countBySkillIdAndStatus(UUID skillId, String status);
 
+    // ===== 分页版本（列表带总数，避免前端只能拿到一页却不知道有多少） =====
+
+    org.springframework.data.domain.Page<AutoInsight> findBySkillIdAndStatus(
+            UUID skillId, String status, Pageable pageable);
+
+    org.springframework.data.domain.Page<AutoInsight> findBySkillIdAndSeverityAndStatus(
+            UUID skillId, String severity, String status, Pageable pageable);
+
+    org.springframework.data.domain.Page<AutoInsight> findBySkillIdInAndStatus(
+            java.util.Collection<UUID> skillIds, String status, Pageable pageable);
+
+    org.springframework.data.domain.Page<AutoInsight> findBySkillIdInAndSeverityAndStatus(
+            java.util.Collection<UUID> skillIds, String severity, String status, Pageable pageable);
+
+    org.springframework.data.domain.Page<AutoInsight> findBySeverityAndStatus(
+            String severity, String status, Pageable pageable);
+
+    org.springframework.data.domain.Page<AutoInsight> findByStatus(
+            String status, Pageable pageable);
 
 }

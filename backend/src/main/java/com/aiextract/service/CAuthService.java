@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +46,7 @@ import java.util.UUID;
 public class CAuthService {
 
     private final UserRepository userRepository;
+    private final UserSecurityService userSecurityService;
     private final SkillMessageRepository skillMessageRepository;
     private final SpaceRepository spaceRepository;
     private final InterviewSessionRepository sessionRepository;
@@ -75,6 +77,7 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse register(UUID userId, CRegisterRequest request) {
+        com.aiextract.common.PasswordPolicy.validate(request.getPassword());
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
         if (!User.STATUS_GUEST.equals(user.getStatus())) {
@@ -106,6 +109,10 @@ public class CAuthService {
             throw new BusinessException(400, "账号已被占用，换一个试试");
         }
 
+        // c_guest → c_user 属于权限变更：安全版本号 +1，让升级前的游客 token 失效
+        // 必须在 saveAndFlush 之后调用，且用实体自增（后面 issueToken 要读新值）
+        userSecurityService.onAuthoritiesChanged(user);
+
         // 自动创建个人空间（如果还没有）
         if (spaceRepository.findByUserId(userId).isEmpty()) {
             spaceRepository.save(com.aiextract.model.Space.builder()
@@ -127,6 +134,7 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse registerNew(String account, String password, String nickname, MultipartFile avatar) {
+        com.aiextract.common.PasswordPolicy.validate(password);
         if (userRepository.existsByAccount(account)) {
             throw new BusinessException(400, "账号已被占用");
         }
@@ -162,11 +170,10 @@ public class CAuthService {
         return buildSession(user, issueToken(user));
     }
 
-    /** 上传用户头像到 OSS，返回公开访问 URL */
+    /** 上传用户头像到 OSS，返回公开访问 URL（只接受 jpg/png/webp，嗅探文件头） */
     private String saveUserAvatar(UUID userId, MultipartFile file) {
-        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
-        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
-        String objectKey = "avatars/users/" + userId + "/" + safeName;
+        String extension = com.aiextract.common.UploadValidator.requireImage(file, 2 * 1024 * 1024);
+        String objectKey = "avatars/users/" + userId + "/" + System.currentTimeMillis() + extension;
         return ossService.upload(objectKey, file);
     }
 
@@ -175,13 +182,18 @@ public class CAuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public GuestSessionResponse login(CLoginRequest request) {
+        // 账号不存在与密码错误统一返回 401，避免枚举
         User user = userRepository.findByAccount(request.getAccount().trim())
                 .filter(User::isCEnd)
-                .orElseThrow(() -> new BusinessException(404, ErrorMessages.USER_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(401, "账号或密码错误"));
         if (user.getPasswordHash() == null
                 || !passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
-            log.warn("C端密码错误 userId={}", user.getId());
-            throw new BusinessException(400, ErrorMessages.PASSWORD_WRONG);
+            log.warn("C端登录失败（密码错误） userId={}", user.getId());
+            throw new BusinessException(401, "账号或密码错误");
+        }
+        if (Boolean.FALSE.equals(user.getIsActive())) {
+            log.warn("C端账户已禁用 userId={}", user.getId());
+            throw new BusinessException(HttpStatus.LOCKED.value(), ErrorMessages.ACCOUNT_DISABLED);
         }
         LocalDateTime now = LocalDateTime.now();
         user.setLastActiveAt(now);
@@ -217,7 +229,8 @@ public class CAuthService {
     private String issueToken(User user) {
         boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L);
+        long version = user.getTokenVersion() == null ? 0L : user.getTokenVersion();
+        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L, version);
     }
 
     private GuestSessionResponse buildSession(User user, String token) {

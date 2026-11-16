@@ -1,5 +1,6 @@
 package com.aiextract.service;
 
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.model.Report;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillMaterial;
@@ -30,6 +31,7 @@ public class AdminService {
     private final AdminInsightService insightService;
     private final ConversationStatsRepository convStatsRepository;
     private final CompanyRepository companyRepository;
+    private final CompanyScopeService companyScopeService;
 
     /** 企业范围 — 一次 DB 计算，getDashboard 和 getDashboardV2 共享 */
     private record CompanyScope(List<UUID> spaceIds, List<UUID> skillIds) {
@@ -38,7 +40,13 @@ public class AdminService {
     }
 
     private CompanyScope resolveCompanyScope(UUID companyId) {
-        if (companyId == null) return new CompanyScope(null, null);
+        if (companyId == null) {
+            // 平台全局统计必须由权限码证明，不能仅凭 company_id 为空就放开
+            if (!companyScopeService.isUnrestrictedDataScope()) {
+                return new CompanyScope(List.of(), List.of());
+            }
+            return new CompanyScope(null, null);
+        }
         List<UUID> userIds = userRepository.findByCompanyId(companyId).stream()
                 .map(com.aiextract.model.User::getId).toList();
         List<UUID> spaceIds = userIds.isEmpty() ? List.of()
@@ -154,8 +162,11 @@ public class AdminService {
                     .flatMap(u -> spaceRepository.findByUserId(u.getId()).stream())
                     .map(Space::getId).collect(Collectors.toList());
             allGrains = spaceIds.isEmpty() ? List.of() : grainRepository.findAllBySpaceIdIn(spaceIds);
-        } else {
+        } else if (companyScopeService.isUnrestrictedDataScope()) {
             allGrains = grainRepository.findAll();
+        } else {
+            // 无企业归属的非超管账号：无可见数据，不退化成全平台
+            allGrains = List.of();
         }
         Map<String, List<com.aiextract.model.ExperienceGrain>> grouped = allGrains.stream()
                 .filter(g -> g.getSceneTag() != null)
@@ -233,8 +244,8 @@ public class AdminService {
         }
         data.put("trend", trend);
 
-        // 企业排行（仅 super_admin，companyId == null）
-        if (companyId == null) {
+        // 企业排行（仅 super_admin）
+        if (companyId == null && companyScopeService.isUnrestrictedDataScope()) {
             List<Map<String, Object>> enterprises = new ArrayList<>();
             var companyUserRows = userRepository.findAll().stream()
                     .filter(u -> u.getCompanyId() != null)

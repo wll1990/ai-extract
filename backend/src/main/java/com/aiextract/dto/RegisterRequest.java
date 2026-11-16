@@ -21,9 +21,8 @@ import lombok.Setter;
 public class RegisterRequest {
 
     /**
-     * 企业ID
+     * 企业ID — 管理员创建用户时必填；匿名注册由 inviteToken 解析，忽略此字段。
      */
-    @NotBlank(message = "企业ID不能为空")
     private String companyId;
 
     /**
@@ -49,4 +48,10 @@ public class RegisterRequest {
      */
     @NotBlank(message = "角色不能为空")
     private String role;
+
+    /**
+     * 注册邀请令牌（公开分享页/访谈邀请页下发）。
+     * 匿名注册时必填，服务端据此确定企业归属，忽略请求体 companyId。
+     */
+    private String inviteToken;
 }

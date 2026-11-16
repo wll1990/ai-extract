@@ -15,6 +15,20 @@ interface RegisterCode {
   id: string; code: string; enabled: boolean;
   maxUses: number; usedCount: number;
   createdAt?: string; expiresAt?: string | null;
+  defaultRole?: string | null;
+  lastUsedBy?: string | null; lastUsedAt?: string | null;
+}
+
+/** 注册码真实状态：停用 > 过期 > 用尽 > 有效 */
+function codeStatus(c: RegisterCode) {
+  if (!c.enabled) return { label: '已停用', cls: 'bg-gray-100 text-gray-600' };
+  if (c.expiresAt && new Date(c.expiresAt).getTime() < Date.now()) {
+    return { label: '已过期', cls: 'bg-amber-100 text-amber-700' };
+  }
+  if (c.maxUses > 0 && c.usedCount >= c.maxUses) {
+    return { label: '已用尽', cls: 'bg-gray-100 text-gray-600' };
+  }
+  return { label: '有效', cls: 'bg-green-100 text-green-700' };
 }
 
 const EMPTY_FORM = {
@@ -43,6 +57,7 @@ export default function CompaniesPage() {
   const [codesLoading, setCodesLoading] = useState(false);
   const [newCode, setNewCode] = useState(''); // 刚生成的明文码
   const [codeRole, setCodeRole] = useState('employee'); // 注册码默认角色
+  const [codeExpiry, setCodeExpiry] = useState(0); // 有效期（天），0=不限期
   const [codeCopied, setCodeCopied] = useState(false);
 
   const load = useCallback(() => {
@@ -122,14 +137,16 @@ export default function CompaniesPage() {
     setCodesLoading(false);
   };
 
-  const handleGenerateCode = async () => {
+  const generateCode = async (role: string) => {
     if (!codeTarget) return;
     setSaving(true);
     try {
-      const res = await apiClient<any>(`/admin/companies/${codeTarget.id}/codes`, {
-        method: 'POST', body: JSON.stringify({ maxUses: 0, defaultRole: codeRole }),
+      // 企业管理员码由后端强制一次性；员工码默认不限次数。有效期由超管选择，0 = 不限期
+      const body: Record<string, unknown> = { defaultRole: role, expiresInDays: codeExpiry };
+      if (role !== 'company_admin') body.maxUses = 0;
+      const data = await apiClient<any>(`/admin/companies/${codeTarget.id}/codes`, {
+        method: 'POST', body: JSON.stringify(body),
       });
-      const data = res; // apiClient already unwraps .data
       setNewCode(data.code || '');
       setCodeCopied(false);
       // refresh code list
@@ -137,6 +154,15 @@ export default function CompaniesPage() {
       setCodes(Array.isArray(d) ? d : []);
     } catch (e: any) { setError(e?.message || '生成失败'); }
     setSaving(false);
+  };
+
+  const handleGenerateCode = () => generateCode(codeRole);
+
+  /** 过期/用尽的码按原角色重新生成一个，旧码保持不变（已失效） */
+  const handleRegenerate = (c: RegisterCode) => {
+    const role = c.defaultRole === 'company_admin' ? 'company_admin' : 'employee';
+    setCodeRole(role);
+    generateCode(role);
   };
 
   const handleCopy = (text: string) => {
@@ -333,7 +359,18 @@ export default function CompaniesPage() {
                   <option value="employee">角色：员工</option>
                   <option value="company_admin">角色：企业管理员</option>
                 </select>
+                <select value={codeExpiry} onChange={e => setCodeExpiry(Number(e.target.value))}
+                  className="border border-border rounded-lg px-3 py-1.5 text-xs bg-white">
+                  <option value={0}>有效期：不限期</option>
+                  <option value={7}>有效期：7 天</option>
+                  <option value={30}>有效期：30 天</option>
+                </select>
               </div>
+              {codeRole === 'company_admin' && (
+                <p className="text-xs text-amber-600 -mt-2 mb-4">
+                  企业管理员码为一次性使用，用掉即失效（复制出去后只有第一个注册的人生效）。企业开通后由管理员自己创建员工。
+                </p>
+              )}
 
               {newCode && (
                 <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4">
@@ -356,30 +393,49 @@ export default function CompaniesPage() {
                   <thead className="bg-surface-2 text-muted-foreground text-xs uppercase">
                     <tr>
                       <th className="text-left px-3 py-2">注册码</th>
+                      <th className="text-left px-3 py-2">角色</th>
                       <th className="text-left px-3 py-2">状态</th>
                       <th className="text-left px-3 py-2">已用/上限</th>
-                      <th className="text-left px-3 py-2">创建时间</th>
+                      <th className="text-left px-3 py-2">最近使用</th>
+                      <th className="text-left px-3 py-2">有效期</th>
                       <th className="text-right px-3 py-2">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {codes.map(c => (
+                    {codes.map(c => {
+                      const st = codeStatus(c);
+                      const dead = st.label === '已过期' || st.label === '已用尽';
+                      return (
                       <tr key={c.id} className="border-t border-border hover:bg-surface-2/50">
                         <td className="px-3 py-2 font-mono text-xs">{c.code}</td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground">
+                          {c.defaultRole === 'company_admin' ? '企业管理员' : '员工'}
+                        </td>
                         <td className="px-3 py-2">
-                          <span className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full ${
-                            c.enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {c.enabled ? '启用' : '停用'}
+                          <span className={`inline-flex text-xs font-medium px-2 py-0.5 rounded-full ${st.cls}`}>
+                            {st.label}
                           </span>
                         </td>
                         <td className="px-3 py-2 text-muted-foreground text-xs">
                           {c.usedCount}/{c.maxUses > 0 ? c.maxUses : '∞'}
                         </td>
                         <td className="px-3 py-2 text-muted-foreground text-xs">
-                          {c.createdAt ? c.createdAt.substring(0, 10) : '-'}
+                          {c.lastUsedAt
+                            ? `${c.lastUsedBy ? `${c.lastUsedBy.slice(0, 8)}… · ` : ''}${new Date(c.lastUsedAt).toLocaleString('zh-CN')}`
+                            : '—'}
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className="px-3 py-2 text-muted-foreground text-xs">
+                          {c.expiresAt
+                            ? new Date(c.expiresAt).toLocaleDateString()
+                            : '长期有效'}
+                        </td>
+                        <td className="px-3 py-2 text-right whitespace-nowrap">
+                          {dead && (
+                            <button onClick={() => handleRegenerate(c)}
+                              className="text-xs px-2 py-1 rounded bg-primary text-white hover:bg-primary-hover mr-1">
+                              重新生成
+                            </button>
+                          )}
                           <button onClick={() => handleToggleCode(c)}
                             className="text-xs px-2 py-1 rounded hover:bg-surface-2 mr-1">
                             {c.enabled ? '停用' : '启用'}
@@ -390,7 +446,8 @@ export default function CompaniesPage() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

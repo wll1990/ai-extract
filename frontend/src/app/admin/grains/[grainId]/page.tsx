@@ -92,7 +92,7 @@ export default function GrainDetailPage() {
             📋 颗粒内容
           </h3>
           <div className="space-y-1 text-xs text-[#94A3B8] mb-4">
-            场景: {data.sceneTag || '未分类'} · 质量: {data.qualityScore || '-'}/5 · 权重: {data.weight} · {data.status}
+            场景: {data.sceneTag || '未分类'} · 质量: {data.qualityScore != null ? `${data.qualityScore}/5` : '未评分'} · 权重: {data.weight} · {data.status === 'active' ? '生效中' : data.status === 'deprecated' ? '已废弃' : data.status}
           </div>
           <Field label="🧠 专家思考" value={data.expertThought} />
           <Field label="💬 标准话术" value={data.standardScript} />

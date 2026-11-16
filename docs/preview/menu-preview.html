@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侧栏菜单优化 · 效果预览</title>
+<style>
+  :root{
+    --surface:#f8fafc; --surface-2:#ffffff; --foreground:#1e293b;
+    --muted:#64748b; --muted-2:#94a3b8; --border:#e2e8f0;
+    --primary:#2563eb; --primary-light:rgba(37,99,235,.12);
+    --danger:#dc2626; --danger-bg:#fef2f2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#eef2f7; color:var(--foreground);
+    font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:32px;
+  }
+  .page-head{max-width:1000px;margin:0 auto 24px}
+  .page-head h1{font-size:20px;font-weight:700}
+  .page-head p{margin-top:6px;font-size:13px;color:var(--muted)}
+  .panels{display:flex;gap:26px;align-items:flex-start;justify-content:center}
+  .panel{width:236px}
+  .caption{font-size:12px;color:#64748b;margin-bottom:8px;line-height:1.5;font-weight:500}
+  .caption b{color:#334155;font-weight:600}
+  .sidebar{
+    width:236px;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:12px;display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:0 10px 28px rgba(15,23,42,.08);min-height:780px;
+  }
+  .sb-head{padding:18px 16px 12px;font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .theme-toggle{
+    margin:0 12px 10px;height:28px;border-radius:7px;background:var(--surface);
+    border:1px solid var(--border);display:flex;align-items:center;
+    padding:2px;gap:2px;font-size:11px;
+  }
+  .theme-toggle span{flex:1;text-align:center;line-height:24px;border-radius:5px;color:var(--muted-2)}
+  .theme-toggle span.on{background:#fff;color:var(--foreground);font-weight:600;box-shadow:0 1px 2px rgba(15,23,42,.08)}
+  .search{
+    margin:0 12px 10px;height:30px;border-radius:8px;background:var(--surface);
+    border:1px solid var(--border);display:flex;align-items:center;gap:6px;
+    padding:0 9px;font-size:12px;color:var(--muted-2);
+  }
+  .nav{flex:1;overflow-y:auto;padding:0 10px 12px}
+  .nav::-webkit-scrollbar{width:0}
+
+  .item{
+    display:flex;align-items:center;gap:9px;height:32px;padding:0 9px;
+    border-radius:6px;font-size:13px;color:#475569;cursor:pointer;
+  }
+  .item:hover{background:#f1f5f9}
+  .item .ico{width:17px;text-align:center;font-size:14px;flex-shrink:0}
+  .item.active{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .item .count{
+    margin-left:auto;font-size:10px;font-weight:600;color:#b91c1c;
+    background:var(--danger-bg);border-radius:6px;padding:1px 5px;line-height:14px;
+  }
+  .pinned{margin-bottom:6px}
+  .divider{height:1px;background:#eef2f7;margin:6px 6px 8px}
+
+  .group{margin-top:2px}
+  .ghead{
+    display:flex;align-items:center;gap:7px;height:28px;padding:0 8px;
+    border-radius:6px;font-size:11.5px;font-weight:600;color:#64748b;
+    letter-spacing:.02em;cursor:pointer;
+  }
+  .ghead:hover{background:#f8fafc}
+  .ghead .chev{width:10px;height:10px;color:#94a3b8;flex-shrink:0;display:block}
+  .ghead .name{flex:1}
+  .gbadge{
+    min-width:16px;height:16px;padding:0 5px;border-radius:8px;
+    background:var(--danger-bg);color:#b91c1c;font-size:10px;font-weight:600;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .gitems{padding-bottom:2px}
+  .footer{
+    border-top:1px solid var(--border);padding:10px 12px;display:flex;
+    align-items:center;gap:8px;font-size:12px;color:var(--muted);
+  }
+  .footer .tour{
+    display:flex;align-items:center;gap:6px;background:var(--surface);
+    border:1px solid var(--border);border-radius:7px;padding:5px 9px;font-size:12px;
+  }
+
+  .notes{max-width:1000px;margin:28px auto 0;background:#fff;border:1px solid var(--border);
+    border-radius:12px;padding:18px 22px;font-size:13px;color:#475569;line-height:1.9}
+  .notes h2{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px}
+  .notes ul{padding-left:18px}
+  .notes b{color:#1e293b}
+</style>
+</head>
+<body>
+
+<div class="page-head">
+  <h1>侧栏菜单优化 · 效果预览</h1>
+  <p>236px 侧栏，6 组折叠。默认只展开「日常使用」，当前页面所在组自动展开。</p>
+</div>
+
+<div class="panels">
+
+  <!-- ① 管理员默认态 -->
+  <div class="panel">
+    <div class="caption"><b>公司管理员 · 默认</b><br>落地「运营总览」，仅①组展开</div>
+    <div class="sidebar">
+      <div class="sb-head">💎 AI萃取平台</div>
+      <div class="search"><span>🔍</span><span>搜索菜单</span></div>
+      <nav class="nav">
+        <div class="pinned">
+          <div class="item active"><span class="ico">📊</span><span>运营总览</span></div>
+        </div>
+        <div class="divider"></div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">日常使用</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">🤖</span><span>分身广场</span></div>
+            <div class="item"><span class="ico">🏠</span><span>我的工作台</span></div>
+            <div class="item"><span class="ico">📚</span><span>经验广场</span></div>
+            <div class="item"><span class="ico">💼</span><span>销冠访谈</span></div>
+            <div class="item"><span class="ico">👤</span><span>我的空间</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M4 2.5L6.5 5L4 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">销售与培训</span><span class="gbadge">1</span></div>
+        </div>
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M4 2.5L6.5 5L4 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">分身生产</span><span class="gbadge">3</span></div>
+        </div>
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M4 2.5L6.5 5L4 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">知识与洞察</span></div>
+        </div>
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M4 2.5L6.5 5L4 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">组织与设置</span></div>
+        </div>
+      </nav>
+      <div class="footer"><div class="tour">🎬 产品导览</div></div>
+    </div>
+  </div>
+
+  <!-- ② 管理员全展开 -->
+  <div class="panel">
+    <div class="caption"><b>公司管理员 · 全部展开</b><br>⑥ 组仅超管可见，此处示意</div>
+    <div class="sidebar">
+      <div class="sb-head">💎 AI萃取平台</div>
+      <div class="search"><span>🔍</span><span>搜索菜单</span></div>
+      <nav class="nav">
+        <div class="pinned">
+          <div class="item"><span class="ico">📊</span><span>运营总览</span></div>
+        </div>
+        <div class="divider"></div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">日常使用</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">🤖</span><span>分身广场</span></div>
+            <div class="item"><span class="ico">🏠</span><span>我的工作台</span></div>
+            <div class="item"><span class="ico">📚</span><span>经验广场</span></div>
+            <div class="item"><span class="ico">💼</span><span>销冠访谈</span></div>
+            <div class="item"><span class="ico">👤</span><span>我的空间</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">销售与培训</span><span class="gbadge">1</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">🧭</span><span>销售复盘</span></div>
+            <div class="item"><span class="ico">📌</span><span>线索</span></div>
+            <div class="item"><span class="ico">✅</span><span>跟进任务</span></div>
+            <div class="item"><span class="ico">🧑‍🏫</span><span>教练台账</span></div>
+            <div class="item"><span class="ico">🎓</span><span>我的培训</span></div>
+            <div class="item"><span class="ico">📋</span><span>培训计划</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">分身生产</span><span class="gbadge">3</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">🧩</span><span>分身管理</span></div>
+            <div class="item"><span class="ico">📁</span><span>素材管理</span><span class="count">2</span></div>
+            <div class="item"><span class="ico">💎</span><span>经验颗粒</span></div>
+            <div class="item"><span class="ico">🎯</span><span>分身调优</span></div>
+            <div class="item"><span class="ico">🏛️</span><span>组织分身</span></div>
+            <div class="item"><span class="ico">🔌</span><span>IM 分身接入</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">知识与洞察</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">📖</span><span>知识库</span></div>
+            <div class="item"><span class="ico">🎞️</span><span>案例库</span></div>
+            <div class="item"><span class="ico">🧠</span><span>专家经验</span></div>
+            <div class="item"><span class="ico">🗺️</span><span>场景地图</span></div>
+            <div class="item"><span class="ico">📈</span><span>数据看板</span></div>
+            <div class="item"><span class="ico">🧪</span><span>评测中心</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">组织与设置</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">👥</span><span>用户管理</span></div>
+            <div class="item"><span class="ico">🗂️</span><span>成员空间</span></div>
+            <div class="item"><span class="ico">💬</span><span>对话历史</span></div>
+            <div class="item"><span class="ico">🪙</span><span>Token 统计</span></div>
+            <div class="item"><span class="ico">🔑</span><span>AI 模型配置</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">平台</span></div>
+          <div class="gitems">
+            <div class="item"><span class="ico">⚙️</span><span>IM 渠道配置</span></div>
+            <div class="item"><span class="ico">🔗</span><span>合作方管理</span></div>
+            <div class="item"><span class="ico">🤝</span><span>企业合作</span></div>
+            <div class="item"><span class="ico">📅</span><span>预约演示</span></div>
+          </div>
+        </div>
+      </nav>
+      <div class="footer"><div class="tour">🎬 产品导览</div></div>
+    </div>
+  </div>
+
+  <!-- ③ 员工 -->
+  <div class="panel">
+    <div class="caption"><b>员工</b><br>只有 2 组，上传素材在①组</div>
+    <div class="sidebar">
+      <div class="sb-head">💎 AI萃取平台</div>
+      <nav class="nav" style="padding-top:4px">
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2.5 4L5 6.5L7.5 4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">日常使用</span></div>
+          <div class="gitems">
+            <div class="item active"><span class="ico">🤖</span><span>分身广场</span></div>
+            <div class="item"><span class="ico">🏠</span><span>我的工作台</span></div>
+            <div class="item"><span class="ico">📚</span><span>经验广场</span></div>
+            <div class="item"><span class="ico">💼</span><span>销冠访谈</span></div>
+            <div class="item"><span class="ico">👤</span><span>我的空间</span></div>
+            <div class="item"><span class="ico">📤</span><span>上传素材</span></div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="ghead"><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M4 2.5L6.5 5L4 7.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="name">销售与培训</span></div>
+        </div>
+      </nav>
+      <div class="footer"><div class="tour">🎬 产品导览</div></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <h2>这张图里要确认的几件事</h2>
+  <ul>
+    <li><b>运营总览独立置顶</b>：它是管理员的落地页，不埋进「组织与设置」里。</li>
+    <li><b>组头带待办数</b>：分身生产 3 = 待审核分身 2 + 待处理素材 1；销售与培训 1 = 待回复教练请求。不用点进去就知道哪有活。</li>
+    <li><b>当前页所在组自动展开</b>：默认只展开①组，点进「知识库」时④组自动展开，其余保持收起。</li>
+    <li><b>搜索框只在可见项 ≥20 时出现</b>：管理员有，员工没有。</li>
+    <li><b>员工不显示「分身生产」组</b>：素材上传作为①组里的一项直达入口。</li>
+    <li><b>改名</b>：工作台→运营总览、空间总览→成员空间、颗粒管理→经验颗粒、萃取师经验库→专家经验、IM管理→IM渠道配置、分身接入→IM分身接入。</li>
+  </ul>
+</div>
+
+</body>
+</html>

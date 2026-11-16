@@ -1,0 +1,19 @@
+[
+  {
+    "id": "REG-SKILL-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "production",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "B12 /skills/list 追加组织分身时把企业全部 skill 都追加了一遍，列表出现重复卡片",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /skills/list?page=1&size=20",
+        "expect": { "status": 200, "uniqueBy": { "data.content": "id" } }
+      }
+    ],
+    "assertions": []
+  }
+]

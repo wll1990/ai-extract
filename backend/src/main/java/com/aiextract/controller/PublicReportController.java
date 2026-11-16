@@ -12,9 +12,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 
 /**
  * 公开报告控制器 — 无需登录即可查看/下载分享的报告。
@@ -28,6 +25,7 @@ import java.nio.file.Path;
 public class PublicReportController {
 
     private final ReportRepository reportRepository;
+    private final com.aiextract.service.ReportStorageService reportStorageService;
 
     @GetMapping(value = "/public/reports/{shareCode}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> viewSharedReport(@PathVariable String shareCode) {
@@ -41,7 +39,7 @@ public class PublicReportController {
                     .body("<html><body><h1>报告尚未生成</h1><p>请稍后刷新。</p></body></html>");
         }
         try {
-            String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
+            String html = reportStorageService.read(report.getHtmlPath());
             int vc = report.getViewCount() != null ? report.getViewCount() : 0;
             report.setViewCount(vc + 1);
             reportRepository.save(report);
@@ -65,7 +63,7 @@ public class PublicReportController {
                     .body("报告文件尚未生成".getBytes());
         }
         try {
-            byte[] content = Files.readAllBytes(Path.of(report.getHtmlPath()));
+            byte[] content = reportStorageService.readBytes(report.getHtmlPath());
             String filename = (report.getTitle() != null ? report.getTitle() : "report") + ".html";
             return ResponseEntity.ok()
                     .header("Content-Disposition", ReportController.encodeContentDisposition(filename))

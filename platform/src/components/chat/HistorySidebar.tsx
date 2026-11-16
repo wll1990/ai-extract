@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import type { ConversationItem } from '@/lib/api/skill';
 
 interface HistorySidebarProps {
@@ -8,12 +9,19 @@ interface HistorySidebarProps {
   onClose: () => void;
   onSwitch: (id: string) => void;
   onDelete: (id: string) => void;
+  onRename: (id: string, currentTitle: string) => void;
   onNew: () => void;
 }
 
 export function HistorySidebar({
-  conversations, currentConvId, onClose, onSwitch, onDelete, onNew,
+  conversations, currentConvId, onClose, onSwitch, onDelete, onRename, onNew,
 }: HistorySidebarProps) {
+  const [keyword, setKeyword] = useState('');
+  const filtered = useMemo(() => {
+    const kw = keyword.trim().toLowerCase();
+    if (!kw) return conversations;
+    return conversations.filter(c => (c.title || '新对话').toLowerCase().includes(kw));
+  }, [conversations, keyword]);
   return (
     <div style={{
       width: 280, flexShrink: 0, borderRight: '1px solid var(--border-subtle)',
@@ -50,8 +58,19 @@ export function HistorySidebar({
         ＋ 新建对话
       </button>
 
+      <input
+        value={keyword}
+        onChange={e => setKeyword(e.target.value)}
+        placeholder="搜索对话标题"
+        style={{
+          margin: '0 16px 8px', padding: '6px 10px', borderRadius: 8,
+          border: '1px solid var(--border-subtle)', background: 'var(--surface)',
+          fontSize: 12, color: 'var(--fg-high)', outline: 'none',
+        }}
+      />
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
-        {conversations.length === 0 ? (
+        {filtered.length === 0 ? (
           <div style={{
             textAlign: 'center', padding: '40px 16px',
             color: 'var(--fg-dim)', fontSize: 12,
@@ -59,7 +78,7 @@ export function HistorySidebar({
             暂无对话记录
           </div>
         ) : (
-          conversations.map(conv => (
+          filtered.map(conv => (
             <div
               key={conv.id}
               onClick={() => onSwitch(conv.id)}
@@ -79,17 +98,30 @@ export function HistorySidebar({
                 }}>
                   {conv.title || '新对话'}
                 </span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    color: 'var(--fg-dim)', fontSize: 12, padding: '2px 4px',
-                    opacity: 0.6,
-                  }}
-                  title="删除"
-                >
-                  🗑
-                </button>
+                <span style={{ display: 'flex', gap: 2 }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onRename(conv.id, conv.title); }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--fg-dim)', fontSize: 12, padding: '2px 4px',
+                      opacity: 0.6,
+                    }}
+                    title="重命名"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onDelete(conv.id); }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--fg-dim)', fontSize: 12, padding: '2px 4px',
+                      opacity: 0.6,
+                    }}
+                    title="删除"
+                  >
+                    🗑
+                  </button>
+                </span>
               </div>
               <div style={{ fontSize: 10, color: 'var(--fg-dim)', marginTop: 2 }}>
                 {conv.mode === 'practice' ? '🎯 对练' : conv.mode === 'talk' ? '💬 对话' : '📝 请教'}

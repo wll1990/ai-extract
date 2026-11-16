@@ -41,4 +41,7 @@ public class UserInfoResponse {
 
     /** 当前用户拥有的权限码列表（由 RolePermissions 映射表派生） */
     private List<String> permissions;
+
+    /** true=必须先修改密码（管理员重置/首次登录） */
+    private Boolean mustChangePassword;
 }

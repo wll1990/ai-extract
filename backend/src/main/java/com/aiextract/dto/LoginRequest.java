@@ -32,6 +32,12 @@ public class LoginRequest {
     private String companyId;
 
     /**
+     * 公开分享/访谈页下发的签名邀请令牌（优先于 companyId，避免公开 companyId）
+     */
+    @JsonProperty("inviteToken")
+    private String inviteToken;
+
+    /**
      * 登录账号
      */
     @NotBlank(message = "账号不能为空")

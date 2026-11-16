@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-SEC-09",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "insights",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "GET /admin/insights/discoveries/candidates 按 insightIds 直接返回候选颗粒全文，企业管理员可读其他企业/平台级候选（批量 IDOR）",
+    "steps": [
+      {
+        "dbExec": {
+          "sql": "INSERT INTO public.auto_insight (id, skill_id, type, title, description, severity, evidence, status, created_at) VALUES ('0c000000-0000-0000-0000-000000000010', NULL, 'knowledge_gap', 'QA SEC 平台洞察', '仅平台可见', 'medium', '{}'::jsonb, 'active', now()) ON CONFLICT (id) DO NOTHING; INSERT INTO public.candidate_grain (id, skill_id, scene_tag, scene_description, expert_thought, source_insight_id, source_evidence, status, created_at) VALUES ('0c000000-0000-0000-0000-000000000011', NULL, 'qa', '仅平台可见', '仅平台可见', '0c000000-0000-0000-0000-000000000010', '{}'::jsonb, 'pending', now()) ON CONFLICT (id) DO NOTHING"
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/insights/discoveries/candidates?insightIds=0c000000-0000-0000-0000-000000000010",
+        "expect": { "status": 200, "json": { "data": {} } }
+      }
+    ],
+    "assertions": []
+  }
+]

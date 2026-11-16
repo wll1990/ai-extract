@@ -21,8 +21,21 @@ public class PartnerCrypto {
 
     private final SecretKeySpec keySpec;
 
-    public PartnerCrypto(@Value("${partner.aes-key}") String base64Key) {
-        byte[] keyBytes = Base64.getDecoder().decode(base64Key);
+    public PartnerCrypto(@Value("${partner.aes-key:}") String base64Key) {
+        if (base64Key == null || base64Key.isBlank()) {
+            throw new IllegalStateException(
+                    "PARTNER_AES_KEY 未配置！请设置 32 字节 Base64 密钥后再启动");
+        }
+        byte[] keyBytes;
+        try {
+            keyBytes = Base64.getDecoder().decode(base64Key);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("PARTNER_AES_KEY 不是合法的 Base64", e);
+        }
+        if (keyBytes.length != 32) {
+            throw new IllegalStateException(
+                    "PARTNER_AES_KEY 必须解码为 32 字节（AES-256），当前 " + keyBytes.length + " 字节");
+        }
         this.keySpec = new SecretKeySpec(keyBytes, "AES");
     }
 

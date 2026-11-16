@@ -2,6 +2,7 @@ package com.aiextract.service;
 
 import com.aiextract.config.DomainConfig;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.exception.BusinessException;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.ExtractionDropLog;
 import com.aiextract.model.Skill;
@@ -22,14 +23,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.reactive.function.client.WebClient;
 
-import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.file.Files;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
@@ -63,7 +60,6 @@ public class MaterialCleaningService {
     private static final String KEY_INDUSTRY_SIGNALS = "industry_signals";
     private static final String KEY_KNOWLEDGE_DOMAINS = "knowledgeDomains";
     private static final String KEY_METHODOLOGY_NAME = "methodology_name";
-    private static final String KEY_NEEDS_MANUAL = "needs_manual";
     private static final String KEY_ONELINER = "oneliner";
     private static final String KEY_PASSED = "passed";
     private static final String KEY_PERSONALITY = "personality";
@@ -73,7 +69,6 @@ public class MaterialCleaningService {
     private static final String KEY_SPEAKING_STYLE = "speakingStyle";
     private static final String KEY_STANDARD_SCRIPT = "standard_script";
     private static final String KEY_TAG = "tag";
-    private static final String KEY_TEXT = "text";
     private static final String KEY_VERDICT = "verdict";
 
     // 素材处理状态常量
@@ -85,6 +80,7 @@ public class MaterialCleaningService {
     static final String STATUS_ANALYZED = "analyzed";
     static final String STATUS_EXTRACTED = "extracted";
     static final String STATUS_REJECTED = "rejected";
+    static final String STATUS_DISCARDED = "discarded";
 
     // 自注入代理：AI/HTTP 调用在事务外，DB 状态更新走短事务
     @org.springframework.beans.factory.annotation.Autowired
@@ -102,22 +98,18 @@ public class MaterialCleaningService {
     private final SkillRepository skillRepository;
     private final SpaceRepository spaceRepository;
     private final com.aiextract.config.DomainConfigLoader domainConfigLoader;
+    private final com.aiextract.config.CompanyScopeService companyScopeService;
     private final com.aiextract.repository.UserRepository userRepository;
     private final com.aiextract.repository.SkillProfileRepository profileRepository;
     private final ExtractionDropLogRepository dropLogRepository;
     private final com.aiextract.service.precheck.MaterialPreChecker preChecker;
-    private final WebClient webClient;
+    private final FileParseService fileParseService;
+    private final FileStorageService fileStorageService;
     @Qualifier("cleanExecutor")
     private final Executor cleanExecutor;
+    @Qualifier("grainExtractExecutor")
+    private final Executor grainExtractExecutor;
     private final ObjectMapper objectMapper;
-
-    /** AI 服务地址 */
-    @org.springframework.beans.factory.annotation.Value("${ai.service.url}")
-    private String aiServiceUrl;
-
-    /** 文件存储路径 */
-    @org.springframework.beans.factory.annotation.Value("${storage.local.path}")
-    private String storageBasePath;
 
     /** 解析后文本最大字数 — 超过此值拒绝并建议拆分（配置：app.material.upload.max-text-length） */
     @org.springframework.beans.factory.annotation.Value("${app.material.upload.max-text-length:100000}")
@@ -126,12 +118,56 @@ public class MaterialCleaningService {
     // ==================== 素材上传（Controller → 本层） ====================
 
     /**
+     * Service 层二次归属校验 — 防止绕过 Controller 直接调用时跨企业写入。
+     * employee 的严格属主校验仍在 Controller；这里兜底企业边界。
+     */
+    private void assertUploadTarget(UUID spaceId, UUID skillId) {
+        if (skillId != null) {
+            companyScopeService.assertSkillOwnership(skillId);
+        } else if (spaceId != null) {
+            companyScopeService.assertSpaceOwnership(spaceId);
+        }
+    }
+
+    /** 分身重名只在本企业内判重，避免不同企业同名被误拦。 */
+    private void assertSkillNameAvailable(String skillName, UUID spaceId, UUID userId) {
+        if (skillName == null || skillName.isBlank()) {
+            return;
+        }
+        UUID ownerId = userId;
+        if (spaceId != null) {
+            Space sp = spaceRepository.findById(spaceId).orElse(null);
+            if (sp != null) {
+                ownerId = sp.getUserId();
+            }
+        }
+        UUID companyId = ownerId == null ? null
+                : userRepository.findById(ownerId).map(com.aiextract.model.User::getCompanyId).orElse(null);
+        boolean exists;
+        if (companyId != null) {
+            // 个人分身 company_id 为空，需再按本企业空间判重
+            exists = skillRepository.existsByCompanyIdAndDisplayName(companyId, skillName);
+            if (!exists) {
+                var spaceIds = companyScopeService.getSpaceIds(companyId);
+                exists = !spaceIds.isEmpty()
+                        && skillRepository.existsBySpaceIdInAndDisplayName(spaceIds, skillName);
+            }
+        } else {
+            exists = skillRepository.findByDisplayName(skillName).isPresent();
+        }
+        if (exists) {
+            throw new RuntimeException("分身名称已存在，请选择已有分身");
+        }
+    }
+
+    /**
      * 通过空间上传素材 — 自动解析 spaceId → skillId
      */
     @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> uploadMaterialToSpace(MultipartFile file, UUID spaceId,
             UUID skillId, String skillName, UUID userId,
             String domain) {
+        assertUploadTarget(spaceId, skillId);
         // 未指定分身名称时，用上传文件名（去扩展名）兜底
         if (skillName == null || skillName.isBlank()) {
             String original = file.getOriginalFilename();
@@ -195,10 +231,7 @@ public class MaterialCleaningService {
             // 在已有空间下创建 Skill（素材上传到指定销冠空间）
             Space existingSpace = spaceRepository.findById(existingSpaceId)
                     .orElseThrow(() -> new RuntimeException("空间不存在"));
-            // 检查重名
-            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
-                throw new RuntimeException("分身名称已存在，请选择已有分身");
-            }
+            assertSkillNameAvailable(skillName, existingSpaceId, userId);
             // 从空间所属用户自动填充 ownerName / ownerTitle
             String autoOwnerName = null;
             String autoOwnerTitle = existingSpace.getDescription();
@@ -225,10 +258,7 @@ public class MaterialCleaningService {
             log.info("在已有空间下新建分身: name={}, skillId={}, spaceId={}, ownerName={}, domain={}",
                     skillName, skill.getId(), existingSpaceId, autoOwnerName, domain);
         } else {
-            // 检查重名 — 用数据库查询，不加载全部
-            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
-                throw new RuntimeException("分身名称已存在，请选择已有分身");
-            }
+            assertSkillNameAvailable(skillName, null, userId);
             // 新建空间（管理员直接创建，不关联已有空间）
             UUID spaceId = UUID.randomUUID();
             Space space = Space.builder()
@@ -260,32 +290,17 @@ public class MaterialCleaningService {
             log.info("新建分身: name={}, id={}, domain={}", skillName, skill.getId(), domain);
         }
 
-        // 保存文件
-        String month = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
-        File dir = new File(storageBasePath + "/skills/" + skill.getId() + "/" + month);
-        {
-            if (!dir.exists())
-                dir.mkdirs();
-        }
-
+        // 保存文件到 OSS（素材与知识/案例同一原则，不再落本地磁盘）
         String originalName = file.getOriginalFilename();
-        String savedName = UUID.randomUUID() + "_" + (originalName != null ? originalName : "file");
-        File dest = new File(dir, savedName).getAbsoluteFile();
-        try {
-            file.transferTo(dest);
-        } catch (Exception e) {
-            log.error("文件保存失败: path={}, originalName={}, size={}",
-                    dest.getAbsolutePath(), originalName, file.getSize(), e);
-            throw new RuntimeException("文件保存失败: " + e.getMessage());
-        }
+        String objectKey = fileStorageService.saveMaterialFile(file, "material");
 
         // 创建素材记录 — 不设 id，由 @GeneratedValue 在 persist 时生成并回填
         SkillMaterial material = SkillMaterial.builder()
                 .skillId(skill.getId())
                 .uploadedBy(userId)
                 .fileName(originalName)
-                .fileUrl(dest.toPath().normalize().toAbsolutePath().toString())
-                .fileType(file.getContentType())
+                .fileUrl(objectKey)
+                .fileType(com.aiextract.common.FileTypeUtil.detect(originalName))
                 .fileSize(file.getSize())
                 .version(1)
                 .status(STATUS_UPLOADED)
@@ -299,7 +314,7 @@ public class MaterialCleaningService {
         Map<String, Object> acceptanceData = new LinkedHashMap<>();
         acceptanceData.put(KEY_PASSED, true);
         try {
-            String textForCheck = readTextContent(dest, file.getContentType());
+            String textForCheck = readTextContent(file);
             if (textForCheck != null && !textForCheck.isBlank()) {
                 // 优先从 skill 取 domain（已有分身），否则用参数
                 String effectiveDomain = domainConfigLoader.resolveDomain(skill);
@@ -322,6 +337,9 @@ public class MaterialCleaningService {
                     // 重复检测 — 用已有素材原文比较（主要） + 锦囊比较（辅助）
                     List<String> existingMaterialTexts = materialRepository
                             .findBySkillId(skill.getId()).stream()
+                            // 被拒绝/放弃的素材不参与判重，否则一次重复上传会连带拒绝正常素材
+                            .filter(m -> !STATUS_REJECTED.equals(m.getStatus())
+                                    && !STATUS_DISCARDED.equals(m.getStatus()))
                             .map(SkillMaterial::getParsedContent)
                             .filter(t -> t != null && !t.isBlank())
                             .toList();
@@ -339,7 +357,7 @@ public class MaterialCleaningService {
                 }
                 // Gate 2: 质量预检
                 if (Boolean.TRUE.equals(acceptanceData.get(KEY_PASSED))) {
-                    var quality = preChecker.evaluate(textForCheck, domain, skill.getSpaceId());
+                    var quality = preChecker.evaluate(textForCheck, effectiveDomain, skill.getSpaceId());
                     preCheckData = new LinkedHashMap<>();
                     preCheckData.put("overallScore", quality.overallScore());
                     preCheckData.put("grade", quality.grade());
@@ -366,8 +384,13 @@ public class MaterialCleaningService {
                 }
             }
         } catch (Exception e) {
-            log.warn("预检异常，素材标记未通过: {}", e.getMessage());
+            log.warn("预检异常，素材标记未通过: {}", e.getMessage(), e);
             acceptanceData.put(KEY_PASSED, false);
+            acceptanceData.put("rejectCode", "PRECHECK_ERROR");
+            acceptanceData.put("rejectReason", "素材预检服务异常，请稍后重试");
+            material.setStatus(STATUS_REJECTED);
+            material.setAnalysisNotes("预检服务异常: " + e.getMessage());
+            materialRepository.save(material);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -390,8 +413,10 @@ public class MaterialCleaningService {
      * <p>逻辑与 {@link #uploadMaterial} 一致，但跳过文件保存步骤，
      * 直接将用户输入的文本写入 parsedContent 并执行预检。</p>
      */
+    @Transactional(rollbackFor = Exception.class)
     public Map<String, Object> uploadTextMaterial(String text, UUID spaceId, UUID skillId,
             String skillName, UUID userId, String domain, String title) {
+        assertUploadTarget(spaceId, skillId);
         Skill skill;
         boolean skillCreated = false;
 
@@ -401,36 +426,50 @@ public class MaterialCleaningService {
         } else if (spaceId != null) {
             Space existingSpace = spaceRepository.findById(spaceId)
                     .orElseThrow(() -> new RuntimeException("空间不存在"));
-            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
-                throw new RuntimeException("分身名称已存在，请选择已有分身");
+            // skill(space_id) 有唯一索引：一个空间只能有一个分身，已有则复用
+            Skill existingSkill = skillRepository.findBySpaceId(spaceId).orElse(null);
+            if (existingSkill != null) {
+                skill = existingSkill;
+                if (existingSkill.getDomain() != null) { domain = existingSkill.getDomain(); }
+                log.info("文本素材复用空间下已有分身: skillId={}, spaceId={}", skill.getId(), spaceId);
+            } else {
+                assertSkillNameAvailable(skillName, spaceId, userId);
+                String autoOwnerName = null;
+                String autoOwnerTitle = existingSpace.getDescription();
+                if (existingSpace.getUserId() != null) {
+                    autoOwnerName = userRepository.findById(existingSpace.getUserId())
+                            .map(com.aiextract.model.User::getName).orElse(null);
+                }
+                Skill created = Skill.builder()
+                        .id(UUID.randomUUID())
+                        .spaceId(spaceId)
+                        .displayName(skillName)
+                        .ownerName(autoOwnerName)
+                        .ownerTitle(autoOwnerTitle)
+                        .type("individual")
+                        .domain(domain)
+                        .status("generating")
+                        .modelName("deepseek-chat")
+                        .modelConfig("{}")
+                        .createdAt(LocalDateTime.now())
+                        .updatedAt(LocalDateTime.now())
+                        .build();
+                try {
+                    skillRepository.save(created);
+                    skill = created;
+                    skillCreated = true;
+                    log.info("文本素材在已有空间下新建分身: name={}, skillId={}, spaceId={}",
+                            skillName, skill.getId(), spaceId);
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    // 并发首传同一 space：唯一索引冲突后退回复用，而不是 500
+                    skill = skillRepository.findBySpaceId(spaceId)
+                            .orElseThrow(() -> new RuntimeException("分身创建失败", e));
+                    if (skill.getDomain() != null) { domain = skill.getDomain(); }
+                    log.info("并发创建分身冲突，复用已有分身 skillId={}, spaceId={}", skill.getId(), spaceId);
+                }
             }
-            String autoOwnerName = null;
-            String autoOwnerTitle = existingSpace.getDescription();
-            if (existingSpace.getUserId() != null) {
-                autoOwnerName = userRepository.findById(existingSpace.getUserId())
-                        .map(com.aiextract.model.User::getName).orElse(null);
-            }
-            skill = Skill.builder()
-                    .id(UUID.randomUUID())
-                    .spaceId(spaceId)
-                    .displayName(skillName)
-                    .ownerName(autoOwnerName)
-                    .ownerTitle(autoOwnerTitle)
-                    .type("individual")
-                    .domain(domain)
-                    .status("generating")
-                    .modelName("deepseek-chat")
-                    .modelConfig("{}")
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
-            skillRepository.save(skill);
-            skillCreated = true;
-            log.info("文本素材在已有空间下新建分身: name={}, skillId={}, spaceId={}", skillName, skill.getId(), spaceId);
         } else {
-            if (skillName != null && skillRepository.findByDisplayName(skillName).isPresent()) {
-                throw new RuntimeException("分身名称已存在，请选择已有分身");
-            }
+            assertSkillNameAvailable(skillName, null, userId);
             UUID newSpaceId = UUID.randomUUID();
             Space space = Space.builder()
                     .id(newSpaceId)
@@ -469,13 +508,14 @@ public class MaterialCleaningService {
                 .fileUrl("text://paste/" + UUID.randomUUID())
                 .fileType("text/plain")
                 .fileSize((long) text.length())
-                .parsedContent(text)
+                .parsedContent(PiiMasker.mask(text))
                 .version(1)
                 .status(STATUS_UPLOADED)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
         material = materialRepository.save(material);
+        final UUID currentMaterialId = material.getId();
 
         // 预检（文本类直接检查）
         Map<String, Object> preCheckData = null;
@@ -496,9 +536,12 @@ public class MaterialCleaningService {
                 material.setAnalysisNotes(acceptance.rejectReason());
                 materialRepository.save(material);
             } else {
-                // 重复检测
+                // 重复检测 — 必须排除刚保存的当前素材，否则自己与自己相似度 1.0
                 List<String> existingMaterialTexts = materialRepository
                         .findBySkillId(skill.getId()).stream()
+                        .filter(m -> !currentMaterialId.equals(m.getId()))
+                        .filter(m -> !STATUS_REJECTED.equals(m.getStatus())
+                                && !STATUS_DISCARDED.equals(m.getStatus()))
                         .map(SkillMaterial::getParsedContent)
                         .filter(t -> t != null && !t.isBlank())
                         .toList();
@@ -515,7 +558,7 @@ public class MaterialCleaningService {
             }
             // Gate 2: 质量预检
             if (Boolean.TRUE.equals(acceptanceData.get(KEY_PASSED))) {
-                var quality = preChecker.evaluate(text, domain, skill.getSpaceId());
+                var quality = preChecker.evaluate(text, effectiveDomain, skill.getSpaceId());
                 preCheckData = new LinkedHashMap<>();
                 preCheckData.put("overallScore", quality.overallScore());
                 preCheckData.put("grade", quality.grade());
@@ -536,8 +579,13 @@ public class MaterialCleaningService {
                 preCheckData.put("checks", checks);
             }
         } catch (Exception e) {
-            log.warn("文本素材预检异常: {}", e.getMessage());
+            log.warn("文本素材预检异常: {}", e.getMessage(), e);
             acceptanceData.put(KEY_PASSED, false);
+            acceptanceData.put("rejectCode", "PRECHECK_ERROR");
+            acceptanceData.put("rejectReason", "素材预检服务异常，请稍后重试");
+            material.setStatus(STATUS_REJECTED);
+            material.setAnalysisNotes("预检服务异常: " + e.getMessage());
+            materialRepository.save(material);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -555,19 +603,18 @@ public class MaterialCleaningService {
      * 尝试从已保存的文件中读取文本内容（仅对文本类文件有效）。
      * 二进制文件（PDF/Word/音频等）返回 null，等 parseFile 解析后再预检。
      */
-    private String readTextContent(File file, String contentType) {
+    private String readTextContent(org.springframework.web.multipart.MultipartFile file) {
+        String contentType = file.getContentType();
         if (contentType == null) {
-
             return null;
-
         }
         String ct = contentType.toLowerCase();
-        // 纯文本类 — 直接读取
+        // 纯文本类 — 直接从上传流读取（文件已落 OSS，不再有本地路径）
         if (ct.contains("text/plain") || ct.contains("text/markdown")
                 || ct.contains("application/json") || ct.contains("text/csv")
                 || ct.contains("text/html") || ct.contains("application/xml")) {
             try {
-                return Files.readString(file.toPath(), java.nio.charset.StandardCharsets.UTF_8);
+                return new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
             } catch (Exception e) {
                 log.debug("读取文本内容失败: {}", e.getMessage());
                 return null;
@@ -588,6 +635,37 @@ public class MaterialCleaningService {
 
         log.info("开始文件解析, materialId: {}, fileName: {}", materialId, material.getFileName());
 
+        // 粘贴文本：正文已在 parsedContent，无需调用解析服务（text:// 不是文件路径）
+        if (material.getFileUrl() != null && material.getFileUrl().startsWith("text://")
+                && material.getParsedContent() != null && !material.getParsedContent().isBlank()) {
+            String text = material.getParsedContent();
+            if (text.length() > maxTextLength) {
+                material.setStatus(STATUS_REJECTED);
+                material.setAnalysisNotes("文本过长(" + text.length() + "字)，超过上限("
+                        + maxTextLength + "字)。建议拆分为多个片段分批上传");
+                materialRepository.save(material);
+                return null;
+            }
+            material.setStatus(STATUS_PARSED);
+            material.setAnalysisNotes("文本素材，无需解析，直接进入清洗");
+            materialRepository.save(material);
+            log.info("文本素材跳过解析, materialId: {}, 长度: {}", materialId, text.length());
+            return text;
+        }
+
+        // 访谈转录：内容已由 InterviewTranscriptExtractor 写入 parsedContent，interview:// 不是可下载地址
+        if (material.getFileUrl() != null && material.getFileUrl().startsWith("interview://")) {
+            if (material.getParsedContent() == null || material.getParsedContent().isBlank()) {
+                material.setStatus(STATUS_REJECTED);
+                material.setAnalysisNotes("访谈转录为空，无法萃取");
+                materialRepository.save(material);
+                return null;
+            }
+            material.setStatus(STATUS_PARSED);
+            materialRepository.save(material);
+            return material.getParsedContent();
+        }
+
         // 已标记需人工补充的素材跳过重新解析
         if (material.getAnalysisNotes() != null
                 && material.getAnalysisNotes().contains("需人工补充文字内容")) {
@@ -596,20 +674,13 @@ public class MaterialCleaningService {
         }
 
         try {
-            Map<String, String> body = Map.of(
-                    "file_path", material.getFileUrl(),
-                    "file_name", material.getFileName());
+            // 与知识/案例共用同一解析客户端（超时、needs_manual 契约单点维护）
+            FileParseService.ParseResult parsed =
+                    fileParseService.parseStored(material.getFileUrl(), material.getFileName());
 
-            Map<String, Object> response = webClient.post()
-                    .uri(aiServiceUrl + "/internal/parse-file")
-                    .bodyValue(body)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .block();
-
-            if (response != null && response.containsKey(KEY_TEXT)) {
-                String text = (String) response.get(KEY_TEXT);
-                boolean needsManual = Boolean.TRUE.equals(response.get(KEY_NEEDS_MANUAL));
+            if (parsed != null) {
+                String text = parsed.text();
+                boolean needsManual = parsed.needsManual();
 
                 if (needsManual) {
                     material.setStatus(STATUS_UPLOADED);
@@ -625,7 +696,8 @@ public class MaterialCleaningService {
                         log.warn("素材文本过长被拒绝, materialId: {}, 长度: {}", materialId, text.length());
                         return null;
                     }
-                    material.setParsedContent(text);
+                    // 进入 AI 抽取与落库前统一脱敏（手机号/身份证/银行卡/座机/邮箱）
+                    material.setParsedContent(PiiMasker.mask(text));
                     material.setAnalysisNotes("文件解析完成，长度: " + text.length() + "字");
                     material.setStatus(STATUS_PARSED);
                 }
@@ -634,12 +706,15 @@ public class MaterialCleaningService {
                         materialId, text.length(), needsManual);
                 return text;
             }
+            throw new RuntimeException("解析服务未返回文本内容");
         } catch (Exception e) {
             log.error("文件解析失败, materialId: {}, fileName: {}", materialId, material.getFileName(), e);
+            material.setStatus(STATUS_PARSE_FAILED);
             material.setAnalysisNotes("文件解析失败: " + e.getMessage());
             materialRepository.save(material);
+            // 必须抛出，否则调度器无法计重试，素材会每 30 秒被无限重扫
+            throw new RuntimeException("文件解析失败: " + material.getFileName(), e);
         }
-        return null;
     }
 
     // ---- 情境标注（Layer 0）----
@@ -1102,7 +1177,8 @@ public class MaterialCleaningService {
     public List<GrainCandidate> clean(UUID materialId) {
         SkillMaterial material = materialRepository.findById(materialId)
                 .orElseThrow(() -> new RuntimeException("素材不存在: " + materialId));
-        String rawText = material.getParsedContent();
+        // 存量素材可能未经脱敏，抽取前再兜底一次（幂等）
+        String rawText = PiiMasker.mask(material.getParsedContent());
         if (rawText == null || rawText.isBlank()) {
             throw new RuntimeException("素材无解析内容: " + materialId);
         }
@@ -1122,6 +1198,24 @@ public class MaterialCleaningService {
                     // 短事务标记 rejected，避免 detached 实例 merge 覆盖中间状态字段
                     self.updateMaterialStatus(materialId, STATUS_REJECTED, acceptance.rejectReason());
                     log.warn("素材准入不通过 materialId={}: {}", materialId, acceptance.rejectReason());
+                    return List.of();
+                }
+                // 判重收口：二进制文件、C 端上传、解析后重试都在这里统一执行一次，
+                // 上传时只对可读文本做过判重，不能代表全部入口
+                List<String> existingTexts = materialRepository.findBySkillId(material.getSkillId()).stream()
+                        .filter(m -> !materialId.equals(m.getId()))
+                        // 被拒绝/放弃的素材不参与判重；仍在 uploaded 的同批素材等对方先入管线，
+                        // 避免「A 因 B 被判重、B 又因 A 被判重」
+                        .filter(m -> !STATUS_REJECTED.equals(m.getStatus())
+                                && !STATUS_DISCARDED.equals(m.getStatus())
+                                && !STATUS_UPLOADED.equals(m.getStatus()))
+                        .map(SkillMaterial::getParsedContent)
+                        .filter(t -> t != null && !t.isBlank())
+                        .toList();
+                var dupCheck = preChecker.checkDuplicate(rawText, spaceId, domain, existingTexts);
+                if (!dupCheck.passed()) {
+                    self.updateMaterialStatus(materialId, STATUS_REJECTED, dupCheck.rejectReason());
+                    log.warn("素材判重不通过 materialId={}: {}", materialId, dupCheck.rejectReason());
                     return List.of();
                 }
             }
@@ -1510,6 +1604,7 @@ public class MaterialCleaningService {
         String contextPrefix = context.toPromptPrefix();
         List<ExtractedInsight> all = java.util.Collections.synchronizedList(new ArrayList<>());
         List<Map<String, Object>> chunkDetails = java.util.Collections.synchronizedList(new ArrayList<>());
+        java.util.concurrent.atomic.AtomicInteger failedChunks = new java.util.concurrent.atomic.AtomicInteger();
 
         // P3-12: 选技巧信号最多的 chunk 注入情境上下文（替代原"最长 chunk"策略）
         int maxSignals = 0;
@@ -1566,6 +1661,7 @@ public class MaterialCleaningService {
                                     conf));
                         }
                     } catch (Exception e) {
+                        failedChunks.incrementAndGet();
                         log.warn("chunk#{} 提取失败: {}", chunk.index(), e.getMessage());
                         Map<String, Object> chunkInfo = new LinkedHashMap<>();
                         chunkInfo.put("chunkIndex", chunk.index());
@@ -1576,11 +1672,15 @@ public class MaterialCleaningService {
                         chunkInfo.put("error", e.getMessage());
                         chunkDetails.add(chunkInfo);
                     }
-                }, cleanExecutor));
+                }, grainExtractExecutor));
             }
             // 等待当前批次完成
             java.util.concurrent.CompletableFuture.allOf(futures.toArray(new java.util.concurrent.CompletableFuture[0]))
                     .join();
+        }
+        // 全部 chunk 都调用失败时不能继续标「已萃取」，否则用户看到 0 颗粒却显示成功
+        if (!chunks.isEmpty() && failedChunks.get() == chunks.size()) {
+            throw new RuntimeException("所有分块的 AI 萃取都失败了，请检查模型服务后重试");
         }
         return new ExtractionResult(all, chunkDetails);
     }

@@ -18,6 +18,8 @@ export interface LoginResult {
     id: string; name: string; role: string;
     avatarUrl: string | null; companyId: string; companyName: string;
     permissions: string[];
+    /** true=管理员重置/首次登录，必须先修改密码 */
+    mustChangePassword?: boolean;
   };
 }
 
@@ -25,6 +27,8 @@ export interface UserInfo {
   id: string; name: string; role: string;
   avatarUrl: string | null; companyId: string; companyName: string;
   permissions: string[];
+  /** true=管理员重置/首次登录，必须先修改密码 */
+  mustChangePassword?: boolean;
 }
 
 export interface RegisterParams {
@@ -48,4 +52,12 @@ export function register(params: RegisterParams): Promise<LoginResult> {
 /** 获取当前用户 */
 export function getCurrentUser(): Promise<UserInfo> {
   return apiClient<UserInfo>('/auth/me');
+}
+
+/** 修改自己的密码（成功后服务端下发新 token） */
+export function changePassword(oldPassword: string, newPassword: string): Promise<{ token: string }> {
+  return apiClient<{ token: string }>('/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify({ oldPassword, newPassword }),
+  });
 }

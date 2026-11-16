@@ -1,0 +1,38 @@
+[
+  {
+    "id": "REG-SEC-08",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "platform",
+    "roles": ["employee", "company_admin", "qa_b_admin"],
+    "llm": false,
+    "sourceBug": "GET /admin/conversations/{id}/messages 没有归属校验，任意管理员可读其他企业的对话内容（IDOR）",
+    "steps": [
+      {
+        "dbExec": {
+          "sql": "INSERT INTO public.skill_conversation (id, skill_id, user_id, title, mode, created_at, updated_at) VALUES ('0c000000-0000-0000-0000-000000000001', '0b000000-0000-0000-0000-000000000031', '0b000000-0000-0000-0000-000000000011', 'QA SEC 跨企业会话', 'qa', now(), now()) ON CONFLICT (id) DO NOTHING"
+        }
+      },
+      {
+        "as": "employee",
+        "api": "GET /admin/conversations/0c000000-0000-0000-0000-000000000001/messages",
+        "expect": { "status": 403 },
+        "note": "员工无 CONVERSATION_VIEW，权限门禁直接拒绝（同样不泄露会话存在性）"
+      },
+      {
+        "asAccount": "qa_b_admin",
+        "companyId": "0b000000-0000-0000-0000-000000000001",
+        "api": "GET /admin/conversations/0c000000-0000-0000-0000-000000000001/messages",
+        "expect": { "status": 200 },
+        "note": "会话归属企业 B 的管理员可正常回放，证明修复没有误伤"
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/conversations/0c000000-0000-0000-0000-000000000001/messages",
+        "expect": { "status": 404 },
+        "note": "企业 A 管理员跨企业读取必须按不存在处理"
+      }
+    ],
+    "assertions": []
+  }
+]

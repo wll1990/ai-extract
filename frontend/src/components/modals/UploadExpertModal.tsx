@@ -160,7 +160,7 @@ export const UploadExpertModal: React.FC<UploadExpertModalProps> = ({ open, onCl
           <span className="text-4xl">📁</span>
           <p className="mt-2 text-sm text-muted-foreground">拖拽文件到此处，或点击上传</p>
           <p className="mt-1 text-xs text-muted-foreground-2">支持 PDF, Word, PPT, Excel, TXT, MD, HTML, 图片(png/jpg), 音频(mp3/wav) · 单文件上限50MB</p>
-          <input type="file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.csv,.txt,.md,.html,.htm,.png,.jpg,.jpeg,.gif,.bmp,.webp,.mp3,.wav,.m4a,.ogg,.flac" onChange={e => handleFiles(e.target.files)}
+          <input type="file" multiple accept=".pdf,.docx,.pptx,.txt,.md,.csv,.html,.htm,.png,.jpg,.jpeg,.mp3,.wav" onChange={e => handleFiles(e.target.files)}
             className="mt-3 text-sm" />
         </div>
 

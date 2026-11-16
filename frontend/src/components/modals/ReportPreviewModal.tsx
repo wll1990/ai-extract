@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { apiClient, API_BASE } from '@/lib/api/client';
+import { apiClient, API_BASE, authHeaders} from '@/lib/api/client';
 import { getToken } from '@/lib/storage';
 
 interface Props {
@@ -21,20 +21,35 @@ interface Readiness {
 export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [readinessError, setReadinessError] = useState('');
   const [htmlContent, setHtmlContent] = useState<string | null>(null);
+  const [htmlError, setHtmlError] = useState('');
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   useEffect(() => {
     if (!readiness?.ready) return;
+    setHtmlError('');
     fetch(`${API_BASE}/admin/skills/${skillId}/report`, {
-      headers: { Authorization: `Bearer ${getToken()}` },
-    }).then(r => r.text()).then(setHtmlContent).catch(() => {});
+      headers: { ...authHeaders() },
+    })
+      .then(async r => {
+        if (!r.ok) throw new Error(`报告加载失败 (${r.status})`);
+        return r.text();
+      })
+      .then(text => {
+        if (!text.trim()) throw new Error('报告内容为空，请重新生成');
+        setHtmlContent(text);
+      })
+      .catch((e: unknown) => setHtmlError(e instanceof Error ? e.message : '报告加载失败'));
   }, [readiness?.ready, skillId]);
 
   useEffect(() => {
     apiClient(`/admin/skills/${skillId}/report-readiness`)
-      .then((d: any) => setReadiness(d || null))
-      .catch(() => setReadiness(null))
+      .then((d: any) => { setReadiness(d || null); setReadinessError(''); })
+      .catch((e: unknown) => {
+        setReadiness(null);
+        setReadinessError(e instanceof Error ? `报告就绪状态加载失败：${e.message}` : '报告就绪状态加载失败');
+      })
       .finally(() => setLoading(false));
   }, [skillId]);
 
@@ -44,7 +59,23 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const reportUrl = `${API_BASE}/admin/skills/${skillId}/report`;
+  const downloadHtml = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/reports/by-skill/${skillId}/html`, {
+        headers: { ...authHeaders() },
+      });
+      if (!res.ok) throw new Error(`下载失败 (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `萃取报告-${skillName}.html`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setHtmlError(e instanceof Error ? e.message : '下载失败');
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black/60 backdrop-blur-sm" onClick={onClose}>
@@ -67,10 +98,10 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
                 className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
                 导出 PDF
               </button>
-              <a href={`/report/${skillId}`} target="_blank" rel="noopener"
+              <button onClick={downloadHtml}
                 className="px-3 py-1.5 text-xs font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
                 下载 HTML
-              </a>
+              </button>
             </>
           )}
           <button onClick={onClose}
@@ -87,6 +118,13 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
             <div className="text-center">
               <div className="w-12 h-12 border-3 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mx-auto mb-4" />
               <p className="text-white/80 text-sm">正在加载报告...</p>
+            </div>
+          </div>
+        ) : readinessError ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="rounded-2xl bg-white p-8 text-center shadow-2xl">
+              <p className="text-sm text-red-500">{readinessError}</p>
+              <button onClick={onClose} className="mt-4 rounded-lg border px-4 py-2 text-sm">关闭</button>
             </div>
           </div>
         ) : readiness && !readiness.ready ? (
@@ -113,6 +151,13 @@ export function ReportPreviewModal({ skillId, skillName, onClose }: Props) {
                 className="mt-6 px-6 py-2 bg-indigo-500 text-white text-sm font-medium rounded-lg hover:bg-indigo-600 transition-colors">
                 知道了
               </button>
+            </div>
+          </div>
+        ) : htmlError ? (
+          <div className="flex h-full items-center justify-center">
+            <div className="rounded-2xl bg-white p-8 text-center shadow-2xl">
+              <p className="text-sm text-red-500">{htmlError}</p>
+              <button onClick={onClose} className="mt-4 rounded-lg border px-4 py-2 text-sm">关闭</button>
             </div>
           </div>
         ) : (

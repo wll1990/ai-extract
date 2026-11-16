@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getSkillOverview, getSceneTop, getRagDistribution, getTopGrains, getKnowledgeGaps, type SkillOverview, type SceneTopItem, type RagDistribution, type GrainRankItem, type KnowledgeGapItem } from '@/lib/api/admin-insights';
+import { getOwnerSkillOverview, getOwnerSceneTop, getOwnerRagDistribution, getOwnerTopGrains, getOwnerKnowledgeGaps, type SkillOverview, type SceneTopItem, type RagDistribution, type GrainRankItem, type KnowledgeGapItem } from '@/lib/api/admin-insights';
+import { getUser } from '@/lib/storage';
+import { Permission } from '@/lib/permissions';
 import { StatCards } from '@/components/admin/StatCards';
 import { SceneBarChart } from '@/components/admin/SceneBarChart';
 import { RagPieChart } from '@/components/admin/RagPieChart';
@@ -28,23 +30,50 @@ export default function SkillOwnerInsightsPage() {
   const [worstGrains, setWorstGrains] = useState<GrainRankItem[]>([]);
   const [gaps, setGaps] = useState<KnowledgeGapItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!skillId) return;
+    setLoading(true);
+    setError('');
+    // 员工没有 DASHBOARD_VIEW，必须走属主只读接口；管理员也能走，范围按空间属主收窄
     Promise.all([
-      getSkillOverview(skillId).catch(() => null),
-      getSceneTop(skillId).catch(() => []),
-      getRagDistribution(skillId).catch(() => null),
-      getTopGrains(skillId, 'best').catch(() => []),
-      getTopGrains(skillId, 'worst').catch(() => []),
-      getKnowledgeGaps(skillId).catch(() => []),
+      getOwnerSkillOverview(skillId),
+      getOwnerSceneTop(skillId),
+      getOwnerRagDistribution(skillId),
+      getOwnerTopGrains(skillId, 'best'),
+      getOwnerTopGrains(skillId, 'worst'),
+      getOwnerKnowledgeGaps(skillId),
     ]).then(([ov, st, rd, bg, wg, kg]) => {
       setOverview(ov); setSceneTop(st); setRagDist(rd);
       setBestGrains(bg); setWorstGrains(wg); setGaps(kg);
+    }).catch((e: unknown) => {
+      const status = (e as { status?: number })?.status;
+      setError(status === 403
+        ? '只能查看自己分身的数据'
+        : '数据加载失败，请稍后重试');
     }).finally(() => setLoading(false));
   }, [skillId]);
 
   if (loading) return <LoadingSpinner />;
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-surface px-6 py-8">
+        <div className="mx-auto max-w-[960px] rounded-xl border border-border bg-surface-2 p-10 text-center">
+          <p className="text-sm text-red-500">{error}</p>
+          <button onClick={() => router.push(`/skill/${skillId}`)}
+            className="mt-4 text-sm rounded-lg px-4 py-2 border">返回对话</button>
+        </div>
+      </div>
+    );
+  }
+
+  const permissions = (getUser() as { permissions?: string[] } | null)?.permissions ?? [];
+  const canEditGrains = permissions.includes(Permission.GRAIN_MANAGE);
+  const canViewFeedback = permissions.includes(Permission.DASHBOARD_VIEW);
+  const canUseTestConsole = permissions.includes(Permission.DASHBOARD_VIEW)
+    || permissions.includes(Permission.SKILL_MANAGE);
 
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
@@ -58,7 +87,9 @@ export default function SkillOwnerInsightsPage() {
             </p>
           </div>
           <div className="flex gap-2">
-            <button onClick={() => router.push(`/skill/${skillId}?tab=test`)}
+            <button onClick={() => router.push(canUseTestConsole
+              ? `/admin/insights/${skillId}/test`
+              : `/skill/${skillId}`)}
               className="text-sm bg-primary text-white rounded-lg px-4 py-2">
               🧪 测试对话
             </button>
@@ -80,29 +111,39 @@ export default function SkillOwnerInsightsPage() {
         {/* 图表行 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <SceneBarChart data={sceneTop} />
-          {ragDist && <RagPieChart high={ragDist.high} refCount={ragDist.ref} none={ragDist.none} highPct={ragDist.highPct} refPct={ragDist.refPct} nonePct={ragDist.nonePct} />}
+          {ragDist && <RagPieChart high={ragDist.high} refCount={ragDist.ref} none={ragDist.none} highPct={ragDist.highPct} refPct={ragDist.refPct} nonePct={ragDist.nonePct} kcKnowledge={ragDist.kcKnowledge} kcCase={ragDist.kcCase} kcKnowledgePct={ragDist.kcKnowledgePct} kcCasePct={ragDist.kcCasePct} />}
         </div>
 
         {/* 颗粒排行 — 点击编辑跳转 Admin 编辑页 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <GrainRankTable grains={bestGrains} type="best"
-            onGrainClick={id => router.push(`/admin/grains/${id}`)} />
+            onGrainClick={canEditGrains
+              ? id => router.push(`/admin/grains/${id}`)
+              : () => router.push(`/skill/${skillId}/insights/grains`)} />
           <GrainRankTable grains={worstGrains} type="worst"
-            onGrainClick={id => router.push(`/admin/grains/${id}`)} />
+            onGrainClick={canEditGrains
+              ? id => router.push(`/admin/grains/${id}`)
+              : () => router.push(`/skill/${skillId}/insights/grains`)} />
         </div>
 
         {/* 知识缺口 */}
         <KnowledgeGapPanel gaps={gaps}
-          onGapClick={id => router.push(`/admin/grains/new?from=gap&gapId=${id}`)} />
+          onGapClick={canEditGrains
+            ? id => router.push(`/admin/grains/new?skillId=${skillId}&gapId=${id}`)
+            : undefined} />
 
-        {/* 快捷操作 */}
+        {/* 快捷操作 — 管理员入口对员工不可见，避免点进去 403 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ActionCard icon="📋" title="查看反馈" desc="看看哪些回答被踩了"
-            onClick={() => router.push(`/admin/insights/${skillId}/feedback`)} />
+          {canViewFeedback && (
+            <ActionCard icon="📋" title="查看反馈" desc="看看哪些回答被踩了"
+              onClick={() => router.push(`/admin/insights/${skillId}/feedback`)} />
+          )}
           <ActionCard icon="✏️" title="编辑颗粒" desc="修改话术让它更准确"
             onClick={() => router.push(`/skill/${skillId}/insights/grains`)} />
-          <ActionCard icon="🧪" title="测试验证" desc="改完立即试试效果"
-            onClick={() => router.push(`/admin/insights/${skillId}/test`)} />
+          {canUseTestConsole && (
+            <ActionCard icon="🧪" title="测试验证" desc="改完立即试试效果"
+              onClick={() => router.push(`/admin/insights/${skillId}/test`)} />
+          )}
         </div>
       </div>
     </div>

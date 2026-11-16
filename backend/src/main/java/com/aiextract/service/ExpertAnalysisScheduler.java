@@ -40,8 +40,11 @@ public class ExpertAnalysisScheduler {
     @Lazy
     private ExpertAnalysisScheduler self;
 
-    /** 锁超时时间（分钟）：超过此时间的锁视为失效 */
-    private static final int LOCK_TIMEOUT_MINUTES = 5;
+    /** 锁超时时间（分钟）：超过此时间的锁视为失效；analyzing 阶段超时由领取条件回收 */
+    private static final int LOCK_TIMEOUT_MINUTES = 10;
+
+    /** 自动重试上限，超过后停留 failed，等待人工处理 */
+    private static final int MAX_RETRY_COUNT = 3;
 
     /** worker 标识：hostname + 线程名 */
     private final String workerId = initWorkerId();
@@ -67,6 +70,8 @@ public class ExpertAnalysisScheduler {
     @Scheduled(fixedDelay = 30_000)
     public void scanAndProcess() {
         LocalDateTime timeout = LocalDateTime.now().minusMinutes(LOCK_TIMEOUT_MINUTES);
+        // 先回收崩溃 worker 遗留的锁，否则 analyzing 任务永远抢不到
+        self.releaseStaleLocks(timeout);
         List<ExpertSkill> pendingTasks = expertSkillRepository.findPendingTasks(timeout);
 
         if (pendingTasks.isEmpty()) { return; }
@@ -86,8 +91,8 @@ public class ExpertAnalysisScheduler {
                 expertService.analyzeMaterials(taskId);
             } catch (Exception e) {
                 log.error("任务分析失败, expertId: {}", taskId, e);
-                // 失败重置为 pending，调度器30s后重新拾取（解析失败doc已标failed，不会被重复解析）
-                self.resetToPending(taskId);
+                // 失败计数 +1；未达上限回 pending 重试，达到上限停留 failed 等人工处理
+                self.markFailure(taskId, e.getMessage());
             } finally {
                 // 释放锁（独立短事务，立即提交）
                 self.releaseLock(taskId);
@@ -107,12 +112,26 @@ public class ExpertAnalysisScheduler {
         expertSkillRepository.releaseLock(taskId);
     }
 
-    /** 失败回退为 pending（短事务），调度器 30s 后重新拾取 */
+    /** 回收超时锁（短事务） */
     @Transactional(rollbackFor = Exception.class, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void resetToPending(UUID taskId) {
+    public void releaseStaleLocks(LocalDateTime timeout) {
+        int released = expertSkillRepository.releaseStaleLocks(timeout);
+        if (released > 0) {
+            log.warn("回收超时锁 {} 个，对应任务将由本轮扫描重新领取", released);
+        }
+    }
+
+    /** 失败计数 +1；未达上限回 pending，达到上限停留 failed（短事务） */
+    @Transactional(rollbackFor = Exception.class, propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public void markFailure(UUID taskId, String reason) {
         expertSkillRepository.findById(taskId).ifPresent(e -> {
-            e.setStatus("pending");
+            int count = e.getRetryCount() == null ? 1 : e.getRetryCount() + 1;
+            e.setRetryCount(count);
+            e.setFailureReason(reason != null && reason.length() > 500
+                    ? reason.substring(0, 500) : reason);
+            e.setStatus(count >= MAX_RETRY_COUNT ? "failed" : "pending");
             expertSkillRepository.save(e);
+            log.warn("萃取师分析失败计数 expertId={} retryCount={} status={}", taskId, count, e.getStatus());
         });
     }
 }

@@ -1,7 +1,8 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { apiClient, API_BASE } from '@/lib/api/client';
+import { apiClient, API_BASE, authHeaders} from '@/lib/api/client';
+import { csrfHeader } from '@/lib/csrf';
 import { getToken } from '@/lib/storage';
 import { MaterialUploadGuide } from '@/components/skill/MaterialUploadGuide';
 import { uploadMaterialText } from '@/lib/api/materials';
@@ -41,7 +42,7 @@ export default function UploadPage() {
 
   const handleUpload = async () => {
     if (files.length === 0) { setError('请至少选择一个文件'); return; }
-    if (files.length > 5) { setError('每次最多上传5个文件'); return; }
+    if (files.length > 5) { setError('每次最多上传 5 个文件，请分批上传'); return; }
     if (!spaceId) { setError('请选择要上传给谁'); return; }
     if (!domain) { setError('请选择领域'); return; }
 
@@ -54,15 +55,20 @@ export default function UploadPage() {
     try {
       const res = await fetch(`${API_BASE}/admin/materials/upload`, {
         method: 'POST', body: form,
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { ...authHeaders(), ...csrfHeader() },
       });
-      const data = await res.json();
-      if (data.code === 200) {
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(data?.message
+          || (res.status === 413 ? '文件过大，单次上传总大小超出限制' : `上传失败 (${res.status})`));
+      } else if (data?.code === 200) {
         setResult(data.data);
       } else {
-        setError(data.message || '上传失败');
+        setError(data?.message || '上传失败');
       }
-    } catch { setError('网络错误'); }
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : '上传失败，请检查网络后重试');
+    }
     setUploading(false);
   };
 
@@ -81,16 +87,23 @@ export default function UploadPage() {
         title: textTitle || undefined,
       });
       setResult(data);
-    } catch { setError('网络错误'); }
+    } catch (e) {
+      setError(e instanceof Error && e.message ? e.message : '提交失败，请检查网络后重试');
+    }
     setUploading(false);
   };
 
   // ── 结果页 ──
   if (result) {
-    const firstItem = result.results?.[0];
+    const results: any[] = result.results || [];
+    const rejectedItems = results.filter(r => r.acceptance && r.acceptance.passed === false);
+    const acceptedItems = results.filter(r => !r.acceptance || r.acceptance.passed !== false);
+    // 只有全部文件都被拒时才显示「未通过」；部分失败在下方逐文件说明
+    const isRejected = results.length > 0 && rejectedItems.length === results.length;
+    const firstItem = (isRejected ? rejectedItems[0] : acceptedItems[0]) ?? results[0];
     const acceptance = firstItem?.acceptance;
     const preCheck = firstItem?.preCheck;
-    const isRejected = acceptance && !acceptance.passed;
+    const partialRejected = rejectedItems.length > 0 && !isRejected;
 
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -121,7 +134,12 @@ export default function UploadPage() {
                   {preCheck?.grade === 'good' ? '🟢' : preCheck?.grade === 'warning' ? '🟡' : '✅'}
                 </div>
                 <h1 className="text-xl font-bold mb-2">上传成功</h1>
-                <p className="text-muted-foreground mb-1">共 {result.uploaded} 个文件</p>
+                <p className="text-muted-foreground mb-1">
+                  共 {acceptedItems.length} 个文件
+                  {partialRejected && (
+                    <span className="ml-2 text-amber-600">（{rejectedItems.length} 个未通过，见下方）</span>
+                  )}
+                </p>
 
                 {preCheck && (
                   <div className="rounded-xl border border-border bg-surface-2 p-4 mt-4 text-left">
@@ -168,6 +186,27 @@ export default function UploadPage() {
               </div>
             )}
 
+            {(result.results?.length || 0) > 1 && (
+              <div className="mt-6 rounded-xl border border-border bg-surface-2 p-4 text-left">
+                <h3 className="mb-2 text-sm font-semibold">逐文件结果</h3>
+                <div className="space-y-1.5">
+                  {result.results.map((r: any, i: number) => {
+                    const passed = r.acceptance?.passed !== false;
+                    return (
+                      <div key={i} className="flex items-start justify-between gap-3 text-xs">
+                        <span className="min-w-0 flex-1 truncate text-foreground">
+                          {r.fileName || `文件 ${i + 1}`}
+                        </span>
+                        <span className={passed ? 'text-green-600' : 'text-red-600'}>
+                          {passed ? '✅ 已受理' : `🚫 ${r.acceptance?.rejectReason || '未通过'}`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 justify-center mt-6">
               {firstItem?.skillId && !isRejected && ((getUser() as any)?.permissions || []).includes(Permission.DASHBOARD_VIEW) && (
                 <button onClick={() => router.push(`/admin/skills/${firstItem.skillId}/audit`)}
@@ -189,7 +228,7 @@ export default function UploadPage() {
       <h1 className="text-xl font-bold mb-2">上传素材</h1>
 
       {/* 输入模式切换 */}
-      <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5 w-fit mb-6">
+      <div className="flex items-center gap-0.5 bg-surface rounded-lg p-0.5 w-fit mb-6" data-tour="upload-tabs">
         <button onClick={() => { setInputMode('file'); setError(''); }}
           className={`rounded-md px-4 py-1.5 text-sm font-medium transition-colors ${inputMode === 'file' ? 'bg-white text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
           📁 上传文件
@@ -202,7 +241,7 @@ export default function UploadPage() {
 
       <div className="grid grid-cols-5 gap-8">
         {/* 左侧：功能区 */}
-        <div className="col-span-3 space-y-5">
+        <div className="col-span-3 space-y-5" data-tour="upload-form">
           {/* 领域选择 */}
           <div>
             <label className="block text-sm font-medium text-muted-foreground mb-2">
@@ -246,10 +285,16 @@ export default function UploadPage() {
               <div>
                 <label className="block text-sm font-medium text-muted-foreground mb-2">选择文件</label>
                 <input type="file" multiple onChange={e => {
-                    const selected = Array.from(e.target.files || []).slice(0, 5);
-                    setFiles(selected); setError('');
+                    const all = Array.from(e.target.files || []);
+                    if (all.length > 5) {
+                      setError(`一次最多 5 个文件，已选择 ${all.length} 个，请分批上传`);
+                      setFiles(all.slice(0, 5));
+                    } else {
+                      setFiles(all);
+                      setError('');
+                    }
                   }}
-                  accept=".txt,.md,.csv,.html,.json,.xml,.pdf,.docx,.doc,.xlsx,.xls,.png,.jpg,.jpeg,.mp3,.wav,.m4a"
+                  accept=".txt,.md,.csv,.html,.htm,.pdf,.docx,.pptx,.png,.jpg,.jpeg,.mp3,.wav"
                   className="w-full border border-border rounded-lg p-3 text-sm file:mr-4 file:py-1 file:px-3 file:rounded file:border-0 file:text-sm file:bg-primary-light file:text-primary" />
                 {files.length > 0 && (
                   <div className="mt-2 space-y-1">
@@ -283,6 +328,9 @@ export default function UploadPage() {
                   rows={14}
                   className="w-full border border-border rounded-lg p-3 text-sm resize-y" />
                 <p className="text-xs text-muted-foreground-2 mt-1">{textContent.length} 字</p>
+                <p className="text-xs text-muted-foreground-2 mt-1">
+                  手机号、身份证、银行卡、座机、邮箱会在入库前自动打码；姓名与公司名请自行使用化名。
+                </p>
               </div>
               {error && <p className="text-red-500 text-sm">{error}</p>}
               <button onClick={handleTextUpload} disabled={uploading}

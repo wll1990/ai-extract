@@ -1,6 +1,8 @@
 package com.aiextract.service;
 
+import com.aiextract.common.AiErrorMapper;
 import com.aiextract.common.TraceContext;
+import com.aiextract.config.TokenContext;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.Skill;
 import com.aiextract.model.SkillMaterial;
@@ -98,7 +100,9 @@ public class MaterialCleaningScheduler {
 
     private void scanAndParse() {
         LocalDateTime timeout = LocalDateTime.now().minusMinutes(LOCK_TIMEOUT_MINUTES);
-        List<SkillMaterial> tasks = materialRepository.findPendingParseTasks(timeout);
+        // 每轮最多 200 条，避免积压时一次性把整表拉进内存并打满线程池
+        List<SkillMaterial> tasks = materialRepository.findPendingParseTasks(
+                timeout, org.springframework.data.domain.PageRequest.of(0, 200));
         if (tasks.isEmpty()) { return; }
         log.info("发现 {} 个待解析素材", tasks.size());
         for (SkillMaterial task : tasks) {
@@ -106,10 +110,13 @@ public class MaterialCleaningScheduler {
         }
     }
 
-    /** 短事务：尝试锁定素材 */
+    /** 短事务：尝试锁定素材（锁过期可抢占，与扫描条件一致） */
     @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
     public boolean tryLockMaterial(UUID materialId) {
-        return materialRepository.tryLock(materialId, workerId) > 0;
+        // 写入与比较使用同一个 JVM 时钟，避免 DB 时区与 JVM 时区不一致导致锁被误判过期
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime timeout = now.minusMinutes(LOCK_TIMEOUT_MINUTES);
+        return materialRepository.tryLock(materialId, workerId, now, timeout) > 0;
     }
 
     /** 短事务：释放锁 */
@@ -137,7 +144,8 @@ public class MaterialCleaningScheduler {
 
     private void scanAndClean() {
         LocalDateTime timeout = LocalDateTime.now().minusMinutes(LOCK_TIMEOUT_MINUTES);
-        List<SkillMaterial> tasks = materialRepository.findPendingCleaningTasks(timeout);
+        List<SkillMaterial> tasks = materialRepository.findPendingCleaningTasks(
+                timeout, org.springframework.data.domain.PageRequest.of(0, 200));
         if (tasks.isEmpty()) { return; }
         log.info("发现 {} 个待清洗素材", tasks.size());
         for (SkillMaterial task : tasks) {
@@ -192,7 +200,7 @@ public class MaterialCleaningScheduler {
     public void markMaterialExtracted(UUID materialId) {
         materialRepository.findById(materialId).ifPresent(m -> {
             if (!STATUS_ANALYZED.equals(m.getStatus())) { return; }
-            m.setStatus("extracted");
+            m.setStatus(MaterialCleaningService.STATUS_EXTRACTED);
             materialRepository.save(m);
         });
     }
@@ -200,18 +208,27 @@ public class MaterialCleaningScheduler {
     /** 短事务：保存颗粒 */
     @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRES_NEW)
     public void saveGrains(UUID materialId, List<MaterialCleaningService.GrainCandidate> candidates) {
-        SkillMaterial material = materialRepository.findById(materialId).orElseThrow();
+        // 素材可能在萃取过程中被用户删除：跳过落库，不能抛 NoSuchElementException 打断调度线程
+        SkillMaterial material = materialRepository.findById(materialId).orElse(null);
+        if (material == null) {
+            log.warn("素材已在萃取过程中被删除，跳过颗粒落库, materialId: {}", materialId);
+            return;
+        }
         UUID spaceId = skillRepository.findById(material.getSkillId())
                 .map(Skill::getSpaceId).orElse(null);
         if (spaceId == null || candidates.isEmpty()) { return; }
         for (MaterialCleaningService.GrainCandidate c : candidates) {
+            // 颗粒落库前兜底脱敏：即使素材已打码，也防止模型回显或拼接出未打码标识
             ExperienceGrain grain = ExperienceGrain.builder()
                     .id(UUID.randomUUID()).spaceId(spaceId).sourceMaterialId(materialId)
-                    .sceneTag(c.sceneTag()).sceneDescription(c.insight().sceneDescription())
-                    .expertThought(c.insight().expertThought()).standardScript(c.insight().standardScript())
-                    .commonMistakes(c.insight().commonMistakes()).applicableCondition(c.insight().applicableCondition())
+                    .sceneTag(PiiMasker.mask(c.sceneTag()))
+                    .sceneDescription(PiiMasker.mask(c.insight().sceneDescription()))
+                    .expertThought(PiiMasker.mask(c.insight().expertThought()))
+                    .standardScript(PiiMasker.mask(c.insight().standardScript()))
+                    .commonMistakes(PiiMasker.mask(c.insight().commonMistakes()))
+                    .applicableCondition(PiiMasker.mask(c.insight().applicableCondition()))
                     .qualityScore(c.qualityScore()).difficultyLevel(c.difficultyLevel())
-                    .verificationNotes(c.verificationNotes()).status("active")
+                    .verificationNotes(PiiMasker.mask(c.verificationNotes())).status("active")
                     .helpfulCount(0).unhelpfulCount(0)
                     .weight(c.qualityScore() != null
                         ? Math.max(0.1, Math.min(2.0, c.qualityScore() / 5.0 * 2.0))
@@ -315,10 +332,14 @@ public class MaterialCleaningScheduler {
 
         TraceContext.init(materialId);
         try {
-            processMaterial(materialId);
+            // 清洗/报告都会调 LLM；历史 individual 分身 company_id 为空，统一走 skill→space→user
+            UUID companyId = skillRepository.findCompanyIdBySkillId(skillId);
+            TokenContext.callWith(null, companyId, () -> {
+                processMaterial(materialId);
+            });
         } catch (Exception e) {
             log.error("素材清洗失败, materialId: {}", materialId, e);
-            self.incrementRetryOrReject(materialId, "清洗失败: " + e.getMessage(), MaterialCleaningService.STATUS_CLEANING_FAILED);
+            self.incrementRetryOrReject(materialId, "清洗失败: " + AiErrorMapper.describe(e), MaterialCleaningService.STATUS_CLEANING_FAILED);
         } finally {
             releaseSkillLock(skillId);
             self.releaseMaterialLock(materialId);
@@ -386,7 +407,12 @@ public class MaterialCleaningScheduler {
             }
             try {
                 log.info("合并生成报告, skillId: {}", skillId);
-                reportGenerationService.generateAsync(UUID.fromString(skillId));
+                UUID skillUuid = UUID.fromString(skillId);
+                UUID companyId = skillRepository.findCompanyIdBySkillId(skillUuid);
+                // @Async 线程池的 TaskDecorator 在提交时捕获当前上下文
+                TokenContext.callWith(null, companyId, () -> {
+                    reportGenerationService.generateAsync(skillUuid);
+                });
             } catch (Exception e) {
                 log.warn("报告生成失败, skillId: {}", skillId, e.getMessage());
             }

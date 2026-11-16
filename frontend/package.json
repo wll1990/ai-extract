@@ -6,13 +6,18 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "help:shots": "node scripts/capture-help-shots.mjs",
+    "help:pdf": "node scripts/export-help-pdf.mjs",
+    "e2e:sales:chain": "E2E_SALES_CHAIN=1 playwright test e2e/sales.chain.spec.ts && psql -d aiextract -f ../scripts/sales-e2e-cleanup.sql"
   },
   "dependencies": {
     "@aiextract/shared-ui": "*",
     "@nivo/bar": "^0.99.0",
     "@nivo/core": "^0.99.0",
     "@nivo/pie": "^0.99.0",
+    "@phosphor-icons/react": "^2.1.10",
     "clsx": "^2.1.1",
     "next": "14.2.21",
     "qrcode": "^1.5.4",
@@ -23,6 +28,7 @@
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^20.14.2",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18.3.3",
@@ -30,6 +36,8 @@
     "autoprefixer": "^10.4.19",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.21",
+    "pixelmatch": "^6.0.0",
+    "pngjs": "^7.0.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.5.2"

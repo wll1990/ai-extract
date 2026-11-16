@@ -73,6 +73,14 @@ public class SkillService {
     private final SkillEvaluationRepository skillEvaluationRepository;
     private final OrganizationSkillService orgSkillService;
     private final OssService ossService;
+    private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
+
+    /** 发布门槛（管理端与 C 端共用同一份配置） */
+    @org.springframework.beans.factory.annotation.Value("${app.publish.min-grains:10}")
+    private int publishMinGrains;
+
+    @org.springframework.beans.factory.annotation.Value("${app.publish.min-scenes:3}")
+    private int publishMinScenes;
 
     // ==================== Helper methods（ChatStreamService 复用） ====================
 
@@ -176,17 +184,59 @@ public class SkillService {
     @Transactional(rollbackFor = Exception.class)
     public void submitFeedback(String skillId, FeedbackRequest request) {
         UUID skillUuid = UUID.fromString(skillId);
+        UUID userId = com.aiextract.config.TokenContext.get();
+        UUID conversationId = null;
+        if (request.getConversationId() != null && !request.getConversationId().isBlank()) {
+            try {
+                conversationId = UUID.fromString(request.getConversationId());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(400, "会话 ID 格式不正确");
+            }
+            // 会话必须属于当前用户且属于该分身，防止拿别人会话 ID 刷分/串数据
+            var conversation = conversationRepository.findById(conversationId)
+                    .orElseThrow(() -> new BusinessException(404, "对话不存在"));
+            if (!skillUuid.equals(conversation.getSkillId())
+                    || (userId != null && !userId.equals(conversation.getUserId()))) {
+                throw new BusinessException(403, "无权评价该对话");
+            }
+        }
+
         UUID grainId = null;
         if (request.getGrainId() != null && !request.getGrainId().isBlank()) {
-            grainId = UUID.fromString(request.getGrainId());
+            try {
+                grainId = UUID.fromString(request.getGrainId());
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(400, "颗粒 ID 格式不正确");
+            }
+            // grain_id 必须属于该分身的空间，否则反馈会顺带改到别家颗粒的 helpful/unhelpful 计数
+            Skill skill = skillRepository.findById(skillUuid)
+                    .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+            ExperienceGrain grain = grainRepository.findById(grainId)
+                    .orElseThrow(() -> new BusinessException(404, "颗粒不存在"));
+            if (skill.getSpaceId() == null || !skill.getSpaceId().equals(grain.getSpaceId())) {
+                throw new BusinessException(400, "颗粒不属于该分身");
+            }
+        }
+
+        // 防刷：同一用户对同一会话/颗粒只计一次；无会话场景 24 小时内只计一次
+        if (userId != null && grainId != null) {
+            boolean duplicate = conversationId != null
+                    ? feedbackLogRepository.existsByUserIdAndConversationIdAndGrainId(
+                            userId, conversationId, grainId)
+                    : feedbackLogRepository.existsByUserIdAndSkillIdAndGrainIdAndCreatedAtAfter(
+                            userId, skillUuid, grainId, LocalDateTime.now().minusHours(24));
+            if (duplicate) {
+                log.info("重复反馈已忽略 userId={} skillId={} grainId={}", userId, skillUuid, grainId);
+                return;
+            }
         }
 
         // ① 写入反馈日志（每次打分一条，无论有无 grain_id）
         feedbackLogRepository.save(com.aiextract.model.FeedbackLog.builder()
             .id(UUID.randomUUID())
             .skillId(skillUuid)
-            .conversationId(request.getConversationId() != null
-                ? UUID.fromString(request.getConversationId()) : null)
+            .userId(userId)
+            .conversationId(conversationId)
             .grainId(grainId)
             .rating(Boolean.TRUE.equals(request.getHelpful()) ? "up" : "down")
             .query(request.getQuery())
@@ -235,12 +285,27 @@ public class SkillService {
 
         // 数据范围标识：super_admin 看全部企业的 skill，其他角色按 companyId 隔离
         // 此项不是权限检查，不替换为 hasPermission
-        boolean isSuperAdmin = "super_admin".equalsIgnoreCase(role);
+        // 切换企业视角后按所选企业收敛；平台视角（无 acting）才看全量
+        boolean isSuperAdmin = "super_admin".equalsIgnoreCase(role)
+                && com.aiextract.config.TokenContext.getActingCompanyId() == null;
+        boolean isCEnd = "c_user".equalsIgnoreCase(role)
+                || "c_guest".equalsIgnoreCase(role)
+                || "c_partner".equalsIgnoreCase(role);
 
         boolean hasType = type != null && !type.isEmpty();
 
         if (userId != null) {
-            // 显式传了 userId → "我的分身"，所有角色（含 super_admin）都按 userId 过滤
+            // 显式传了 userId → "我的分身"，但必须校验归属：
+            // C 端只能看自己；B 端不能通过 userId 跨企业枚举他人分身（含草稿）。
+            if (!isSuperAdmin) {
+                UUID currentUserId = com.aiextract.config.TokenContext.get();
+                boolean self = userId.equals(currentUserId);
+                boolean sameCompany = companyId != null
+                        && userRepository.existsByIdAndCompanyId(userId, companyId);
+                if (!self && !sameCompany) {
+                    throw new BusinessException(403, "无权查看其他用户的分身");
+                }
+            }
             List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
                     .map(Space::getId).toList();
             if (userSpaceIds.isEmpty()) return emptyPage(page, size);
@@ -286,6 +351,12 @@ public class SkillService {
                     ? skillRepository.findBySpaceIdInAndType(companySpaceIds, type, pageable)
                     : skillRepository.findBySpaceIdIn(companySpaceIds, pageable);
             }
+        } else if (isCEnd) {
+            // C 端无企业上下文：只允许浏览已发布分身（与 /public/skills 公开目录一致），
+            // 不能因为没传 status 就列出全平台的草稿/审核中分身。
+            skillPage = hasType
+                ? skillRepository.findByTypeAndStatusOrderByCreatedAtDesc(type, "published", pageable)
+                : skillRepository.findByStatusOrderByCreatedAtDesc("published", pageable);
         } else if (status != null && !status.isEmpty()) {
             skillPage = hasType
                 ? skillRepository.findByTypeAndStatusOrderByCreatedAtDesc(type, status, pageable)
@@ -298,15 +369,18 @@ public class SkillService {
         Map<String, Object> response = buildSkillPageResult(skillPage, page, size);
 
         // 追加组织分身（仅 B 端按 companyId 过滤的场景，且未指定 type=individual 时）
-        if (companyId != null && (status == null || "published".equals(status))
+        if (companyId != null && userId == null && (status == null || "published".equals(status))
                 && !"individual".equals(type)) {
             @SuppressWarnings("unchecked")
             List<Map<String, Object>> content = (List<Map<String, Object>>) response.get("content");
+            // 只查组织分身（space_id 为空），避免把企业全部 skill 拉进内存再过滤
             List<Skill> orgSkills = "published".equals(status)
-                    ? orgSkillService.listByCompany(companyId, "published")
-                    : orgSkillService.listByCompany(companyId, null);
+                    ? skillRepository.findByCompanyIdAndTypeAndStatus(companyId, "organization", "published")
+                    : skillRepository.findByCompanyIdAndType(companyId, "organization");
+            Map<UUID, Integer> orgMemberCounts = orgSkillService.memberCounts(orgSkills);
             for (Skill org : orgSkills) {
-                content.add(orgSkillService.toApiMap(org));
+                content.add(orgSkillService.toApiMap(org,
+                        orgMemberCounts.getOrDefault(org.getId(), 0)));
             }
             int orgCount = orgSkills.size();
             response.put("total", skillPage.getTotalElements() + orgCount);
@@ -337,7 +411,10 @@ public class SkillService {
             item.put("status", skill.getStatus());
             item.put("modelName", skill.getModelName());
             Space sp = spaceMap.get(skill.getSpaceId());
-            String ownerName = sp != null ? userNameMap.getOrDefault(sp.getUserId(), "未知") : "未知";
+            String accountName = sp != null ? userNameMap.getOrDefault(sp.getUserId(), "未知") : "未知";
+            // 分身可单独维护对外姓名，列表不能被空间归属账号覆盖
+            String ownerName = skill.getOwnerName() != null && !skill.getOwnerName().isBlank()
+                    ? skill.getOwnerName() : accountName;
             item.put("ownerName", ownerName);
             item.put("displayName", skill.getDisplayName() != null ? skill.getDisplayName() : ownerName);
             item.put("ownerTitle", skill.getOwnerTitle() != null ? skill.getOwnerTitle()
@@ -391,16 +468,136 @@ public class SkillService {
         return response;
     }
 
+    /** 分身状态白名单 — 防止任意字符串写入导致分身从列表分组中消失 */
+    private static final Set<String> ALLOWED_SKILL_STATUSES =
+            Set.of("generating", "reviewing", "published", "discarded", "draft", "paused");
+
     /**
-     * 更新分身状态
+     * 状态机转移表 — 只允许明确列出的迁移。
+     *
+     * <p>discarded → reviewing 是恢复入口；30 天窗口校验在版本历史/回收站功能里统一加。
+     * 管理端的正式发布走 /admin/skills/{id}/publish（带门槛校验），不经过这里。</p>
      */
+    private static final Map<String, Set<String>> SKILL_STATUS_TRANSITIONS = Map.of(
+            "draft", Set.of("generating", "reviewing", "discarded"),
+            "generating", Set.of("reviewing", "discarded", "published"),
+            "reviewing", Set.of("published", "discarded", "generating"),
+            "published", Set.of("paused", "discarded"),
+            "paused", Set.of("reviewing", "published", "discarded"),
+            "discarded", Set.of("reviewing"));
+
+    /**
+     * 发布门槛：活跃颗粒 ≥ 10、场景覆盖 ≥ 3、画像完整。
+     *
+     * <p>后台发布与 C 端自助发布共用同一份规则，避免 C 端绕过管理端校验。</p>
+     *
+     * @return 阻塞项；空列表表示可发布
+     */
+    public List<String> publishBlockers(Skill skill) {
+        List<String> blockers = new ArrayList<>();
+        List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
+        long activeGrains = grains.stream().filter(g -> "active".equals(g.getStatus())).count();
+        if (activeGrains < publishMinGrains) {
+            blockers.add("活跃颗粒不足（当前" + activeGrains + "条，需 ≥ " + publishMinGrains + "）");
+        }
+        long sceneCount = grains.stream()
+                .filter(g -> "active".equals(g.getStatus()))
+                .filter(g -> g.getSceneTag() != null && !g.getSceneTag().isBlank())
+                .map(ExperienceGrain::getSceneTag).distinct().count();
+        if (sceneCount < publishMinScenes) {
+            blockers.add("场景覆盖不足（当前" + sceneCount + "个，需 ≥ " + publishMinScenes + "）");
+        }
+        if (skill.getOwnerName() == null || skill.getOwnerName().isBlank()) {
+            blockers.add("画像未完善：销冠姓名为必填");
+        }
+        SkillProfile profile = profileRepository.findBySkillId(skill.getId()).orElse(null);
+        if (profile == null
+                || profile.getPersonality() == null || profile.getPersonality().isBlank()
+                || profile.getBackground() == null || profile.getBackground().isBlank()
+                || profile.getKnowledgeDomains() == null || profile.getKnowledgeDomains().isBlank()
+                || "[]".equals(profile.getKnowledgeDomains())) {
+            blockers.add("画像未完善：性格特征、从业背景、擅长领域为必填");
+        }
+        return blockers;
+    }
+
+    /** 发布守卫：不满足门槛直接 409，供 C 端自助发布使用 */
+    public void assertPublishable(UUID skillId) {
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        List<String> blockers = publishBlockers(skill);
+        if (!blockers.isEmpty()) {
+            throw new BusinessException(HttpStatus.CONFLICT.value(),
+                    "发布条件未满足：" + String.join("；", blockers));
+        }
+    }
+
+    /** 状态迁移守卫，供直接 setStatus 的管理端接口复用，避免绕过迁移表（只读，无事务） */
+    public void assertStatusTransition(String from, String to) {
+        if (to == null || !ALLOWED_SKILL_STATUSES.contains(to)) {
+            throw new BusinessException(400, "不支持的分身状态: " + to);
+        }
+        if (!to.equals(from)) {
+            Set<String> allowed = SKILL_STATUS_TRANSITIONS.getOrDefault(from, Set.of());
+            if (!allowed.contains(to)) {
+                throw new BusinessException(HttpStatus.CONFLICT.value(),
+                        "不允许的状态变更：" + from + " → " + to);
+            }
+        }
+    }
+
+    /** 更新分身状态（读当前状态 → 校验迁移 → 落库，必须在同一事务内） */
     @Transactional(rollbackFor = Exception.class)
     public void updateSkillStatus(String skillId, String status) {
+        if (status == null || !ALLOWED_SKILL_STATUSES.contains(status)) {
+            throw new BusinessException(400, "不支持的分身状态: " + status);
+        }
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
+        String current = skill.getStatus();
+        assertStatusTransition(current, status);
         skill.setStatus(status);
+        if ("discarded".equals(status)) {
+            skill.setDiscardedAt(LocalDateTime.now());
+        } else {
+            skill.setDiscardedAt(null);
+        }
         skillRepository.save(skill);
         log.info("分身状态已更新, skillId: {}, status: {}", skillId, status);
+    }
+
+    /** 恢复窗口 30 天 */
+    private static final int RESTORE_WINDOW_DAYS = 30;
+
+    /**
+     * 恢复已废弃分身：仅 30 天内可恢复，恢复后进入 reviewing（需重新发布）。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void restoreSkill(UUID skillId) {
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        if (!"discarded".equals(skill.getStatus())) {
+            throw new BusinessException(400, "只有已废弃的分身可以恢复");
+        }
+        LocalDateTime discardedAt = skill.getDiscardedAt() != null
+                ? skill.getDiscardedAt() : skill.getUpdatedAt();
+        if (discardedAt != null && discardedAt.isBefore(LocalDateTime.now().minusDays(RESTORE_WINDOW_DAYS))) {
+            throw new BusinessException(409, "已超过 " + RESTORE_WINDOW_DAYS + " 天恢复窗口，无法恢复");
+        }
+        skill.setStatus("reviewing");
+        skill.setDiscardedAt(null);
+        skill.setUpdatedAt(LocalDateTime.now());
+        skillRepository.save(skill);
+        auditLogRepository.save(com.aiextract.model.AdminAuditLog.builder()
+                .id(UUID.randomUUID())
+                .adminId(com.aiextract.config.TokenContext.get())
+                .action("restore_skill")
+                .targetType("skill")
+                .targetId(skillId)
+                .detail("{\"status\":\"reviewing\"}")
+                .createdAt(LocalDateTime.now())
+                .build());
+        log.info("分身已恢复 skillId={} 进入 reviewing", skillId);
     }
 
     /**
@@ -885,11 +1082,17 @@ public class SkillService {
             Skill skill = skillRepository.findById(skillId).orElse(null);
             if (skill == null) return;
 
-            // introProfile 已存在则跳过（发布时 @Async 幂等 + 手动编辑后不覆盖）
+            // introProfile 或手填开场白已存在则跳过（发布时 @Async 幂等 + 手动编辑后不覆盖）
             if (skill.getIntroProfile() != null && !skill.getIntroProfile().isBlank()
                     && !"{}".equals(skill.getIntroProfile())) {
                 log.info("introProfile 已存在，跳过自动生成 skillId={}", skillId);
                 return;
+            }
+            // 手填开场白时仍要补生成 introProfile（详情页三段式介绍卡），只保留用户填的 openingMessage
+            boolean keepOpeningMessage = skill.getOpeningMessage() != null
+                    && !skill.getOpeningMessage().isBlank();
+            if (keepOpeningMessage) {
+                log.info("开场白已手动填写，仅补生成 introProfile skillId={}", skillId);
             }
 
             // 收集 top 3 场景标签
@@ -943,14 +1146,16 @@ public class SkillService {
                         skill.setIntroProfile(objectMapper.writeValueAsString(cleaned));
                     }
                     // 向后兼容：openingMessage 存 headline，旧版 API/前端可继续用
-                    if (headline != null && !headline.isBlank()) {
-                        skill.setOpeningMessage(headline.trim());
-                    } else {
-                        // headline 为空时取 body 前 50 字兜底
-                        String fallback = body != null && !body.isBlank()
-                            ? body.trim().substring(0, Math.min(50, body.trim().length()))
-                            : generated.trim().substring(0, Math.min(100, generated.trim().length()));
-                        skill.setOpeningMessage(fallback);
+                    if (!keepOpeningMessage) {
+                        if (headline != null && !headline.isBlank()) {
+                            skill.setOpeningMessage(headline.trim());
+                        } else {
+                            // headline 为空时取 body 前 50 字兜底
+                            String fallback = body != null && !body.isBlank()
+                                ? body.trim().substring(0, Math.min(50, body.trim().length()))
+                                : generated.trim().substring(0, Math.min(100, generated.trim().length()));
+                            skill.setOpeningMessage(fallback);
+                        }
                     }
                     skillRepository.save(skill);
                     log.info("开场白已生成 skillId={} introProfile={} chars", skillId,
@@ -964,7 +1169,9 @@ public class SkillService {
                         .replaceAll("[\"'\"\"'']$", "")
                         .replaceAll("\\n", " ");
                     if (cleaned.length() > 100) cleaned = cleaned.substring(0, 100);
-                    skill.setOpeningMessage(cleaned);
+                    if (!keepOpeningMessage) {
+                        skill.setOpeningMessage(cleaned);
+                    }
                     skillRepository.save(skill);
                 }
             }
@@ -1142,13 +1349,10 @@ public class SkillService {
      * @return 头像、姓名、职级、开场白、场景标签、颗粒数、领域等
      */
     @Transactional(readOnly = true)
-    public Map<String, Object> getSkillDetail(String skillId) {
-        Skill skill = skillRepository.findById(UUID.fromString(skillId))
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
-
+    public Map<String, Object> getSkillDetail(Skill skill) {
         // 组织分身 → 委托 OrganizationSkillService
         if ("organization".equals(skill.getType())) {
-            return orgSkillService.getDetail(UUID.fromString(skillId));
+            return orgSkillService.getDetail(skill);
         }
 
         // 场景标签
@@ -1237,9 +1441,9 @@ public class SkillService {
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "分身不存在"));
 
-        String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "avatar";
-        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
-        String objectKey = "avatars/skills/" + skillId + "/" + safeName;
+        // 只接受 jpg/png/webp，且嗅探文件头；扩展名由内容决定，不用原始文件名
+        String extension = com.aiextract.common.UploadValidator.requireImage(file, 2 * 1024 * 1024);
+        String objectKey = "avatars/skills/" + skillId + "/" + System.currentTimeMillis() + extension;
         String avatarUrl = ossService.upload(objectKey, file);
 
         skill.setAvatarUrl(avatarUrl);

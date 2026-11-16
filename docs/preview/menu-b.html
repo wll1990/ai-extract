@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案 B · 顶栏分区 + 侧栏二级 · 全屏效果</title>
+<style>
+  :root{
+    --bg:#ffffff; --surface:#f8fafc; --surface-2:#ffffff; --fg:#1e293b;
+    --muted:#64748b; --muted-2:#94a3b8; --border:#e2e8f0; --border-strong:#cbd5e1;
+    --primary:#2563eb; --primary-light:rgba(37,99,235,.10);
+    --success:#16a34a; --success-bg:#dcfce7;
+    --warning:#d97706; --warning-bg:#fef3c7;
+    --danger:#dc2626; --danger-bg:#fef2f2;
+    --radius:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#e9eef5;color:var(--fg);font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;padding:30px;-webkit-font-smoothing:antialiased}
+  .page-title{font-size:18px;font-weight:700;margin-bottom:4px}
+  .page-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+  .caption{font-size:12px;color:var(--muted);margin:18px 0 8px;font-weight:500}
+  .caption b{color:#334155}
+  .screen{
+    width:1440px;height:900px;background:var(--surface);border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;box-shadow:0 18px 44px rgba(15,23,42,.12);
+    border:1px solid #dfe6ef;
+  }
+  /* ---------- top bar ---------- */
+  .topbar{
+    height:56px;background:#fff;border-bottom:1px solid var(--border);
+    display:flex;align-items:center;padding:0 20px;gap:16px;flex-shrink:0;
+  }
+  .brand{font-size:15px;font-weight:700;white-space:nowrap;letter-spacing:-.01em}
+  .domains{display:flex;align-items:center;gap:4px;margin-left:10px}
+  .domain{
+    height:32px;padding:0 14px;border-radius:7px;display:flex;align-items:center;gap:6px;
+    font-size:13px;color:#475569;cursor:pointer;white-space:nowrap;
+  }
+  .domain:hover{background:#f1f5f9}
+  .domain.on{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .domain .dot{width:5px;height:5px;border-radius:50%;background:var(--danger)}
+  .top-right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .ghost-btn{
+    height:28px;padding:0 10px;border:1px solid var(--border);border-radius:6px;
+    background:#fff;font-size:12px;color:var(--muted);display:flex;align-items:center;
+  }
+  .icon-btn{
+    width:30px;height:30px;border-radius:6px;border:1px solid var(--border);background:#fff;
+    display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);position:relative;
+  }
+  .icon-btn .badge-dot{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--danger)}
+  .avatar{
+    width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#06b6d4,#3b82f6);
+    color:#fff;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;
+  }
+  /* ---------- body ---------- */
+  .app-body{flex:1;display:flex;min-height:0}
+  .sidebar{
+    width:220px;flex-shrink:0;background:#fff;border-right:1px solid var(--border);
+    display:flex;flex-direction:column;
+  }
+  .sb-title{
+    padding:18px 18px 10px;font-size:11px;font-weight:600;color:var(--muted-2);
+    letter-spacing:.08em;
+  }
+  .sb-nav{padding:0 10px;flex:1;overflow:hidden}
+  .nav-item{
+    height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;
+    font-size:13px;color:#475569;cursor:pointer;margin-bottom:2px;
+  }
+  .nav-item:hover{background:#f8fafc}
+  .nav-item .ico{font-size:14px;width:18px;text-align:center;flex-shrink:0}
+  .nav-item.on{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .nav-item .count{
+    margin-left:auto;font-size:10px;font-weight:600;color:#b91c1c;background:var(--danger-bg);
+    border-radius:6px;padding:1px 5px;
+  }
+  .sb-foot{border-top:1px solid var(--border);padding:10px 12px}
+  .tour-btn{
+    display:flex;align-items:center;gap:7px;height:30px;padding:0 9px;border-radius:6px;
+    border:1px solid var(--border);font-size:12px;color:var(--muted);
+  }
+  /* ---------- content ---------- */
+  .content{flex:1;overflow:hidden;padding:26px 30px}
+  .content-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px}
+  .content-head h1{font-size:22px;font-weight:700;letter-spacing:-.01em}
+  .content-head p{margin-top:5px;font-size:13px;color:var(--muted)}
+  .primary-btn{
+    height:34px;padding:0 14px;border-radius:7px;background:var(--primary);color:#fff;
+    font-size:12.5px;font-weight:600;display:flex;align-items:center;gap:6px;
+  }
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .kpi .label{font-size:12px;color:var(--muted)}
+  .kpi .value{margin-top:8px;font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .kpi .delta{margin-top:4px;font-size:11px;color:var(--success)}
+  .kpi .delta.down{color:var(--danger)}
+  .cols{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-top:14px}
+  .panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+  .panel h3{font-size:13px;font-weight:600;margin-bottom:2px}
+  .panel .hint{font-size:11px;color:var(--muted-2)}
+  .chart{height:150px;display:flex;align-items:flex-end;gap:10px;padding-top:18px}
+  .bar{flex:1;background:linear-gradient(180deg,#93c5fd,#3b82f6);border-radius:4px 4px 0 0;opacity:.85}
+  .axis{display:flex;justify-content:space-between;font-size:10px;color:var(--muted-2);margin-top:8px}
+  .todo{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f1f5f9}
+  .todo:last-child{border-bottom:none;padding-bottom:0}
+  .todo .n{width:22px;height:22px;border-radius:6px;background:var(--warning-bg);color:var(--warning);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .todo .t{font-size:12.5px;color:#334155}
+  .todo .go{margin-left:auto;font-size:11px;color:var(--primary)}
+  /* table */
+  .filters{display:flex;gap:8px;margin-bottom:14px}
+  .chip{height:28px;padding:0 11px;border-radius:6px;background:#fff;border:1px solid var(--border);font-size:12px;color:var(--muted);display:flex;align-items:center}
+  .chip.on{background:var(--primary-light);border-color:transparent;color:var(--primary);font-weight:600}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th{font-size:11px;color:var(--muted-2);font-weight:600;text-align:left;padding:11px 16px;background:#fafcff;border-bottom:1px solid var(--border)}
+  td{font-size:12.5px;color:#334155;padding:13px 16px;border-bottom:1px solid #f1f5f9}
+  tr:last-child td{border-bottom:none}
+  .pill{display:inline-flex;align-items:center;height:20px;padding:0 8px;border-radius:99px;font-size:10.5px;font-weight:600}
+  .pill.ok{background:var(--success-bg);color:#15803d}
+  .pill.run{background:#eff6ff;color:#1d4ed8}
+  .pill.wait{background:var(--warning-bg);color:#b45309}
+  .pill.bad{background:var(--danger-bg);color:#b91c1c}
+  .notes{
+    width:1440px;margin-top:22px;background:#fff;border:1px solid var(--border);border-radius:12px;
+    padding:18px 22px;font-size:13px;color:#475569;line-height:1.9;
+  }
+  .notes h2{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px}
+  .notes ul{padding-left:18px}
+  .notes b{color:#1e293b}
+</style>
+</head>
+<body>
+
+<div class="page-title">方案 B · 顶栏分区 + 侧栏二级</div>
+<div class="page-sub">1440×900 全屏效果，两个典型域：管理域落地页、分身生产域列表页。</div>
+
+<div class="caption"><b>① 管理域 · 运营总览</b>（管理员默认落地页）</div>
+<div class="screen">
+  <div class="topbar">
+    <div class="brand">💎 AI萃取平台</div>
+    <div class="domains">
+      <div class="domain">日常</div>
+      <div class="domain">销售</div>
+      <div class="domain">分身生产</div>
+      <div class="domain">知识</div>
+      <div class="domain on">管理</div>
+    </div>
+    <div class="top-right">
+      <div class="ghost-btn">销冠门户</div>
+      <div class="icon-btn">?</div>
+      <div class="icon-btn">🔔<span class="badge-dot"></span></div>
+      <div class="avatar">管</div>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar">
+      <div class="sb-title">管理</div>
+      <nav class="sb-nav">
+        <div class="nav-item on"><span class="ico">📊</span>运营总览</div>
+        <div class="nav-item"><span class="ico">👥</span>用户管理</div>
+        <div class="nav-item"><span class="ico">🗂️</span>成员空间</div>
+        <div class="nav-item"><span class="ico">💬</span>对话历史</div>
+        <div class="nav-item"><span class="ico">🪙</span>Token 统计</div>
+        <div class="nav-item"><span class="ico">🔑</span>AI 模型配置</div>
+        <div class="nav-item"><span class="ico">📋</span>培训计划</div>
+      </nav>
+      <div class="sb-foot"><div class="tour-btn">🎬 产品导览</div></div>
+    </aside>
+
+    <main class="content">
+      <div class="content-head">
+        <div>
+          <h1>运营总览</h1>
+          <p>今天发生了什么，需要你处理什么 · 2026年11月2日 周一</p>
+        </div>
+        <div class="primary-btn">＋ 上传素材</div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="label">今日对话</div><div class="value">128</div><div class="delta">↑ 12% 较昨日</div></div>
+        <div class="kpi"><div class="label">今日活跃用户</div><div class="value">24</div><div class="delta">↑ 4 人</div></div>
+        <div class="kpi"><div class="label">活跃分身</div><div class="value">12</div><div class="delta">2 个待审核</div></div>
+        <div class="kpi"><div class="label">满意度</div><div class="value">92%</div><div class="delta down">↓ 1.4%</div></div>
+      </div>
+
+      <div class="cols">
+        <div class="panel">
+          <h3>对话趋势</h3>
+          <div class="hint">最近 7 天</div>
+          <div class="chart">
+            <div class="bar" style="height:42%"></div>
+            <div class="bar" style="height:58%"></div>
+            <div class="bar" style="height:49%"></div>
+            <div class="bar" style="height:72%"></div>
+            <div class="bar" style="height:66%"></div>
+            <div class="bar" style="height:88%"></div>
+            <div class="bar" style="height:76%"></div>
+          </div>
+          <div class="axis"><span>10-27</span><span>10-28</span><span>10-29</span><span>10-30</span><span>10-31</span><span>11-01</span><span>今天</span></div>
+        </div>
+        <div class="panel">
+          <h3>待处理</h3>
+          <div class="hint">点数字直接跳到对应列表</div>
+          <div class="todo"><span class="n">2</span><span class="t">分身待审核</span><span class="go">去审核 →</span></div>
+          <div class="todo"><span class="n">3</span><span class="t">素材待清洗</span><span class="go">去处理 →</span></div>
+          <div class="todo"><span class="n">1</span><span class="t">教练补充待回复</span><span class="go">去回复 →</span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<div class="caption"><b>② 分身生产域 · 素材管理</b>（顶栏切域后，侧栏只显示该域 6 项）</div>
+<div class="screen">
+  <div class="topbar">
+    <div class="brand">💎 AI萃取平台</div>
+    <div class="domains">
+      <div class="domain">日常</div>
+      <div class="domain">销售</div>
+      <div class="domain on">分身生产<span class="dot"></span></div>
+      <div class="domain">知识</div>
+      <div class="domain">管理</div>
+    </div>
+    <div class="top-right">
+      <div class="ghost-btn">销冠门户</div>
+      <div class="icon-btn">?</div>
+      <div class="icon-btn">🔔<span class="badge-dot"></span></div>
+      <div class="avatar">管</div>
+    </div>
+  </div>
+
+  <div class="app-body">
+    <aside class="sidebar">
+      <div class="sb-title">分身生产</div>
+      <nav class="sb-nav">
+        <div class="nav-item"><span class="ico">🧩</span>分身管理</div>
+        <div class="nav-item on"><span class="ico">📁</span>素材管理<span class="count">2</span></div>
+        <div class="nav-item"><span class="ico">💎</span>经验颗粒</div>
+        <div class="nav-item"><span class="ico">🎯</span>分身调优</div>
+        <div class="nav-item"><span class="ico">🏛️</span>组织分身</div>
+        <div class="nav-item"><span class="ico">🔌</span>IM 分身接入</div>
+      </nav>
+      <div class="sb-foot"><div class="tour-btn">🎬 产品导览</div></div>
+    </aside>
+
+    <main class="content">
+      <div class="content-head">
+        <div>
+          <h1>素材管理</h1>
+          <p>上传录音、文档或粘贴文字，系统会自动解析、清洗、萃取经验颗粒</p>
+        </div>
+        <div class="primary-btn">＋ 上传素材</div>
+      </div>
+
+      <div class="filters">
+        <div class="chip on">全部 12</div>
+        <div class="chip">已萃取 8</div>
+        <div class="chip">处理中 1</div>
+        <div class="chip">待处理 2</div>
+        <div class="chip">需人工 1</div>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>文件 / 来源</th><th>所属分身</th><th>大小</th><th>状态</th><th>上传时间</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>华星科技-首次拜访.m4a</td><td>大客户拜访</td><td>18.2 MB</td><td><span class="pill ok">已萃取</span></td><td>11-01 14:22</td><td style="color:var(--primary)">查看</td></tr>
+          <tr><td>预算异议处理.docx</td><td>大客户拜访</td><td>246 KB</td><td><span class="pill ok">已萃取</span></td><td>11-01 10:05</td><td style="color:var(--primary)">查看</td></tr>
+          <tr><td>竞品对比话术.pdf</td><td>方案型销售</td><td>1.1 MB</td><td><span class="pill run">清洗中</span></td><td>11-02 09:12</td><td style="color:var(--primary)">查看</td></tr>
+          <tr><td>粘贴文本 · 客户砍价场景</td><td>大客户拜访</td><td>—</td><td><span class="pill wait">待清洗</span></td><td>11-02 09:30</td><td style="color:var(--primary)">重试</td></tr>
+          <tr><td>客户访谈录音-1127.mp3</td><td>方案型销售</td><td>32.4 MB</td><td><span class="pill bad">需人工补充</span></td><td>10-31 16:40</td><td style="color:var(--primary)">补录文字</td></tr>
+        </tbody>
+      </table>
+    </main>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>这版要确认的细节</h2>
+  <ul>
+    <li><b>域标签固定在顶栏</b>：日常 / 销售 / 分身生产 / 知识 / 管理，超管多一个「平台」。员工只有「日常」「销售」两项。</li>
+    <li><b>侧栏标题显示当前域</b>，下面是该域的 5–6 项，不再有嵌套折叠。</li>
+    <li><b>待办用两个地方表达</b>：顶栏域标签上的小红点（哪个域有活），侧栏具体项的数字（哪一项有活）。</li>
+    <li><b>点「分身生产」不改变内容页</b>，默认进该域第一项（分身管理）；只有当点击的是域里另一项时才跳转。</li>
+    <li><b>深链/刷新</b>：按路径反推域名并高亮，例如 <code>/admin/materials</code> → 分身生产 + 素材管理。</li>
+    <li><b>运营总览放在「管理」域首位</b>，登录默认落这里；员工没有 DASHBOARD_VIEW，不会看到该域。</li>
+  </ul>
+</div>
+
+</body>
+</html>

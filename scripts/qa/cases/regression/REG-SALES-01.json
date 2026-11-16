@@ -1,0 +1,18 @@
+[
+  {
+    "id": "REG-SALES-01",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "R6/R7 报告状态与详情页回归",
+    "steps": [
+      { "as": "employee", "api": "GET /sales/reviews/0a000000-0000-0000-0000-000000000071", "expect": { "status": 200 } },
+      { "as": "employee", "api": "GET /sales/reviews?page=1&size=5", "expect": { "status": 200 } }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select status from review_session where id='0a000000-0000-0000-0000-000000000071'", "expect": "active" }
+    ]
+  }
+]

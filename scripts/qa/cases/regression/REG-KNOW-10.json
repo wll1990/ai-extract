@@ -1,0 +1,64 @@
+[
+  {
+    "id": "REG-KNOW-10",
+    "set": "regression",
+    "priority": "P2",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "KN-08 知识库只能逐条操作，审批/废弃/改分类没有批量入口",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-批量A",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "批量操作测试条目 A，内容足够十个字。",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "idA": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-批量B",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "批量操作测试条目 B，内容足够十个字。",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "idB": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/batch",
+        "body": { "action": "category", "ids": ["${idA}", "${idB}"], "category": "product" },
+        "expect": { "status": 200, "json": { "data.success": 2, "data.failed": 0 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/batch",
+        "body": { "action": "approve", "ids": ["${idA}", "${idB}"] },
+        "expect": { "status": 200, "json": { "data.success": 2, "data.failed": 0 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/batch",
+        "body": { "action": "deprecate", "ids": ["${idA}", "${idB}"] },
+        "expect": { "status": 200, "json": { "data.success": 2, "data.failed": 0 } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id in (:idA, :idB) and category = 'product' and status = 'deprecated'",
+        "expect": "2"
+      }
+    ]
+  }
+]

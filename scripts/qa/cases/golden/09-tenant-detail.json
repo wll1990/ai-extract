@@ -1,0 +1,16 @@
+[
+  {
+    "id": "GOLD-TENANT-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "manage",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "A10 跨企业资源越权",
+    "steps": [
+      { "as": "company_admin", "api": "GET /skills/0b000000-0000-0000-0000-000000000034/detail", "expect": { "status": [403, 404] } },
+      { "as": "company_admin", "api": "GET /skills/0b000000-0000-0000-0000-000000000031/detail", "expect": { "status": 200 } }
+    ],
+    "assertions": []
+  }
+]

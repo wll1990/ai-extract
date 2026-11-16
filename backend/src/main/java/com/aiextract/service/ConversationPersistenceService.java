@@ -44,6 +44,10 @@ public class ConversationPersistenceService {
      * @param skill   分身对象
      * @return 会话 ID
      */
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s.trim();
+    }
+
     public UUID upsertConversation(UUID skillId, UUID userId,
                                     SkillChatRequest request, String mode, LocalDateTime now, Skill skill) {
         com.aiextract.model.SkillConversation conv = null;
@@ -74,9 +78,23 @@ public class ConversationPersistenceService {
 
         String roleLabel = resolveRoleLabel(skill);
         String userLabel = "practice".equals(mode) ? "我（" + roleLabel + "）" : "我";
-        skillMessageRepository.save(com.aiextract.model.SkillMessage.builder()
-            .id(UUID.randomUUID()).conversationId(conv.getId())
-            .role("user").roleLabel(userLabel).content(request.getMessage()).createdAt(now).build());
+        String clientMessageId = blankToNull(request.getClientMessageId());
+        // 幂等：重试/双击复用同一 clientMessageId 时不再重复写 user 消息
+        if (clientMessageId != null && skillMessageRepository
+                .findFirstByConversationIdAndClientMessageIdAndRole(conv.getId(), clientMessageId, "user")
+                .isPresent()) {
+            log.info("Step1 会话就绪（幂等命中 user） convId={} clientMessageId={}", conv.getId(), clientMessageId);
+            return conv.getId();
+        }
+        try {
+            skillMessageRepository.save(com.aiextract.model.SkillMessage.builder()
+                .id(UUID.randomUUID()).conversationId(conv.getId())
+                .role("user").roleLabel(userLabel).content(request.getMessage())
+                .clientMessageId(clientMessageId).createdAt(now).build());
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            // 并发重复提交撞唯一索引：另一位请求已写入，忽略
+            log.info("Step1 user 消息重复写入已忽略 convId={} clientMessageId={}", conv.getId(), clientMessageId);
+        }
         return conv.getId();
     }
 
@@ -98,14 +116,32 @@ public class ConversationPersistenceService {
      * 保存 AI 助手回复消息，关联溯源 grainId 和 reportId。
      */
     public void saveAiMessage(UUID convId, boolean record, String content, String mode, LocalDateTime now, Skill skill,
-                               UUID grainId, UUID reportId) {
+                               UUID grainId, UUID reportId, String grainIds, Double avgSimilarity,
+                               String clientMessageId, String sourceRefsJson) {
         if (!record || content.isEmpty()) return;
+        String key = blankToNull(clientMessageId);
+        // 幂等：同一 clientMessageId 的 AI 回复只落一条
+        if (key != null && skillMessageRepository
+                .findFirstByConversationIdAndClientMessageIdAndRole(convId, key, "assistant")
+                .isPresent()) {
+            log.info("AI 回复重复写入已忽略 convId={} clientMessageId={}", convId, key);
+            return;
+        }
         String counterpartyLabel = resolveCounterpartyLabel(skill);
         String aiLabel = "practice".equals(mode) ? counterpartyLabel : resolveRoleLabel(skill);
-        skillMessageRepository.save(com.aiextract.model.SkillMessage.builder()
-            .id(UUID.randomUUID()).conversationId(convId)
-            .role("assistant").roleLabel(aiLabel)
-            .content(content).grainId(grainId).reportId(reportId).createdAt(now).build());
+        try {
+            skillMessageRepository.save(com.aiextract.model.SkillMessage.builder()
+                .id(UUID.randomUUID()).conversationId(convId)
+                .role("assistant").roleLabel(aiLabel)
+                .content(content).grainId(grainId).grainIds(grainIds)
+                .avgSimilarity(avgSimilarity).reportId(reportId)
+                .sourceRefs(sourceRefsJson)
+                .clientMessageId(key)
+                // 用落库时刻而不是请求开始时刻：同轮 user/assistant 同一时间戳会导致顺序不确定
+                .createdAt(LocalDateTime.now()).build());
+        } catch (org.springframework.dao.DataIntegrityViolationException e) {
+            log.info("AI 回复并发重复写入已忽略 convId={} clientMessageId={}", convId, key);
+        }
     }
 
     /**

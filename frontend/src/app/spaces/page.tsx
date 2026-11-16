@@ -124,6 +124,16 @@ export default function SpacesOverviewPage() {
             <p className="text-4xl mb-3">📭</p>
             <p className="text-muted-foreground">暂无销冠空间</p>
             <p className="mt-1 text-sm text-muted-foreground-2">创建用户后自动生成个人空间</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button onClick={() => router.push('/admin/materials')}
+                className="rounded-full bg-primary px-4 py-2 text-sm text-white hover:opacity-90">
+                去上传素材
+              </button>
+              <button onClick={() => router.push('/interview/create')}
+                className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+                发起访谈
+              </button>
+            </div>
           </div>
         )}
       </div>

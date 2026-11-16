@@ -1,0 +1,59 @@
+[
+  {
+    "id": "REG-EVAL-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "E1 草稿题集未审核即可发布，跳过复核",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets",
+        "body": { "name": "QA-${runId}-未审核题集", "purpose": "acceptance", "description": "发布前置校验" },
+        "expect": { "status": 200 },
+        "save": { "datasetId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/items",
+        "body": {
+          "question": "客户要求先试用再付款，如何设计试用边界？",
+          "expectedPoints": "[\"明确试用范围与时长\",\"约定转正条件与付款节点\"]",
+          "orderNo": 1
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/publish",
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/submit",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/review",
+        "body": { "action": "reject" },
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/evaluations/datasets/${datasetId}/review",
+        "body": { "action": "reject", "reason": "QA 质量不达标，退回" },
+        "expect": { "status": 200, "json": { "data.status": "draft" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.evaluation_dataset where id = :datasetId",
+        "expect": "draft"
+      }
+    ]
+  }
+]

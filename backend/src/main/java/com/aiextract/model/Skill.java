@@ -136,6 +136,10 @@ public class Skill {
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 
+    /** 废弃时间；恢复窗口 30 天，恢复后清空 */
+    @Column(name = "discarded_at")
+    private LocalDateTime discardedAt;
+
     /**
      * 发布人ID
      */

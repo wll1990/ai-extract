@@ -1,0 +1,57 @@
+[
+  {
+    "id": "REG-AI-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "platform",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "后端写死 provider=deepseek，前端只能配 Base URL/Key，无法选择多厂商对话模型",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "GET /admin/company/ai-model/providers",
+        "expect": { "status": 200, "json": { "data[0].id": "deepseek" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/company/ai-model",
+        "body": {
+          "provider": "qwen",
+          "modelName": "qwen-plus",
+          "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode",
+          "apiKey": "sk-qa-multi-provider-123456",
+          "fallbackEnabled": true
+        },
+        "expect": {
+          "status": 200,
+          "json": { "data.provider": "qwen", "data.model": "qwen-plus" }
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/company/ai-model",
+        "body": {
+          "provider": "deepseek",
+          "modelName": "deepseek-chat",
+          "baseUrl": "https://example.com",
+          "apiKey": "sk-qa-multi-provider-123456",
+          "fallbackEnabled": true
+        },
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/company/ai-model/disable",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select provider || '/' || model_name || '/' || status from public.company_ai_config order by updated_at desc limit 1",
+        "expect": "qwen/qwen-plus/disabled"
+      }
+    ]
+  }
+]

@@ -28,6 +28,9 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
     List<ExperienceGrain> findBySpaceId(UUID spaceId);
     org.springframework.data.domain.Page<ExperienceGrain> findBySpaceId(UUID spaceId, org.springframework.data.domain.Pageable pageable);
 
+    org.springframework.data.domain.Page<ExperienceGrain> findBySpaceIdAndStatus(
+            UUID spaceId, String status, org.springframework.data.domain.Pageable pageable);
+
     /**
      * 每场景最佳颗粒 — PostgreSQL DISTINCT ON，一条查询替代 Java 内存 groupGrainsByScene。
      * 返回每场景标签、场景描述、常见误区、质量分。
@@ -145,6 +148,11 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      */
     @Query("SELECT eg.spaceId, COUNT(eg) FROM ExperienceGrain eg WHERE eg.spaceId IN :spaceIds GROUP BY eg.spaceId")
     List<Object[]> countBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
+
+    /** 批量统计活跃颗粒数与场景数 — 教练选择器展示经验丰富度，避免逐分身查询 */
+    @Query("SELECT eg.spaceId, COUNT(eg), COUNT(DISTINCT eg.sceneTag) FROM ExperienceGrain eg "
+            + "WHERE eg.spaceId IN :spaceIds AND eg.status = 'active' GROUP BY eg.spaceId")
+    List<Object[]> activeStatsBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds);
     /** 按空间列表分页查询（仅有 embedding 的活跃颗粒） */
     @Query("SELECT g FROM ExperienceGrain g WHERE g.spaceId IN :spaceIds AND g.status = 'active' AND g.embedding IS NOT NULL")
     List<ExperienceGrain> findBySpaceIdIn(@Param("spaceIds") List<UUID> spaceIds,
@@ -231,9 +239,9 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @param id id
      * @param embedding embedding
      */
-    @Modifying
+    @Modifying(flushAutomatically = true)
     @Query(value = "UPDATE experience_grain SET embedding = CAST(:embedding AS VECTOR) WHERE id = :id", nativeQuery = true)
-    void updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
+    int updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);
 
     // ═══════════════════════════════════════════════════════════
     // SkillStatsScheduler 用 — 替代 findAll() 全表扫描

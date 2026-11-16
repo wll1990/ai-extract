@@ -8,10 +8,12 @@ import { KpiHero, type KpiItem } from '@/components/admin/KpiHero';
 import { SkillCard } from '@/components/admin/SkillCard';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import type { SkillHealth } from '@/lib/api/admin-insights';
+import { MATERIAL_STATUS_LABELS } from '@/lib/material-status';
 
 const PIPE_LABELS: Record<string, string> = {
-  uploaded: '待处理', cleaning: '清洗中', analyzing: '分析中',
-  analyzed: '已分析', extracted: '已萃取', rejected: '已拒绝', discarded: '已丢弃',
+  ...MATERIAL_STATUS_LABELS,
+  uploaded: '待处理',
+  discarded: '已丢弃',
 };
 const PIPE_COLORS: Record<string, string> = {
   uploaded: '#93c5fd', cleaning: '#60a5fa', analyzing: '#fbbf24',
@@ -38,17 +40,41 @@ export default function AdminDashboard() {
   const [data, setData] = useState<DashboardV2Data | null>(null);
   const [loading, setLoading] = useState(true);
   const [trendDays, setTrendDays] = useState(7);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     setLoading(true);
+    setError('');
     apiClient<DashboardV2Data>(`/admin/dashboard/v2?days=${trendDays}`)
       .then(setData)
-      .catch(() => {})
+      .catch((e: unknown) => {
+        setData(null);
+        const status = (e as { status?: number })?.status;
+        setError(status === 403
+          ? '当前账号没有查看企业看板的权限'
+          : '看板数据加载失败，请稍后重试');
+      })
       .finally(() => setLoading(false));
-  }, [trendDays]);
+  }, [trendDays, reloadKey]);
 
   if (loading) return <LoadingSpinner />;
-  if (!data) return null;
+
+  if (error || !data) {
+    return (
+      <div className="mx-auto max-w-xl p-10 text-center">
+        <div className="rounded-xl border border-border bg-surface-2 p-8">
+          <p className="text-sm text-red-500">{error || '看板数据为空'}</p>
+          {!error?.includes('权限') && (
+            <button
+              onClick={() => setReloadKey(k => k + 1)}
+              className="mt-4 rounded-lg border px-4 py-2 text-sm"
+            >重试</button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const { today, trend, satisfactionRate, hitRate, pipeline, skills, activeUsers, pending, recent } = data;
 
@@ -73,10 +99,10 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-surface">
       <div className="mx-auto max-w-[960px] px-6 py-8 space-y-6">
-        <h1 className="text-2xl font-bold text-foreground">工作台</h1>
+        <h1 className="text-2xl font-bold text-foreground" data-tour="admin-title">运营总览</h1>
 
         {/* KPI Hero */}
-        <KpiHero items={kpis} />
+        <div data-tour="admin-kpi"><KpiHero items={kpis} /></div>
 
         {/* N 天对话趋势 */}
         {trend && trend.length > 0 && (
@@ -215,7 +241,7 @@ export default function AdminDashboard() {
 
         {/* 待处理 + 最近活动 */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-[12px] bg-surface-2 border border-border p-5 shadow-sm">
+          <div className="rounded-[12px] bg-surface-2 border border-border p-5 shadow-sm" data-tour="admin-pending">
             <h2 className="font-semibold text-foreground mb-4">⚠️ 待处理</h2>
             {pending.length > 0 ? (
               <div className="space-y-2">

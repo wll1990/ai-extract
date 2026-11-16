@@ -16,8 +16,8 @@ bash /opt/mindforge/scripts/start-platform.sh || { echo "⚠️ 平台端启动�
 echo "=== 启动管理后台 :3000 ==="
 bash /opt/mindforge/scripts/start-frontend.sh || { echo "⚠️ 管理后台启动异常（logs/frontend.log）"; fail=1; }
 
-echo "=== 启动飞书桥 :3010 ==="
-bash /opt/mindforge/scripts/start-feishu-bot.sh || { echo "⚠️ 飞书桥启动异常（logs/feishu-bot.log）"; fail=1; }
+echo "=== 启动 IM 桥 :3010 ==="
+bash /opt/mindforge/scripts/start-im-bridge.sh || { echo "⚠️ IM 桥启动异常（logs/im-bridge.log）"; fail=1; }
 
 echo ""
 if [ "$fail" -eq 0 ]; then

@@ -27,4 +27,7 @@ public class ImPublishResponse {
 
     /** 链接有效期（秒） */
     private Long expireIn;
+
+    /** 凭证式发布（企微/钉钉）立即绑定的 botId；飞书扫码发布为空 */
+    private String bridgeBotId;
 }

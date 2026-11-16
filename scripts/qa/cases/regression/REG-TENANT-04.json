@@ -1,0 +1,39 @@
+[
+  {
+    "id": "REG-TENANT-04",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "A10 跨企业知识读写越权",
+    "steps": [
+      {
+        "asAccount": "qa_b_admin",
+        "companyId": "0b000000-0000-0000-0000-000000000001",
+        "api": "GET /admin/knowledge/0a000000-0000-0000-0000-000000000041",
+        "expect": { "status": [403, 404] }
+      },
+      {
+        "asAccount": "qa_b_admin",
+        "companyId": "0b000000-0000-0000-0000-000000000001",
+        "api": "PUT /admin/knowledge/0a000000-0000-0000-0000-000000000041",
+        "body": {
+          "title": "QA-TENANT-04-越权改写",
+          "category": "methodology",
+          "sourceType": "tenant",
+          "content": "跨企业写入应当被拒绝",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": [403, 404] }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select title from public.knowledge_entry where id = '0a000000-0000-0000-0000-000000000041'",
+        "expect": "QA 基础知识"
+      }
+    ]
+  }
+]

@@ -73,6 +73,15 @@ public class OssService {
         }
     }
 
+    /** 读取 OSS 对象内容（报告 HTML 等需要后端直接返回文本的场景）。 */
+    public byte[] read(String objectKey) {
+        try (com.aliyun.oss.model.OSSObject object = ossClient.getObject(bucket, objectKey)) {
+            return object.getObjectContent().readAllBytes();
+        } catch (IOException e) {
+            throw new RuntimeException("OSS 读取失败: " + objectKey, e);
+        }
+    }
+
     /** 删除 OSS 对象。 */
     public void delete(String objectKey) {
         ossClient.deleteObject(bucket, objectKey);
@@ -85,7 +94,17 @@ public class OssService {
      * 结构等同于 AWS S3 预签名 URL。</p>
      */
     public String generatePresignedUrl(String objectKey) {
-        Date expiration = new Date(System.currentTimeMillis() + AVATAR_URL_EXPIRE_SECONDS * 1000);
+        return generatePresignedUrl(objectKey, AVATAR_URL_EXPIRE_SECONDS);
+    }
+
+    /**
+     * 生成指定有效期的预签名 GET URL。
+     *
+     * <p>导出文件含学员姓名/账号/成绩等 PII，凭证有效期必须短（分钟级），
+     * 不能复用头像的 365 天有效期——URL 一旦进浏览器历史/代理日志就是长期可下载凭证。</p>
+     */
+    public String generatePresignedUrl(String objectKey, long expireSeconds) {
+        Date expiration = new Date(System.currentTimeMillis() + expireSeconds * 1000);
         URL url = ossClient.generatePresignedUrl(bucket, objectKey, expiration);
         return url.toString();
     }

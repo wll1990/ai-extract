@@ -2,6 +2,7 @@
 
 import React from 'react';
 import type { AuditDashboard } from '@/lib/api/audit';
+import { csrfHeader } from '@/lib/csrf';
 
 interface GrainInfo {
   id?: string;
@@ -89,7 +90,7 @@ export default function SceneStep({ data, sceneTag, setSceneTag, grainIdx, setGr
                     </a>
                   )}
                   {grain.id && (
-                    <button onClick={() => { if (confirm('确定废弃这条颗粒？')) fetch(`/api/v1/admin/grains/${grain.id}/deprecate`, { method: 'POST' }).then(() => location.reload()); }}
+                    <button onClick={() => { if (confirm('确定废弃这条颗粒？')) fetch(`/api/v1/admin/grains/${grain.id}/deprecate`, { method: 'POST', headers: { ...csrfHeader() } }).then(() => location.reload()); }}
                       className="ml-1 px-3 py-1.5 border border-red-200 rounded-lg text-xs text-red-600 hover:bg-red-50 shrink-0">
                       废弃
                     </button>

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { API_BASE, authHeaders } from '@/lib/api/client';
+import { apiClient } from '@/lib/api/client';
 
 /**
  * 新增颗粒 —— 从知识缺口「补充颗粒」按钮跳入，分身已预选。
@@ -11,7 +11,7 @@ export default function NewGrainPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const skillId = searchParams.get('skillId') || '';
-  const spaceId = searchParams.get('spaceId') || '';
+  const gapId = searchParams.get('gapId') || '';
 
   const [form, setForm] = useState({
     sceneTag: '', sceneDescription: '',
@@ -35,15 +35,16 @@ export default function NewGrainPage() {
     if (!validate()) return;
     setSaving(true);
     try {
-      await fetch(`${API_BASE}/admin/grains`, {
+      await apiClient('/admin/grains', {
         method: 'POST',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skillId, spaceId, ...form }),
+        body: JSON.stringify({ skillId, gapId: gapId || undefined, ...form }),
       });
-      alert('✅ 颗粒已创建，向量已生成，下次对话生效');
+      alert('✅ 颗粒已创建并完成向量化，下次对话生效');
       router.back();
-    } catch { alert('保存失败'); }
-    finally { setSaving(false); }
+    } catch (e) {
+      // 403/400/500 必须显示真实原因，不能一律提示「保存失败」
+      alert(e instanceof Error ? e.message : '保存失败');
+    } finally { setSaving(false); }
   };
 
   if (!skillId) {
@@ -67,7 +68,7 @@ export default function NewGrainPage() {
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <button onClick={() => router.back()} className="text-sm text-primary hover:underline mb-4 block">← 返回</button>
-      <div className="rounded-xl bg-surface-2 p-6 shadow-sm">
+      <div className="rounded-xl bg-surface-2 p-6 shadow-sm" data-tour="grain-form">
         <h2 className="text-lg font-bold mb-4">➕ 新增颗粒</h2>
         <p className="text-xs text-muted-foreground mb-4">为分身补充缺失的知识点，保存后自动向量化</p>
 

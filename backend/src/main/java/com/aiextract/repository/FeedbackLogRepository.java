@@ -59,6 +59,15 @@ public interface FeedbackLogRepository extends JpaRepository<FeedbackLog, UUID> 
     @Query("SELECT fl.skillId, COALESCE(SUM(CASE WHEN fl.rating = 'up' THEN 1 ELSE 0 END), 0), COUNT(fl) FROM FeedbackLog fl WHERE fl.skillId IN :skillIds GROUP BY fl.skillId")
     List<Object[]> batchSatisfactionStats(@Param("skillIds") List<UUID> skillIds);
 
+    // ==================== 防重复刷分 ====================
+
+    /** 同一用户对同一会话里的同一颗粒只能评价一次 */
+    boolean existsByUserIdAndConversationIdAndGrainId(UUID userId, UUID conversationId, UUID grainId);
+
+    /** 无会话场景（公开分享页）：同一用户对同一分身的同一颗粒 24 小时内只计一次 */
+    boolean existsByUserIdAndSkillIdAndGrainIdAndCreatedAtAfter(
+            UUID userId, UUID skillId, UUID grainId, java.time.LocalDateTime after);
+
     /** 按颗粒 ID 查询反馈记录，按时间降序 */
     List<FeedbackLog> findByGrainIdOrderByCreatedAtDesc(UUID grainId, Pageable pageable);
 

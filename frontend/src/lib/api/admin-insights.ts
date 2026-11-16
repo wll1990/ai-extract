@@ -7,7 +7,13 @@ export interface SkillOverview {
   totalFeedback: number;
 }
 export interface SceneTopItem { scene: string; count: number; }
-export interface RagDistribution { high: number; ref: number; none: number; total: number; highPct: number; refPct: number; nonePct: number; }
+export interface RagDistribution {
+  high: number; ref: number; none: number; total: number;
+  highPct: number; refPct: number; nonePct: number;
+  /** 知识/案例检索命中（独立于颗粒 RAG） */
+  kcKnowledge?: number; kcCase?: number;
+  kcKnowledgePct?: number; kcCasePct?: number;
+}
 export interface GrainRankItem { id: string; description: string; sceneTag?: string; helpful: number; unhelpful: number; qualityScore?: number; }
 export interface KnowledgeGapItem { id: string; query: string; sceneTag?: string; count: number; lastSeen?: string; status: string; note?: string; }
 export interface SkillHealth { skillId: string; name: string; ownerTitle?: string; department?: string; conversations: number; users: number; satisfactionRate: number; hitRate: number; openGaps: number; grainCount: number; lastActive?: string; alerts: string[]; }
@@ -60,20 +66,45 @@ export function getKnowledgeGaps(skillId: string) {
 }
 export function getGlobalOverview() { return apiClient<GlobalOverview>('/admin/insights/overview'); }
 
+// ── 分身主（空间属主）只读接口 — 员工没有 DASHBOARD_VIEW，走 /skills/{id}/insights ──
+export function getOwnerSkillOverview(skillId: string) { return apiClient<SkillOverview>(`/skills/${skillId}/insights/overview`); }
+export function getOwnerSceneTop(skillId: string) { return apiClient<SceneTopItem[]>(`/skills/${skillId}/insights/scene-top`); }
+export function getOwnerRagDistribution(skillId: string) { return apiClient<RagDistribution>(`/skills/${skillId}/insights/rag-distribution`); }
+export function getOwnerTopGrains(skillId: string, sort: 'best' | 'worst' = 'best') { return apiClient<GrainRankItem[]>(`/skills/${skillId}/insights/grains-top?sort=${sort}`); }
+export function getOwnerKnowledgeGaps(skillId: string) {
+  return apiClient<{ content: KnowledgeGapItem[] }>(`/skills/${skillId}/insights/knowledge-gaps?page=0&size=100`)
+    .then(d => d.content || []);
+}
+
 // ── 自动发现 API ──
 
-/** 洞察列表（支持按分身/严重程度/状态筛选） */
+export interface PageResult<T> {
+  content: T[];
+  page: number;
+  size: number;
+  total: number;
+  totalPages: number;
+}
+
+/** 洞察列表（支持按分身/严重程度/状态筛选；page 从 1 开始） */
 export function getDiscoveries(params?: {
   skillId?: string; severity?: string; status?: string; page?: number; size?: number;
-}): Promise<AutoInsight[]> {
+}): Promise<PageResult<AutoInsight>> {
   const sp = new URLSearchParams();
   if (params?.skillId) sp.set('skillId', params.skillId);
   if (params?.severity) sp.set('severity', params.severity);
   if (params?.status) sp.set('status', params.status);
   else sp.set('status', 'active');
-  if (params?.page != null) sp.set('page', String(params.page));
-  if (params?.size != null) sp.set('size', String(params.size));
-  return apiClient<AutoInsight[]>(`/admin/insights/discoveries?${sp.toString()}`);
+  sp.set('page', String(params?.page ?? 1));
+  sp.set('size', String(params?.size ?? 20));
+  return apiClient<PageResult<AutoInsight>>(`/admin/insights/discoveries?${sp.toString()}`);
+}
+
+/** 批量取候选颗粒，key 为洞察 ID */
+export function getDiscoveryCandidates(insightIds: string[]): Promise<Record<string, CandidateGrain[]>> {
+  if (insightIds.length === 0) return Promise.resolve({});
+  const sp = new URLSearchParams({ insightIds: insightIds.join(',') });
+  return apiClient<Record<string, CandidateGrain[]>>(`/admin/insights/discoveries/candidates?${sp.toString()}`);
 }
 
 /** 洞察详情（含候选颗粒） */

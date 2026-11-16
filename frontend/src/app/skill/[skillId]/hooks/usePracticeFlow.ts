@@ -33,10 +33,20 @@ export interface PracticeMessage {
   reportTitle?: string;
 }
 
+export interface PracticeRound {
+  round: number;
+  score?: number;
+  problem?: string;
+  suggestion?: string;
+  quote?: string;
+}
+
 export interface PracticeEval {
   score?: number;
   strengths: Array<{ point: string; quote: string }>;
   improvements: Array<{ point: string; quote: string; suggestion: string }>;
+  /** 逐轮反馈（TR-04），模型未返回时为空 */
+  rounds?: PracticeRound[];
   demo_script: string;
   next_advice: string;
 }

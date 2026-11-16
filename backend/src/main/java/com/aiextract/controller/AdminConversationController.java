@@ -37,20 +37,24 @@ public class AdminConversationController {
             @RequestParam(defaultValue = "20") int size) {
 
         UUID companyId = TokenContext.getCompanyId();
+        boolean unrestricted = companyScopeService.isUnrestrictedDataScope();
         Page<SkillConversation> convPage;
         if (skillId != null) {
             companyScopeService.assertSkillOwnership(skillId);
-            convPage = conversationRepository.findBySkillIdOrderByUpdatedAtDesc(skillId, PageRequest.of(page - 1, size));
+            convPage = unrestricted
+                    ? conversationRepository.findBySkillIdOrderByUpdatedAtDesc(
+                            skillId, PageRequest.of(page - 1, size))
+                    : conversationRepository.findCompanyConversationsBySkill(
+                            skillId, companyId, PageRequest.of(page - 1, size));
         } else {
             List<UUID> companySkillIds = companyScopeService.getCompanySkillIds(companyId);
-            if (!companyScopeService.isSuperAdmin() && !companySkillIds.isEmpty()) {
-                convPage = conversationRepository.findBySkillIdInOrderByUpdatedAtDesc(companySkillIds, PageRequest.of(page - 1, size));
-            } else if (!companyScopeService.isSuperAdmin()) {
-                // company_admin with no skills — return empty page
-                convPage = Page.empty();
-            } else {
-                // super_admin — see all
+            if (unrestricted) {
                 convPage = conversationRepository.findAllByOrderByUpdatedAtDesc(PageRequest.of(page - 1, size));
+            } else if (!companySkillIds.isEmpty()) {
+                convPage = conversationRepository.findCompanyConversationsBySkillIn(
+                        companySkillIds, companyId, PageRequest.of(page - 1, size));
+            } else {
+                convPage = Page.empty();
             }
         }
 
@@ -94,9 +98,22 @@ public class AdminConversationController {
         return ApiResponse.success(result);
     }
 
-    /** 对话回放 — 获取指定会话的全部消息 */
+    /** 对话回放 — 获取指定会话的全部消息（按会话所属分身做企业归属校验） */
     @GetMapping("/admin/conversations/{conversationId}/messages")
     public ApiResponse<List<SkillMessage>> getConversationMessages(@PathVariable UUID conversationId) {
+        // 租户查询在 SQL 层就带参与者企业条件：跨企业会话不是「查到后拒绝」，而是根本查不到
+        SkillConversation conversation;
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            conversation = conversationRepository.findById(conversationId)
+                    .orElseThrow(() -> new com.aiextract.exception.BusinessException(404, "对话不存在"));
+        } else {
+            UUID companyId = TokenContext.getCompanyId();
+            conversation = conversationRepository.findByIdAndParticipantCompany(conversationId, companyId)
+                    .orElseThrow(() -> new com.aiextract.exception.BusinessException(404, "对话不存在"));
+        }
+        if (conversation.getSkillId() == null || !companyScopeService.canAccessSkill(conversation.getSkillId())) {
+            throw new com.aiextract.exception.BusinessException(404, "对话不存在");
+        }
         return ApiResponse.success(messageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId));
     }
 }

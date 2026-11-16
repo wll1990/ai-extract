@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-EVAL-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "evaluation",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "质量基线没有趋势接口，模型/Prompt 变更后无法看均分与通过率变化（CH-03 / EV-02）",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "GET /admin/evaluations/runs/trend?datasetId=0a000000-0000-0000-0000-000000000051&limit=5",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/evaluations/runs/trend?datasetId=0a000000-0000-0000-0000-000000000051&limit=0",
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": []
+  }
+]

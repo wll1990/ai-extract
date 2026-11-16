@@ -18,8 +18,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.net.URLEncoder;
 import java.security.SecureRandom;
 import java.util.Map;
@@ -40,6 +38,7 @@ public class ReportController {
     private final ReportService reportService;
     private final ReportRepository reportRepository;
     private final com.aiextract.util.JwtUtil jwtUtil;
+    private final com.aiextract.service.ReportStorageService reportStorageService;
 
     private static final String SHARE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SHARE_CODE_LEN = 8;
@@ -67,12 +66,14 @@ public class ReportController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "12") int size) {
         UUID companyId = TokenContext.getCompanyId();
-        Page<ReportListResponse> reports = reportService.getReports(companyId, spaceId, keyword, tag, sort, page, size);
+        Page<ReportListResponse> reports = reportService.getReports(
+                companyId, TokenContext.get(), spaceId, keyword, tag, sort, page, size);
         return ApiResponse.success(reports);
     }
 
     @GetMapping("/{reportId}")
     public ApiResponse<ReportDetailResponse> getReport(@PathVariable String reportId) {
+        reportService.requireAccessibleReport(reportId);
         ReportDetailResponse response = reportService.getReport(reportId);
         return ApiResponse.success(response);
     }
@@ -100,7 +101,7 @@ public class ReportController {
                     .body("<html><body><h1>报告尚未生成</h1><p>请等待萃取完成后刷新页面。</p></body></html>");
         }
         try {
-            String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
+            String html = reportStorageService.read(report.getHtmlPath());
             return ResponseEntity.ok(html);
         } catch (Exception e) {
             log.error("读取报告HTML文件失败, reportId: {}, path: {}", report.getId(), report.getHtmlPath(), e);
@@ -115,15 +116,13 @@ public class ReportController {
 
     @GetMapping(value = "/{reportId}/html", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> getReportHtml(@PathVariable String reportId) {
-        UUID id = UUID.fromString(reportId);
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        Report report = reportService.requireAccessibleReport(reportId);
         if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
                     .body("<html><body><h1>报告尚未生成</h1><p>请等待萃取完成后刷新页面。</p></body></html>");
         }
         try {
-            String html = Files.readString(Path.of(report.getHtmlPath()), StandardCharsets.UTF_8);
+            String html = reportStorageService.read(report.getHtmlPath());
             // 认证接口不再注入工具栏 — ReportViewer 已提供分享/下载/导出按钮
             return ResponseEntity.ok(html);
         } catch (Exception e) {
@@ -135,14 +134,12 @@ public class ReportController {
 
     @GetMapping("/{reportId}/download")
     public ResponseEntity<byte[]> downloadReportHtml(@PathVariable String reportId) {
-        UUID id = UUID.fromString(reportId);
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
+        Report report = reportService.requireAccessibleReport(reportId);
         if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "报告文件尚未生成");
         }
         try {
-            byte[] content = Files.readAllBytes(Path.of(report.getHtmlPath()));
+            byte[] content = reportStorageService.readBytes(report.getHtmlPath());
             String filename = (report.getTitle() != null ? report.getTitle() : "report") + ".html";
             return ResponseEntity.ok()
                     .header("Content-Disposition", encodeContentDisposition(filename))
@@ -160,9 +157,8 @@ public class ReportController {
 
     @PostMapping("/{reportId}/share")
     public ApiResponse<Map<String, Object>> shareReport(@PathVariable String reportId) {
+        Report report = reportService.requireAccessibleReport(reportId);
         UUID id = UUID.fromString(reportId);
-        Report report = reportRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.REPORT_NOT_FOUND));
 
         if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "报告尚未生成，无法分享");

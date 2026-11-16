@@ -42,6 +42,7 @@ public class AdminAuditController {
     private final com.aiextract.service.OrganizationSkillService orgSkillService;
     private final com.aiextract.scheduler.SkillStatsScheduler skillStatsScheduler;
     private final com.aiextract.repository.ReportRepository reportRepository;
+    private final com.aiextract.service.ReportStorageService reportStorageService;
 
     /** 审核仪表盘 — 聚合返回分身发布前的所有关键数据 */
     @GetMapping("/admin/skills/{skillId}/audit-dashboard")
@@ -89,8 +90,10 @@ public class AdminAuditController {
         summary.put("activeGrains", grains.stream().filter(g -> "active".equals(g.getStatus())).count());
         summary.put("deprecatedGrains", grains.stream().filter(g -> "deprecated".equals(g.getStatus())).count());
 
+        // 场景覆盖必须与发布校验一致：只统计 active 且非空标签
         Map<String, Long> sceneCoverage = grains.stream()
-            .filter(g -> g.getSceneTag() != null)
+            .filter(g -> "active".equals(g.getStatus()))
+            .filter(g -> g.getSceneTag() != null && !g.getSceneTag().isBlank())
             .collect(Collectors.groupingBy(ExperienceGrain::getSceneTag, Collectors.counting()));
         summary.put("sceneTags", new ArrayList<>(sceneCoverage.keySet()));
         summary.put("sceneCoverage", sceneCoverage);
@@ -345,9 +348,7 @@ public class AdminAuditController {
                 var report = reports.getContent().get(0);
                 if (report.getHtmlPath() != null && !report.getHtmlPath().isEmpty()) {
                     try {
-                        html = java.nio.file.Files.readString(
-                                java.nio.file.Path.of(report.getHtmlPath()),
-                                java.nio.charset.StandardCharsets.UTF_8);
+                        html = reportStorageService.read(report.getHtmlPath());
                     } catch (Exception e) {
                         log.warn("读取报告缓存文件失败, fallback 到实时生成: {}", e.getMessage());
                     }
@@ -371,38 +372,13 @@ public class AdminAuditController {
         Skill skill = skillRepository.findById(skillId)
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         String action = body.getOrDefault("action", "publish");
+        if (!"publish".equals(action) && !"unpublish".equals(action) && !"discard".equals(action)) {
+            throw new com.aiextract.exception.BusinessException(400, "未知操作：" + action);
+        }
 
         if ("publish".equals(action)) {
-            // 发布前校验（与前端 publishChecks 保持一致）
-            List<String> blockers = new ArrayList<>();
-
-            // 1) 活跃颗粒 ≥ 10
-            List<ExperienceGrain> grains = grainRepository.findBySpaceId(skill.getSpaceId());
-            long activeGrains = grains.stream().filter(g -> "active".equals(g.getStatus())).count();
-            if (activeGrains < 10) {
-                blockers.add("活跃颗粒不足（当前" + activeGrains + "条，需 ≥ 10）");
-            }
-
-            // 2) 场景覆盖 ≥ 3
-            long sceneCount = grains.stream()
-                .filter(g -> g.getSceneTag() != null && !g.getSceneTag().isBlank())
-                .map(ExperienceGrain::getSceneTag).distinct().count();
-            if (sceneCount < 3) {
-                blockers.add("场景覆盖不足（当前" + sceneCount + "个，需 ≥ 3）");
-            }
-
-            // 3) 画像已填写：姓名 + 性格 + 背景 + 知识领域
-            if (skill.getOwnerName() == null || skill.getOwnerName().isBlank()) {
-                blockers.add("画像未完善：销冠姓名为必填");
-            }
-            SkillProfile profile = profileRepository.findBySkillId(skillId).orElse(null);
-            if (profile == null
-                || profile.getPersonality() == null || profile.getPersonality().isBlank()
-                || profile.getBackground() == null || profile.getBackground().isBlank()
-                || profile.getKnowledgeDomains() == null || profile.getKnowledgeDomains().isBlank()
-                || "[]".equals(profile.getKnowledgeDomains())) {
-                blockers.add("画像未完善：性格特征、从业背景、擅长领域为必填");
-            }
+            // 发布前校验 — 与 C 端自助发布共用 SkillService 的同一份规则
+            List<String> blockers = skillService.publishBlockers(skill);
 
             if (!blockers.isEmpty()) {
                 Map<String, Object> result = new LinkedHashMap<>();
@@ -411,6 +387,7 @@ public class AdminAuditController {
                 return ApiResponse.success(result);
             }
 
+            skillService.assertStatusTransition(skill.getStatus(), "published");
             skill.setStatus("published");
             skill.setPublishedAt(java.time.LocalDateTime.now());
             skillRepository.save(skill);
@@ -436,6 +413,7 @@ public class AdminAuditController {
             skillRepository.save(skill);
             orgSkillService.removeMemberFromAllOrgSkills(skillId);
         } else if ("discard".equals(action)) {
+            skillService.assertStatusTransition(skill.getStatus(), "discarded");
             skill.setStatus("discarded");
             skillRepository.save(skill);
             orgSkillService.removeMemberFromAllOrgSkills(skillId);
@@ -459,9 +437,12 @@ public class AdminAuditController {
         return ApiResponse.success("已触发推荐问题重新生成，稍后刷新查看");
     }
 
-    /** 触发存量推荐问题批量补齐（一次性任务，最多处理 50 个） */
+    /** 触发存量推荐问题批量补齐（一次性任务，最多处理 50 个）— 全平台批量，仅超管 */
     @PostMapping("/admin/skills/backfill-recommended-questions")
     public ApiResponse<String> backfillRecommendedQuestions() {
+        if (!companyScopeService.isSuperAdmin()) {
+            throw new BusinessException(403, "仅平台管理员可执行");
+        }
         skillStatsScheduler.backfillRecommendedQuestions();
         return ApiResponse.success("存量推荐问题补齐已触发，完成后查看日志");
     }
@@ -487,7 +468,13 @@ public class AdminAuditController {
     public ApiResponse<Map<String, Object>> getGrainSource(
             @PathVariable UUID skillId, @RequestParam UUID grainId) {
         companyScopeService.assertSkillOwnership(skillId);
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         ExperienceGrain grain = grainRepository.findById(grainId).orElse(null);
+        // 颗粒必须属于该分身所在空间，防止按任意 grainId 读取他分身/他企业的原文
+        if (grain != null && !java.util.Objects.equals(grain.getSpaceId(), skill.getSpaceId())) {
+            throw new BusinessException(403, "颗粒不属于该分身");
+        }
         if (grain == null || grain.getSourceMaterialId() == null)
             return ApiResponse.success(Map.of());
 
@@ -574,6 +561,15 @@ public class AdminAuditController {
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("matchLevel", match.level.name());
 
+            // 批量取素材文件名，避免逐条 findById
+            java.util.Set<UUID> materialIds = match.grains.stream()
+                    .map(ExperienceGrain::getSourceMaterialId)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(Collectors.toSet());
+            Map<UUID, String> materialNames = materialIds.isEmpty() ? Map.of()
+                    : materialRepository.findAllById(materialIds).stream()
+                        .collect(Collectors.toMap(m -> m.getId(), m -> m.getFileName(), (a, b) -> a));
+
             List<Map<String, Object>> traces = new ArrayList<>();
             for (ExperienceGrain g : match.grains) {
                 Map<String, Object> trace = new LinkedHashMap<>();
@@ -581,8 +577,8 @@ public class AdminAuditController {
                 trace.put("qualityScore", g.getQualityScore());
                 trace.put("matchLevel", match.level.name());
                 if (g.getSourceMaterialId() != null) {
-                    materialRepository.findById(g.getSourceMaterialId()).ifPresent(m ->
-                        trace.put("fileName", m.getFileName()));
+                    String fileName = materialNames.get(g.getSourceMaterialId());
+                    if (fileName != null) trace.put("fileName", fileName);
                 }
                 traces.add(trace);
             }
@@ -701,13 +697,14 @@ public class AdminAuditController {
         if (spaceId == null) throw new BusinessException(400, "报告未关联空间");
         var skill = skillRepository.findBySpaceId(spaceId).orElse(null);
         if (skill == null) throw new BusinessException(400, "未找到对应的分身");
+        companyScopeService.assertSkillOwnership(skill.getId());
         long grains = grainRepository.countBySpaceIdAndStatus(spaceId, "active");
         if (grains < 10) throw new BusinessException(400,
                 "颗粒数不足（当前 " + grains + "，需要 10），无法生成报告");
         String html = extractionReportService.generateHtml(skill.getId());
         if (html == null || html.isBlank()) throw new BusinessException(500, "报告生成失败");
-        com.aiextract.service.ReportGenerationService.writeReportHtml(reportId, html);
-        report.setHtmlPath("./data/reports/" + reportId + ".html");
+        reportStorageService.delete(report.getHtmlPath());
+        report.setHtmlPath(reportStorageService.write(reportId, html));
         reportRepository.save(report);
         return ApiResponse.success(Map.of("success", true, "grainCount", (int) grains));
     }

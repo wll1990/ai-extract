@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 传输层开机对账需连接的 bot 列表项。
@@ -24,6 +25,9 @@ import java.util.List;
 @AllArgsConstructor
 public class ImActiveBotResponse {
 
+    /** 渠道类型：feishu / wecom / dingtalk */
+    private String channelType;
+
     /** 平台 bot 标识 */
     private String botId;
 
@@ -32,6 +36,9 @@ public class ImActiveBotResponse {
 
     /** 平台应用密钥（已解密） */
     private String appSecret;
+
+    /** 渠道专属配置（企微 corpId/agentId/token/encodingAesKey；钉钉 robotCode） */
+    private Map<String, Object> config;
 
     /** 绑定的分身 ID */
     private String skillId;

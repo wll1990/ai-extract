@@ -1,0 +1,59 @@
+[
+  {
+    "id": "REG-CASE-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "案例只能 AI 整理/废弃重建，没有人工编辑；本轮补编辑入口并限制生效后只能生成新版本",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-可编辑案例",
+          "customerProfile": "{\"industry\":\"制造业\",\"scale\":\"500人\",\"role\":\"采购总监\"}",
+          "dialogueQuote": "[\"你们比竞品贵\"]",
+          "result": "win",
+          "objection": "价格异议"
+        },
+        "expect": { "status": 200 },
+        "save": { "caseId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/cases/${caseId}",
+        "body": {
+          "title": "QA-${runId}-可编辑案例（已修正）",
+          "customerProfile": "{\"industry\":\"制造业\"}",
+          "dialogueQuote": "[\"你们比竞品贵\"]",
+          "objection": "价格异议",
+          "keyActions": "拆解总拥有成本，提出分阶段验收",
+          "result": "win"
+        },
+        "expect": { "status": 200 },
+        "note": "待审核案例允许人工编辑（此前只能 AI 整理）"
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": { "status": 200, "json": { "data.status": "active" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/cases/${caseId}",
+        "body": { "title": "QA-${runId}-不该成功", "result": "win" },
+        "expect": { "status": 400 },
+        "note": "已生效案例不允许直接改，必须基于此版本修改生成新草稿"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "active"
+      }
+    ]
+  }
+]

@@ -1,0 +1,131 @@
+[
+  {
+    "id": "GOLD-PUBLISH-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["employee", "company_admin"],
+    "llm": true,
+    "sourceBug": null,
+    "note": "发布门槛→发布成功→详情可见→对话溯源。颗粒数用测试夹具补齐（关键词：dbExec），真实萃取链路见 GOLD-MAT-02",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /spaces",
+        "body": { "title": "QA-${runId}-发布空间", "description": "发布→问答全链路" },
+        "expect": { "status": 200 },
+        "save": { "spaceId": "data.id" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /admin/materials/text",
+        "body": {
+          "spaceId": "${spaceId}",
+          "skillName": "QA-${runId}-发布分身",
+          "domain": "sales.b2b_enterprise",
+          "title": "QA-${runId}-发布素材",
+          "text": "客户说价格比竞品高，预算还没有批。我先确认决策链和内部评审时间，再把方案拆成投入产出摘要，用分阶段验收和分期付款降低首付压力。遇到压价时调整交付范围和付款节奏，不破坏价值锚点，同时提供同行业案例证明溢价部分的交付能力。"
+        },
+        "expect": { "status": 200 },
+        "save": { "skillId": "data.results[0].skillId" }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${skillId}/detail",
+        "await": {
+          "sql": "select status from public.skill_material where skill_id = :skillId order by created_at limit 1",
+          "until": ["extracted"],
+          "maxAttempts": 60,
+          "intervalMs": 10000
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${skillId}/detail",
+        "dbExec": {
+          "sql": "INSERT INTO public.experience_grain (id, space_id, source_type, scene_tag, scene_description, expert_thought, standard_script, status, weight, quality_score, helpful_count, unhelpful_count, created_at, embedding) SELECT gen_random_uuid(), :spaceId, 'file_upload', s.tag, '客户在' || s.tag || '场景提出价格、预算或竞品异议，需要先确认决策链再给方案。', '先确认预算与决策人，再用价值锚定和分阶段验收替代直接降价。', '我理解您对预算和价格的顾虑，我们先确认内部评审流程，再按投入产出拆解方案。', 'active', 1.0, 0.9, 0, 0, now(), (SELECT embedding FROM public.experience_grain WHERE embedding IS NOT NULL LIMIT 1) FROM (VALUES ('价格谈判'),('竞品对比'),('决策链推进'),('预算审批'),('效果保障'),('售后挽回'),('合同条款'),('试用方案'),('客户异议')) AS s(tag)"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/skills/${skillId}/profile",
+        "body": {
+          "personality": "稳健、先确认再推进",
+          "background": "八年企业软件销售，负责华东区大客户",
+          "knowledgeDomains": "[\"价格谈判\",\"竞品对比\",\"决策链推进\"]"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/skills/${skillId}/publish",
+        "body": { "action": "publish" },
+        "expect": { "status": 200, "json": { "data.passed": true } }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${skillId}/detail",
+        "expect": { "status": 200, "json": { "data.status": "published" } }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/${skillId}/chat",
+        "body": {
+          "message": "客户说价格比竞品高、预算没批，怎么推进？",
+          "sessionId": "QA-${runId}-published-chat"
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["meta", "content", "source", "done"],
+          "contentNonEmpty": true,
+          "sourceGrainIds": true
+        },
+        "saveSse": { "from": "source", "fields": { "grainIds": "grainIds" } },
+        "timeout": 120000
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/skills/${skillId}/publish",
+        "body": { "action": "unpublish" },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/${skillId}/detail",
+        "expect": { "status": 200, "json": { "data.status": "reviewing" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/skills/${skillId}/publish",
+        "body": { "action": "discard" },
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select (count(*) >= 10)::text from public.experience_grain where space_id = :spaceId and status = 'active'",
+        "expect": "true"
+      },
+      {
+        "type": "db",
+        "sql": "select (count(distinct scene_tag) >= 3)::text from public.experience_grain where space_id = :spaceId and status = 'active' and scene_tag is not null and scene_tag <> ''",
+        "expect": "true"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.experience_grain where id = any(string_to_array(:grainIds, ',')::uuid[])",
+        "op": "gte",
+        "expect": "1"
+      },
+      {
+        "type": "db",
+        "sql": "select status from public.skill where id = :skillId",
+        "expect": "discarded"
+      }
+    ]
+  }
+]

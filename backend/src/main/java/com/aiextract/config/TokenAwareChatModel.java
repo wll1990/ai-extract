@@ -1,5 +1,6 @@
 package com.aiextract.config;
 
+import com.aiextract.service.TokenEstimationCalibrator;
 import com.aiextract.service.TokenUsageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.metadata.Usage;
@@ -28,17 +29,22 @@ public class TokenAwareChatModel implements ChatModel {
 
     private static final int PROMPT_WARN_THRESHOLD = 10_000;
 
-    /** 中文为主场景：1 token ≈ 1.5-2 字符，取保守值 2 避免低估成本 */
-    private static final int CHARS_PER_TOKEN = 2;
-
     private final ChatModel delegate;
     private final TokenUsageService tokenUsageService;
     private final String modelName;
+    /** null = 平台 Key；非 null = 企业 Key 代调用，用量强制归属该企业 */
+    private final UUID companyId;
 
     public TokenAwareChatModel(ChatModel delegate, TokenUsageService tokenUsageService, String modelName) {
+        this(delegate, tokenUsageService, modelName, null);
+    }
+
+    public TokenAwareChatModel(ChatModel delegate, TokenUsageService tokenUsageService,
+                               String modelName, UUID companyId) {
         this.delegate = delegate;
         this.tokenUsageService = tokenUsageService;
         this.modelName = modelName;
+        this.companyId = companyId;
     }
 
     // ============================================================
@@ -64,14 +70,16 @@ public class TokenAwareChatModel implements ChatModel {
         if (usage != null && usage.getTotalTokens() > 0) {
             inputTokens = (int) (long) usage.getPromptTokens();
             outputTokens = (int) (long) usage.getGenerationTokens();
+            TokenEstimationCalibrator.observe(modelName, promptChars, inputTokens);
         } else {
-            inputTokens = promptChars / CHARS_PER_TOKEN;
-            outputTokens = completionChars / CHARS_PER_TOKEN;
+            inputTokens = estimateTokens(promptChars);
+            outputTokens = estimateTokens(completionChars);
         }
 
         log.info("LLM call() done promptChars={} completionChars={} inputTokens={} outputTokens={} model={}",
                 promptChars, completionChars, inputTokens, outputTokens, modelName);
-        logUsage(inputTokens, outputTokens, promptChars, completionChars);
+        UUID effectiveCompanyId = companyId != null ? companyId : TokenContext.getCompanyId();
+        logUsage(TokenContext.get(), effectiveCompanyId, inputTokens, outputTokens, promptChars, completionChars);
         return response;
     }
 
@@ -86,6 +94,7 @@ public class TokenAwareChatModel implements ChatModel {
 
         // 在请求线程上捕获 userId — doOnComplete/doOnError 在 Reactor/SSE 线程执行，此时 TokenContext 已被 Filter finally 清掉
         UUID userId = TokenContext.get();
+        UUID effectiveCompanyId = companyId != null ? companyId : TokenContext.getCompanyId();
 
         AtomicReference<Usage> lastUsage = new AtomicReference<>();
         StringBuilder fullResponse = new StringBuilder();
@@ -115,30 +124,39 @@ public class TokenAwareChatModel implements ChatModel {
                         // API 返回了完整 Usage → 用真实值，chars 仍落库做基准
                         inputTokens = (int) (long) usage.getPromptTokens();
                         outputTokens = (int) (long) usage.getGenerationTokens();
+                        TokenEstimationCalibrator.observe(modelName, promptChars, inputTokens);
                     } else {
                         // API 未返回 Usage（流式默认不带）→ 从字符数估算
-                        inputTokens = promptChars / CHARS_PER_TOKEN;
-                        outputTokens = completionChars / CHARS_PER_TOKEN;
+                        inputTokens = estimateTokens(promptChars);
+                        outputTokens = estimateTokens(completionChars);
                     }
 
                     log.info("LLM stream() done promptChars={} completionChars={} inputTokens={} outputTokens={} model={}",
                             promptChars, completionChars, inputTokens, outputTokens, modelName);
-                    logUsage(userId, inputTokens, outputTokens, promptChars, completionChars);
+                    logUsage(userId, effectiveCompanyId, inputTokens, outputTokens, promptChars, completionChars);
                 })
                 .doOnError(err -> {
                     // 流中断：至少把 prompt 统计落库，completion 按已累积的算
                     int completionChars = fullResponse.length();
-                    int inputTokens = promptChars / CHARS_PER_TOKEN;
-                    int outputTokens = completionChars / CHARS_PER_TOKEN;
+                    int inputTokens = estimateTokens(promptChars);
+                    int outputTokens = estimateTokens(completionChars);
                     log.warn("LLM stream() error promptChars={} completionChars={} err={}",
                             promptChars, completionChars, err.getMessage());
-                    logUsage(userId, inputTokens, outputTokens, promptChars, completionChars);
+                    logUsage(userId, effectiveCompanyId, inputTokens, outputTokens, promptChars, completionChars);
                 });
     }
 
     // ============================================================
     // 内部方法
     // ============================================================
+
+    /** 字符数 → token 估算（使用校准后的 chars/token） */
+    private int estimateTokens(int chars) {
+        if (chars <= 0) {
+            return 0;
+        }
+        return (int) Math.ceil(chars / TokenEstimationCalibrator.charsPerToken());
+    }
 
     /** 从 Prompt 对象中提取所有消息的字符总数 */
     private int countPromptChars(Prompt prompt) {
@@ -159,17 +177,10 @@ public class TokenAwareChatModel implements ChatModel {
         log.debug("LLM REQ promptChars={} model={}", promptChars, modelName);
     }
 
-    /** 异步入库（同步调用路径） */
-    private void logUsage(int inputTokens, int outputTokens, int promptChars, int completionChars) {
-        UUID userId = TokenContext.get();
-        // userId 可为 null（scheduler 线程无 TokenContext），TokenUsageService 接受 null
-        tokenUsageService.log(userId, "CHAT", modelName,
-                inputTokens, outputTokens, promptChars, completionChars);
-    }
-
-    /** 异步入库（流式调用路径 — userId 在 stream() 开头捕获，ThreadLocal 不可用） */
-    private void logUsage(UUID userId, int inputTokens, int outputTokens, int promptChars, int completionChars) {
-        tokenUsageService.log(userId, "CHAT", modelName,
+    /** 异步入库（userId/companyId 在调用入口捕获；两者都可为 null） */
+    private void logUsage(UUID userId, UUID effectiveCompanyId, int inputTokens, int outputTokens,
+                          int promptChars, int completionChars) {
+        tokenUsageService.log(userId, effectiveCompanyId, "CHAT", modelName,
                 inputTokens, outputTokens, promptChars, completionChars);
     }
 }

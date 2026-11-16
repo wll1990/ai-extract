@@ -1,0 +1,20 @@
+[
+  {
+    "id": "REG-MAT-03",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "M26 补录/文本长度未校验",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": { "skillId": "0a000000-0000-0000-0000-000000000031", "text": "太短" },
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": []
+  }
+]

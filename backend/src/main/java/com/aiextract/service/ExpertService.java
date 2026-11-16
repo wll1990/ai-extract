@@ -5,7 +5,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.web.reactive.function.client.WebClient;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.*;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.exception.BusinessException;
@@ -49,6 +51,10 @@ public class ExpertService {
     private final WebClient webClient;
     private final PromptLoader promptLoader;
     private final com.aiextract.config.DomainConfigLoader domainConfigLoader;
+    private final CompanyScopeService companyScopeService;
+    private final com.aiextract.repository.InterviewSessionRepository interviewSessionRepository;
+    private final FileStorageService fileStorageService;
+    private final FileParseService fileParseService;
 
     @Autowired
     @Lazy
@@ -60,12 +66,67 @@ public class ExpertService {
     @Value("${storage.local.path}")
     private String storageBasePath;
 
+    // ==================== 企业隔离守卫 ====================
+
+    /**
+     * 校验萃取师是否属于当前企业。
+     *
+     * <p>超管可访问全部（含平台级 company_id 为空的数据）；企业用户只能访问本企业的。
+     * 跨企业统一抛 404 而不是 403，避免通过状态码枚举其他企业的萃取师 ID。</p>
+     */
+    private ExpertSkill requireExpertAccess(UUID expertId) {
+        ExpertSkill expert = expertSkillRepository.findById(expertId)
+                .orElseThrow(() -> new BusinessException(404, "萃取师不存在"));
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return expert;
+        }
+        UUID companyId = TokenContext.getCompanyId();
+        if (companyId == null || !companyId.equals(expert.getCompanyId())) {
+            throw new BusinessException(404, "萃取师不存在");
+        }
+        return expert;
+    }
+
+    /** Controller 异步入口（extract/analyze）的前置校验；Scheduler 内部调用不经过这里 */
+    public void assertExpertAccessible(String expertId) {
+        requireExpertAccess(parseExpertId(expertId));
+    }
+
+    private UUID parseExpertId(String expertId) {
+        try {
+            return UUID.fromString(expertId);
+        } catch (Exception e) {
+            throw new BusinessException(400, "萃取师 ID 格式不正确");
+        }
+    }
+
+    /** 当前调用方可见的 active 萃取师：超管全量，企业用户只看本企业 */
+    private List<ExpertSkill> activeExpertsVisibleToCaller() {
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return expertSkillRepository.findByStatus("active");
+        }
+        UUID companyId = TokenContext.getCompanyId();
+        if (companyId == null) {
+            return List.of();
+        }
+        return expertSkillRepository.findByCompanyIdAndStatus(companyId, "active");
+    }
+
     /** 获取可用萃取师列表 */
     @Transactional(readOnly = true)
     public List<ExpertAvailableResponse> getAvailableExperts(String domain) {
-        List<ExpertSkill> activeExperts = domain != null && !domain.isBlank()
-                ? expertSkillRepository.findByStatusAndDomain("active", domain)
-                : expertSkillRepository.findByStatus("active");
+        List<ExpertSkill> activeExperts;
+        if (!companyScopeService.isUnrestrictedDataScope()) {
+            UUID companyId = TokenContext.getCompanyId();
+            activeExperts = companyId == null ? List.of()
+                    : (domain != null && !domain.isBlank()
+                    ? expertSkillRepository.findByCompanyIdAndStatusAndDomain(companyId, "active", domain)
+                    : expertSkillRepository.findByCompanyIdAndStatus(companyId, "active"));
+        } else {
+            activeExperts = domain != null && !domain.isBlank()
+                    ? expertSkillRepository.findByStatusAndDomain("active", domain)
+                    : expertSkillRepository.findByStatus("active");
+        }
         List<ExpertAvailableResponse> list = new ArrayList<>();
 
         list.add(ExpertAvailableResponse.builder().id("").name("综合（使用所有萃取师）").type("composite").build());
@@ -86,12 +147,30 @@ public class ExpertService {
     public Page<ExpertSkillListResponse> getExperts(int page, int size, String keyword, String status) {
         Pageable pageable = PageRequest.of(page - 1, size);
         Page<ExpertSkill> expertPage;
-        if (keyword != null && !keyword.isEmpty()) {
-            expertPage = expertSkillRepository.findByNameContainingIgnoreCase(keyword, pageable);
-        } else if (status != null && !status.isEmpty()) {
-            expertPage = expertSkillRepository.findByStatus(status, pageable);
+        boolean hasKeyword = keyword != null && !keyword.isEmpty();
+        boolean hasStatus = status != null && !status.isEmpty();
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            // 平台侧：跨企业全量
+            if (hasKeyword) {
+                expertPage = expertSkillRepository.findByNameContainingIgnoreCase(keyword, pageable);
+            } else if (hasStatus) {
+                expertPage = expertSkillRepository.findByStatus(status, pageable);
+            } else {
+                expertPage = expertSkillRepository.findAll(pageable);
+            }
         } else {
-            expertPage = expertSkillRepository.findAll(pageable);
+            UUID companyId = TokenContext.getCompanyId();
+            if (companyId == null) {
+                return Page.empty(pageable);
+            }
+            if (hasKeyword) {
+                expertPage = expertSkillRepository.findByCompanyIdAndNameContainingIgnoreCase(
+                        companyId, keyword, pageable);
+            } else if (hasStatus) {
+                expertPage = expertSkillRepository.findByCompanyIdAndStatus(companyId, status, pageable);
+            } else {
+                expertPage = expertSkillRepository.findByCompanyId(companyId, pageable);
+            }
         }
 
         // 批量预加载文档数和颗粒数，避免 toListResponse 里 N+1
@@ -106,9 +185,8 @@ public class ExpertService {
     /** 获取萃取师详情 */
     @Transactional(readOnly = true)
     public ExpertSkillDetailResponse getExpertDetail(String expertId) {
-        UUID id = UUID.fromString(expertId);
-        ExpertSkill expert = expertSkillRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.EXPERT_NOT_FOUND));
+        UUID id = parseExpertId(expertId);
+        ExpertSkill expert = requireExpertAccess(id);
 
         List<ExpertGrain> grains = expertGrainRepository.findByExpertId(id);
         Map<String, List<ExpertGrain>> grouped = grains.stream()
@@ -135,6 +213,7 @@ public class ExpertService {
                 .sourceType(expert.getSourceType()).styleTags(parseJsonList(expert.getStyleTags()))
                 .industryTags(parseJsonList(expert.getIndustryTags())).seniority(expert.getSeniority())
                 .skillFile(expert.getSkillFile()).grainCount(expert.getGrainCount()).status(expert.getStatus())
+                .retryCount(expert.getRetryCount()).failureReason(expert.getFailureReason())
                 .grainGroups(grainGroups).documents(docInfos)
                 .createdAt(toString(expert.getCreatedAt())).updatedAt(toString(expert.getUpdatedAt())).build();
     }
@@ -145,8 +224,9 @@ public class ExpertService {
             String name, String description, List<String> styleTags,
             List<String> industryTags, String seniority, List<Map<String, Object>> files,
             String domain, String existingExpertId) {
-        // 追加模式：追加文件到已有萃取师
+        // 追加模式：追加文件到已有萃取师（必须先校验归属）
         if (existingExpertId != null && !existingExpertId.isBlank()) {
+            requireExpertAccess(parseExpertId(existingExpertId));
             return addDocumentsToExpert(existingExpertId, files);
         }
 
@@ -161,26 +241,15 @@ public class ExpertService {
                 .description(description).sourceType("document").domain(domain)
                 .styleTags(toJson(styleTags))
                 .industryTags(toJson(industryTags)).seniority(seniority).grainCount(0)
+                .companyId(TokenContext.getCompanyId())
+                .createdBy(TokenContext.get())
                 .status("pending").createdAt(now).updatedAt(now).build();
         expertSkillRepository.save(expert);;
 
-        // 文件记录——按人分目录，同名自动编号
-        String basePath = storageBasePath != null && !storageBasePath.isBlank() ? storageBasePath : "data/files";
-        String baseDir = basePath + "/experts/" + expert.getId() + "/";
-        java.util.Set<String> batchNames = new java.util.HashSet<>();
-
-        List<ExpertDocument> docs = new ArrayList<>();
-        for (Map<String, Object> file : files) {
-            String originalName = (String) file.get("fileName");
-            String safeName = resolveFileName(baseDir, originalName, batchNames);
-            String fileUrl = baseDir + safeName;
-            docs.add(ExpertDocument.builder().id(UUID.randomUUID()).expertId(expert.getId())
-                    .fileName(originalName).fileUrl(fileUrl)
-                    .fileType((String) file.get("fileType")).fileSize(((Number) file.getOrDefault("fileSize", 0)).longValue())
-                    .status("uploaded").createdAt(now).build());
+        // 创建时只建萃取师；文件必须通过 /documents/file 上传字节并落 OSS，禁止在这里拼本地路径
+        if (files != null && !files.isEmpty()) {
+            throw new BusinessException(400, "请先创建萃取师，再通过文档上传接口逐个上传文件");
         }
-        expertDocumentRepository.saveAll(docs);
-
         // 上传后状态置为 pending，由 ExpertAnalysisScheduler 定时扫描处理
         log.info("萃取师材料已上传（待调度分析）, expertId: {}", expert.getId());
         return getExpertDetail(expert.getId().toString());
@@ -235,22 +304,13 @@ public class ExpertService {
 
                 if (doc.getParsedContent() == null && !"parsed".equals(doc.getStatus()) && !"pending_manual".equals(doc.getStatus())) {
                     try {
-                        String fileUrl = doc.getFileUrl() != null ? doc.getFileUrl()
-                                : "/data/files/experts/" + expertId + "/" + doc.getFileName();
-                        Map<String, String> parseResult = webClient.post()
-                                .uri(aiServiceUrl + "/internal/parse-file")
-                                .bodyValue(Map.of("file_path", fileUrl, "file_name", doc.getFileName()))
-                                .retrieve()
-                                .bodyToMono(new org.springframework.core.ParameterizedTypeReference<Map<String, String>>() {})
-                                .timeout(java.time.Duration.ofSeconds(120))
-                                .block();
-                        if (parseResult != null && parseResult.containsKey("text")) {
-                            doc.setParsedContent(parseResult.get("text"));
-                            // 图片/音频需要手动处理
-                            boolean needsManual = Boolean.TRUE.equals(parseResult.get("needs_manual"))
-                                    || (parseResult.get("needs_manual") instanceof String
-                                        && "true".equalsIgnoreCase((String) parseResult.get("needs_manual")));
-                            if (needsManual) {
+                        String ref = doc.getFileUrl() != null ? doc.getFileUrl()
+                                : storageBasePath + "/experts/" + expertId + "/" + doc.getFileName();
+                        FileParseService.ParseResult parsed =
+                                fileParseService.parseStored(ref, doc.getFileName());
+                        if (parsed != null && parsed.text() != null) {
+                            doc.setParsedContent(PiiMasker.mask(parsed.text()));
+                            if (parsed.needsManual()) {
                                 doc.setStatus("pending_manual");
                                 hasPendingManual = true;
                                 log.info("文件需手动处理, docId: {}, type: {}", doc.getId(), doc.getFileType());
@@ -270,10 +330,11 @@ public class ExpertService {
                 }
             }
 
-            // 如果有待手动处理的文件，跳过AI分析
+            // 如果有待手动处理的文件，停在 manual_review 等管理员补录，避免 30s 后无限重扫
             if (hasPendingManual) {
-                log.info("萃取师存在待手动处理的文件，跳过AI分析, expertId: {}", expertId);
-                expert.setStatus("pending");
+                log.info("萃取师存在待手动处理的文件，进入人工补录, expertId: {}", expertId);
+                expert.setStatus("manual_review");
+                expert.setFailureReason("存在图片/音频文件需人工补充文字内容");
                 expertSkillRepository.save(expert);
                 return;
             }
@@ -332,9 +393,11 @@ public class ExpertService {
                 log.info("萃取师材料分析完成, expertId: {}", expertId);
             } catch (Exception aiEx) {
                 log.error("AI分析萃取师材料失败, expertId: {}", expertId, aiEx);
+                String reason = "AI分析失败: " + aiEx.getMessage();
                 expert.setStatus("failed");
+                expert.setFailureReason(reason.length() > 500 ? reason.substring(0, 500) : reason);
                 expertSkillRepository.save(expert);
-                throw new RuntimeException("AI分析萃取师材料失败: " + aiEx.getMessage(), aiEx);
+                throw new RuntimeException(reason, aiEx);
             }
     }
 
@@ -521,10 +584,14 @@ public class ExpertService {
     /** 编辑颗粒 */
     @Transactional(rollbackFor = Exception.class)
     public void editGrain(String expertId, String grainId, ExpertGrainEditRequest request) {
+        requireExpertAccess(parseExpertId(expertId));
         UUID gid = UUID.fromString(grainId);
         ExpertGrain grain = expertGrainRepository.findById(gid).orElse(null);
         if (grain == null) {
             throw new BusinessException(404, "颗粒不存在: " + grainId);
+        }
+        if (!java.util.Objects.equals(grain.getExpertId(), UUID.fromString(expertId))) {
+            throw new BusinessException(403, "颗粒不属于该萃取师");
         }
 
         if (request.getCategory() != null) grain.setCategory(request.getCategory());
@@ -538,18 +605,55 @@ public class ExpertService {
     /** 删除萃取师及其所有关联数据（颗粒+文档级联删除） */
     @Transactional(rollbackFor = Exception.class)
     public void deleteExpert(String expertId) {
-        UUID id = UUID.fromString(expertId);
-        ExpertSkill expert = expertSkillRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.EXPERT_NOT_FOUND));
+        UUID id = parseExpertId(expertId);
+        ExpertSkill expert = requireExpertAccess(id);
+        // 先删子表：表上没有外键，必须显式级联，避免孤儿数据
+        for (ExpertDocument doc : expertDocumentRepository.findByExpertId(id)) {
+            deleteStoredFile(doc.getFileUrl());
+        }
+        expertGrainRepository.deleteByExpertId(id);
+        expertDocumentRepository.deleteByExpertId(id);
+        // 访谈历史保留，但解除对已删萃取师的引用
+        interviewSessionRepository.clearExpertSkillId(id);
         expertSkillRepository.delete(expert);
         log.info("萃取师已删除, expertId: {}, name: {}", expertId, expert.getName());}
+
+    /** 删除素材文件：OSS key 直接删对象；本地遗留路径只允许删存储根目录内，避免误删 */
+    private void deleteStoredFile(String fileUrl) {
+        if (fileUrl == null || fileUrl.isBlank()) return;
+        if (!fileUrl.startsWith("/") && !fileUrl.startsWith("./") && !fileUrl.startsWith("../")
+                && !fileUrl.startsWith("data/") && !fileUrl.startsWith("file:")
+                && !fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")
+                && !fileUrl.startsWith("text://") && !fileUrl.matches("^[A-Za-z]:[\\\\/].*")) {
+            fileStorageService.delete(fileUrl);
+            return;
+        }
+        try {
+            String basePath = storageBasePath != null && !storageBasePath.isBlank() ? storageBasePath : "data/files";
+            java.nio.file.Path base = java.nio.file.Paths.get(basePath).toAbsolutePath().normalize();
+            java.nio.file.Path target = java.nio.file.Paths.get(fileUrl).toAbsolutePath().normalize();
+            if (!target.startsWith(base)) {
+                log.warn("跳过删除存储目录之外的文件: {}", fileUrl);
+                return;
+            }
+            java.nio.file.Files.deleteIfExists(target);
+        } catch (Exception e) {
+            log.warn("删除素材文件失败 {}: {}", fileUrl, e.getMessage());
+        }
+    }
 
 
     /** 删除颗粒 */
     @Transactional(rollbackFor = Exception.class)
     public void deleteGrain(String expertId, String grainId) {
+        requireExpertAccess(parseExpertId(expertId));
         UUID gid = UUID.fromString(grainId);
-        expertGrainRepository.deleteById(gid);
+        ExpertGrain grain = expertGrainRepository.findById(gid)
+                .orElseThrow(() -> new BusinessException(404, "颗粒不存在: " + grainId));
+        if (!java.util.Objects.equals(grain.getExpertId(), UUID.fromString(expertId))) {
+            throw new BusinessException(403, "颗粒不属于该萃取师");
+        }
+        expertGrainRepository.delete(grain);
         log.info("颗粒已删除, grainId: {}", grainId);
     }
 
@@ -557,9 +661,8 @@ public class ExpertService {
     /** 激活Skill */
     @Transactional(rollbackFor = Exception.class)
     public void activateExpert(String expertId) {
-        UUID id = UUID.fromString(expertId);
-        ExpertSkill expert = expertSkillRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.EXPERT_NOT_FOUND));
+        UUID id = parseExpertId(expertId);
+        ExpertSkill expert = requireExpertAccess(id);
 
         List<ExpertGrain> underReview = expertGrainRepository.findByExpertIdAndStatus(id, "under_review");
         for (ExpertGrain g : underReview) { g.setStatus("active"); }
@@ -585,14 +688,15 @@ public class ExpertService {
     /** 重试失败的萃取师 — 重置为 pending，scheduler 30s 内重新拾取 */
     @Transactional(rollbackFor = Exception.class)
     public void retryExpert(String expertId) {
-        UUID id = UUID.fromString(expertId);
-        ExpertSkill expert = expertSkillRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "萃取师不存在"));
-        if (!"failed".equals(expert.getStatus())) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "仅失败状态的萃取师可重试");
+        UUID id = parseExpertId(expertId);
+        ExpertSkill expert = requireExpertAccess(id);
+        if (!"failed".equals(expert.getStatus()) && !"manual_review".equals(expert.getStatus())) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "仅失败或待人工补录的萃取师可重试");
         }
 
         expert.setStatus("pending");
+        expert.setRetryCount(0);
+        expert.setFailureReason(null);
         expertSkillRepository.save(expert);
         log.info("萃取师已重置为pending, expertId={}", expertId);
     }
@@ -601,26 +705,15 @@ public class ExpertService {
     /** 上传文档文件字节（multipart → 落盘 → 建 ExpertDocument → 触发重分析） */
     @Transactional(rollbackFor = Exception.class)
     public ExpertDocument uploadDocumentFile(UUID expertId, org.springframework.web.multipart.MultipartFile file) {
-        ExpertSkill expert = expertSkillRepository.findById(expertId)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), "萃取师不存在"));
+        ExpertSkill expert = requireExpertAccess(expertId);
         LocalDateTime now = LocalDateTime.now();
-        String basePath = storageBasePath != null && !storageBasePath.isBlank() ? storageBasePath : "data/files";
-        String dir = basePath + "/experts/" + expertId + "/";
         String originalName = file.getOriginalFilename() != null ? file.getOriginalFilename() : "untitled";
-        String safeName = System.currentTimeMillis() + "_" + originalName.replaceAll("[^a-zA-Z0-9._\\-]", "_");
-        java.io.File destDir = new java.io.File(dir).getAbsoluteFile();
-        { if (!destDir.exists()) destDir.mkdirs(); }
-        java.io.File dest = new java.io.File(destDir, safeName);
-        try {
-            file.transferTo(dest);
-        } catch (Exception e) {
-            log.error("文件保存失败, expertId={}, path={}, originalName={}", expertId, dest.getAbsolutePath(), originalName, e);
-            throw new RuntimeException("文件保存失败: " + e.getMessage());
-        }
+        // 萃取师资料与分身素材统一存 OSS，不再落本地磁盘
+        String objectKey = fileStorageService.saveMaterialFile(file, "expert");
 
         ExpertDocument doc = ExpertDocument.builder()
                 .id(UUID.randomUUID()).expertId(expertId)
-                .fileName(originalName).fileUrl(dest.toPath().normalize().toAbsolutePath().toString())
+                .fileName(originalName).fileUrl(objectKey)
                 .fileType(file.getContentType()).fileSize(file.getSize())
                 .status("uploaded").createdAt(now).build();
         doc = expertDocumentRepository.save(doc);
@@ -636,34 +729,29 @@ public class ExpertService {
     /** 追加文件——同样按时间戳分目录+同批次+跨批次同名编号 */
     @Transactional(rollbackFor = Exception.class)
     public void addDocuments(String expertId, List<Map<String, Object>> files) {
-        UUID id = UUID.fromString(expertId);
+        UUID id = parseExpertId(expertId);
+        requireExpertAccess(id);
         LocalDateTime now = LocalDateTime.now();
-        String basePath = storageBasePath != null && !storageBasePath.isBlank() ? storageBasePath : "data/files";
-        String baseDir = basePath + "/experts/" + id + "/";
-        java.util.Set<String> batchNames = new java.util.HashSet<>();
-
-        for (Map<String, Object> file : files) {
-            String originalName = (String) file.get("fileName");
-            String safeName = resolveFileName(baseDir, originalName, batchNames);
-
-            ExpertDocument doc = ExpertDocument.builder().id(UUID.randomUUID()).expertId(id)
-                    .fileName(originalName).fileUrl(baseDir + safeName)
-                    .fileType((String) file.get("fileType")).status("uploaded").createdAt(now).build();
-            expertDocumentRepository.save(doc);}
-
-        // 重置状态为pending，触发调度器重新分析
-        ExpertSkill expert = expertSkillRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.EXPERT_NOT_FOUND));
-        expert.setStatus("pending");
-        expertSkillRepository.save(expert);;
-        log.info("文件已追加并触发重新分析, expertId: {}, files: {}", expertId, files.size());}
+        // 文件必须走 /documents/file 上传字节；这里不再接受仅元数据、无实际文件的追加
+        if (files != null && !files.isEmpty()) {
+            throw new BusinessException(400, "请通过文档上传接口上传文件内容");
+        }
+        log.info("没有新增文件，跳过追加, expertId={}", expertId);}
 
 
     /** 删除文件 */
     @Transactional(rollbackFor = Exception.class)
     public void deleteDocument(String expertId, String documentId) {
+        UUID expertUuid = parseExpertId(expertId);
+        requireExpertAccess(expertUuid);
         UUID did = UUID.fromString(documentId);
-        expertDocumentRepository.deleteById(did);
+        ExpertDocument doc = expertDocumentRepository.findById(did)
+                .orElseThrow(() -> new BusinessException(404, "文档不存在: " + documentId));
+        if (!java.util.Objects.equals(doc.getExpertId(), expertUuid)) {
+            throw new BusinessException(403, "文档不属于该萃取师");
+        }
+        deleteStoredFile(doc.getFileUrl());
+        expertDocumentRepository.delete(doc);
         // under_review颗粒→废弃
         List<ExpertGrain> toDeprecate = expertGrainRepository.findByExpertIdAndStatus(UUID.fromString(expertId), "under_review");
         toDeprecate.forEach(g -> g.setStatus("deprecated"));
@@ -671,24 +759,23 @@ public class ExpertService {
         log.info("文件已删除, documentId: {}", documentId);}
 
 
-    /** 替换文件 */
+    /** 替换文件：必须先删除旧文档，再走 /documents/file 上传字节（不接受仅元数据） */
     @Transactional(rollbackFor = Exception.class)
     public void replaceDocument(String expertId, String documentId, Map<String, Object> newFile) {
-        deleteDocument(expertId, documentId);
-        addDocuments(expertId, List.of(newFile));
-        log.info("文件已替换, documentId: {}", documentId);}
+        throw new BusinessException(400, "请先删除旧文档，再通过文档上传接口上传新文件");
+    }
 
 
-    /** 重新生成综合Skill */
+    /** 重新生成综合Skill（按调用方可见范围重算并返回最新详情） */
     @Transactional(readOnly = true)
-    public void regenerateComposite() {
+    public ExpertCompositeResponse regenerateComposite() {
         log.info("开始重新生成综合Skill");
 
-        // 加载所有 active 状态的萃取师
-        List<ExpertSkill> activeExperts = expertSkillRepository.findByStatus("active");
+        // 只聚合调用方可见的 active 萃取师（企业用户不串企业）
+        List<ExpertSkill> activeExperts = activeExpertsVisibleToCaller();
         if (activeExperts.isEmpty()) {
             log.warn("没有已激活的萃取师，综合Skill生成跳过");
-            return;
+            return getCompositeDetail();
         }
 
         int totalGrains = 0;
@@ -725,6 +812,8 @@ public class ExpertService {
         preview.append("- 互补类别：").append(conflictTags.size()).append(" 个\n");
 
         log.info("综合Skill重新生成完成, experts: {}, grains: {}", activeExperts.size(), totalGrains);
+        // 返回重新计算后的详情，调用方可直接展示最新统计（此前只写日志，等于空实现）
+        return getCompositeDetail();
     }
 
 
@@ -736,8 +825,9 @@ public class ExpertService {
         UUID id = UUID.fromString(docId);
         ExpertDocument doc = expertDocumentRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.DOCUMENT_NOT_FOUND));
+        requireExpertAccess(doc.getExpertId());
         if (parsedContent != null) {
-            doc.setParsedContent(parsedContent);
+            doc.setParsedContent(PiiMasker.mask(parsedContent));
         }
 
         if (status != null) {
@@ -750,7 +840,7 @@ public class ExpertService {
 
 
     public ExpertCompositeResponse getCompositeDetail() {
-        List<ExpertSkill> activeExperts = expertSkillRepository.findByStatus("active");
+        List<ExpertSkill> activeExperts = activeExpertsVisibleToCaller();
         int expertCount = activeExperts.size();
 
         // 批量查所有激活萃取师的颗粒（避免 N+1）
@@ -814,6 +904,7 @@ public class ExpertService {
                 .styleTags(parseJsonList(e.getStyleTags())).industryTags(parseJsonList(e.getIndustryTags()))
                 .seniority(e.getSeniority()).grainCount(grainCount).status(e.getStatus())
                 .documentCount(docCount)
+                .retryCount(e.getRetryCount()).failureReason(e.getFailureReason())
                 .createdAt(toString(e.getCreatedAt())).build();
     }
 

@@ -88,6 +88,15 @@ public class User {
     private Boolean isActive;
 
     /**
+     * 安全版本号：改角色/停用账号时 +1，已签发 JWT 中的 ver claim 与之不符即失效。
+     *
+     * <p>默认 0；改造前签发的 token 没有 ver claim，按 0 处理，因此在版本号 bump 之前保持兼容。</p>
+     */
+    @Column(name = "token_version", nullable = false)
+    @Builder.Default
+    private Long tokenVersion = 0L;
+
+    /**
      * 创建时间
      */
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -116,6 +125,11 @@ public class User {
     /** 最后活跃时间 */
     @Column(name = "last_active_at")
     private LocalDateTime lastActiveAt;
+
+    /** true=下次登录必须修改密码（管理员重置/首次登录） */
+    @Builder.Default
+    @Column(name = "must_change_password", nullable = false)
+    private Boolean mustChangePassword = false;
 
     // ========== 常量 ==========
 

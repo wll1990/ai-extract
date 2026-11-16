@@ -2,6 +2,8 @@ package com.aiextract.service;
 
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.config.TokenContext;
+import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -199,7 +201,65 @@ public class PracticeDemoService {
         String raw = chatStreamAdapter.chat(prompt);
         log.info("Demo评估 skillId={} messages={} time={}ms",
                 skillId, messages.size(), System.currentTimeMillis() - t0);
-        return parseAiJson(raw);
+
+        Map<String, Object> parsed = parseAiJson(raw);
+
+        // 必须落库：前端「验证测试」完成态依赖 mode=auto_demo 的评估记录
+        Integer rawScore = toInt(parsed.get("totalScore"));
+        if (rawScore == null) {
+            log.warn("Demo评估未返回有效 totalScore，跳过落库 skillId={} keys={}", skillId, parsed.keySet());
+            parsed.put("evaluationSaved", false);
+            return parsed;
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> dims = parsed.get("dimensions") instanceof Map
+                    ? (Map<String, Object>) parsed.get("dimensions") : Map.of();
+            SkillEvaluation eval = SkillEvaluation.builder()
+                    .skillId(skillId)
+                    .mode("auto_demo")
+                    .evaluatorId(TokenContext.get())
+                    .score(clampScore(rawScore))
+                    .styleScore(dimensionScore(dims, "distinctiveness"))
+                    .consistencyScore(dimensionScore(dims, "causality"))
+                    .behaviorScore(dimensionScore(dims, "specificity"))
+                    .scriptReuseScore(dimensionScore(dims, "reproducibility"))
+                    .scoreDetail(objectMapper.writeValueAsString(parsed))
+                    .strengths(objectMapper.writeValueAsString(
+                            parsed.getOrDefault("highlights", List.of())))
+                    .improvements(objectMapper.writeValueAsString(
+                            parsed.getOrDefault("improvements", List.of())))
+                    .build();
+            evaluationRepository.save(eval);
+            parsed.put("evaluationId", eval.getId().toString());
+            log.info("Demo评估已落库 skillId={} evaluationId={} score={}",
+                    skillId, eval.getId(), eval.getScore());
+        } catch (Exception e) {
+            // 落库失败必须让调用方感知：前端「验证测试完成」依赖这条记录
+            log.error("Demo评估落库失败 skillId={}: {}", skillId, e.getMessage(), e);
+            throw new BusinessException(500, "评估结果保存失败，请重试");
+        }
+        return parsed;
+    }
+
+    private Integer toInt(Object v) {
+        if (v instanceof Number n) return n.intValue();
+        if (v instanceof String s) {
+            try { return Integer.parseInt(s.trim()); } catch (NumberFormatException ignored) { return null; }
+        }
+        return null;
+    }
+
+    /** DB 有 CHECK (score BETWEEN 0 AND 100)，必须先夹紧 */
+    private Integer clampScore(Integer v) {
+        return v == null ? null : Math.max(0, Math.min(100, v));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Integer dimensionScore(Map<String, Object> dims, String key) {
+        Object v = dims.get(key);
+        if (v instanceof Map<?, ?> m) return clampScore(toInt(((Map<String, Object>) m).get("score")));
+        return null;
     }
 
     /**

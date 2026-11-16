@@ -2,6 +2,7 @@ package com.aiextract.controller;
 
 import com.aiextract.model.AnalyticsEvent;
 import com.aiextract.repository.AnalyticsEventRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,7 @@ import java.util.UUID;
 public class AnalyticsController {
 
     private final AnalyticsEventRepository analyticsEventRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 接收前端埋点事件。
@@ -31,16 +33,24 @@ public class AnalyticsController {
      */
     @PostMapping("/analytics/event")
     public ResponseEntity<Void> trackEvent(@RequestBody Map<String, Object> body) {
+        Object eventType = body.get("event_type");
+        if (!(eventType instanceof String type) || type.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
         try {
+            // event_data 列是 JSONB，必须写真正的 JSON 文本。
+            // 此前用 Map.toString() 得到的是 {audience=external} 这种 Java 字面量，
+            // Postgres 拒绝写入，异常被吞掉，接口照样返回 200 —— 非空 event_data 的埋点全部丢失。
+            Object data = body.get("event_data");
             analyticsEventRepository.save(AnalyticsEvent.builder()
                 .id(UUID.randomUUID())
-                .eventType((String) body.get("event_type"))
-                .eventData(body.get("event_data") != null ? body.get("event_data").toString() : null)
+                .eventType(type)
+                .eventData(data == null ? null : objectMapper.writeValueAsString(data))
                 .createdAt(LocalDateTime.now())
                 .build());
         } catch (Exception e) {
-            // 埋点失败不影响主流程，静默忽略
-            log.debug("埋点写入失败: {}", e.getMessage());
+            // 埋点失败不影响主流程；用 warn 留痕，避免静默丢数据后无从排查
+            log.warn("埋点写入失败: type={}, err={}", type, e.getMessage());
         }
         return ResponseEntity.ok().build();
     }

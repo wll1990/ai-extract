@@ -1,0 +1,22 @@
+[
+  {
+    "id": "REG-TENANT-03",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "A10 跨企业资源越权：POST /skills/{id}/chat 未校验企业归属，可对其他企业草稿分身发起对话并读取颗粒",
+    "steps": [
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0b000000-0000-0000-0000-000000000034/chat",
+        "body": { "message": "客户说价格太高怎么办？", "sessionId": "QA-${runId}-tenant-probe" },
+        "expect": { "status": [403, 404] },
+        "timeout": 30000
+      }
+    ],
+    "assertions": []
+  }
+]

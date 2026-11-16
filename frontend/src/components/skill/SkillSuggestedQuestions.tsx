@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { API_BASE } from '@/lib/api/client';
+import { csrfHeader } from '@/lib/csrf';
 
 interface Props {
   questions: string[];
@@ -30,7 +31,7 @@ export default function SkillSuggestedQuestions({ questions, skillId, onSelect }
   const handleClick = (q: string) => {
     fetch(`${API_BASE}/analytics/event`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...csrfHeader() },
       body: JSON.stringify({
         event_type: 'recommendation_click',
         event_data: { question: q, skill_id: skillId },

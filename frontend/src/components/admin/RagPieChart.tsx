@@ -9,15 +9,24 @@ interface Props {
   highPct: number;
   refPct: number;
   nonePct: number;
+  kcKnowledge?: number;
+  kcCase?: number;
+  kcKnowledgePct?: number;
+  kcCasePct?: number;
 }
 
-const COLORS = ['#22C55E', '#EAB308', '#9CA3AF'];
+const COLORS = ['#22C55E', '#EAB308', '#3B82F6', '#8B5CF6', '#9CA3AF'];
 
-/** RAG 匹配分布环形图 */
-export function RagPieChart({ high, refCount, none, highPct, refPct, nonePct }: Props) {
+/** RAG 匹配分布环形图（含知识/案例命中） */
+export function RagPieChart({
+  high, refCount, none, highPct, refPct, nonePct,
+  kcKnowledge = 0, kcCase = 0, kcKnowledgePct = 0, kcCasePct = 0,
+}: Props) {
   const data = [
     { id: '高匹配', label: '高匹配', value: high, pct: highPct },
     { id: '参考', label: '参考', value: refCount, pct: refPct },
+    { id: '知识命中', label: '知识命中', value: kcKnowledge, pct: kcKnowledgePct },
+    { id: '案例命中', label: '案例命中', value: kcCase, pct: kcCasePct },
     { id: '无匹配', label: '无匹配', value: none, pct: nonePct },
   ].filter(d => d.value > 0);
 

@@ -34,6 +34,7 @@ public class GrainController {
     private final ExperienceGrainRepository grainRepository;
     private final SpaceRepository spaceRepository;
     private final JwtUtil jwtUtil;
+    private final com.aiextract.service.AdminGrainService adminGrainService;
 
     private UUID extractUserId() {
         String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
@@ -85,7 +86,14 @@ public class GrainController {
             grain.setCommonMistakes(body.get("commonMistakes"));
         }
 
+        // 只有文本字段变化才需要重算向量；异步执行，不占 HTTP 线程
+        boolean textChanged = body.containsKey("expertThought") || body.containsKey("standardScript")
+                || body.containsKey("sceneTag") || body.containsKey("sceneDescription")
+                || body.containsKey("commonMistakes");
         grainRepository.save(grain);
+        if (textChanged) {
+            adminGrainService.refreshEmbeddingAsync(grain.getId());
+        }
         log.info("颗粒已更新 grainId={} status={}", grainId, grain.getStatus());
 
         Map<String, Object> result = new LinkedHashMap<>();

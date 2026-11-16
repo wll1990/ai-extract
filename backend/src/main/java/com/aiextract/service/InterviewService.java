@@ -1,8 +1,10 @@
 package com.aiextract.service;
 
 import com.aiextract.common.ErrorMessages;
+import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.config.TokenContext;
 import com.aiextract.dto.CreateInterviewRequest;
 import com.aiextract.dto.InterviewMessageResponse;
 import com.aiextract.dto.InterviewSessionResponse;
@@ -35,9 +37,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 访谈服务 — 管理 AI 萃取访谈的完整生命周期。
@@ -82,8 +87,10 @@ public class InterviewService {
     private final SkillRepository skillRepository;
     private final InterviewTranscriptExtractor interviewTranscriptExtractor;
     private final ExpertInterviewProcessor expertInterviewProcessor;
+    private final InterviewExtractionStateService extractionStateService;
     private final ContextWindowGuard contextWindowGuard;
     private final com.aiextract.repository.PhaseSummaryRepository phaseSummaryRepository;
+    private final CompanyScopeService companyScopeService;
 
     /** 自注入代理，用于解决同类内方法调用的事务代理问题 */
     @Autowired
@@ -159,9 +166,15 @@ public class InterviewService {
             spaceId = space.getId();
         }
 
-        // 一次查询用户所有 Space，复用给后续 C 端限制和 TOCTOU 检查
+        // 一次查询用户所有 Space，复用给归属校验、C 端限制和 TOCTOU 检查
         List<UUID> userSpaceIds = spaceRepository.findByUserId(userId).stream()
             .map(Space::getId).toList();
+
+        // 请求体里的 spaceId 必须属于当前用户：否则可在他人/他企业的空间写入访谈，
+        // 并借响应泄露该空间的颗粒数、报告 ID、头像等信息
+        if (!userSpaceIds.contains(spaceId) && !companyScopeService.isUnrestrictedDataScope()) {
+            throw new BusinessException(403, "无权在该空间创建访谈");
+        }
 
         // C端免费次数限制
         if ("c_user".equalsIgnoreCase(role)) {
@@ -183,8 +196,9 @@ public class InterviewService {
         }
 
         // 1. 解析萃取师：有指定 → 单个萃取师名称；无 → "综合"
-        String expertSkillUsed = resolveExpertSkillUsed(request.getExpertSkillId());
         UUID expertSkillId = parseExpertSkillId(request.getExpertSkillId());
+        assertExpertSkillUsable(expertSkillId);
+        String expertSkillUsed = resolveExpertSkillUsed(request.getExpertSkillId());
 
         // 2. 判断是否首次访谈
         long completedCount = sessionRepository.countBySpaceIdAndStatus(spaceId, STATUS_COMPLETED);
@@ -208,14 +222,19 @@ public class InterviewService {
 
         // 4. 验证邀请码（防止绕过前端直接调 API 或使用已失效的邀请码）
         String inviteCode = request.getInviteCode();
+        InterviewInviteCode invite = null;
         if (inviteCode != null && !inviteCode.isBlank()) {
-            InterviewInviteCode code = inviteCodeRepository.findByCode(inviteCode)
+            invite = inviteCodeRepository.findByCode(inviteCode)
                 .orElseThrow(() -> new BusinessException(400, "邀请码无效"));
-            if (Boolean.FALSE.equals(code.getEnabled())) {
+            if (Boolean.FALSE.equals(invite.getEnabled())) {
                 throw new BusinessException(400, "邀请码已失效");
             }
-            if (code.getExpiresAt() != null && code.getExpiresAt().isBefore(LocalDateTime.now())) {
+            if (invite.getExpiresAt() != null && invite.getExpiresAt().isBefore(LocalDateTime.now())) {
                 throw new BusinessException(400, "邀请码已过期");
+            }
+            if (invite.getMaxUses() != null && invite.getMaxUses() > 0
+                    && invite.getUsedCount() != null && invite.getUsedCount() >= invite.getMaxUses()) {
+                throw new BusinessException(400, "邀请码已达使用上限");
             }
         }
 
@@ -263,6 +282,11 @@ public class InterviewService {
                 .build();
         messageRepository.save(guideMessage);
 
+        // 邀请码计数在会话创建成功后原子占用；并发超限时回滚本次创建
+        if (invite != null && inviteCodeRepository.consume(invite.getId()) == 0) {
+            throw new BusinessException(400, "邀请码已达使用上限");
+        }
+
         log.info("访谈会话创建完成, sessionId: {}, isFirstInterview: {}", session.getId(), isFirstInterview);
         return buildSessionResponse(session, expertSkillUsed);
     }
@@ -284,6 +308,29 @@ public class InterviewService {
         validateOwnership(session, userId);
         String expertSkillUsed = resolveExpertSkillUsed(session.getExpertSkillId());
         return buildSessionResponse(session, expertSkillUsed);
+    }
+
+    /**
+     * 重新萃取颗粒：仅已完成且未萃取成功的访谈可重试。
+     *
+     * <p>重置虚拟素材状态后异步重跑；失败原因通过 session.extractionError 返回。</p>
+     */
+    public void retryExtraction(String sessionId, UUID userId) {
+        UUID id = parseUuid(sessionId);
+        InterviewSession session = sessionRepository.findById(id)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SESSION_NOT_FOUND));
+        validateOwnership(session, userId);
+        if (!STATUS_COMPLETED.equals(session.getStatus())) {
+            throw new BusinessException(409, "仅已完成的访谈可以重新萃取");
+        }
+        if (InterviewExtractionStateService.EXTRACTING.equals(session.getExtractionStatus())) {
+            throw new BusinessException(409, "正在萃取中，请稍后再试");
+        }
+        if (InterviewExtractionStateService.DONE.equals(session.getExtractionStatus())) {
+            throw new BusinessException(409, "颗粒已萃取完成，无需重试");
+        }
+        interviewTranscriptExtractor.extractFromInterview(id);
+        log.info("访谈重新萃取已触发 sessionId={}", sessionId);
     }
 
     /**
@@ -469,6 +516,12 @@ public class InterviewService {
             log.info("访谈已完成，重触发萃取管道, sessionId={}", sessionId);
             interviewTranscriptExtractor.extractFromInterview(session.getId());
             return sessionId;
+        }
+
+        // created（尚未开始）等状态不能强制完成；checkAndCompleteSession 会静默 return，不能返回 200 骗前端
+        if (!STATUS_IN_PROGRESS.equals(session.getStatus()) && !STATUS_PAUSED.equals(session.getStatus())) {
+            throw new BusinessException(HttpStatus.CONFLICT.value(),
+                    "访谈尚未开始或已结束，不能强制完成");
         }
 
         self.checkAndCompleteSession(session);
@@ -914,19 +967,36 @@ public class InterviewService {
         String currentPhase = session.getCurrentPhase();
         List<Map<String, String>> messages = new ArrayList<>();
 
-        // 1. 已完成阶段的摘要（替代全量历史，减少 token）
-        List<com.aiextract.model.PhaseSummary> summaries = phaseSummaryRepository
+        List<InterviewMessage> historyMsgs = messageRepository
                 .findBySessionIdOrderByCreatedAtAsc(session.getId());
-        for (com.aiextract.model.PhaseSummary s : summaries) {
-            if (!s.getPhase().equals(currentPhase)) {
+
+        // 1. 已完成阶段：有摘要用摘要；摘要还在异步生成时回退原始消息，避免阶段切换瞬间历史断层
+        Map<String, com.aiextract.model.PhaseSummary> summaryByPhase =
+                phaseSummaryRepository.findBySessionIdOrderByCreatedAtAsc(session.getId()).stream()
+                        .filter(s -> s.getPhase() != null && !s.getPhase().equals(currentPhase))
+                        .collect(Collectors.toMap(
+                                com.aiextract.model.PhaseSummary::getPhase,
+                                s -> s, (a, b) -> b, LinkedHashMap::new));
+        Set<String> completedPhases = historyMsgs.stream()
+                .map(InterviewMessage::getPhase)
+                .filter(p -> p != null && !p.equals(currentPhase))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        for (String phase : completedPhases) {
+            com.aiextract.model.PhaseSummary summary = summaryByPhase.get(phase);
+            if (summary != null) {
                 messages.add(Map.of("role", "system", "content",
-                    "[阶段回顾] " + s.getPhaseLabel() + "：" + s.getSummary()));
+                        "[阶段回顾] " + summary.getPhaseLabel() + "：" + summary.getSummary()));
+                continue;
+            }
+            for (InterviewMessage msg : historyMsgs) {
+                if (phase.equals(msg.getPhase())) {
+                    messages.add(Map.of("role", msg.getRole(), "content",
+                            msg.getContent() != null ? msg.getContent() : ""));
+                }
             }
         }
 
         // 2. 当前阶段：保留全部消息
-        List<InterviewMessage> historyMsgs = messageRepository
-                .findBySessionIdOrderByCreatedAtAsc(session.getId());
         for (InterviewMessage msg : historyMsgs) {
             if (currentPhase == null || currentPhase.equals(msg.getPhase())) {
                 messages.add(Map.of("role", msg.getRole(), "content",
@@ -1129,6 +1199,29 @@ public class InterviewService {
     // ==================== 内部方法 — 工具 ====================
 
     /**
+     * 访谈可引用的萃取师必须对当前调用方可见。
+     *
+     * <p>超管可用全部；企业用户只能引用本企业的萃取师，跨企业按「不存在」处理，
+     * 避免通过引用他人萃取师拿到其名称/领域。</p>
+     */
+    private void assertExpertSkillUsable(UUID expertSkillId) {
+        if (expertSkillId == null) {
+            return;
+        }
+        ExpertSkill expert = expertSkillRepository.findById(expertSkillId).orElse(null);
+        if (expert == null) {
+            throw new BusinessException(400, "萃取师不存在或不可用");
+        }
+        if (companyScopeService.isUnrestrictedDataScope()) {
+            return;
+        }
+        UUID companyId = TokenContext.getCompanyId();
+        if (companyId == null || !companyId.equals(expert.getCompanyId())) {
+            throw new BusinessException(400, "萃取师不存在或不可用");
+        }
+    }
+
+    /**
      * 解析萃取师标识为显示名称。
      *
      * <p>返回值含义:
@@ -1250,7 +1343,8 @@ public class InterviewService {
                 .status(session.getStatus())
                 .currentPhase(session.getCurrentPhase())
                 // space 级别活跃颗粒数（非 session 级别：同一 space 多次访谈累计，与报告就绪检查口径一致）
-                .grainCount((int) grainRepository.countBySpaceIdAndStatus(session.getSpaceId(), "active"))
+                // 本次访谈产出，而不是 space 累计；否则新会话一完成就显示历史条数
+                .grainCount(grainRepository.findBySourceInterviewId(session.getId()).size())
                 .expertSkillUsed(expertSkillUsed)
                 .phases(phases)
                 .templatePreview(templatePreview)
@@ -1263,6 +1357,9 @@ public class InterviewService {
                 .interviewType(session.getInterviewType())
                 .avatarUrl(skillRepository.findBySpaceId(session.getSpaceId())
                         .map(com.aiextract.model.Skill::getAvatarUrl).orElse(null))
+                .extractionStatus(session.getExtractionStatus())
+                .extractionError(session.getExtractionError())
+                .extractedAt(session.getExtractedAt() != null ? session.getExtractedAt().toString() : null)
                 .build();
     }
 

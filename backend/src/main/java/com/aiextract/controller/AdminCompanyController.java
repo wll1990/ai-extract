@@ -6,10 +6,10 @@ import com.aiextract.model.Company;
 import com.aiextract.model.CompanyRegisterCode;
 import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.repository.CompanyRepository;
+import com.aiextract.service.CompanyRegisterCodeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -29,10 +29,7 @@ public class AdminCompanyController {
 
     private final CompanyRepository companyRepository;
     private final CompanyRegisterCodeRepository registerCodeRepository;
-
-    private static final String CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    private static final int CODE_LENGTH = 8;
-    private static final SecureRandom RNG = new SecureRandom();
+    private final CompanyRegisterCodeService registerCodeService;
 
     // ═══════════════════════════════════════════════════════════
     // 企业 CRUD
@@ -150,6 +147,9 @@ public class AdminCompanyController {
             m.put("usedCount", c.getUsedCount());
             m.put("createdAt", c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
             m.put("expiresAt", c.getExpiresAt() != null ? c.getExpiresAt().toString() : null);
+            m.put("defaultRole", c.getDefaultRole());
+            m.put("lastUsedBy", c.getLastUsedBy() != null ? c.getLastUsedBy().toString() : null);
+            m.put("lastUsedAt", c.getLastUsedAt() != null ? c.getLastUsedAt().toString() : null);
             result.add(m);
         }
         return ApiResponse.success(result);
@@ -163,33 +163,33 @@ public class AdminCompanyController {
             return ApiResponse.error(404, "企业不存在");
         }
 
+        String defaultRole = body != null && body.get("defaultRole") instanceof String s
+            && com.aiextract.config.RolePermissions.REGISTRABLE_ROLES.contains(s) ? s : "employee";
+
+        LocalDateTime now = LocalDateTime.now();
         int maxUses = 0;
         if (body != null && body.get("maxUses") instanceof Number n) {
             maxUses = n.intValue();
         }
-        String defaultRole = body != null && body.get("defaultRole") instanceof String s
-            && com.aiextract.config.RolePermissions.REGISTRABLE_ROLES.contains(s) ? s : "employee";
+        if (com.aiextract.config.RolePermissions.COMPANY_ADMIN.equals(defaultRole)) {
+            // 企业管理员码：一次性。限制的是「用几次」——码被复制后只有第一个用的人生效，
+            // 之后全部失败。有效期不强制，由超管按需选择。
+            maxUses = 1;
+        }
+        // 有效期默认不设，由超管决定（0 或不传 = 不限期）
+        LocalDateTime expiresAt = null;
+        if (body != null && body.get("expiresInDays") instanceof Number d && d.intValue() > 0) {
+            expiresAt = now.plusDays(d.intValue());
+        }
 
-        String code = generateUniqueCode();
-        CompanyRegisterCode crc = CompanyRegisterCode.builder()
-            .id(UUID.randomUUID())
-            .companyId(companyId)
-            .code(code)
-            .enabled(true)
-            .maxUses(maxUses)
-            .usedCount(0)
-            .createdBy(null)
-            .createdAt(LocalDateTime.now())
-            .expiresAt(null)
-            .defaultRole(defaultRole)
-            .build();
-        registerCodeRepository.save(crc);
+        CompanyRegisterCode crc = registerCodeService.create(companyId, defaultRole, maxUses, expiresAt, null);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", crc.getId().toString());
-        result.put("code", code);
+        result.put("code", crc.getCode());
         result.put("maxUses", crc.getMaxUses());
         result.put("defaultRole", crc.getDefaultRole());
+        result.put("expiresAt", crc.getExpiresAt() != null ? crc.getExpiresAt().toString() : null);
         return ApiResponse.success(result);
     }
 
@@ -222,22 +222,4 @@ public class AdminCompanyController {
         return ApiResponse.success();
     }
 
-    // ═══════════════════════════════════════════════════════════
-    // 内部工具
-    // ═══════════════════════════════════════════════════════════
-
-    /** 生成全局唯一注册码。小概率冲突（30^8 空间）时重试 5 次后抛异常让调用方重试。 */
-    private String generateUniqueCode() {
-        for (int i = 0; i < 5; i++) {
-            StringBuilder sb = new StringBuilder(CODE_LENGTH);
-            for (int j = 0; j < CODE_LENGTH; j++) {
-                sb.append(CODE_CHARS.charAt(RNG.nextInt(CODE_CHARS.length())));
-            }
-            String code = sb.toString();
-            if (registerCodeRepository.findByCode(code).isEmpty()) {
-                return code;
-            }
-        }
-        throw new RuntimeException("生成注册码失败，请重试");
-    }
 }

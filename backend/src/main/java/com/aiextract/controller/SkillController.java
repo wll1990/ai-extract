@@ -77,12 +77,15 @@ public class SkillController extends BaseController {
     }
 
     private final com.aiextract.service.ShareService shareService;
+    private final com.aiextract.config.CompanyScopeService companyScopeService;
     private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
 
     @PostMapping(value = "/{skillId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(@PathVariable String skillId,
             @Valid @RequestBody SkillChatRequest request,
             HttpServletRequest httpRequest) {
+        // 未发布分身只有归属方可以对话，防止跨租户读取草稿颗粒
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         // QueryGate 前置拦截 — 四层门控，短路返回
         var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
         if (blocked != null)
@@ -111,9 +114,18 @@ public class SkillController extends BaseController {
         return ApiResponse.success();
     }
 
+    /** 重命名会话 */
+    @PatchMapping("/conversations/{conversationId}")
+    public ApiResponse<Map<String, Object>> renameConversation(@PathVariable String conversationId,
+                                                               @RequestBody Map<String, String> body) {
+        return ApiResponse.success(conversationService.renameConversation(
+                conversationId, body.get("title"), extractUserId()));
+    }
+
     @PostMapping("/{skillId}/practice/start")
     public ApiResponse<PracticeStartResponse> startPractice(
             @PathVariable String skillId, @RequestBody PracticeStartRequest request) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return ApiResponse.success(skillService.startPractice(skillId, request, extractUserId()));
     }
 
@@ -122,6 +134,8 @@ public class SkillController extends BaseController {
             @PathVariable String skillId,
             @Valid @RequestBody PracticeRespondRequest request,
             HttpServletRequest httpRequest) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
+
         // QueryGate 前置拦截 — 四层门控
         var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(), getClientIp(httpRequest));
         if (blocked != null)
@@ -144,6 +158,7 @@ public class SkillController extends BaseController {
         if (customerMessage.isBlank() || myResponse.isBlank()) {
             return ApiResponse.error(400, "客户消息和你的回答不能为空");
         }
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         try {
             return ApiResponse.success(
                     practiceDemoService.evaluatePracticeResponse(
@@ -164,6 +179,7 @@ public class SkillController extends BaseController {
     @PostMapping("/{skillId}/feedback")
     public ApiResponse<Void> submitFeedback(
             @PathVariable String skillId, @RequestBody FeedbackRequest request) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         skillService.submitFeedback(skillId, request);
         return ApiResponse.success();
     }
@@ -174,8 +190,7 @@ public class SkillController extends BaseController {
      */
     @GetMapping("/{skillId}/suggested")
     public ApiResponse<List<String>> getSuggestedQuestions(@PathVariable String skillId) {
-        Skill skill = skillRepository.findById(UUID.fromString(skillId))
-                .orElseThrow(() -> new BusinessException(404, ErrorMessages.SKILL_NOT_FOUND));
+        Skill skill = companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return ApiResponse.success(grainRecommendationService.generateSuggestedQuestions(skill));
     }
 
@@ -213,7 +228,10 @@ public class SkillController extends BaseController {
      */
     @GetMapping("/{skillId}/detail")
     public ApiResponse<Map<String, Object>> getSkillDetail(@PathVariable String skillId) {
-        return ApiResponse.success(skillService.getSkillDetail(skillId));
+        // 已发布对所有登录用户可见；未发布仅归属方可见（跨租户草稿隔离）。
+        // 复用这里加载的实体，详情链路只查一次 skill。
+        Skill skill = companyScopeService.requireSkillReadable(UUID.fromString(skillId));
+        return ApiResponse.success(skillService.getSkillDetail(skill));
     }
 
     /**
@@ -221,11 +239,23 @@ public class SkillController extends BaseController {
      * B端管理员：可改任意状态（审核流水线）。
      * C端用户：只能对自己的分身操作 published（发布）。
      */
+    /** 恢复已废弃分身（30 天内），恢复后进入 reviewing 需重新发布 */
+    @PostMapping("/{skillId}/restore")
+    public ApiResponse<Void> restoreSkill(@PathVariable String skillId) {
+        companyScopeService.assertSkillOwnership(UUID.fromString(skillId));
+        skillService.restoreSkill(UUID.fromString(skillId));
+        return ApiResponse.success();
+    }
+
     @PutMapping("/{skillId}/status")
     public ApiResponse<Void> updateSkillStatus(
             @PathVariable String skillId,
             @RequestBody Map<String, String> body) {
-        String newStatus = body.getOrDefault("status", "active");
+        companyScopeService.assertSkillOwnership(UUID.fromString(skillId));
+        String newStatus = body.get("status");
+        if (newStatus == null || newStatus.isBlank()) {
+            throw new BusinessException(400, "缺少 status");
+        }
         String role = extractRole();
         if ("c_user".equalsIgnoreCase(role)) {
             // C端：只能发布自己的分身
@@ -239,6 +269,8 @@ public class SkillController extends BaseController {
             if (!"published".equals(newStatus)) {
                 throw new BusinessException(400, "只能发布");
             }
+            // C 端不得绕过管理端的发布门槛（颗粒/场景/画像）
+            skillService.assertPublishable(UUID.fromString(skillId));
         }
         skillService.updateSkillStatus(skillId, newStatus);
 
@@ -268,6 +300,7 @@ public class SkillController extends BaseController {
     @PostMapping("/{skillId}/share")
     public ApiResponse<Map<String, Object>> getOrCreateShare(@PathVariable UUID skillId,
             @RequestBody(required = false) Map<String, String> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         String channel = body != null ? body.getOrDefault("channel", SkillShare.CHANNEL_PUBLIC) : SkillShare.CHANNEL_PUBLIC;
         var share = shareService.getOrCreateShare(skillId, extractUserId(), channel);
         return ApiResponse.success(toShareMap(share));
@@ -279,6 +312,7 @@ public class SkillController extends BaseController {
     @PutMapping("/{skillId}/share")
     public ApiResponse<Map<String, Object>> toggleShare(
             @PathVariable UUID skillId, @RequestBody Map<String, Object> body) {
+        companyScopeService.assertSkillOwnership(skillId);
         boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
         var share = shareService.toggleShare(skillId, enabled);
         return ApiResponse.success(toShareMap(share));
@@ -289,6 +323,7 @@ public class SkillController extends BaseController {
      */
     @GetMapping("/{skillId}/share")
     public ApiResponse<Map<String, Object>> getShare(@PathVariable UUID skillId) {
+        companyScopeService.assertSkillOwnership(skillId);
         var share = shareService.findShare(skillId)
                 .orElseThrow(() -> new BusinessException(404, "尚未生成分享链接"));
         return ApiResponse.success(toShareMap(share));
@@ -302,10 +337,7 @@ public class SkillController extends BaseController {
         if (!sceneTag.isBlank()) {
             return ApiResponse.success(practiceDemoService.generateRecommendedQuestions(sceneTag));
         }
-        Skill skill = skillRepository.findById(skillId).orElse(null);
-        if (skill == null) {
-            return ApiResponse.success(List.of());
-        }
+        Skill skill = companyScopeService.requireSkillReadable(skillId);
         // 组织分身 → 委托 OrganizationSkillService 聚合成员场景标签
         if ("organization".equals(skill.getType())) {
             return ApiResponse.success(orgSkillService.getRecommendedQuestionsFallback(skillId));
@@ -329,6 +361,7 @@ public class SkillController extends BaseController {
      */
     @GetMapping("/{skillId}/scene-tags")
     public ApiResponse<List<Map<String, Object>>> getSceneTags(@PathVariable String skillId) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return ApiResponse.success(skillService.getSceneTags(skillId));
     }
 
@@ -342,6 +375,7 @@ public class SkillController extends BaseController {
      */
     @GetMapping("/{skillId}/practice-scenes")
     public ApiResponse<List<Map<String, Object>>> getPracticeScenes(@PathVariable String skillId) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return ApiResponse.success(skillService.getPracticeScenes(skillId));
     }
 
@@ -357,6 +391,7 @@ public class SkillController extends BaseController {
     public SseEmitter evaluatePractice(
             @PathVariable String skillId,
             @RequestBody Map<String, String> body) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return SseAdapter.fromFlux(
                 chatStreamService.evaluatePractice(skillId,
                         body.getOrDefault("conversation", ""),
@@ -370,6 +405,7 @@ public class SkillController extends BaseController {
     @GetMapping("/{skillId}/practice/trend")
     public ApiResponse<List<Map<String, Object>>> getPracticeTrend(
             @PathVariable String skillId) {
+        companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         UUID userId = extractUserId();
         var evaluations = skillService.getPracticeScoreTrend(skillId, userId);
         return ApiResponse.success(evaluations);
@@ -433,6 +469,7 @@ public class SkillController extends BaseController {
     public ApiResponse<Map<String, String>> uploadAvatar(
             @PathVariable String skillId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        companyScopeService.assertSkillOwnership(UUID.fromString(skillId));
         return ApiResponse.success(skillService.uploadAvatar(skillId, file));
     }
 

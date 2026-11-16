@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { authHeaders } from '@/lib/api/client';
 import { useParams, useRouter } from 'next/navigation';
 import { getToken } from '@/lib/storage';
 import { copyToClipboard } from '@/lib/clipboard';
+import { csrfHeader } from '@/lib/csrf';
 
 const GRAIN_ENOUGH = 10;
 const GRAIN_SUGGEST_MORE = 5;
@@ -31,6 +33,9 @@ export default function ReportSessionPage() {
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [pollStopped, setPollStopped] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [extraction, setExtraction] = useState<{ status: string; error: string | null } | null>(null);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval>>();
   const startTimeRef = useRef(Date.now());
@@ -48,7 +53,7 @@ export default function ReportSessionPage() {
   const checkReport = useCallback(async () => {
     try {
       const r = await fetch(`/api/v1/reports/by-session/${encodeURIComponent(sessionId)}/html`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
+        headers: { ...authHeaders() },
       });
       setLastCheck(new Date());
       setPollCount(c => c + 1);
@@ -110,6 +115,50 @@ export default function ReportSessionPage() {
       clearTimeout(timeoutId);
     };
   }, [sessionId, loading, checkReport]);
+
+  // 0 颗粒时拉取访谈萃取状态，给出可读原因与重试入口
+  useEffect(() => {
+    if (!pollStopped || pollGrains !== 0) return;
+    fetch(`/api/v1/interviews/${encodeURIComponent(sessionId)}`, {
+      headers: { ...authHeaders() },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.code === 200 && d.data) {
+          setExtraction({
+            status: d.data.extractionStatus || 'pending',
+            error: d.data.extractionError || null,
+          });
+        }
+      })
+      .catch(() => { /* 状态查询失败不阻塞页面 */ });
+  }, [pollStopped, pollGrains, sessionId]);
+
+  const retryExtraction = async () => {
+    setRetrying(true);
+    try {
+      const r = await fetch(`/api/v1/interviews/${encodeURIComponent(sessionId)}/retry-extraction`, {
+        method: 'POST',
+        headers: { ...authHeaders(), ...csrfHeader() },
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.code === 200) {
+        setExtraction({ status: 'extracting', error: null });
+        setPollGrains(-1);
+        setPollStopped(false);
+        startTimeRef.current = Date.now();
+        if (timerRef.current) clearInterval(timerRef.current);
+        checkReport();
+        timerRef.current = setInterval(checkReport, 10_000);
+      } else {
+        setRetryError(d.message || '重新萃取失败，请稍后再试');
+      }
+    } catch {
+      setRetryError('网络错误，请稍后再试');
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handleCopy = useCallback(async () => {
     const ok = await copyToClipboard('platform.mindforce.com');
@@ -200,6 +249,29 @@ export default function ReportSessionPage() {
         </p>
 
         {/* Poll stopped states */}
+        {pollStopped && pollGrains === 0 && (
+          <div className="rounded-xl bg-red-50 border border-red-200 p-4 mb-4 text-left">
+            <p className="text-sm font-medium text-red-700">没有提取到经验颗粒</p>
+            <p className="text-xs text-red-600 mt-1">
+              {extraction?.error
+                || (extraction?.status === 'failed'
+                  ? '萃取失败，可重试或返回补充更多案例细节。'
+                  : '访谈内容可能不足，建议返回补充具体案例、客户原话和推进过程。')}
+            </p>
+            {retryError && <p className="text-xs text-red-700 mt-1">{retryError}</p>}
+            <div className="mt-3 flex flex-wrap gap-3">
+              <button onClick={retryExtraction} disabled={retrying}
+                className="text-sm font-medium text-red-700 hover:text-red-800 underline disabled:opacity-50">
+                {retrying ? '正在重新萃取…' : '重新萃取'}
+              </button>
+              <button onClick={() => router.back()}
+                className="text-sm font-medium text-red-700 hover:text-red-800 underline">
+                ← 返回继续补充
+              </button>
+            </div>
+          </div>
+        )}
+
         {pollStopped && pollGrains > 0 && pollGrains < GRAIN_SUGGEST_MORE && (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 mb-4">
             <p className="text-sm font-medium text-amber-700">内容还不够丰富</p>

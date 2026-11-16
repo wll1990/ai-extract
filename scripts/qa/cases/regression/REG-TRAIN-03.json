@@ -1,0 +1,49 @@
+[
+  {
+    "id": "REG-TRAIN-03",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "T2 空计划/非法任务可直接发布，学员端出现不可执行任务",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-空计划", "description": "发布前置校验" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": { "type": "webinar", "title": "QA-${runId}-非法类型任务", "orderNo": 1 },
+        "expect": { "status": 400 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": { "type": "reading", "title": "QA-${runId}-缺资源任务", "orderNo": 1 },
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.training_plan where id = :planId",
+        "expect": "draft"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.training_task where plan_id = :planId",
+        "expect": "0"
+      }
+    ]
+  }
+]

@@ -3,6 +3,7 @@ package com.aiextract;
 import com.alibaba.dashscope.embeddings.TextEmbedding;
 import com.alibaba.dashscope.embeddings.TextEmbeddingParam;
 import com.alibaba.dashscope.utils.Constants;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import java.util.Collections;
 import static org.junit.jupiter.api.Assertions.*;
@@ -11,6 +12,8 @@ public class EmbeddingSdkTest {
 
     @Test
     public void testEmbeddingWithNewWorkspace() {
+        Assumptions.assumeTrue(System.getenv("DASHSCOPE_API_KEY") != null,
+                "跳过：未配置 DASHSCOPE_API_KEY，无法调用真实 embedding");
         Constants.baseHttpApiUrl = "https://ws-2q3nlw8vormc0y29.cn-beijing.maas.aliyuncs.com/api/v1";
 
         String[] texts = {"你好世界", "今天天气真好", "销售技巧分享"};

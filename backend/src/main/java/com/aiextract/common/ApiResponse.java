@@ -1,5 +1,6 @@
 package com.aiextract.common;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -31,6 +32,12 @@ public class ApiResponse<T> {
      * 提示信息
      */
     private String message;
+
+    /**
+     * 稳定业务子码（仅冲突类错误下发，成功响应不出现）
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String subCode;
 
     /**
      * 响应数据
@@ -73,6 +80,22 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(int code, String message) {
         return ApiResponse.<T>builder()
                 .code(code)
+                .message(message)
+                .data(null)
+                .build();
+    }
+
+    /**
+     * 构建带稳定子码的错误响应。
+     *
+     * @param code    错误码
+     * @param subCode 稳定子码（可空）
+     * @param message 错误信息
+     */
+    public static <T> ApiResponse<T> error(int code, String subCode, String message) {
+        return ApiResponse.<T>builder()
+                .code(code)
+                .subCode(subCode)
                 .message(message)
                 .data(null)
                 .build();

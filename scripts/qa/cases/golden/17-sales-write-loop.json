@@ -1,0 +1,86 @@
+[
+  {
+    "id": "GOLD-SALES-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "sales",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "employee",
+        "api": "POST /sales/reviews",
+        "body": {
+          "coachSkillId": "0a000000-0000-0000-0000-000000000032",
+          "customerName": "QA-${runId}-复盘客户",
+          "topic": "QA-${runId}-预算与决策链复盘",
+          "shareTranscriptWithCoach": false,
+          "transcript": "销售：王总，上次方案您看过了，今天主要想确认预算和推进节奏。\n客户：方案还行，但今年预算已经用掉大半，而且价格比另外一家高。\n销售：理解。价格这部分我不急着解释，先确认一下您内部立项需要谁签字、评审会大概什么时候？\n客户：业务我这边能定，但财务要看回报周期，法务还要看合同条款。\n销售：那我们分三步走。第一，我整理一页纸的投入产出和回收周期给财务；第二，把标准合同条款和过往案例发给法务；第三，两周内安排一次业务+财务的联合评审。您看这个节奏可以吗？\n客户：可以，但价格还是要有说法。\n销售：我们把实施周期、交付团队和培训支持拆开算总拥有成本，同时提供分阶段验收，首付款降低，尾款和效果挂钩。这样财务看到的现金流压力会小很多。\n客户：行，你先把材料发我，我转给财务。\n销售：好的，我今天下班前发您，另外约下周三上午评审，我提前一天和您对一遍材料。"
+        },
+        "expect": { "status": 200 },
+        "save": { "reviewId": "data.session.id" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /sales/reviews/${reviewId}/report",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /sales/reviews/${reviewId}/report",
+        "await": {
+          "sql": "select status from public.review_report where session_id = :reviewId order by version desc limit 1",
+          "until": ["ready"],
+          "maxAttempts": 60,
+          "intervalMs": 10000
+        },
+        "expect": { "status": 200, "json": { "data.status": "ready" } }
+      },
+      {
+        "as": "employee",
+        "api": "POST /sales/reviews/${reviewId}/leads",
+        "body": {
+          "name": "QA-${runId}-线索",
+          "contactName": "王总",
+          "contactPhone": "13800000000",
+          "needSummary": "预算受限，需要回报周期材料与分阶段付款方案"
+        },
+        "expect": { "status": 200, "json": { "data.created": true } },
+        "save": { "leadId": "data.lead.id" }
+      },
+      {
+        "as": "employee",
+        "api": "POST /sales/reviews/${reviewId}/tasks",
+        "body": {
+          "drafts": [
+            {
+              "title": "QA-${runId}-跟进任务",
+              "channel": "phone",
+              "content": "下周三联合评审前，先和王总对一遍投入产出材料"
+            }
+          ]
+        },
+        "expect": { "status": 200 }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.review_report where session_id = :reviewId",
+        "op": "gte",
+        "expect": "1"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.lead where id = :leadId and source_review_id = :reviewId",
+        "expect": "1"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.follow_up_task where title = 'QA-' || :runId || '-跟进任务'",
+        "expect": "1"
+      }
+    ]
+  }
+]

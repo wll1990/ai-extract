@@ -38,3 +38,29 @@ docker-compose.override.yml
 
 # graphify AST 缓存（知识图谱本体 graphify-out/graph.json 等仍追踪）
 graphify-out/cache/
+# 每日 graphify 快照：单份 60MB+，只保留根目录本体
+graphify-out/2*/
+# 前端独立图谱与差异/截图产物
+frontend/graphify-out/
+
+# 本地截图与设计对照产物
+/artifacts/
+/frontend/artifacts/
+
+# 编辑器/Office 临时文件
+*.bak
+.~*
+
+# Playwright
+frontend/e2e/.auth/
+frontend/playwright-report/
+frontend/test-results/
+frontend/blob-report/
+
+# 本地导出文件
+data/exports/
+backend/data/
+
+# QA 黑盒测试
+.qa.env
+reports/qa/

@@ -1,5 +1,7 @@
 package com.aiextract.config;
 
+import com.aiextract.service.ChatClientResolver;
+import com.aiextract.service.TenantChatClientProxy;
 import com.aiextract.service.TokenUsageService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
@@ -7,6 +9,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
@@ -26,17 +29,38 @@ public class AiConfig {
     @Value("${spring.ai.openai.chat.options.temperature:0.7}")
     private double temperature;
 
-    /** Chat: DeepSeek（包装 ChatModel 自动记录 token，无循环依赖） */
-    @Bean
-    public ChatClient chatClient(ChatModel chatModel, TokenUsageService tokenUsageService) {
+    /** 平台 ChatClient：未配置企业 Key / 无企业上下文时使用 */
+    @Bean("platformChatClient")
+    public ChatClient platformChatClient(ChatModel chatModel, TokenUsageService tokenUsageService) {
         return ChatClient.builder(
-            new TokenAwareChatModel(chatModel, tokenUsageService, modelName)
+            new TokenAwareChatModel(chatModel, tokenUsageService, modelName, null)
         ).defaultOptions(OpenAiChatOptions.builder()
                 .model(modelName)
                 .maxTokens(maxTokens)
                 .temperature(temperature)
                 .build()
         ).build();
+    }
+
+    /** 租户代理：所有注入 ChatClient 的代码无感切换到企业 Key */
+    @Bean("chatClient")
+    @Primary
+    public ChatClient chatClient(ChatClientResolver resolver) {
+        return TenantChatClientProxy.of(resolver);
+    }
+
+    /**
+     * RestClient 超时：报告/萃取的非流式 LLM 调用可能跑 1-2 分钟。
+     * 默认客户端（classpath 存在 OkHttp 时）读超时只有 10s，长 prompt 必然超时。
+     */
+    @Bean
+    public org.springframework.boot.web.client.RestClientCustomizer aiRestClientTimeoutCustomizer() {
+        return builder -> {
+            var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
+            factory.setReadTimeout(java.time.Duration.ofSeconds(180));
+            builder.requestFactory(factory);
+        };
     }
 
     /** Token 记录异步线程池 */
@@ -109,6 +133,60 @@ public class AiConfig {
         executor.setThreadNamePrefix("clean-");
         executor.setRejectedExecutionHandler(
             new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 颗粒抽取线程池 — 与 cleanExecutor 分离。
+     * 清洗任务本身跑在 cleanExecutor 上，chunk 抽取若再提交到同一池并 join，
+     * 池满时会互相等待形成自锁（M16）。
+     */
+    @Bean("grainExtractExecutor")
+    public Executor grainExtractExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(40);
+        executor.setThreadNamePrefix("grain-extract-");
+        executor.setRejectedExecutionHandler(
+            new java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
+        executor.initialize();
+        return executor;
+    }
+
+    /**
+     * 评测候选生成线程池 — 逐素材 AI 出题，独立于销冠清洗管道，避免相互抢资源。
+     *
+     * <p>拒绝策略必须是 AbortPolicy：CallerRunsPolicy 会在队列满时让 AI 调用回落到
+     * HTTP 请求线程，违反「请求线程内禁止 AI 调用」的红线。</p>
+     */
+    @Bean("generationExecutor")
+    public Executor generationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("eval-gen-");
+        executor.setRejectedExecutionHandler(
+            new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+        executor.setTaskDecorator(new TokenContext.Decorator());
+        executor.initialize();
+        return executor;
+    }
+
+    /** 内容智能生成线程池 — 知识/案例/考题/派生，和评测候选生成隔离 */
+    @Bean("contentGenerationExecutor")
+    public Executor contentGenerationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
+        executor.setQueueCapacity(50);
+        executor.setThreadNamePrefix("content-gen-");
+        executor.setRejectedExecutionHandler(
+            new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
         executor.setTaskDecorator(new TokenContext.Decorator());
         executor.initialize();
         return executor;

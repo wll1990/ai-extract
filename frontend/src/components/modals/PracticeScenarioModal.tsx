@@ -1,7 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect } from 'react';
-import { getToken } from '@/lib/storage';
-import { API_BASE } from '@/lib/api/client';
+import { API_BASE, authHeaders } from '@/lib/api/client';
 import { connectSse } from '@/lib/sse';
 import { SkillChatView } from '@/components/skill/SkillChatView';
 
@@ -67,10 +66,9 @@ export default function PracticeScenarioModal({ skillId, grain, grains, grainIdx
       started.current = true;
       startRound(buildOpening(grain.sceneDescription || ''));
     }
-    // 加载溯源
-    const token = getToken();
+    // 加载溯源（B 端走 Cookie，有 token 时才带 Authorization）
     fetch(`${API_BASE}/admin/skills/${skillId}/grain-source?grainId=${grain.id}`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: authHeaders()
     }).then(r => r.json()).then(d => {
       console.log('source data:', d);
       if (d.code === 200 && d.data?.sourceExcerpt) setSourceData(d.data);

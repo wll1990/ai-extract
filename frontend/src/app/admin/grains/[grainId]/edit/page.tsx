@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { API_BASE, authHeaders } from '@/lib/api/client';
+import { csrfHeader } from '@/lib/csrf';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 /**
@@ -16,6 +17,8 @@ export default function GrainEditPage() {
   const grainId = params.grainId as string;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(false);
   const [form, setForm] = useState({
     expertThought: '', standardScript: '', commonMistakes: '',
     applicableCondition: '', sceneTag: '', weight: 1.0,
@@ -23,27 +26,33 @@ export default function GrainEditPage() {
 
   useEffect(() => {
     fetch(`${API_BASE}/admin/grains/${grainId}`, { headers: authHeaders() })
-      .then(r => r.json()).then(d => {
-        const g = d.data;
+      .then(async r => {
+        const d = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(d?.message || `加载失败 (${r.status})`);
+        const g = d?.data;
+        if (!g) throw new Error('颗粒不存在');
         setForm({
           expertThought: g.expertThought || '', standardScript: g.standardScript || '',
           commonMistakes: g.commonMistakes || '', applicableCondition: g.applicableCondition || '',
           sceneTag: g.sceneTag || '', weight: g.weight || 1.0,
         });
-      }).catch(() => {}).finally(() => setLoading(false));
+      }).catch((e: unknown) => setError(e instanceof Error ? e.message : '颗粒加载失败'))
+      .finally(() => setLoading(false));
   }, [grainId]);
 
   const handleSave = async () => {
-    setSaving(true);
+    setSaving(true); setError(''); setSaved(false);
     try {
-      await fetch(`${API_BASE}/admin/grains/${grainId}`, {
-        method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      const res = await fetch(`${API_BASE}/admin/grains/${grainId}`, {
+        method: 'PUT', headers: { ...authHeaders(), ...csrfHeader(), 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      alert('✅ 已保存，向量已更新，下次对话生效');
-      router.push(`/admin/grains/${grainId}`);
-    } catch {
-      alert('保存失败');
+      const d = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(d?.message || `保存失败 (${res.status})`);
+      setSaved(true);
+      setTimeout(() => router.push(`/admin/grains/${grainId}`), 600);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '保存失败，请稍后重试');
     } finally { setSaving(false); }
   };
 
@@ -54,6 +63,15 @@ export default function GrainEditPage() {
       <button onClick={() => router.back()} className="text-sm text-primary hover:underline mb-4 block">← 返回</button>
       <div className="rounded-xl bg-surface-2 p-6 shadow-sm">
         <h2 className="text-lg font-bold mb-4">✏️ 编辑颗粒</h2>
+
+        {error && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
+        )}
+        {saved && (
+          <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
+            已保存，向量已更新
+          </div>
+        )}
 
         <EditField label="🧠 专家思考（这个场景下的判断逻辑）" value={form.expertThought}
           onChange={v => setForm(p => ({ ...p, expertThought: v }))} rows={4} />

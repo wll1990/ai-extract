@@ -1,0 +1,92 @@
+[
+  {
+    "id": "REG-TRN-06",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "sales",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "培训发布只有单一错误提示，管理员不知道还有哪些任务阻塞；任务预览只能看结构，看不到绑定资源正文；预览默认取草稿版本而非学员实际看到的已发布版本",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge",
+        "body": {
+          "title": "QA-${runId}-预览用知识",
+          "category": "product",
+          "sourceType": "tenant",
+          "content": "这是一条用于验证发布预检与任务预览的知识正文。",
+          "status": "pending",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "knowledgeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/${knowledgeId}/approve",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans",
+        "body": { "name": "QA-${runId}-发布预检回归", "description": "验证 readiness 与任务预览" },
+        "expect": { "status": 200 },
+        "save": { "planId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/tasks",
+        "body": {
+          "type": "reading",
+          "phaseNo": 1,
+          "phaseName": "认知",
+          "title": "QA-${runId}-阅读任务",
+          "resourceType": "knowledge",
+          "resourceId": "${knowledgeId}",
+          "isRequired": true,
+          "orderNo": 1
+        },
+        "expect": { "status": 200 },
+        "save": { "taskId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}/readiness",
+        "expect": { "status": 200, "json": { "data.ok": true } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}/tasks/${taskId}/preview",
+        "expect": { "status": 200, "json": { "data.resource.available": true } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}/resource-preview?resourceType=knowledge&resourceId=${knowledgeId}",
+        "expect": { "status": 200, "json": { "data.available": true } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}/preview",
+        "expect": { "status": 200, "json": { "data.published": false } }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/training/plans/${planId}/publish",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/training/plans/${planId}/preview",
+        "expect": { "status": 200, "json": { "data.published": true, "data.version": 1 } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.training_plan where id = :planId",
+        "expect": "published"
+      }
+    ]
+  }
+]

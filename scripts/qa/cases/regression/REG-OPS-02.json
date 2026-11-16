@@ -1,0 +1,49 @@
+[
+  {
+    "id": "REG-OPS-02",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "daily",
+    "roles": ["employee"],
+    "llm": true,
+    "sourceBug": "OPS-03 对话落库无幂等：网络重试/双击同一问题会落两条 user + 两条 assistant",
+    "steps": [
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说预算还没批，我该怎么推进？",
+          "clientMessageId": "qa-${runId}-idem-1"
+        },
+        "expect": { "status": 200, "eventTypes": ["meta", "content", "done"], "contentNonEmpty": true },
+        "saveSse": { "from": "meta", "fields": { "conversationId": "conversationId" } },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户说预算还没批，我该怎么推进？",
+          "clientMessageId": "qa-${runId}-idem-1",
+          "conversationId": "${conversationId}"
+        },
+        "expect": { "status": 200, "eventTypes": ["meta", "content", "done"], "contentNonEmpty": true },
+        "timeout": 120000
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_message where conversation_id = :conversationId and client_message_id = 'qa-' || :runId || '-idem-1'",
+        "expect": "2"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.skill_conversation where id = :conversationId",
+        "expect": "1"
+      }
+    ]
+  }
+]

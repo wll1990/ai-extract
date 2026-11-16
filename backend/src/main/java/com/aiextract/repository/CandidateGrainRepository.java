@@ -3,8 +3,12 @@ package com.aiextract.repository;
 import com.aiextract.model.CandidateGrain;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -33,6 +37,9 @@ public interface CandidateGrainRepository extends JpaRepository<CandidateGrain, 
      * @return 结果列表
      */
     List<CandidateGrain> findBySourceInsightId(UUID insightId);
+
+    /** 批量取洞察的候选颗粒，避免前端逐条请求（N+1）。 */
+    List<CandidateGrain> findBySourceInsightIdIn(java.util.Collection<UUID> insightIds);
     /**
      * 统计（Skill,Id,Status）。
      * @param skillId skillId
@@ -47,5 +54,11 @@ public interface CandidateGrainRepository extends JpaRepository<CandidateGrain, 
      */
     long countByStatus(String status);
 
+    /** 条件更新：只有仍处于待审核时才置为通过，用于并发审批的幂等保护 */
+    @Modifying(flushAutomatically = true)
+    @Query("UPDATE CandidateGrain c SET c.status = 'approved', c.reviewedAt = :now, c.note = :note "
+        + "WHERE c.id = :id AND c.status = 'pending_review'")
+    int markApprovedIfPending(@Param("id") UUID id, @Param("now") LocalDateTime now,
+                              @Param("note") String note);
 
 }

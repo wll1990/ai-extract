@@ -18,6 +18,9 @@ public interface SkillMessageRepository extends JpaRepository<SkillMessage, UUID
      * @return 查询结果列表
      */
     List<SkillMessage> findByConversationIdOrderByCreatedAtAsc(UUID conversationId);
+
+    /** 某会话中某角色的消息数（培训陪练的调用额度判定） */
+    long countByConversationIdAndRole(UUID conversationId, String role);
     /**
      * 统计（Conversation,Id）。
      * @param conversationId conversationId
@@ -58,4 +61,7 @@ public interface SkillMessageRepository extends JpaRepository<SkillMessage, UUID
     /** 删除会话下所有消息 */
     void deleteByConversationId(UUID conversationId);
 
+    /** 幂等键查询：同一会话下 user/assistant 各一条，重复提交时用于跳过落库或重放。 */
+    java.util.Optional<SkillMessage> findFirstByConversationIdAndClientMessageIdAndRole(
+            UUID conversationId, String clientMessageId, String role);
 }

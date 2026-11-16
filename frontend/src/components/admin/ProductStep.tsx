@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { getToken } from '@/lib/storage';
-import { API_BASE, apiClient } from '@/lib/api/client';
+import { API_BASE, apiClient, authHeaders} from '@/lib/api/client';
+import { csrfHeader } from '@/lib/csrf';
 import { getAuditDashboard, type AuditDashboard } from '@/lib/api/audit';
 
 // JSON array ↔ plain text helpers
@@ -19,6 +20,7 @@ interface Props {
   allPassed: boolean;
   handlePublish: () => void;
   handleDiscard: () => void;
+  handleUnpublish: () => void;
   showDemoModal: boolean;
   setShowDemoModal: (v: boolean) => void;
   onPreviewReport: (skillId: string) => void;
@@ -34,7 +36,7 @@ const SUB_STEPS = [
 
 export default function ProductStep({
   skillId, data, productSubStep, setProductSubStep,
-  publishing, publishChecks, allPassed, handlePublish, handleDiscard,
+  publishing, publishChecks, allPassed, handlePublish, handleDiscard, handleUnpublish,
   showDemoModal, setShowDemoModal,
   onPreviewReport, onDownloadReport, onDataRefresh,
 }: Props) {
@@ -78,7 +80,7 @@ export default function ProductStep({
       });
       await fetch(`${API_BASE}/admin/skills/${skillId}/profile`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(), ...csrfHeader() },
         body: JSON.stringify({
           personality: inlineEdit.personality || '',
           speakingStyle: inlineEdit.speakingStyle || '',
@@ -249,11 +251,13 @@ export default function ProductStep({
         <div className="space-y-6">
           <div className="bg-surface-2 border rounded-xl p-5">
             <h3 className="text-sm font-semibold mb-3">📄 报告输出</h3>
-            {verified ? (
+            {(verified || data.skill.status === 'published') ? (
               <>
                 <p className="text-xs text-green-600 mb-3">
-                  ✅ 验证已完成（{demoEvals.length}次·最高{latestEval?.score || '-'}分）
-                  {data.skillsSummary.activeGrains > 0 && ` · 基于${data.skillsSummary.activeGrains}条活跃颗粒生成最终报告`}
+                  {verified
+                    ? `✅ 验证已完成（${demoEvals.length}次·最高${latestEval?.score || '-'}分）`
+                    : '✅ 已发布，报告基于当前活跃颗粒生成'}
+                  {data.skillsSummary.activeGrains > 0 && ` · 基于${data.skillsSummary.activeGrains}条活跃颗粒`}
                 </p>
                 <div className="flex flex-wrap gap-2">
 {(() => {
@@ -261,7 +265,7 @@ export default function ProductStep({
                     const sc = data.skillsSummary.sceneTags?.length || 0;
                     const ready = g >= 10 && sc >= 3;
                     return (
-                      <button onClick={() => onPreviewReport(skillId)}
+                      <button onClick={() => onPreviewReport(skillId)} disabled={!ready}
                         className={`px-4 py-2 rounded-lg text-sm transition-colors ${
                           ready ? 'border border-primary text-primary hover:bg-primary-light' : 'border border-gray-200 text-gray-400 cursor-not-allowed'
                         }`}
@@ -278,27 +282,45 @@ export default function ProductStep({
             )}
           </div>
 
-          <div className="bg-surface-2 border rounded-xl p-5">
+          <div className="bg-surface-2 border rounded-xl p-5" data-tour="audit-publish-check">
             <h3 className="text-sm font-semibold mb-4">发布条件</h3>
-            <div className="space-y-2 mb-6">
-              {publishChecks.map(c => (
-                <div key={c.label} className="flex items-center gap-2 text-sm">
-                  <span>{c.pass ? '✅' : '❌'}</span>
-                  <span className={c.pass ? 'text-foreground' : 'text-red-500'}>{c.label}</span>
+            {data.skill.status === 'published' ? (
+              <div className="space-y-3">
+                <p className="text-sm text-green-600">✅ 已发布上线，员工可在分身广场看到</p>
+                <div className="flex gap-3">
+                  <button onClick={handleUnpublish} disabled={publishing}
+                    className="px-6 py-2 border border-amber-300 text-amber-700 rounded-lg text-sm hover:bg-amber-50 disabled:opacity-50">
+                    {publishing ? '撤销中...' : '⏸ 撤销发布'}
+                  </button>
+                  <button onClick={handleDiscard} disabled={publishing}
+                    className="px-6 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">
+                    🗑 废弃
+                  </button>
                 </div>
-              ))}
-            </div>
-            <div className="flex gap-3">
-              <button disabled={!allPassed || publishing}
-                onClick={handlePublish}
-                className={`px-6 py-2 rounded-lg text-white text-sm ${allPassed ? 'bg-success hover:bg-success' : 'bg-gray-300 cursor-not-allowed'}`}>
-                {publishing ? '发布中...' : '🚀 发布分身'}
-              </button>
-              <button onClick={handleDiscard}
-                className="px-6 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50">
-                🗑 废弃
-              </button>
-            </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2 mb-6">
+                  {publishChecks.map(c => (
+                    <div key={c.label} className="flex items-center gap-2 text-sm">
+                      <span>{c.pass ? '✅' : '❌'}</span>
+                      <span className={c.pass ? 'text-foreground' : 'text-red-500'}>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button disabled={!allPassed || publishing}
+                    onClick={handlePublish}
+                    className={`px-6 py-2 rounded-lg text-white text-sm ${allPassed ? 'bg-success hover:bg-success' : 'bg-gray-300 cursor-not-allowed'}`}>
+                    {publishing ? '发布中...' : '🚀 发布分身'}
+                  </button>
+                  <button onClick={handleDiscard} disabled={publishing}
+                    className="px-6 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50">
+                    🗑 废弃
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

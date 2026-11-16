@@ -26,9 +26,17 @@ scp -q scripts/stop-all.sh \
     scripts/start-ai-service.sh \
     scripts/start-platform.sh \
     scripts/start-frontend.sh \
-    scripts/start-feishu-bot.sh \
+    scripts/start-im-bridge.sh \
+    scripts/status.sh \
     mindforge:/opt/mindforge/scripts/
 ssh mindforge "chmod +x /opt/mindforge/scripts/*.sh"
+
+# 0.5 质量门禁（可选）：DEPLOY_GATE=1 时先跑静态检查+单测+只读权限矩阵
+if [ "${DEPLOY_GATE:-0}" = "1" ]; then
+  echo -e "\n${YELLOW}[gate] 构建前质量门禁（qa:quick）...${NC}"
+  npm run qa:quick
+  echo -e "${GREEN}  gate 通过${NC}"
+fi
 
 # 1. 停服
 echo -e "\n${YELLOW}[1/8] 停止所有服务...${NC}"
@@ -48,8 +56,8 @@ bash scripts/deploy-frontend.sh
 echo -e "\n${YELLOW}[5/8] 部署 AI 服务...${NC}"
 bash scripts/deploy-ai-service.sh
 
-echo -e "\n${YELLOW}[6/8] 部署飞书桥...${NC}"
-bash scripts/deploy-feishu-bot.sh
+echo -e "\n${YELLOW}[6/8] 部署 IM 桥（飞书/企微/钉钉）...${NC}"
+bash scripts/deploy-im-bridge.sh
 
 # 7. 同步配置
 echo -e "\n${YELLOW}[7/8] 同步生产配置...${NC}"
@@ -59,6 +67,15 @@ scp -q config/backend.env config/frontend.env config/platform.env mindforge:/opt
 # 8. 启服
 echo -e "\n${YELLOW}[8/8] 启动所有服务...${NC}"
 ssh mindforge "bash /opt/mindforge/scripts/start-all.sh"
+
+# 8.5 发布后回归（可选）：POST_DEPLOY_QA=1 时对新版本跑 release gate
+if [ "${POST_DEPLOY_QA:-0}" = "1" ]; then
+  echo -e "\n${YELLOW}[post] 发布后回归（qa:release）...${NC}"
+  if ! bash scripts/qa/release-gate.sh; then
+    echo -e "${YELLOW}  ⚠ 回归失败：服务已上线，请立即查看 reports/qa 并决定回滚${NC}"
+    exit 1
+  fi
+fi
 
 echo -e "\n${GREEN}=========================================${NC}"
 echo -e "${GREEN}  ✅ 部署完成${NC}"

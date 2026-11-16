@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>侧栏底部栏 · 三种做法</title>
+<style>
+  :root{
+    --surface:#f8fafc; --fg:#1e293b; --muted:#64748b; --muted-2:#94a3b8;
+    --border:#e2e8f0; --primary:#2563eb; --primary-light:rgba(37,99,235,.10);
+    --danger:#dc2626; --danger-bg:#fef2f2;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#e9eef5;color:var(--fg);font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;padding:30px;-webkit-font-smoothing:antialiased}
+  .page-title{font-size:18px;font-weight:700;margin-bottom:4px}
+  .page-sub{font-size:13px;color:var(--muted);margin-bottom:22px}
+  .caption{font-size:12px;color:var(--muted);margin:24px 0 10px;font-weight:500;text-align:center}
+  .caption b{color:#334155}
+
+  .row{display:flex;gap:26px;justify-content:center;align-items:flex-start}
+  .wrap{width:260px}
+  .cname{font-size:12.5px;font-weight:600;color:#334155;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:#dcfce7;color:#15803d}
+  .tag.gray{background:#f1f5f9;color:#64748b}
+  .tag.red{background:#fef2f2;color:#b91c1c}
+  .sidebar{width:240px;height:520px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 26px rgba(15,23,42,.07);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .sb-title{padding:16px 18px 8px;font-size:11px;font-weight:600;color:var(--muted-2);letter-spacing:.08em}
+  .nav{padding:0 10px;flex:1}
+
+  /* first-run card */
+  .firstrun{margin:0 10px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 11px}
+  .firstrun .t{font-size:12px;font-weight:600;color:#1d4ed8}
+  .firstrun .d{font-size:11px;color:#3b82f6;margin-top:2px;line-height:1.5}
+  .firstrun .a{margin-top:7px;font-size:11px;font-weight:600;color:#1d4ed8;display:flex;align-items:center;gap:4px}
+
+  .item{height:36px;display:flex;align-items:center;gap:10px;padding:0 10px;border-radius:6px;font-size:13px;color:#475569;margin-bottom:2px}
+  .item svg{width:16px;height:16px;color:#94a3b8;flex-shrink:0}
+  .item.on{background:var(--primary-light);color:var(--primary);font-weight:600}
+  .item.on svg{color:var(--primary)}
+  .item .count{margin-left:auto;font-size:10px;font-weight:600;color:#b91c1c;background:var(--danger-bg);border-radius:6px;padding:1px 5px}
+
+  /* footer variants */
+  .foot{border-top:1px solid var(--border);padding:8px 10px 10px}
+  .foot-icons{display:flex;align-items:center;gap:2px}
+  .fbtn{width:34px;height:34px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:#94a3b8;position:relative}
+  .fbtn:hover{background:#f8fafc;color:#475569}
+  .fbtn svg{width:16px;height:16px}
+  .fbtn .k{font-size:11px;font-weight:600;color:#94a3b8}
+  .fbtn .tip{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);background:#1e293b;color:#fff;font-size:10.5px;padding:4px 8px;border-radius:5px;white-space:nowrap;display:none}
+  .wrap:hover .fbtn .tip{display:block}
+  .foot-one{display:flex;align-items:center;gap:9px;height:32px;padding:0 8px;border-radius:6px;font-size:12.5px;color:#475569}
+  .foot-one svg{width:15px;height:15px;color:#94a3b8}
+  .foot-one .chev{margin-left:auto;width:12px;height:12px;color:#cbd5e1}
+  .foot-rows .frow{height:32px;display:flex;align-items:center;gap:9px;padding:0 8px;border-radius:6px;font-size:12.5px;color:#475569}
+  .foot-rows .frow svg{width:15px;height:15px;color:#94a3b8}
+  .foot-rows .kbd{margin-left:auto;font-size:10px;color:var(--muted-2);border:1px solid var(--border);border-radius:4px;padding:1px 4px;line-height:12px}
+
+  /* popover */
+  .pop{position:absolute;left:12px;bottom:52px;width:196px;background:#fff;border:1px solid var(--border);border-radius:10px;box-shadow:0 14px 34px rgba(15,23,42,.14);overflow:hidden}
+  .pop .pi{height:34px;display:flex;align-items:center;gap:8px;padding:0 12px;font-size:12px;color:#475569}
+  .pop .pi svg{width:14px;height:14px;color:#94a3b8}
+  .pop .pi .kbd{margin-left:auto;font-size:10px;color:var(--muted-2)}
+
+  .reason{width:260px;font-size:12px;color:#64748b;line-height:1.75;margin-top:10px}
+  .reason b{color:#334155}
+
+  .notes{width:1000px;margin:26px auto 0;background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 22px;font-size:13px;color:#475569;line-height:1.9}
+  .notes h2{font-size:13px;font-weight:700;color:#1e293b;margin-bottom:6px}
+  .notes ul{padding-left:18px}
+  .notes b{color:#1e293b}
+</style>
+</head>
+<body>
+
+<div class="page-title">侧栏底部栏 · 三种做法</div>
+<div class="page-sub">高级产品经理视角：底部栏是「辅助区」，不能和业务菜单一个视觉重量。</div>
+
+<div class="row">
+
+  <!-- A -->
+  <div class="wrap">
+    <div class="cname">A · 单行图标条 <span class="tag">推荐</span></div>
+    <div class="sidebar">
+      <div class="sb-title">分身生产</div>
+      <nav class="nav">
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.5-1.3 1.6-2 3-2s2.5.7 3 2"/><path d="M14 10h4M14 14h4"/></svg>分身管理</div>
+        <div class="item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>素材管理<span class="count">2</span></div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9l3-6Z"/><path d="M3 9h18"/></svg>经验颗粒</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h8M16 8h4"/><circle cx="14" cy="8" r="2"/><path d="M4 16h4M12 16h8"/><circle cx="10" cy="16" r="2"/></svg>分身调优</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2"/><path d="M10 21v-2h4v2"/></svg>组织分身</div>
+      </nav>
+      <div class="foot">
+        <div class="foot-icons">
+          <div class="fbtn"><span class="tip">产品导览</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg></div>
+          <div class="fbtn"><span class="tip">快捷入口 ⌘K</span><span class="k">⌘</span></div>
+          <div class="fbtn"><span class="tip">帮助与 FAQ</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg></div>
+        </div>
+      </div>
+    </div>
+    <div class="reason"><b>为什么推荐</b>：只占 34px，视觉上明确是「辅助区」；悬停出 tooltip，不占常驻文字。三个入口都保留，导览仍是持久入口。</div>
+  </div>
+
+  <!-- B -->
+  <div class="wrap">
+    <div class="cname">B · 收进「帮助与学习」 <span class="tag gray">备选</span></div>
+    <div class="sidebar">
+      <div class="sb-title">分身生产</div>
+      <nav class="nav">
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.5-1.3 1.6-2 3-2s2.5.7 3 2"/><path d="M14 10h4M14 14h4"/></svg>分身管理</div>
+        <div class="item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>素材管理<span class="count">2</span></div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9l3-6Z"/><path d="M3 9h18"/></svg>经验颗粒</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h8M16 8h4"/><circle cx="14" cy="8" r="2"/><path d="M4 16h4M12 16h8"/><circle cx="10" cy="16" r="2"/></svg>分身调优</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2"/><path d="M10 21v-2h4v2"/></svg>组织分身</div>
+      </nav>
+      <div class="pop">
+        <div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg>产品导览</div>
+        <div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M8 7h8M8 11h6"/></svg>操作手册</div>
+        <div class="pi"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>常见问题</div>
+        <div class="pi"><span style="width:14px;text-align:center;color:#94a3b8">⌘</span>快捷键<span class="kbd">⌘K</span></div>
+      </div>
+      <div class="foot">
+        <div class="foot-one">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>
+          帮助与学习
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+      </div>
+    </div>
+    <div class="reason"><b>代价</b>：导览被收进二级，新用户第一眼看不到「从哪开始」。除非顶部再加首次使用卡片，否则违背「持久入口」的初衷。</div>
+  </div>
+
+  <!-- C -->
+  <div class="wrap">
+    <div class="cname">C · 三行文字（现状） <span class="tag red">不建议</span></div>
+    <div class="sidebar">
+      <div class="sb-title">分身生产</div>
+      <nav class="nav">
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.5-1.3 1.6-2 3-2s2.5.7 3 2"/><path d="M14 10h4M14 14h4"/></svg>分身管理</div>
+        <div class="item on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg>素材管理<span class="count">2</span></div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l3 6-9 12L3 9l3-6Z"/><path d="M3 9h18"/></svg>经验颗粒</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h8M16 8h4"/><circle cx="14" cy="8" r="2"/><path d="M4 16h4M12 16h8"/><circle cx="10" cy="16" r="2"/></svg>分身调优</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2"/><path d="M10 21v-2h4v2"/></svg>组织分身</div>
+      </nav>
+      <div class="foot foot-rows">
+        <div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5"/></svg>产品导览</div>
+        <div class="frow"><span style="width:15px;text-align:center;font-size:12px;font-weight:600;color:#94a3b8">⌘</span>快捷入口<span class="kbd">⌘K</span></div>
+        <div class="frow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7"/><path d="M12 17h.01"/></svg>帮助与 FAQ</div>
+      </div>
+    </div>
+    <div class="reason"><b>问题</b>：三行文字和业务菜单同等字重、同等行高，底部区看起来像多了三个菜单项；侧栏被拉长，主次不分。</div>
+  </div>
+
+</div>
+
+<div class="caption"><b>A 的补充：首次使用卡片</b>（只给没走完导览的人看，可关闭）</div>
+<div class="row" style="align-items:flex-start">
+  <div class="wrap">
+    <div class="sidebar" style="height:auto">
+      <div class="sb-title">日常</div>
+      <div class="firstrun">
+        <div class="t">第一次用？</div>
+        <div class="d">跟着导览走一遍核心流程，约 3 分钟。</div>
+        <div class="a">▶ 开始导览 →</div>
+      </div>
+      <nav class="nav" style="padding-bottom:12px">
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="8" r="3.2"/><path d="M4.5 20c.4-3.2 2.7-5.2 5.5-5.2s5.1 2 5.5 5.2"/><path d="M18.5 3.2l.5 1.4 1.4.5-1.4.5-.5 1.4-.5-1.4-1.4-.5 1.4-.5.5-1.4Z"/></svg>分身广场</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 4l9 6.5"/><path d="M5 9.5V20h14V9.5"/><path d="M9 20v-5h6v5"/></svg>我的工作台</div>
+        <div class="item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v18H6.5A2.5 2.5 0 0 1 4 18.5v-13Z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v18h4.5A2.5 2.5 0 0 0 20 18.5v-13Z"/></svg>经验广场</div>
+      </nav>
+    </div>
+    <div class="reason"><b>作用</b>：把「导览」的发现动作前置到最显眼处；底部图标条只承担「看过了，再刷一遍」的复看入口。</div>
+  </div>
+  <div style="width:520px;background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;font-size:13px;color:#475569;line-height:1.9;margin-top:30px">
+    <b style="color:#1e293b">高级产品经理的判断</b><br>
+    底部栏不是第三个菜单，它只回答两个问题：<b>「我不会用，去哪学」</b>和<b>「我要找东西，怎么快」</b>。<br><br>
+    所以：<br>
+    · 导览和帮助都属于「学」，但导览需要<b>被看见</b>，所以给首次卡片 + 底部复看入口；<br>
+    · 帮助只有遇到问题才点，收进图标即可；<br>
+    · ⌘K 是效率工具，一个图标足够，不需要文字；<br>
+    · 三行文字会把辅助区做成第二菜单，这是 C 的问题。
+  </div>
+</div>
+
+<div class="notes">
+  <h2>结论</h2>
+  <ul>
+    <li><b>采用 A</b>：底部单行图标条（导览 / ⌘K / 帮助），34px 高，悬停出 tooltip。</li>
+    <li><b>加首次使用卡片</b>：只对没走完导览的用户显示，可关闭，走完不再出现——解决新用户找不到入口的问题。</li>
+    <li><b>不做 B 的单入口</b>：导览被藏进二级菜单，和「最多人需要的功能要在第一层」冲突。</li>
+    <li><b>不做 C 的三行文字</b>：辅助区不能和业务菜单同权重。</li>
+  </ul>
+</div>
+
+</body>
+</html>

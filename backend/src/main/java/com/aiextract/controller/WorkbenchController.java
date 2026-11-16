@@ -26,14 +26,23 @@ public class WorkbenchController {
     private final ConversationStatsRepository convStatsRepository;
     private final SkillRepository skillRepository;
 
-    private String getToken() {
-        return (String) org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication().getCredentials();
+    /** 当前用户 ID；匿名/凭证缺失时明确 401，而不是 NPE 后 500 */
+    private UUID currentUserId() {
+        var auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        if (auth == null || !(auth.getCredentials() instanceof String token) || token.isBlank()) {
+            throw new com.aiextract.exception.BusinessException(401, "未登录");
+        }
+        UUID userId = jwtUtil.getUserIdFromToken(token);
+        if (userId == null) {
+            throw new com.aiextract.exception.BusinessException(401, "登录已失效，请重新登录");
+        }
+        return userId;
     }
 
     @GetMapping("/workbench/mine")
     public ApiResponse<Map<String, Object>> mine() {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = currentUserId();
         Map<String, Object> data = new LinkedHashMap<>();
 
         // 本周对话数

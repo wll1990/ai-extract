@@ -1,0 +1,24 @@
+[
+  {
+    "id": "REG-TENANT-02",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "A10 跨企业资源越权：/skills/{id}/scene-tags 等按 ID 直读接口未校验归属，可读其他企业草稿分身的颗粒信息",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /skills/0b000000-0000-0000-0000-000000000034/scene-tags",
+        "expect": { "status": [403, 404] }
+      },
+      {
+        "as": "employee",
+        "api": "GET /skills/0b000000-0000-0000-0000-000000000034/practice-scenes",
+        "expect": { "status": [403, 404] }
+      }
+    ],
+    "assertions": []
+  }
+]

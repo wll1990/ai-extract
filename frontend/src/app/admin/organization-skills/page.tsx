@@ -5,7 +5,7 @@ import { apiClient, API_BASE } from '@/lib/api/client';
 import { OrgDashboard } from '@/components/admin/OrgDashboard';
 import { Pagination } from '@/components/ui/Pagination';
 import { copyToClipboard } from '@/lib/clipboard';
-import FeishuPublishModal from '@/components/admin/FeishuPublishModal';
+import ImPublishModal from '@/components/admin/ImPublishModal';
 import { listImBots } from '@/lib/api/im';
 
 interface OrgSkill {
@@ -37,6 +37,7 @@ export default function AdminOrgSkillsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+  const [error, setError] = useState('');
 
   // Form
   const [formName, setFormName] = useState('');
@@ -46,9 +47,10 @@ export default function AdminOrgSkillsPage() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setError('');
     apiClient<{ content: OrgSkill[]; total: number; totalPages: number }>(`/admin/organization-skills?page=${page}&size=20`)
       .then(d => { setOrgSkills(d.content || []); setTotalPages(d.totalPages); setTotalElements(d.total); })
-      .catch(e => console.error('加载组织分身失败:', e))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : '加载组织分身失败'))
       .finally(() => setLoading(false));
   }, [page]);
 
@@ -75,7 +77,7 @@ export default function AdminOrgSkillsPage() {
         await apiClient('/admin/organization-skills', { method: 'POST', body: JSON.stringify(body) });
       }
       resetForm(); load();
-    } catch (e) { console.error('保存失败:', e); }
+    } catch (e) { setError(e instanceof Error ? e.message : '保存失败'); }
   };
 
   const handleEdit = async (org: OrgSkill) => {
@@ -145,6 +147,13 @@ export default function AdminOrgSkillsPage() {
             + 新建组织分身
           </button>
         </div>
+
+        {error && (
+          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+            {error}
+            <button onClick={load} className="ml-3 underline">重试</button>
+          </div>
+        )}
 
         {/* Form modal */}
         {showForm && (
@@ -237,11 +246,11 @@ export default function AdminOrgSkillsPage() {
                       className="rounded-lg border border-blue-200 text-blue-600 px-3 py-1 text-xs">分享</button>
                   )}
                   {org.status === 'published' && feishuBoundIds.has(org.id) && (
-                    <span className="self-center text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">🕊️ 已发布</span>
+                    <span className="self-center text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">📡 已接入 IM</span>
                   )}
                   {org.status === 'published' && !feishuBoundIds.has(org.id) && (
                     <button onClick={() => setFeishuSkill({ id: org.id, name: org.displayName, avatar: org.avatarUrl })}
-                      className="rounded-lg border border-indigo-200 text-indigo-600 px-3 py-1 text-xs">🕊️ 飞书</button>
+                      className="rounded-lg border border-indigo-200 text-indigo-600 px-3 py-1 text-xs">📡 发布到 IM</button>
                   )}
                   {org.status === 'published' && (
                     <button onClick={() => handleDashboard(org.id)}
@@ -280,7 +289,7 @@ export default function AdminOrgSkillsPage() {
 
         {/* Feishu publish modal */}
         {feishuSkill && (
-          <FeishuPublishModal
+          <ImPublishModal
             skillId={feishuSkill.id}
             skillName={feishuSkill.name}
             skillAvatar={feishuSkill.avatar}

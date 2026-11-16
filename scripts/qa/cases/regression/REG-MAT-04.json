@@ -1,0 +1,20 @@
+[
+  {
+    "id": "REG-MAT-04",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "素材上传目标校验",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/materials/text",
+        "body": { "text": "客户说价格太高，需要先确认预算归属和决策链，再准备材料。编号${shortId}。" },
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": []
+  }
+]

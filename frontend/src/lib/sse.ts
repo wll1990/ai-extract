@@ -17,7 +17,31 @@
  *
  * 所有页面/组件统一通过此模块处理 SSE，禁止内联 fetch + 手写解析。
  */
-import { getToken } from './storage';
+import { clearAuth, getToken } from './storage';
+import { csrfHeader } from './csrf';
+import { getActingHeaders, isActingSwitching } from './acting-company';
+
+/**
+ * SSE 请求头唯一构造点 —— 认证、CSRF、企业视角都从这里注入。
+ * 调用方显式传入的同名 header 优先，避免被默认值覆盖。
+ */
+function buildHeaders(base?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'text/event-stream',
+    ...base,
+  };
+  // HttpOnly Cookie 自动携带，向后兼容仍支持 Authorization header
+  const token = getToken();
+  if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+  // SSE 是 POST：Cookie 认证时后端要求 CSRF 双提交
+  if (!headers['X-CSRF-Token']) Object.assign(headers, csrfHeader());
+  // 超管切换企业视角；普通用户为空
+  if (!headers['X-Acting-Company-Id']) Object.assign(headers, getActingHeaders());
+  // OBS-02：SSE 也带 traceId，长连接问题可按同一 id 关联前端/网关/后端日志
+  if (!headers['X-Trace-Id']) headers['X-Trace-Id'] = `web-${crypto.randomUUID()}`;
+  return headers;
+}
 
 // ====== Format A: JSON SSE ======
 
@@ -27,10 +51,19 @@ export interface SseEvent {
   type: SseEventType;
   content?: string;
   message?: string;
+  /** 稳定错误码（type=error）：AI_KEY_INVALID / AI_QUOTA_EXCEEDED / AI_RATE_LIMITED ... */
+  code?: string;
   phase?: string;
   module?: string;
   reportId?: string;
   reportTitle?: string;
+  /** 溯源类型：'knowledge' | 'case'（undefined = 经验溯源，向后兼容） */
+  sourceType?: string;
+  /** 知识/案例溯源标题（sourceType=knowledge/case 时有效） */
+  sourceTitle?: string;
+  /** 知识/案例条目 ID（新后端下发，用于跳转/持久化） */
+  knowledgeId?: string;
+  caseId?: string;
 }
 
 export interface SseCallbacks {
@@ -38,9 +71,13 @@ export interface SseCallbacks {
   onPhaseChange?: (phase: string) => void;
   onCollectUpdate?: (module: string) => void;
   onDone?: () => void;
-  onError?: (message: string) => void;
+  onError?: (message: string, code?: string) => void;
   onAbort?: () => void;
   onSource?: (reportId: string, reportTitle: string, grainIds?: string, grainTags?: string, grainCount?: number, avgScore?: string, avgSimilarity?: string, sourceNames?: string) => void;
+  /** 知识库溯源（sourceType=knowledge）：标题 + 来源 + 相似度百分比 + 条目 ID */
+  onKnowledgeSource?: (title: string, source: string, similarity: string, knowledgeId?: string) => void;
+  /** 案例库溯源（sourceType=case）：标题 + 来源 + 相似度百分比 + 条目 ID */
+  onCaseSource?: (title: string, source: string, similarity: string, caseId?: string) => void;
   onMeta?: (conversationId: string) => void;
   onEvent?: (type: string, data: Record<string, unknown>) => void;
 }
@@ -56,19 +93,12 @@ export interface SseConnectOptions {
 
 function buildFetchOptions(options: SseConnectOptions, controller: AbortController): RequestInit {
   const signal = options.signal || controller.signal;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream',
-    ...options.headers,
-  };
-  // HttpOnly Cookie 自动携带，向后兼容仍支持 Authorization header；
-  // 调用方已显式传入 Authorization（C 端分享页 Bearer）时不覆盖
-  const token = getToken();
-  if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+  const headers = buildHeaders(options.headers);
   const fetchOptions: RequestInit = {
     method: options.method || 'POST',
     headers,
     signal,
+    credentials: 'same-origin',
   };
   if (options.body) fetchOptions.body = JSON.stringify(options.body);
   return fetchOptions;
@@ -213,26 +243,44 @@ interface SseHandler {
 export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks): AbortController {
   const controller = new AbortController();
   const signal = options.signal || controller.signal;
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'text/event-stream',
-    ...options.headers,
-  };
-  const token = getToken();
-  if (token && !headers['Authorization']) headers['Authorization'] = `Bearer ${token}`;
+  const headers = buildHeaders(options.headers);
 
   fetch(options.url, {
     method: options.method || 'POST',
     headers,
     signal,
+    credentials: 'same-origin',
     ...(options.body ? { body: JSON.stringify(options.body) } : {}),
   }).then(async (response) => {
-    if (!response.ok) { callbacks.onError?.(`HTTP ${response.status}`); return; }
+    if (!response.ok) {
+      // 非 2xx：后端返回的是 ApiResponse JSON（如 403「考试任务不提供提示」），
+      // 只回 HTTP 状态码会让用户看到无意义的「HTTP 403」
+      let msg = `HTTP ${response.status}`;
+      try {
+        const body = await response.json();
+        if (body && typeof body.message === 'string' && body.message) msg = body.message;
+      } catch { /* 非 JSON 响应保持状态码 */ }
+      if (response.status === 401 && typeof window !== 'undefined') {
+        if (isActingSwitching()) {
+          // 切换视角的探针/在途请求失败：交给切换流程回退，不跳登录
+          callbacks.onError?.('切换企业视角失败');
+          return;
+        }
+        clearAuth();
+        window.location.href = '/login';
+        callbacks.onError?.('登录已过期，请重新登录');
+        return;
+      }
+      callbacks.onError?.(msg);
+      return;
+    }
     if (!response.body) { callbacks.onError?.('不支持流式读取'); return; }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    // 是否已收到终止事件：干净关闭的流不一定补 done，finally 里兜底收尾
+    let terminal = false;
 
     try {
       while (true) {
@@ -266,31 +314,64 @@ export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks):
               callbacks.onChunk?.((event.content as string) || '');
               break;
             case 'done':
+              terminal = true;
               callbacks.onDone?.();
               break;
+            case 'heartbeat': {
+              // SseAdapter 超时/提前结束只发 heartbeat，不补 done
+              const status = event.status as string | undefined;
+              if (status === 'timeout') {
+                terminal = true;
+                callbacks.onError?.('生成超时，请重试');
+              } else if (status === 'done') {
+                terminal = true;
+                callbacks.onDone?.();
+              }
+              break;
+            }
             case 'phase_change':
               callbacks.onPhaseChange?.((event.content as string) || (event.phase as string) || '');
               break;
             case 'collect_update':
               callbacks.onCollectUpdate?.((event.content as string) || (event.module as string) || '');
               break;
-            case 'source':
-              callbacks.onSource?.(
-                (event.reportId as string) || '',
-                (event.reportTitle as string) || '',
-                (event.grainIds as string) || '',
-                (event.grainTags as string) || '',
-                event.grainCount != null ? Number(event.grainCount) : 0,
-                (event.avgScore as string) || '',
-                (event.avgSimilarity as string) || '',
-                (event.sourceNames as string) || '',
-              );
+            case 'source': {
+              // 三类溯源按 sourceType 路由：undefined=经验（旧格式），knowledge/case 走独立回调
+              const sourceType = event.sourceType as string | undefined;
+              if (sourceType === 'knowledge') {
+                callbacks.onKnowledgeSource?.(
+                  (event.sourceTitle as string) || '',
+                  (event.sourceNames as string) || '',
+                  (event.avgSimilarity as string) || '',
+                  (event.knowledgeId as string) || undefined,
+                );
+              } else if (sourceType === 'case') {
+                callbacks.onCaseSource?.(
+                  (event.sourceTitle as string) || '',
+                  (event.sourceNames as string) || '',
+                  (event.avgSimilarity as string) || '',
+                  (event.caseId as string) || undefined,
+                );
+              } else {
+                callbacks.onSource?.(
+                  (event.reportId as string) || '',
+                  (event.reportTitle as string) || '',
+                  (event.grainIds as string) || '',
+                  (event.grainTags as string) || '',
+                  event.grainCount != null ? Number(event.grainCount) : 0,
+                  (event.avgScore as string) || '',
+                  (event.avgSimilarity as string) || '',
+                  (event.sourceNames as string) || '',
+                );
+              }
               break;
+            }
             case 'meta':
               callbacks.onMeta?.((event.conversationId as string) || '');
               break;
             case 'error':
-              callbacks.onError?.((event.message as string) || '');
+              terminal = true;
+              callbacks.onError?.((event.message as string) || '', (event.code as string) || undefined);
               break;
             default:
               callbacks.onEvent?.(type, (event.data as Record<string, unknown>) || event);
@@ -298,11 +379,18 @@ export function connectSse(options: SseConnectOptions, callbacks: SseCallbacks):
         }
       }
     } catch (err) {
+      // 主动中断不算失败，也不补 onDone
+      terminal = true;
       if ((err as Error).name !== 'AbortError') {
         callbacks.onError?.('连接中断，请检查网络');
       }
     } finally {
       reader.releaseLock();
+      // 流干净结束但没收到 done/error（服务端提前 complete）时兜底收尾，
+      // 否则调用方会永久停在「正在输入」
+      if (!terminal) {
+        callbacks.onDone?.();
+      }
     }
   }).catch((err) => {
     if (err.name !== 'AbortError') {

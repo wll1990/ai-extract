@@ -26,6 +26,7 @@ public class ChatChunk {
     private static final String KEY_TYPE = "type";
     private static final String KEY_CONTENT = "content";
     private static final String KEY_MESSAGE = "message";
+    private static final String KEY_CODE = "code";
     private static final String KEY_CONVERSATION_ID = "conversationId";
     private static final String KEY_REPORT_ID = "reportId";
     private static final String KEY_REPORT_TITLE = "reportTitle";
@@ -35,6 +36,8 @@ public class ChatChunk {
     private static final String KEY_AVG_SCORE = "avgScore";
     private static final String KEY_AVG_SIMILARITY = "avgSimilarity";
     private static final String KEY_SOURCE_NAMES = "sourceNames";
+    private static final String KEY_SOURCE_TYPE = "sourceType";
+    private static final String KEY_SOURCE_TITLE = "sourceTitle";
     private static final String KEY_ACTION = "action";
     private static final String KEY_DATA = "data";
     private static final String KEY_SKILL_ID = "skillId";
@@ -53,6 +56,9 @@ public class ChatChunk {
     /** 错误信息（type=error 时有效） */
     private String message;
 
+    /** 稳定错误码（type=error 时有效）：AI_KEY_INVALID / AI_QUOTA_EXCEEDED / AI_RATE_LIMITED ... */
+    private String code;
+
     /** 所属对话 ID（type=meta 时有效） */
     private String conversationId;
 
@@ -67,6 +73,18 @@ public class ChatChunk {
 
     /** 来源名称列表（type=source 时有效）：素材文件名或访谈主题，逗号分隔 */
     private String sourceNames;
+
+    /** 溯源类型（type=source 时有效）：null=旧版经验溯源（向后兼容），knowledge/case 为三类溯源 */
+    private String sourceType;
+
+    /** 溯源标题（sourceType=knowledge/case 时有效）：知识/案例标题 */
+    private String sourceTitle;
+
+    /** 知识条目 ID（sourceType=knowledge 时有效），用于前端跳转/持久化 */
+    private String knowledgeId;
+
+    /** 案例条目 ID（sourceType=case 时有效） */
+    private String caseId;
 
     /** 警告信息（type=warning 时有效） */
     private String action;
@@ -88,8 +106,13 @@ public class ChatChunk {
     }
 
     public static ChatChunk error(String msg) {
+        return error(null, msg);
+    }
+
+    public static ChatChunk error(String code, String msg) {
         ChatChunk c = new ChatChunk();
         c.type = "error";
+        c.code = code;
         c.message = msg;
         return c;
     }
@@ -126,6 +149,40 @@ public class ChatChunk {
         return c;
     }
 
+    /** 知识溯源（type=source，sourceType=knowledge）：ID + 标题 + 来源 + 相似度。 */
+    public static ChatChunk knowledgeSource(java.util.UUID id, String title, String source, double similarity) {
+        ChatChunk c = new ChatChunk();
+        c.type = "source";
+        c.sourceType = "knowledge";
+        c.knowledgeId = id != null ? id.toString() : null;
+        c.sourceTitle = title;
+        c.sourceNames = source;
+        c.avgSimilarity = String.format("%.0f", similarity * 100);
+        return c;
+    }
+
+    /** 兼容旧调用（无条目 ID） */
+    public static ChatChunk knowledgeSource(String title, String source, double similarity) {
+        return knowledgeSource(null, title, source, similarity);
+    }
+
+    /** 案例溯源（type=source，sourceType=case）：ID + 标题 + 来源 + 相似度。 */
+    public static ChatChunk caseSource(java.util.UUID id, String title, String source, double similarity) {
+        ChatChunk c = new ChatChunk();
+        c.type = "source";
+        c.sourceType = "case";
+        c.caseId = id != null ? id.toString() : null;
+        c.sourceTitle = title;
+        c.sourceNames = source;
+        c.avgSimilarity = String.format("%.0f", similarity * 100);
+        return c;
+    }
+
+    /** 兼容旧调用（无条目 ID） */
+    public static ChatChunk caseSource(String title, String source, double similarity) {
+        return caseSource(null, title, source, similarity);
+    }
+
     /** 自定义事件（type=customer/avatar 等） */
     public static ChatChunk event(String type, Map<String, Object> data) {
         ChatChunk c = new ChatChunk();
@@ -141,6 +198,7 @@ public class ChatChunk {
         c.type = event.get(KEY_TYPE) != null ? event.get(KEY_TYPE).toString() : null;
         c.content = event.get(KEY_CONTENT) != null ? event.get(KEY_CONTENT).toString() : null;
         c.message = event.get(KEY_MESSAGE) != null ? event.get(KEY_MESSAGE).toString() : null;
+        c.code = event.get(KEY_CODE) != null ? event.get(KEY_CODE).toString() : null;
         c.conversationId = event.get(KEY_CONVERSATION_ID) != null ? event.get(KEY_CONVERSATION_ID).toString() : null;
         c.reportId = event.get(KEY_REPORT_ID) != null ? event.get(KEY_REPORT_ID).toString() : null;
         c.reportTitle = event.get(KEY_REPORT_TITLE) != null ? event.get(KEY_REPORT_TITLE).toString() : null;
@@ -154,6 +212,8 @@ public class ChatChunk {
         c.avgScore = event.get(KEY_AVG_SCORE) != null ? event.get(KEY_AVG_SCORE).toString() : null;
         c.avgSimilarity = event.get(KEY_AVG_SIMILARITY) != null ? event.get(KEY_AVG_SIMILARITY).toString() : null;
         c.sourceNames = event.get(KEY_SOURCE_NAMES) != null ? event.get(KEY_SOURCE_NAMES).toString() : null;
+        c.sourceType = event.get(KEY_SOURCE_TYPE) != null ? event.get(KEY_SOURCE_TYPE).toString() : null;
+        c.sourceTitle = event.get(KEY_SOURCE_TITLE) != null ? event.get(KEY_SOURCE_TITLE).toString() : null;
         c.action = event.get(KEY_ACTION) != null ? event.get(KEY_ACTION).toString() : null;
         c.skillId = event.get(KEY_SKILL_ID) != null ? event.get(KEY_SKILL_ID).toString() : null;
         return c;
@@ -167,6 +227,7 @@ public class ChatChunk {
             if (content != null) { m.put(KEY_CONTENT, content); }
             if (data != null) { m.put(KEY_DATA, data); }
             if (message != null) { m.put(KEY_MESSAGE, message); }
+            if (code != null) { m.put(KEY_CODE, code); }
             if (conversationId != null) { m.put(KEY_CONVERSATION_ID, conversationId); }
             if (reportId != null) { m.put(KEY_REPORT_ID, reportId); }
             if (reportTitle != null) { m.put(KEY_REPORT_TITLE, reportTitle); }
@@ -176,6 +237,8 @@ public class ChatChunk {
             if (avgScore != null) { m.put(KEY_AVG_SCORE, avgScore); }
             if (avgSimilarity != null) { m.put(KEY_AVG_SIMILARITY, avgSimilarity); }
             if (sourceNames != null) { m.put(KEY_SOURCE_NAMES, sourceNames); }
+            if (sourceType != null) { m.put(KEY_SOURCE_TYPE, sourceType); }
+            if (sourceTitle != null) { m.put(KEY_SOURCE_TITLE, sourceTitle); }
             if (action != null) { m.put(KEY_ACTION, action); }
             if (skillId != null) { m.put(KEY_SKILL_ID, skillId); }
             return MAPPER.writeValueAsString(m);
@@ -190,6 +253,7 @@ public class ChatChunk {
     public String getContent() { return content; }
     public Map<String, Object> getData() { return data; }
     public String getMessage() { return message; }
+    public String getCode() { return code; }
     public String getConversationId() { return conversationId; }
     public String getReportId() { return reportId; }
     public String getReportTitle() { return reportTitle; }
@@ -198,6 +262,8 @@ public class ChatChunk {
     public Integer getGrainCount() { return grainCount; }
     public String getAvgScore() { return avgScore; }
     public String getAvgSimilarity() { return avgSimilarity; }
+    public String getSourceType() { return sourceType; }
+    public String getSourceTitle() { return sourceTitle; }
     public String getAction() { return action; }
     public String getSkillId() { return skillId; }
 }

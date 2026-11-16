@@ -1,0 +1,55 @@
+[
+  {
+    "id": "REG-CASE-01",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "案例列表/详情没有版本与修订入口，AI 整理只支持知识；案例详情只能看不能审批/废弃",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-案例详情回归",
+          "customerProfile": "{\"industry\":\"制造业\",\"size\":\"中型\",\"role\":\"采购负责人\",\"budget\":\"80万\"}",
+          "funnelStage": "proposal",
+          "sceneTag": "价格异议",
+          "objection": "客户认为报价比竞品高 20%。",
+          "keyActions": "拆两期交付，第一期收 40%。",
+          "scripts": "先用年度收益做锚点，再倒推价格区间。",
+          "result": "win",
+          "reusablePoints": "分期交付可以化解预算审批压力。",
+          "failurePoints": "没有提前确认财务回款周期。",
+          "source": "QA 回归",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 },
+        "save": { "caseId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases/${caseId}",
+        "expect": { "status": 200, "json": { "data.supersedesId": null, "data.version": 1 } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases/${caseId}/revisions",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": { "status": 200, "json": { "data.status": "active" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "active"
+      }
+    ]
+  }
+]

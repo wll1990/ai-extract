@@ -1,0 +1,53 @@
+[
+  {
+    "id": "REG-AUTH-05",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "platform",
+    "roles": ["company_admin", "employee", "anonymous"],
+    "llm": false,
+    "sourceBug": "员工入职只能由超管生成注册码，企业管理员无法自助发码；注册码能力长期只覆盖超管路径",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/company/register-codes",
+        "body": { "maxUses": 0, "defaultRole": "company_admin" },
+        "expect": { "status": 200, "json": { "data.defaultRole": "employee" } },
+        "save": { "code": "data.code", "codeId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/company/register-codes",
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "employee",
+        "api": "GET /admin/company/register-codes",
+        "expect": { "status": 403 }
+      },
+      {
+        "as": "anonymous",
+        "api": "POST /auth/register/with-code",
+        "body": {
+          "companyCode": "${code}",
+          "account": "QA-${runId}-staff1",
+          "password": "Qa123456!",
+          "name": "QA-自助入职员工"
+        },
+        "expect": { "status": 200, "json": { "data.user.role": "employee" } }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select (company_id = '0a000000-0000-0000-0000-000000000001')::text || '/' || used_count || '/' || default_role from public.company_register_code where id = :codeId",
+        "expect": "true/1/employee"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.\"user\" where account = 'QA-' || :runId || '-staff1' and company_id = '0a000000-0000-0000-0000-000000000001' and role = 'employee'",
+        "expect": "1"
+      }
+    ]
+  }
+]

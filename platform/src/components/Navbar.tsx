@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getUser, clearAuth } from '@/lib/storage';
 import { logout as logoutApi } from '@/lib/api/auth';
+import { NotificationBell } from '@/components/NotificationBell';
 
 export function Navbar() {
   const router = useRouter();
@@ -65,6 +66,8 @@ export function Navbar() {
           <span style={{ width: 56, height: 34 }} />
         ) : isLoggedIn ? (
           <>
+            <NotificationBell />
+
             {/* 用户头像 + 姓名 */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,

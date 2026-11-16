@@ -1,0 +1,22 @@
+[
+  {
+    "id": "REG-AUD-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "A6 非法状态值被接受导致分身消失",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "PUT /skills/0a000000-0000-0000-0000-000000000033/status",
+        "body": { "status": "failed" },
+        "expect": { "status": 400 }
+      }
+    ],
+    "assertions": [
+      { "type": "db", "sql": "select status from skill where id='0a000000-0000-0000-0000-000000000033'", "expect": "generating" }
+    ]
+  }
+]

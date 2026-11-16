@@ -1,0 +1,19 @@
+[
+  {
+    "id": "REG-SKILL-01",
+    "set": "regression",
+    "priority": "P0",
+    "domain": "production",
+    "roles": ["employee"],
+    "llm": false,
+    "sourceBug": "A10 跨企业资源越权：GET /skills/list?userId=<他企业用户> 可枚举其他企业分身（含草稿）",
+    "steps": [
+      {
+        "as": "employee",
+        "api": "GET /skills/list?userId=0b000000-0000-0000-0000-000000000011&page=1&size=20",
+        "expect": { "status": 403 }
+      }
+    ],
+    "assertions": []
+  }
+]

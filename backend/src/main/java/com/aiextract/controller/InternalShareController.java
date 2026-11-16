@@ -77,10 +77,14 @@ public class InternalShareController {
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("skillId", skill.getId().toString());
-        result.put("companyId", share.getCompanyId() != null ? share.getCompanyId().toString() : null);
+        // 不公开 companyId：登录/注册都使用签名邀请令牌
         result.put("companyName", companyName);
         result.put("ownerName", skill.getOwnerName());
         result.put("avatarUrl", skill.getAvatarUrl());
+        if (share.getCompanyId() != null) {
+            result.put("registerToken", jwtUtil.generateInviteToken(share.getCompanyId(),
+                    "share", com.aiextract.util.JwtUtil.REGISTER_INVITE_TTL_MILLIS));
+        }
         return ApiResponse.success(result);
     }
 

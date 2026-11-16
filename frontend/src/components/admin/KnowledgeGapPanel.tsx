@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 interface GapItem {
   id: string;
   query: string;
@@ -21,7 +23,7 @@ interface Props {
 export function KnowledgeGapPanel({ gaps, onGapClick, onResolve, onIgnore }: Props) {
   if (!gaps || gaps.length === 0) {
     return (
-      <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm">
+      <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm" data-tour="gap-panel">
         <h3 className="mb-3 text-sm font-semibold">🔴 待处理知识缺口</h3>
         <div className="flex items-center justify-center h-[180px]">
           <p className="text-sm text-muted-foreground">暂无待处理的知识缺口 🎉</p>
@@ -31,7 +33,7 @@ export function KnowledgeGapPanel({ gaps, onGapClick, onResolve, onIgnore }: Pro
   }
 
   return (
-    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm">
+    <div className="rounded-[12px] bg-surface-2 p-5 shadow-sm" data-tour="gap-panel">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold">🔴 待处理知识缺口（{gaps.length}个）</h3>
       </div>
@@ -49,10 +51,26 @@ export function KnowledgeGapPanel({ gaps, onGapClick, onResolve, onIgnore }: Pro
               </p>
             </div>
             <div className="flex items-center gap-1.5 ml-2 flex-shrink-0">
-              <button onClick={() => onGapClick?.(g.id)}
-                className="text-xs bg-primary/10 text-primary rounded-lg px-3 py-1.5 hover:bg-primary/20 transition-colors">
-                补充颗粒
-              </button>
+              {onGapClick && (
+                <button onClick={() => onGapClick(g.id)}
+                  className="text-xs bg-primary/10 text-primary rounded-lg px-3 py-1.5 hover:bg-primary/20 transition-colors">
+                  补充颗粒
+                </button>
+              )}
+              <Link
+                href={`/admin/knowledge/new?title=${encodeURIComponent(g.query.slice(0, 60))}&content=${encodeURIComponent(`问题：${g.query}\n\n（请补充权威答案/口径）`)}`}
+                className="text-xs bg-primary/10 text-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                title="把这个问题补成一条知识"
+              >
+                补知识
+              </Link>
+              <Link
+                href={`/admin/cases/new?title=${encodeURIComponent(g.query.slice(0, 60))}&objection=${encodeURIComponent(g.query)}`}
+                className="text-xs bg-primary/10 text-primary rounded-lg px-2.5 py-1.5 hover:bg-primary/20 transition-colors"
+                title="把这个场景补成一个案例"
+              >
+                补案例
+              </Link>
               {onResolve && (
                 <button onClick={(e) => { e.stopPropagation(); onResolve(g.id); }}
                   className="text-xs text-green-600 hover:bg-green-50 rounded-lg px-2.5 py-1.5 transition-colors font-medium"

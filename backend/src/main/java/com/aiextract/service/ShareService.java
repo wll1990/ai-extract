@@ -68,6 +68,7 @@ public class ShareService {
     private final JwtUtil jwtUtil;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final ObjectMapper objectMapper;
+    private final com.aiextract.config.CompanyScopeService companyScopeService;
 
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
@@ -336,7 +337,17 @@ public class ShareService {
         if (!"published".equals(skill.getStatus())) {
             throw new BusinessException(404, "分身未发布");
         }
-        SkillShare share = getOrCreateShare(skillId, skill.getCreatedBy(), SkillShare.CHANNEL_PUBLIC);
+        // 已存在的分享记录若被关闭，必须拒绝；没有记录时沿用首次发布自动建分享的行为
+        var existingShare = shareRepository.findFirstBySkillIdAndChannel(skillId, SkillShare.CHANNEL_PUBLIC);
+        SkillShare share;
+        if (existingShare.isPresent()) {
+            if (!Boolean.TRUE.equals(existingShare.get().getEnabled())) {
+                throw new BusinessException(403, "该分身未开放分享");
+            }
+            share = existingShare.get();
+        } else {
+            share = getOrCreateShare(skillId, skill.getCreatedBy(), SkillShare.CHANNEL_PUBLIC);
+        }
         return issueGuestSession(share, clientIp, currentUserIdOrNull, share.getShareCode());
     }
 
@@ -406,6 +417,11 @@ public class ShareService {
      */
     private UUID resolveCompanyId(Skill skill) {
         try {
+            // 组织分身没有 space_id，企业归属直接取 skill.company_id。
+            // 不能把 null 传给 findById：会抛 IllegalArgumentException 并把外层事务标记 rollback-only。
+            if (skill.getSpaceId() == null) {
+                return skill.getCompanyId();
+            }
             Space space = spaceRepository.findById(skill.getSpaceId()).orElse(null);
             if (space == null) return null;
             User owner = userRepository.findById(space.getUserId()).orElse(null);
@@ -437,11 +453,15 @@ public class ShareService {
     /**
      * 获取或创建对内分享（channel='internal'）。
      * 对内分享 → /i/{code}，需本公司员工或平台登录用户访问。
-     * 有分身管理权限的用户免属主校验，可管理任意分身的内对分享。
+     *
+     * <p>SKILL_MANAGE 只放宽到「本企业任意分身」，不放宽到跨企业：分享码会签发
+     * 目标企业的注册令牌，跨企业生成等于把别家企业的员工注册入口交出去。</p>
      */
     @Transactional(rollbackFor = Exception.class)
     public SkillShare getOrCreateInternalShare(UUID skillId, UUID userId, String role) {
-        if (!com.aiextract.config.RolePermissions.hasPermission(role, com.aiextract.config.Permission.SKILL_MANAGE)) {
+        if (com.aiextract.config.RolePermissions.hasPermission(role, com.aiextract.config.Permission.SKILL_MANAGE)) {
+            companyScopeService.assertSkillOwnership(skillId);
+        } else {
             validateOwnership(skillId, userId);
         }
 
@@ -472,7 +492,8 @@ public class ShareService {
     private String issueToken(User user) {
         boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
         long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L);
+        long version = user.getTokenVersion() == null ? 0L : user.getTokenVersion();
+        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L, version);
     }
 
     private GuestSessionResponse buildSession(User user, String token) {

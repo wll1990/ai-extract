@@ -40,6 +40,7 @@ public class AdminController {
     private final CompanyRepository companyRepository;
     private final UserRepository userRepository;
     private final com.aiextract.service.AdminService adminService;
+    private final com.aiextract.service.AuthService authService;
     private final JwtUtil jwtUtil;
 
     /** 平台端地址（C端对外链接用，nginx 8088→platform） */
@@ -216,12 +217,29 @@ public class AdminController {
             m.put("account", u.getAccount());
             m.put("role", u.getRole());
             m.put("isActive", u.getIsActive());
+            m.put("mustChangePassword", Boolean.TRUE.equals(u.getMustChangePassword()));
             m.put("createdAt", u.getCreatedAt() != null ? u.getCreatedAt().toString() : null);
             UUID spaceId = userSpaceMap.get(u.getId());
             m.put("spaceId", spaceId != null ? spaceId.toString() : null);
             return m;
         }).collect(Collectors.toList());
         return ApiResponse.success(PageResponse.of(list, userPage, page, size));
+    }
+
+    /** 停用/启用成员账号（停用后旧 token 立即失效） */
+    @PutMapping("/users/{id}/status")
+    public ApiResponse<Void> setUserStatus(@PathVariable UUID id,
+                                           @RequestBody Map<String, Object> body) {
+        boolean active = Boolean.TRUE.equals(body.get("active"));
+        authService.setUserActive(id, active);
+        return ApiResponse.success();
+    }
+
+    /** 重置成员密码：返回一次性临时密码，首次登录强制改密 */
+    @PostMapping("/users/{id}/reset-password")
+    public ApiResponse<Map<String, String>> resetUserPassword(@PathVariable UUID id) {
+        String temporary = authService.resetPassword(id);
+        return ApiResponse.success(Map.of("temporaryPassword", temporary));
     }
 
     /** 用户选择器 — 返回公司内全部用户（不分页），供上传素材/指派等下拉框使用 */

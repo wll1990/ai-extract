@@ -4,13 +4,10 @@ import React, { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { setAuth } from '@/lib/storage';
-import { register } from '@/lib/api/auth';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [useCode, setUseCode] = useState(true);
   const [companyCode, setCompanyCode] = useState('');
-  const [companyId, setCompanyId] = useState('c0000000-0000-0000-0000-000000000001');
   const [name, setName] = useState('');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
@@ -19,29 +16,23 @@ export default function RegisterPage() {
 
   const handleRegister = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!companyCode.trim()) { setError('请输入企业注册码'); return; }
     if (!name || !account || !password) { setError('请填写所有字段'); return; }
     if (password.length < 6) { setError('密码至少6位'); return; }
     setLoading(true); setError('');
     try {
-      if (useCode && companyCode.trim()) {
-        // 企业注册码方式
-        const r = await fetch('/api/v1/auth/register/with-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ companyCode: companyCode.trim(), name, account, password }),
-        });
-        const d = await r.json();
-        if (d.code !== 200) throw new Error(d.message || '注册失败');
-        setAuth(d.data.token, d.data.user);
-      } else {
-        // 手动输入企业ID（管理员创建种子用户等场景）
-        const result = await register({ companyId, name, account, password, role: 'employee' });
-        setAuth(result.token, result.user);
-      }
+      const r = await fetch('/api/v1/auth/register/with-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyCode: companyCode.trim(), name, account, password }),
+      });
+      const d = await r.json();
+      if (d.code !== 200) throw new Error(d.message || '注册失败');
+      setAuth(d.data.token, d.data.user);
       router.push('/');
     } catch (err) { setError(err instanceof Error ? err.message : '注册失败，请重试'); }
     finally { setLoading(false); }
-  }, [useCode, companyCode, companyId, name, account, password, router]);
+  }, [companyCode, name, account, password, router]);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-6">
@@ -50,31 +41,12 @@ export default function RegisterPage() {
         <p className="mt-2 text-sm text-muted-foreground text-center">注册后即可创建你的AI分身</p>
 
         <form onSubmit={handleRegister} className="mt-8 space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <button type="button" onClick={() => setUseCode(true)}
-              className={`text-xs px-3 py-1 rounded-full ${useCode ? 'bg-primary text-white' : 'bg-surface-2 text-muted-foreground'}`}>
-              企业注册码
-            </button>
-            <button type="button" onClick={() => setUseCode(false)}
-              className={`text-xs px-3 py-1 rounded-full ${!useCode ? 'bg-primary text-white' : 'bg-surface-2 text-muted-foreground'}`}>
-              手动输入企业ID
-            </button>
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1">企业注册码</label>
+            <input type="text" value={companyCode} onChange={e => setCompanyCode(e.target.value)}
+              placeholder="管理员提供的注册码"
+              className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary" />
           </div>
-          {useCode ? (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">企业注册码</label>
-              <input type="text" value={companyCode} onChange={e => setCompanyCode(e.target.value)}
-                placeholder="管理员提供的注册码"
-                className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary" />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">企业ID</label>
-              <input type="text" value={companyId} onChange={e => setCompanyId(e.target.value)}
-                placeholder="企业唯一标识"
-                className="w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-sm text-foreground outline-none focus:border-primary" />
-            </div>
-          )}
           <div>
             <label className="block text-sm font-medium text-foreground mb-1">真实姓名</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)}

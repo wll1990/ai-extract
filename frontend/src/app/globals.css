@@ -424,3 +424,43 @@
   border-color: #2147ff;
   background: #f6f8ff;
 }
+
+/* 产品导览：三主题遮罩与高亮环 */
+:root {
+  --tour-scrim: rgba(15, 12, 30, 0.62);
+  --tour-ring: #3b82f6;
+}
+.theme-dark {
+  --tour-scrim: rgba(0, 0, 0, 0.72);
+  --tour-ring: #93c5fd;
+}
+.theme-claude {
+  --tour-scrim: rgba(68, 64, 60, 0.6);
+  --tour-ring: #b45309;
+}
+
+/* 导览自身动画在减少动效时全部静止 */
+@media (prefers-reduced-motion: reduce) {
+  [data-tour-root] *,
+  [data-tour-card] {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* 打印手册时隐藏后台外壳，只留正文 */
+@media print {
+  #app-shell > aside,
+  [data-tour-root],
+  [data-tour-card] {
+    display: none !important;
+  }
+  #app-shell main,
+  #app-shell main > div {
+    overflow: visible !important;
+    height: auto !important;
+  }
+  section {
+    break-inside: avoid;
+  }
+}

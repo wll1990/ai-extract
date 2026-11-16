@@ -21,6 +21,23 @@ import { apiClient } from '@/lib/api/client';
 import { chat, submitFeedback, fetchRecommendedQuestions } from '@/lib/api/skill';
 import { useConversations } from './useConversations';
 
+/** 后端未给文案时按错误码兜底 */
+function aiErrorFallback(code?: string): string {
+  switch (code) {
+    case 'AI_KEY_INVALID':
+    case 'AI_KEY_FORBIDDEN':
+      return '模型 Key 配置有误，请联系管理员检查模型配置';
+    case 'AI_QUOTA_EXCEEDED':
+      return '模型额度已用尽，请联系管理员充值或更换 Key';
+    case 'AI_RATE_LIMITED':
+      return '调用过于频繁，请稍后重试';
+    case 'AI_TIMEOUT':
+      return '模型响应超时，请稍后重试';
+    default:
+      return 'AI服务暂时不可用，请稍后重试';
+  }
+}
+
 interface SkillInfo {
   ownerName?: string;
   ownerTitle?: string;
@@ -39,6 +56,8 @@ interface Message {
   source?: string; grainIds?: string; grainId?: string; reportId?: string;
   grainTags?: string; grainCount?: number; avgScore?: string;
   avgSimilarity?: string;
+  knowledgeSources?: Array<{ title: string; source: string; similarity: string }>;
+  caseSources?: Array<{ title: string; source: string; similarity: string }>;
 }
 
 interface QaChatInputs {
@@ -112,8 +131,11 @@ export function useQaChat({
 
     const aiMsgId = `a-${Date.now()}`;
     let sourceInfo: any = {};
+    const knowledgeSources: Array<{ title: string; source: string; similarity: string }> = [];
+    const caseSources: Array<{ title: string; source: string; similarity: string }> = [];
 
     let fullContent = '';
+    const clientMessageId = crypto.randomUUID();
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
@@ -122,21 +144,31 @@ export function useQaChat({
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
+      onKnowledgeSource: (title, source, similarity) => {
+        knowledgeSources.push({ title, source, similarity });
+      },
+      onCaseSource: (title, source, similarity) => {
+        caseSources.push({ title, source, similarity });
+      },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
       },
       onDone: () => {
         setQaStreamText('');
-        setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo }]);
+        setMessages((prev) => [...prev, {
+          id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo,
+          ...(knowledgeSources.length ? { knowledgeSources } : {}),
+          ...(caseSources.length ? { caseSources } : {}),
+        }]);
         setIsStreaming(false);
         loadConversations();
       },
-      onError: (msg) => {
+      onError: (msg, code) => {
         setIsStreaming(false);
         setMessages((prev) => prev.filter((m) => m.id !== aiMsgId));
         setMessages((prev) => [...prev, {
           id: `err-${Date.now()}`, role: 'ai',
-          content: `⚠️ ${msg || 'AI服务暂时不可用，请稍后重试'}`,
+          content: `⚠️ ${msg || aiErrorFallback(code)}`,
         }]);
       },
       // RAG 无匹配时后端推送推荐问题，前端接收并展示可点击按钮；
@@ -153,7 +185,7 @@ export function useQaChat({
           setSuggestedQuestions(data.questions as string[]);
         }
       },
-    }, currentConvId || undefined, 'web', chatMode, historyText, authToken);
+    }, currentConvId || undefined, 'web', chatMode, historyText, authToken, clientMessageId);
     abortRef.current?.abort(); abortRef.current = controller;
   }, [inputValue, isStreaming, skillId, messages, skillInfo, currentConvId, chatMode, authToken, onLimit]);
 
@@ -173,6 +205,9 @@ export function useQaChat({
 
     let fullContent = '';
     let sourceInfo: any = {};
+    const knowledgeSources: Array<{ title: string; source: string; similarity: string }> = [];
+    const caseSources: Array<{ title: string; source: string; similarity: string }> = [];
+    const clientMessageId = crypto.randomUUID();
     const controller = chat(skillId, text, {
       onChunk: (content) => {
         fullContent += content;
@@ -181,12 +216,22 @@ export function useQaChat({
       onSource: (reportId, reportTitle, grainIds, grainTags, grainCount, avgScore, avgSimilarity, sourceNames) => {
         sourceInfo = { reportId, grainIds: grainIds || '', grainId: (grainIds || '').split(',')[0], source: reportTitle || '', grainTags, grainCount, avgScore, avgSimilarity, sourceNames };
       },
+      onKnowledgeSource: (title, source, similarity) => {
+        knowledgeSources.push({ title, source, similarity });
+      },
+      onCaseSource: (title, source, similarity) => {
+        caseSources.push({ title, source, similarity });
+      },
       onMeta: (conversationId) => {
         if (conversationId && !currentConvId) setCurrentConvId(conversationId);
       },
       onDone: () => {
         const aiMsgId = `a-${Date.now()}`;
-        setMessages((prev) => [...prev, { id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo }]);
+        setMessages((prev) => [...prev, {
+          id: aiMsgId, role: 'ai', content: fullContent, ...sourceInfo,
+          ...(knowledgeSources.length ? { knowledgeSources } : {}),
+          ...(caseSources.length ? { caseSources } : {}),
+        }]);
         setQaStreamText('');
         setIsStreaming(false);
         loadConversations();
@@ -206,7 +251,7 @@ export function useQaChat({
           setSuggestedQuestions(data.questions as string[]);
         }
       },
-    }, currentConvId || undefined, 'web', chatMode, historyText, authToken);
+    }, currentConvId || undefined, 'web', chatMode, historyText, authToken, clientMessageId);
     abortRef.current?.abort(); abortRef.current = controller;
   }, [isStreaming, skillId, messages, skillInfo, currentConvId, chatMode, authToken, onLimit]);
 

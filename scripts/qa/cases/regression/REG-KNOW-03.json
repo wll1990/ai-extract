@@ -1,0 +1,83 @@
+[
+  {
+    "id": "REG-KNOW-03",
+    "set": "regression",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin"],
+    "llm": false,
+    "sourceBug": "公共知识/案例库从未被测试：公共库无数据、复制到企业的链路未验证",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/knowledge/e0c0a000-0000-0000-0000-000000000001/copy",
+        "expect": { "status": 200, "json": { "data.status": "pending" } },
+        "save": { "copyId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/knowledge/${copyId}",
+        "body": {
+          "title": "QA-${runId}-复制公共知识",
+          "category": "price",
+          "sourceType": "tenant",
+          "content": "从公共知识复制并改名的测试条目。",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/e0c0b000-0000-0000-0000-000000000001/copy",
+        "expect": { "status": 200 },
+        "save": { "caseCopyId": "data.id" }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/cases/${caseCopyId}",
+        "body": {
+          "title": "QA-${runId}-复制公共案例",
+          "customerProfile": "{\"industry\":\"制造业\",\"budgetChain\":\"采购+财务\"}",
+          "funnelStage": "proposal",
+          "sceneTag": "价格异议",
+          "objection": "客户认为报价高于竞品。",
+          "keyActions": "拆两期交付，第一期收 40%。",
+          "scripts": "用年度收益锚定价格。",
+          "result": "win",
+          "reusablePoints": "分期交付化解预算压力。",
+          "failurePoints": "未提前确认回款周期。",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": { "status": 200 }
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/cases/${caseCopyId}",
+        "body": {
+          "title": "QA-${runId}-非法客户画像",
+          "customerProfile": "制造业客户，纯文本不是 JSON",
+          "result": "win"
+        },
+        "expect": { "status": 400 },
+        "note": "JSONB 列传纯文本必须 400，不能 500"
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select (company_id = '0a000000-0000-0000-0000-000000000001')::text || '/' || status from public.knowledge_entry where id = :copyId",
+        "expect": "true/pending"
+      },
+      {
+        "type": "db",
+        "sql": "select (company_id = '0a000000-0000-0000-0000-000000000001')::text || '/' || (title = 'QA-' || :runId || '-复制公共案例')::text from public.industry_case where id = :caseCopyId",
+        "expect": "true/true"
+      },
+      {
+        "type": "db",
+        "sql": "select count(*) from public.knowledge_entry where id = 'e0c0a000-0000-0000-0000-000000000001' and company_id is null",
+        "expect": "1"
+      }
+    ]
+  }
+]
