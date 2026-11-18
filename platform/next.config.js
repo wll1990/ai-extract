@@ -5,7 +5,12 @@ const nextConfig = {
   images: {
     remotePatterns: [{ protocol: 'https', hostname: '**' }],
   },
-  /** API 代理（仅开发模式生效） */
+  /**
+   * API 代理（开发便利）
+   *
+   * 注意：rewrites 在生产同样生效。生产必须由 Nginx/Ingress 先截获 /api/v1，
+   * 否则会打到前端机器自己的 localhost:8080（见 docs/78 §12-3）。
+   */
   async rewrites() {
     return [
       {

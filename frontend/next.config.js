@@ -11,11 +11,12 @@ const nextConfig = {
     ],
   },
   /**
-   * API 代理（仅开发模式生效）
+   * API 代理（开发便利）
    *
-   * 生产环境跨域部署时此配置不生效，需通过以下两种方式之一：
-   * 1. 设置 NEXT_PUBLIC_API_BASE_URL 为后端完整 URL（后端需配 CORS）
-   * 2. 用 Nginx 反向代理 /api/ 到后端服务器
+   * 注意：Next 的 rewrites 在生产同样生效，并不存在「仅开发模式」的开关。
+   * 生产必须由 Nginx/Ingress 在进入 Next 之前截获 /api/v1，否则请求会被代理到
+   * **前端机器自己的** localhost:8080；前端机没装后端时表现为 502。
+   * 详见 docs/78-多服务部署与调用.md §12-3。
    */
   async rewrites() {
     return [

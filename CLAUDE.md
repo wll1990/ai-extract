@@ -107,6 +107,7 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 - `im-bridge` 与后端 `/internal/im/*` 之间 HMAC-SHA256 双向验签（`im-bridge/src/hmac.js` ↔ `config/ImBridgeAuth`）
 - IM 渠道契约平台无关：`/internal/im/message` 收统一消息，`/internal/im/{channelType}/complete|active` 做生命周期；新增渠道只需加一个 `channels/*.js` 适配器
 - 企业微信回调走 `GET/POST /wecom/callback`（需公网 HTTPS 指向桥 3010）；钉钉走 Stream，无需公网回调
+- 部署：单机执行手册 [DEPLOY.md](DEPLOY.md)；多服务拆分（域名/网关/服务发现/K8s）见 [docs/78-多服务部署与调用.md](docs/78-多服务部署与调用.md)，backend 扩多实例前必须先解决 `@Scheduled` 互斥
 
 ## 角色定位
 
