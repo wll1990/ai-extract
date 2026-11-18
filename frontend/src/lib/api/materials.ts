@@ -16,8 +16,12 @@ export interface GrainItem {
   qualityScore?: number; difficultyLevel?: string;
 }
 
-export function listMaterials(skillId: string, page = 1, size = 20): Promise<{ content: MaterialItem[]; total: number; totalPages: number }> {
-  return apiClient(`/admin/skills/${skillId}/materials?page=${page}&size=${size}`);
+export function listMaterials(
+  skillId: string, page = 1, size = 20, status?: string,
+): Promise<{ content: MaterialItem[]; total: number; totalPages: number }> {
+  const q = new URLSearchParams({ page: String(page), size: String(size) });
+  if (status && status !== 'all') q.set('status', status);
+  return apiClient(`/admin/skills/${skillId}/materials?${q.toString()}`);
 }
 
 /** 管理员手动重试失败素材 */

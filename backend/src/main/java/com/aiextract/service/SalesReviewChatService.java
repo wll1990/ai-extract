@@ -34,6 +34,7 @@ public class SalesReviewChatService {
     private final SalesReviewChatPersistence persistence;
     private final SalesReviewRateLimiter rateLimiter;
     private final ChatStreamAdapter chatStreamAdapter;
+    private final QueryGate queryGate;
 
     public List<ReviewMessageView> history(UUID sessionId) {
         access.requireSession(sessionId);
@@ -44,6 +45,10 @@ public class SalesReviewChatService {
     }
 
     public Flux<ChatChunk> stream(UUID sessionId, String content) {
+        String blocked = queryGate.auditSimple(content);
+        if (blocked != null) {
+            return Flux.just(ChatChunk.error(blocked), ChatChunk.done());
+        }
         ReviewSession session = access.requireSession(sessionId);
         long persisted = messageRepository.countBySessionIdAndRole(sessionId, "user");
         if (!rateLimiter.tryConsume(sessionId, persisted)) {

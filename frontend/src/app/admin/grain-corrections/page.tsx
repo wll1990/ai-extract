@@ -1,4 +1,5 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -141,15 +142,7 @@ export default function GrainCorrectionsPage() {
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40">上一页</button>
-            <span className="text-muted-foreground">{page} / {totalPages}（共 {total} 条）</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40">下一页</button>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} totalElements={total} onPageChange={setPage} loading={loading} />
       </div>
     </div>
   );

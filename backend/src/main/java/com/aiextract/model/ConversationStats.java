@@ -126,6 +126,6 @@ public class ConversationStats {
      * 用于跨类型统计区分。注意 skill_id 字段在不同类型下的语义不同。
      * @since 2026-07-28 V31 迁移
      */
-    @Column(name = "skill_type", length = 10)
+    @Column(name = "skill_type", length = 20)
     private String skillType;
 }

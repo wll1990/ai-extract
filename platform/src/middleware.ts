@@ -11,7 +11,10 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = ['/login', '/register'];
 const PUBLIC_PREFIXES = ['/', '/discover', '/skill/', '/h5/', '/s/', '/chat/'];
-const SKIP_PREFIXES = ['/_next', '/api', '/favicon.ico', '/robots.txt'];
+const SKIP_PREFIXES = [
+  '/_next', '/api', '/robots.txt',
+  '/favicon.ico', '/favicon-32.png', '/icon-512.png', '/apple-touch-icon.png',
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -44,5 +47,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|favicon-32.png|icon-512.png|apple-touch-icon.png|robots.txt).*)'],
 };

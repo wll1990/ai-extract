@@ -29,11 +29,25 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KnowledgeCaseRetriever {
 
-    /** 知识默认最低相似度阈值（事实型，分布尖锐，低阈值即可高精度） */
-    public static final double DEFAULT_KNOWLEDGE_MIN_SIMILARITY = 0.35;
+    /**
+     * 知识默认最低相似度阈值。
+     *
+     * <p>实测 text-embedding-v4 下「无关中文短句」的余弦相似度集中在 0.36–0.42，
+     * 原 0.35 等于不设门槛（「客户骂我」会命中「退款口径」「竞品对比」）。
+     * 0.45 与案例阈值一起挡掉这条噪声基线，同时给真实事实型命中留足余量。</p>
+     */
+    public static final double DEFAULT_KNOWLEDGE_MIN_SIMILARITY = 0.45;
 
     /** 案例默认最低相似度阈值（叙事型，分布平缓，需抬到能挡掉「泛销售」基底噪音） */
     public static final double DEFAULT_CASE_MIN_SIMILARITY = 0.50;
+
+    /**
+     * 检索测试专用的「诊断下限」：低于线上阈值的近失命中也会返回，
+     * 由调用方标记为「不会进入分身」，便于回答「为什么没引用」。
+     */
+    public static final double DIAGNOSTIC_KNOWLEDGE_MIN_SIMILARITY = 0.25;
+
+    public static final double DIAGNOSTIC_CASE_MIN_SIMILARITY = 0.30;
 
     private final JdbcTemplate jdbc;
     private final DashScopeEmbeddingService embeddingService;
@@ -43,8 +57,14 @@ public class KnowledgeCaseRetriever {
                                String source, double similarity) {
     }
 
-    /** 案例命中 */
+    /**
+     * 案例命中。
+     *
+     * <p>{@code customerProfile/emotionChange/advanceNodes} 供对练「客户角色」使用：
+     * 只暴露客户侧信息，不把标准话术/动作喂给扮演客户的模型。</p>
+     */
     public record CaseHit(UUID id, String title, String sceneTag, String funnelStage, String result,
+                          String customerProfile, String emotionChange, String advanceNodes,
                           String objection, String keyActions, String scripts, String reusablePoints,
                           String failurePoints, String source, double similarity) {
     }
@@ -70,8 +90,9 @@ public class KnowledgeCaseRetriever {
 
     /** 案例 ANN 检索 SQL（同知识，含相似度下限） */
     private static final String CASE_SQL = """
-            SELECT c.id, c.title, c.scene_tag, c.funnel_stage, c.result, c.objection,
-                   c.key_actions, c.scripts, c.reusable_points, c.failure_points, c.source,
+            SELECT c.id, c.title, c.scene_tag, c.funnel_stage, c.result,
+                   c.customer_profile, c.emotion_change, c.advance_nodes,
+                   c.objection, c.key_actions, c.scripts, c.reusable_points, c.failure_points, c.source,
                    1.0 - (c.embedding <=> ?) AS similarity
             FROM industry_case c
             WHERE (c.company_id = ? OR c.company_id IS NULL)
@@ -117,6 +138,9 @@ public class KnowledgeCaseRetriever {
             rs.getString("scene_tag"),
             rs.getString("funnel_stage"),
             rs.getString("result"),
+            rs.getString("customer_profile"),
+            rs.getString("emotion_change"),
+            rs.getString("advance_nodes"),
             rs.getString("objection"),
             rs.getString("key_actions"),
             rs.getString("scripts"),

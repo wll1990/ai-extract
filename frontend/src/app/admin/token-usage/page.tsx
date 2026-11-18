@@ -1,4 +1,5 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
@@ -100,14 +101,6 @@ export default function TokenUsagePage() {
   }, [loadDaily, loadLogs, days]);
 
   const totalPages = Math.max(1, Math.ceil(totalLogs / size));
-  const hasMore = page < totalPages - 1;
-
-  const goPage = (delta: number) => {
-    const next = page + delta;
-    if (next < 0 || next >= totalPages) return;
-    setPage(next);
-    loadLogs(next);
-  };
 
   const dailyFilled = useMemo(() => fillDaily(daily, days), [daily, days]);
   const dailyHasData = daily.some(d => d.inputTokens > 0 || d.outputTokens > 0 || d.count > 0);
@@ -202,6 +195,8 @@ export default function TokenUsagePage() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page + 1} totalPages={totalPages} totalElements={totalLogs}
+            onPageChange={p => { setPage(p - 1); loadLogs(p - 1); }} loading={loading} />
         </div>
 
         {/* 模型分布 + 企业排行 */}
@@ -240,21 +235,7 @@ export default function TokenUsagePage() {
         <div className="bg-white rounded-xl border border-border overflow-hidden">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <h2 className="font-semibold text-foreground">📋 最近调用明细</h2>
-            <div className="flex items-center gap-2">
-              <button onClick={() => goPage(-1)}
-                disabled={page === 0}
-                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-surface-2 disabled:opacity-30">
-                上一页
-              </button>
-              <span className="text-xs text-muted-foreground">
-                第 {page + 1}/{totalPages} 页（共 {totalLogs} 条）
-              </span>
-              <button onClick={() => goPage(1)}
-                disabled={!hasMore}
-                className="text-xs px-3 py-1.5 rounded-lg border border-border hover:bg-surface-2 disabled:opacity-30">
-                下一页
-              </button>
-            </div>
+
           </div>
           {logsError && (
             <div className="px-5 py-3 bg-red-50 border-b border-red-200 text-xs text-red-600">{logsError}</div>

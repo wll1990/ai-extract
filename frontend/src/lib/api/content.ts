@@ -15,6 +15,10 @@ export interface ContentNeeds {
   gaps: number;
   trainingFailures: number;
   evalFailures: number;
+  /** 待审 AI 知识草稿数：大于 0 时不允许继续生成 */
+  pendingAiKnowledge: number;
+  /** 待审 AI 案例草稿数：大于 0 时不允许继续生成 */
+  pendingAiCases: number;
   needs: ContentNeed[];
 }
 
@@ -140,7 +144,7 @@ export function getContentHealth(type: 'knowledge' | 'case', id: string): Promis
   return apiClient<ContentHealth>(`/admin/content/health/${type}/${id}`);
 }
 
-// ==================== 一源多用（派生） ====================
+// ==================== AI 派生（原一源多用） ====================
 
 export interface DerivedExamItem {
   question: string;
@@ -164,7 +168,7 @@ export interface DerivedContent {
   drill?: { scenario: string; clientRole?: string; questions?: DerivedDrillQuestion[] } | null;
 }
 
-/** 一源多用：提交派生任务，返回 jobId；结果从 job.result 取（不落库） */
+/** AI 派生：提交派生任务，返回 jobId；结果从 job.result 取（不落库） */
 export function deriveContent(sourceType: 'knowledge' | 'case', sourceId: string): Promise<ContentJobAccepted> {
   return apiClient('/admin/content/derive', {
     method: 'POST', body: JSON.stringify({ sourceType, sourceId }),
@@ -255,7 +259,7 @@ export function promoteRunIssues(runId: string): Promise<ContentJobAccepted> {
   return apiClient(`/admin/content/evaluation/runs/${runId}/promote-issues`, { method: 'POST' });
 }
 
-// ==================== AI 草稿审核台 ====================
+// ==================== AI 待审视图 ====================
 
 export type ReviewKind = 'knowledge' | 'case' | 'eval_item';
 export type ReviewPathKind = 'knowledge' | 'case' | 'eval-item';

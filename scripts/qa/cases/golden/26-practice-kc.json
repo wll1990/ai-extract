@@ -1,0 +1,131 @@
+[
+  {
+    "id": "GOLD-PRACTICE-01",
+    "set": "golden",
+    "priority": "P1",
+    "domain": "knowledge",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "note": "开关开启后：对练开练/回应/逐轮评价接入案例；关闭时零检索",
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/company/practice-kc",
+        "body": {
+          "enabled": true
+        },
+        "expect": {
+          "status": 200,
+          "json": {
+            "data.enabled": true
+          }
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-对练案例命中",
+          "customerProfile": "{\"industry\":\"汽车零部件\",\"scale\":\"2000人\",\"role\":\"采购总监\"}",
+          "funnelStage": "objection",
+          "sceneTag": "预算冻结",
+          "objection": "今年设备预算冻结，但产线良率问题已经影响交付，必须想办法先上一个小项目。",
+          "emotionChange": "焦虑 → 试探 → 松口",
+          "advanceNodes": "问题暴露 → 预算冻结 → 试点立项 → 效果验收 → 次年扩容",
+          "keyActions": "把整线改造拆成单工位试点，走设备维修预算而不是技改预算。",
+          "scripts": "先用维修预算做单工位验证，良率数据出来后再谈整线扩容。",
+          "result": "win",
+          "reusablePoints": "预算冻结时换预算科目：技改走不通就先走维修。",
+          "failurePoints": "一开始坚持整线报价，被预算直接挡住。",
+          "source": "QA 黄金链路",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": {
+          "status": 200
+        },
+        "save": {
+          "caseId": "data.id"
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "as": "employee",
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/practice/start",
+        "body": {
+          "scene": "预算冻结"
+        },
+        "await": {
+          "sql": "select (embedding is not null)::text from public.industry_case where id = :caseId",
+          "until": ["true"],
+          "maxAttempts": 30,
+          "intervalMs": 5000
+        },
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/practice/respond",
+        "body": {
+          "message": "王总，我理解今年设备预算冻结。我们先把产线良率问题拆成单工位试点，用维修预算立项，验证后再谈整线扩容。",
+          "sceneTag": "预算冻结",
+          "sceneContext": "客户是汽车零部件采购总监，今年设备预算冻结，但产线良率影响交付。",
+          "roundNumber": 1,
+          "totalAngles": 3,
+          "practiceAngles": "1. 客户提出预算冻结的现实约束\n2. 客户质疑小项目是否能解决问题\n3. 客户追问试点如何验收"
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["content", "source", "done"],
+          "contentNonEmpty": true,
+          "sourceType": "case",
+          "sourceTitleContains": "QA-${runId}-对练案例命中"
+        },
+        "timeout": 120000
+      },
+      {
+        "as": "employee",
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/practice/evaluate-round",
+        "body": {
+          "sceneTag": "预算冻结",
+          "customerMessage": "今年设备预算冻结，但产线良率问题已经影响交付，必须先上一个小项目。",
+          "myResponse": "我们先拆成单工位试点，用维修预算立项，验证后再谈整线扩容。",
+          "retryCount": 0
+        },
+        "expect": {
+          "status": 200
+        },
+        "timeout": 120000
+      },
+      {
+        "as": "company_admin",
+        "api": "PUT /admin/company/practice-kc",
+        "body": {
+          "enabled": false
+        },
+        "expect": {
+          "status": 200,
+          "json": {
+            "data.enabled": false
+          }
+        }
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "active"
+      }
+    ]
+  }
+]

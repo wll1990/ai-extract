@@ -150,9 +150,25 @@ export function renameConversation(conversationId: string, title: string, authTo
 }
 
 /** 推荐问题 */
+export interface SceneTagCount {
+  tag: string;
+  count: number;
+}
+
+/** 场景标签：可选展示数据，失败只降级为空列表，不跳登录。 */
+export function fetchSceneTags(skillId: string, authToken?: string): Promise<SceneTagCount[]> {
+  return apiClient<SceneTagCount[]>(`/skills/${skillId}/scene-tags`, {
+    headers: bearer(authToken),
+    skipAuthRedirect: true,
+  });
+}
+
 export function fetchRecommendedQuestions(skillId: string, sceneTag?: string, authToken?: string): Promise<string[]> {
   const params = sceneTag ? `?sceneTag=${encodeURIComponent(sceneTag)}` : '';
-  return apiClient(`/skills/${skillId}/recommended-questions${params}`, { headers: bearer(authToken) });
+  return apiClient(`/skills/${skillId}/recommended-questions${params}`, {
+    headers: bearer(authToken),
+    skipAuthRedirect: true,
+  });
 }
 
 /** 分身问答（SSE 流式） */

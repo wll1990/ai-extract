@@ -1,10 +1,19 @@
 'use client';
 
 import React, { useState } from 'react';
+import { Button } from '@/components/ui/Button';
 
 export interface HelpStep {
   title: string;
   desc: string;
+}
+
+export interface HelpAction {
+  /** 按钮上的原文，必须与页面一致 */
+  label: string;
+  /** 什么时候可用、点了发生什么、能不能撤销 */
+  desc: string;
+  tone?: 'primary' | 'neutral' | 'danger';
 }
 
 interface PageHelpProps {
@@ -14,6 +23,8 @@ interface PageHelpProps {
   intro: string;
   /** 主要操作步骤 */
   steps: HelpStep[];
+  /** 按钮级说明：页面里每个按钮都要有一条，避免「不知道这个按钮干嘛」 */
+  actions?: HelpAction[];
   /** 注意事项 / 常见问题 */
   notes?: string[];
 }
@@ -23,18 +34,17 @@ interface PageHelpProps {
  *
  * <p>统一入口，避免每个页面各写一套引导；空态和关键动作也可以引用同一份文案。</p>
  */
-export function PageHelp({ title, intro, steps, notes }: PageHelpProps) {
+export function PageHelp({ title, intro, steps, actions, notes }: PageHelpProps) {
   const [open, setOpen] = useState(false);
+  const toneClass = (tone?: HelpAction['tone']) => tone === 'primary'
+    ? 'text-primary'
+    : tone === 'danger' ? 'text-danger' : 'text-foreground';
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:text-foreground hover:bg-surface-2 transition-colors"
-        aria-label="查看使用说明"
-      >
+      <Button variant="neutral" size="md" onClick={() => setOpen(true)} aria-label="查看使用说明">
         使用说明
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -73,6 +83,20 @@ export function PageHelp({ title, intro, steps, notes }: PageHelpProps) {
                 </li>
               ))}
             </ol>
+
+            {actions && actions.length > 0 && (
+              <div className="mt-6">
+                <p className="mb-2 text-xs font-semibold text-muted-foreground">按钮说明</p>
+                <dl className="space-y-2">
+                  {actions.map(action => (
+                    <div key={action.label} className="rounded-lg border border-border bg-surface-2 px-3 py-2">
+                      <dt className={`text-sm font-medium ${toneClass(action.tone)}`}>{action.label}</dt>
+                      <dd className="mt-0.5 text-xs leading-5 text-muted-foreground">{action.desc}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
 
             {notes && notes.length > 0 && (
               <div className="mt-6 rounded-xl border border-border bg-surface-2 p-4">

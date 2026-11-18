@@ -129,7 +129,7 @@ export default function CaseEditPage({ params }: { params: { id: string } }) {
     <div className="mx-auto max-w-3xl p-6">
       <button onClick={() => router.push(`/admin/cases/${id}`)} className="mb-4 text-sm text-muted-foreground hover:underline">← 返回详情</button>
       <h1 className="mb-1 text-xl font-bold text-foreground">编辑案例</h1>
-      <p className="mb-5 text-sm text-muted-foreground">当前状态：{item.status === 'draft' ? '草稿' : '待审核'}，修改后仍需审批才会生效。</p>
+      <p className="mb-5 text-sm text-muted-foreground">当前状态：{item.status === 'draft' ? '草稿' : '待审核'}，修改后仍需审核才会生效。</p>
 
       <div className="space-y-3">
         <label className="block">

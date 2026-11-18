@@ -163,6 +163,24 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 主库/会话存储不可用 → 503。
+     *
+     * <p>前端对 503 的语义是「服务暂不可用，保留本地登录态」；不能落到 500，
+     * 否则会被当成未知错误、用户被反复弹登录。</p>
+     */
+    @ExceptionHandler({
+            com.aiextract.service.session.SessionUnavailableException.class,
+            org.springframework.dao.DataAccessResourceFailureException.class,
+            org.springframework.jdbc.CannotGetJdbcConnectionException.class,
+            org.springframework.transaction.CannotCreateTransactionException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleStorageUnavailable(Exception e) {
+        log.error("存储不可用: {}", e.getMessage(), e);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(503, "服务暂不可用，请稍后重试"));
+    }
+
+    /**
      * 处理文件上传大小超限
      */
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
@@ -201,8 +219,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler({
             org.springframework.web.client.RestClientResponseException.class,
             org.springframework.web.reactive.function.client.WebClientResponseException.class,
-            org.springframework.ai.retry.NonTransientAiException.class,
-            org.springframework.ai.retry.TransientAiException.class
+            com.openai.errors.OpenAIException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleAiException(Exception e) {
         AiErrorMapper.AiError aiError = AiErrorMapper.map(e);

@@ -1,10 +1,11 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.dto.GuestSessionResponse;
 import com.aiextract.dto.ShareInfoResponse;
 import com.aiextract.service.ShareService;
-import com.aiextract.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +36,6 @@ import java.util.UUID;
 public class PublicShareController {
 
     private final ShareService shareService;
-    private final JwtUtil jwtUtil;
 
     /**
      * 分享落地页信息
@@ -70,15 +70,7 @@ public class PublicShareController {
      * 匿名请求的 credentials 非 JWT（AnonymousAuthenticationToken），解析失败即返回 null。
      */
     private UUID currentUserIdOrNull() {
-        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null || auth.getCredentials() == null) {
-            return null;
-        }
-        try {
-            return jwtUtil.getUserIdFromToken(auth.getCredentials().toString());
-        } catch (Exception e) {
-            return null;
-        }
+        return CurrentUser.id();
     }
 
     /** 取客户端真实 IP：X-Forwarded-For 首段（Nginx 反代场景）回退 remoteAddr */

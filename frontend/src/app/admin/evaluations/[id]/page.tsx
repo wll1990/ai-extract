@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import {
   getDataset, updateDataset, submitDataset, reviewDataset, publishDataset, createVersion,
   listItems, addItem, updateItem, deleteItem, createGenerationJob, getGenerationJob,
@@ -12,7 +11,8 @@ import {
 } from '@/lib/api/evaluation';
 import { listKnowledge, listCases } from '@/lib/api/knowledge';
 import {
-  getDatasetAnalysis, generateEvalItemsFromSignals, pollContentJob, type EvaluationDatasetAnalysis,
+  getDatasetAnalysis, generateEvalItemsFromSignals, pollContentJob,
+  approveReviewDraft, rejectReviewDraft, type EvaluationDatasetAnalysis,
 } from '@/lib/api/content';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHelp } from '@/components/ui/PageHelp';
@@ -53,6 +53,10 @@ export default function AdminDatasetEditorPage() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [rejectTarget, setRejectTarget] = useState<EvaluationItem | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [itemFilter, setItemFilter] = useState<'all' | 'draft' | 'active'>('all');
 
   // 题集 + 元信息表单
   const [dataset, setDataset] = useState<EvaluationDataset | null>(null);
@@ -141,14 +145,29 @@ export default function AdminDatasetEditorPage() {
 
   const isDraft = dataset?.status === 'draft';
   const draftCount = items.filter(i => i.status === 'draft').length;
+  const filteredItems = items.filter(i => itemFilter === 'all' || i.status === itemFilter);
   const readOnlyVersion = !!dataset && viewVersion !== null && viewVersion !== dataset.currentVersion;
+  const nextStepText = dataset
+    ? dataset.status === 'draft'
+      ? draftCount > 0
+        ? `还有 ${draftCount} 道 AI 草稿题待处理：在题目列表逐题点「通过」或「丢弃」，处理完再提交审核。`
+        : '题目确认无误后点「提交审核」；提交后题目暂不可改。'
+      : dataset.status === 'in_review'
+        ? '等待审核结果；通过后可以点「发布」。退回会显示理由。'
+        : dataset.status === 'approved'
+          ? '审核已通过，点「发布」冻结当前版本，之后到「评测运行」使用。'
+          : dataset.status === 'published'
+            ? '已发布并冻结；要改题请点「创建新版本」，旧版本仍可被运行引用。'
+            : '当前版本只读。'
+    : '';
 
   const runAction = async (fn: () => Promise<unknown>) => {
+    setActionError(null);
     try {
       await fn();
       await loadAll();
     } catch (e) {
-      alert(e instanceof Error ? e.message : '操作失败');
+      setActionError(e instanceof Error ? e.message : '操作失败');
     }
   };
 
@@ -215,6 +234,23 @@ export default function AdminDatasetEditorPage() {
     runAction(() => deleteItem(item.id));
   };
 
+  const approveDraftItem = (item: EvaluationItem) => {
+    runAction(() => approveReviewDraft('eval-item', item.id));
+  };
+
+  const submitRejectItem = () => {
+    if (!rejectTarget) return;
+    if (!rejectReason.trim()) {
+      setActionError('丢弃 AI 草稿题必须填写理由');
+      return;
+    }
+    const target = rejectTarget;
+    const reason = rejectReason.trim();
+    setRejectTarget(null);
+    setRejectReason('');
+    runAction(() => rejectReviewDraft('eval-item', target.id, reason));
+  };
+
   // ==================== AI 生成候选 ====================
 
   const loadGenSources = useCallback(async (sourceType: 'knowledge' | 'case', keyword = '') => {
@@ -277,7 +313,7 @@ export default function AdminDatasetEditorPage() {
         alert(job.errorMessage || '生成失败');
         return;
       }
-      alert(`已从真实失败信号生成 ${job.producedCount} 道题，进入 AI 草稿待审；通过后才会进入题集`);
+      alert(`已从真实失败信号生成 ${job.producedCount} 道题，已进入下方题目列表并标「待处理」；逐题点「通过」或「丢弃」后再提交审核`);
       setSignalScene('');
       await loadAll();
       getDatasetAnalysis(dataset.id).then(setAnalysis).catch(() => {});
@@ -368,26 +404,8 @@ export default function AdminDatasetEditorPage() {
       <div className="mx-auto max-w-[1080px]">
         <button onClick={() => router.push('/admin/evaluations')} className="mb-4 text-sm text-muted-foreground hover:underline">← 返回评测中心</button>
 
-        <PageHelp
-          title="评测题集怎么用"
-          intro="题集是一组「问题 + 期望要点」，用来衡量分身回答得对不对。流程是：录题 → 提交审核 → 发布冻结版本 → 到「评测运行」选分身跑分。"
-          steps={[
-            { title: '录题或 AI 生成', desc: '草稿状态下可以手工加题，也可以从知识库/案例库让 AI 生成候选，生成后请人工检查一遍。' },
-            { title: '提交并审核', desc: '提交后由管理员审核；退回必须写理由，理由会显示在本页。' },
-            { title: '发布冻结', desc: '发布后该版本只读，评测运行只能选已发布版本；要改题请「创建新版本」。' },
-            { title: '跑运行看结果', desc: '到「评测运行」创建批次，完成后逐题复核、定稿出报告。' },
-          ]}
-          notes={[
-            '研发回归用途的题目必须填写「检索期望」，验收/培训用途必须填写「预期要点」，否则提交审核会被拦。',
-            '用途决定评分口径，运行时的用途必须与题集一致；发布后版本冻结，改题必须创建新版本。',
-            'AI 生成的候选必须人工检查后再发布；题集会标「AI 生成」。',
-            '跑完在「评测运行」复核：最终分以人工改分为准（标「人工」），定稿后生成报告。',
-            '版本对比只在同题集同版本逐题可比；版本不同只比较公共题目，不相减总分。',
-          ]}
-        />
-
         {/* 头部 */}
-        <div className="mb-6 flex items-start justify-between">
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="mb-1 text-[26px] font-bold text-foreground">{dataset.name}</h1>
             <p className="text-sm text-muted-foreground">
@@ -395,9 +413,34 @@ export default function AdminDatasetEditorPage() {
               {dataset.companyId === null ? ' · 平台公共' : ''}
             </p>
           </div>
-          <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${DATASET_STATUS_CLS[dataset.status] || 'bg-gray-100 text-gray-600'}`}>
-            {DATASET_STATUS_LABELS[dataset.status] || dataset.status}
-          </span>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <PageHelp
+              title="评测题集怎么用"
+              intro="题集是一组「问题 + 期望要点」，用来衡量分身回答得对不对。流程是：录题 → 提交审核 → 发布冻结版本 → 到「评测运行」选分身跑分。"
+              steps={[
+                { title: '录题或 AI 生成', desc: '草稿状态下可以手工加题，也可以从知识库/案例库让 AI 生成候选，生成后请人工检查一遍。' },
+                { title: '提交并审核', desc: '提交后由管理员审核；退回必须写理由，理由会显示在本页。' },
+                { title: '发布冻结', desc: '发布后该版本只读，评测运行只能选已发布版本；要改题请「创建新版本」。' },
+                { title: '跑运行看结果', desc: '到「评测运行」创建批次，完成后逐题复核、定稿出报告。' },
+              ]}
+              notes={[
+                '研发回归用途的题目必须填写「检索期望」，验收/培训用途必须填写「预期要点」，否则提交审核会被拦。',
+                '用途决定评分口径，运行时的用途必须与题集一致；发布后版本冻结，改题必须创建新版本。',
+                'AI 生成的候选必须人工检查后再发布；题集会标「AI 生成」。',
+                'AI 考题的通过/丢弃需要「评测管理」权限（EVAL_MANAGE），并且仍要随题集提交审核、发布后才可运行。',
+                '跑完在「评测运行」复核：最终分以人工改分为准（标「人工」），定稿后生成报告。',
+                '版本对比只在同题集同版本逐题可比；版本不同只比较公共题目，不相减总分。',
+              ]}
+            />
+            <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${DATASET_STATUS_CLS[dataset.status] || 'bg-gray-100 text-gray-600'}`}>
+              {DATASET_STATUS_LABELS[dataset.status] || dataset.status}
+            </span>
+            {actions}
+          </div>
+        </div>
+
+        <div className="mb-5 rounded-xl border border-border bg-surface px-4 py-3 text-sm leading-6 text-muted-foreground">
+          <b className="text-foreground">下一步：</b>{nextStepText}
         </div>
 
         {dataset.status === 'draft' && dataset.lastReviewReason && (
@@ -416,12 +459,177 @@ export default function AdminDatasetEditorPage() {
           </div>
         )}
 
-        {draftCount > 0 && (
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-warning-bg px-4 py-3 text-sm text-warning-text">
-            <span>还有 {draftCount} 道 AI 草稿题待审核；通过或丢弃后才能提交审核/发布。</span>
-            <Link href="/admin/content/review" className="font-medium underline">去 AI 草稿审核</Link>
+        {actionError && (
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-danger/30 bg-danger-bg px-4 py-3 text-sm text-danger">
+            <span className="min-w-0 leading-6">
+              {actionError}
+              {actionError.includes('草稿题') && ' 在下方题目列表逐题点「通过」或「丢弃」即可。'}
+            </span>
+            <button onClick={() => setActionError(null)} className="shrink-0 text-xs underline hover:no-underline">
+              关闭
+            </button>
           </div>
         )}
+
+        {draftCount > 0 && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-warning-bg px-4 py-3 text-sm text-warning-text">
+            <span>还有 {draftCount} 道 AI 草稿题未处理；在下方题目列表逐题点「通过」或「丢弃」后才能提交审核/发布。</span>
+            <button
+              onClick={() => {
+                setItemFilter('draft');
+                document.getElementById('dataset-items')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className="rounded-md border border-warning-text/40 bg-surface px-3 py-1 text-xs font-medium text-warning-text hover:bg-warning-bg"
+            >
+              处理 AI 草稿题
+            </button>
+          </div>
+        )}
+
+        {/* 题目区 */}
+        <div id="dataset-items" className="mt-6 scroll-mt-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-foreground">题目（{itemTotal}）</h2>
+            <div className="flex items-center gap-2">
+              {versions.length > 1 && (
+                <select
+                  value={viewVersion ?? dataset.currentVersion}
+                  onChange={e => setViewVersion(Number(e.target.value))}
+                  className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-foreground"
+                >
+                  {versions.map(v => (
+                    <option key={v.version} value={v.version}>
+                      v{v.version} · {DATASET_STATUS_LABELS[v.status] || v.status}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {isDraft && !readOnlyVersion && (
+                <>
+                  <button onClick={openGen}
+                    className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">🤖 AI 生成候选</button>
+                  <button onClick={openAddItem}
+                    className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">＋ 添加题目</button>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="flex rounded-lg bg-surface-2 p-0.5">
+              {([
+                ['all', `全部 ${items.length}`],
+                ['draft', `待处理 ${draftCount}`],
+                ['active', `已生效 ${items.filter(i => i.status === 'active').length}`],
+              ] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setItemFilter(key)}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    itemFilter === key ? 'bg-surface text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            {draftCount > 0 && (
+              <span className="text-xs text-warning-text">
+                带「待处理」的题，需要点「通过」或「丢弃」后才能提交审核。
+              </span>
+            )}
+          </div>
+
+          {filteredItems.length === 0 ? (
+            <div className="rounded-xl border border-border bg-surface-2 py-16 text-center">
+              <span className="text-4xl">📝</span>
+              <p className="mt-3 text-sm text-muted-foreground">
+                {itemFilter === 'draft'
+                  ? '没有待处理的 AI 草稿题。'
+                  : itemFilter === 'active'
+                    ? '还没有已生效的题目。'
+                    : isDraft ? '暂无题目，可手动添加或 AI 从知识/案例生成候选。' : '该版本暂无题目。'}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-surface-2 overflow-hidden">
+              <div className="grid grid-cols-12 gap-2 px-5 py-3 text-xs font-semibold text-muted-foreground border-b border-border">
+                <span className="col-span-1">序</span>
+                <span className="col-span-5">题干</span>
+                <span className="col-span-2">场景</span>
+                <span className="col-span-2">预期要点</span>
+                <span className="col-span-2 text-right">操作</span>
+              </div>
+              {filteredItems.map(item => (
+                <div key={item.id} className={`grid grid-cols-12 gap-2 px-5 py-3 border-b border-border last:border-0 items-start transition-colors ${
+                  item.status === 'draft' ? 'bg-warning-bg/40' : 'hover:bg-primary-light'
+                }`}>
+                  <span className="col-span-1 text-sm text-muted-foreground">{item.orderNo}</span>
+                  <div className="col-span-5 min-w-0">
+                    <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                      {item.generated && (
+                        <span className="mr-2 rounded-full bg-primary-light px-1.5 py-0.5 text-[10px] text-primary align-middle">AI 生成</span>
+                      )}
+                      {item.status === 'draft' && (
+                        <span className="mr-2 rounded-full bg-warning-bg px-1.5 py-0.5 text-[10px] text-warning-text align-middle">待处理</span>
+                      )}
+                      {item.question}
+                    </p>
+                    {item.goldBasis && <p className="mt-1 text-xs text-muted-foreground">依据：{item.goldBasis}</p>}
+                  </div>
+                  <span className="col-span-2 text-sm text-muted-foreground">{item.sceneTag || '—'}</span>
+                  <span className="col-span-2 text-sm text-foreground">{previewPoints(item.expectedPoints)}</span>
+                  <div className="col-span-2 flex flex-wrap justify-end gap-x-3 gap-y-1">
+                    {isDraft && !readOnlyVersion && item.status === 'draft' && (
+                      <>
+                        <button onClick={() => approveDraftItem(item)}
+                          className="rounded-md border border-success px-2 py-0.5 text-xs font-medium text-success hover:bg-success-bg">通过</button>
+                        <button onClick={() => { setRejectTarget(item); setRejectReason(''); }}
+                          className="rounded-md border border-danger px-2 py-0.5 text-xs text-danger hover:bg-danger-bg">丢弃</button>
+                      </>
+                    )}
+                    {isDraft && !readOnlyVersion && (
+                      <>
+                        <button onClick={() => openEditItem(item)} className="text-xs text-primary hover:underline">编辑</button>
+                        <button onClick={() => onDeleteItem(item)} className="text-xs text-danger hover:underline">删除</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {itemTotal > items.length && (
+                <p className="px-5 py-3 text-xs text-muted-foreground">仅显示前 {items.length} 题（共 {itemTotal} 题），请精简题集或联系管理员。</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* 元信息编辑（仅草稿） */}
+        <div className="mt-5 rounded-xl border border-border bg-surface-2 p-5">
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">题集信息{isDraft ? '' : '（发布后只读，编辑请创建新版本）'}</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">题集名</label>
+              <input value={name} onChange={e => setName(e.target.value)} disabled={!isDraft} className={input} />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">用途</label>
+              <select value={purpose} onChange={e => setPurpose(e.target.value)} disabled={!isDraft} className={input}>
+                {(['regression', 'acceptance', 'training'] as const).map(p => <option key={p} value={p}>{PURPOSE_LABELS[p]}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="mt-3">
+            <label className="mb-1 block text-sm font-medium text-foreground">描述</label>
+            <textarea value={description} onChange={e => setDescription(e.target.value)} disabled={!isDraft} rows={2} className={input} />
+          </div>
+          {isDraft && (
+            <div className="mt-3 flex justify-end">
+              <button onClick={saveMeta} disabled={savingMeta}
+                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                {savingMeta ? '保存中…' : '保存信息'}
+              </button>
+            </div>
+          )}
+        </div>
+
 
         {/* AI 题目分析：评分身回答质量的核心读模型 */}
         <div className="mb-5 rounded-xl border border-border bg-surface-2 p-4">
@@ -541,8 +749,6 @@ export default function AdminDatasetEditorPage() {
           )}
         </div>
 
-        {actions}
-
         {recentJobs.length > 0 && (
           <div className="mt-4 rounded-xl border border-border bg-surface-2 p-4">
             <p className="mb-2 text-xs font-semibold text-muted-foreground">最近 AI 生成任务</p>
@@ -566,110 +772,6 @@ export default function AdminDatasetEditorPage() {
           </div>
         )}
 
-        {/* 元信息编辑（仅草稿） */}
-        <div className="mt-5 rounded-xl border border-border bg-surface-2 p-5">
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">题集信息{isDraft ? '' : '（发布后只读，编辑请创建新版本）'}</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">题集名</label>
-              <input value={name} onChange={e => setName(e.target.value)} disabled={!isDraft} className={input} />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground">用途</label>
-              <select value={purpose} onChange={e => setPurpose(e.target.value)} disabled={!isDraft} className={input}>
-                {(['regression', 'acceptance', 'training'] as const).map(p => <option key={p} value={p}>{PURPOSE_LABELS[p]}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="mt-3">
-            <label className="mb-1 block text-sm font-medium text-foreground">描述</label>
-            <textarea value={description} onChange={e => setDescription(e.target.value)} disabled={!isDraft} rows={2} className={input} />
-          </div>
-          {isDraft && (
-            <div className="mt-3 flex justify-end">
-              <button onClick={saveMeta} disabled={savingMeta}
-                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-                {savingMeta ? '保存中…' : '保存信息'}
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* 题目区 */}
-        <div className="mt-6">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">题目（{itemTotal}）</h2>
-            <div className="flex items-center gap-2">
-              {versions.length > 1 && (
-                <select
-                  value={viewVersion ?? dataset.currentVersion}
-                  onChange={e => setViewVersion(Number(e.target.value))}
-                  className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-foreground"
-                >
-                  {versions.map(v => (
-                    <option key={v.version} value={v.version}>
-                      v{v.version} · {DATASET_STATUS_LABELS[v.status] || v.status}
-                    </option>
-                  ))}
-                </select>
-              )}
-              {isDraft && !readOnlyVersion && (
-                <>
-                  <button onClick={openGen}
-                    className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light">🤖 AI 生成候选</button>
-                  <button onClick={openAddItem}
-                    className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">＋ 添加题目</button>
-                </>
-              )}
-            </div>
-          </div>
-
-          {items.length === 0 ? (
-            <div className="rounded-xl border border-border bg-surface-2 py-16 text-center">
-              <span className="text-4xl">📝</span>
-              <p className="mt-3 text-sm text-muted-foreground">
-                {isDraft ? '暂无题目，可手动添加或 AI 从知识/案例生成候选。' : '该版本暂无题目。'}
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-xl border border-border bg-surface-2 overflow-hidden">
-              <div className="grid grid-cols-12 gap-2 px-5 py-3 text-xs font-semibold text-muted-foreground border-b border-border">
-                <span className="col-span-1">序</span>
-                <span className="col-span-5">题干</span>
-                <span className="col-span-2">场景</span>
-                <span className="col-span-3">预期要点</span>
-                <span className="col-span-1 text-right">操作</span>
-              </div>
-              {items.map(item => (
-                <div key={item.id} className="grid grid-cols-12 gap-2 px-5 py-3 border-b border-border last:border-0 items-start hover:bg-primary-light transition-colors">
-                  <span className="col-span-1 text-sm text-muted-foreground">{item.orderNo}</span>
-                  <div className="col-span-5 min-w-0">
-                    <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                      {item.generated && (
-                        <span className="mr-2 rounded-full bg-primary-light px-1.5 py-0.5 text-[10px] text-primary align-middle">AI 生成</span>
-                      )}
-                      {item.question}
-                    </p>
-                    {item.goldBasis && <p className="mt-1 text-xs text-muted-foreground">依据：{item.goldBasis}</p>}
-                  </div>
-                  <span className="col-span-2 text-sm text-muted-foreground">{item.sceneTag || '—'}</span>
-                  <span className="col-span-3 text-sm text-foreground">{previewPoints(item.expectedPoints)}</span>
-                  <div className="col-span-1 flex justify-end gap-2">
-                    {isDraft && !readOnlyVersion && (
-                      <>
-                        <button onClick={() => openEditItem(item)} className="text-xs text-primary hover:underline">编辑</button>
-                        <button onClick={() => onDeleteItem(item)} className="text-xs text-danger hover:underline">删除</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {itemTotal > items.length && (
-                <p className="px-5 py-3 text-xs text-muted-foreground">仅显示前 {items.length} 题（共 {itemTotal} 题），请精简题集或联系管理员。</p>
-              )}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* 题目表单弹层 */}
@@ -786,6 +888,39 @@ export default function AdminDatasetEditorPage() {
               <button onClick={startGenerate} disabled={genStarting || selectedIds.length === 0 || genJob?.status === 'running'}
                 className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
                 {genStarting ? '提交中…' : '开始生成'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setRejectTarget(null)}>
+          <div className="w-full max-w-[480px] rounded-2xl bg-surface p-6 shadow-xl"
+            onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-foreground">丢弃这道 AI 草稿题？</h3>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              丢弃后题目会变为已下架，不再进入题集；理由必填，便于后续复盘生成质量。
+            </p>
+            <p className="mt-3 line-clamp-3 rounded-lg bg-surface-2 px-3 py-2 text-xs text-muted-foreground">
+              {rejectTarget.question}
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+              placeholder="例如：与已有题目重复 / 题干不清晰 / 与题集用途不符"
+              className="mt-3 w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setRejectTarget(null)}
+                className="rounded-[10px] border border-border-strong px-4 py-2 text-sm text-foreground hover:bg-surface-2">
+                取消
+              </button>
+              <button onClick={submitRejectItem}
+                className="rounded-[10px] bg-danger px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+                确认丢弃
               </button>
             </div>
           </div>

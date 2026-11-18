@@ -133,6 +133,32 @@ public final class ProviderCatalog {
     }
 
     /**
+     * 2.0 起 OpenAI SDK 自行追加 {@code /chat/completions}，不再支持 completionsPath 覆盖。
+     * 把版本前缀折进 baseUrl；baseUrl 已包含该前缀时不重复追加。
+     */
+    public static String resolveChatBaseUrl(String baseUrl, String completionsPath) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            throw new IllegalArgumentException("Base URL 不能为空");
+        }
+        String base = baseUrl.trim();
+        while (base.endsWith("/")) {
+            base = base.substring(0, base.length() - 1);
+        }
+        String prefix = completionsPath == null ? "" : completionsPath.trim();
+        String suffix = "/chat/completions";
+        if (prefix.endsWith(suffix)) {
+            prefix = prefix.substring(0, prefix.length() - suffix.length());
+        }
+        if (!prefix.isEmpty() && !prefix.startsWith("/")) {
+            prefix = "/" + prefix;
+        }
+        if (prefix.isEmpty() || base.endsWith(prefix)) {
+            return base;
+        }
+        return base + prefix;
+    }
+
+    /**
      * 不允许自定义端点的厂商必须使用官方域名，防止企业管理员把 Base URL
      * 指向自己的域名窃取 Key。允许官方域名的子域（如区域端点）。
      */

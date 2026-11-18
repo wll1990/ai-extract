@@ -36,7 +36,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 内容智能 —— 信号 → AI 草稿 → 审核 → 派生；评测题目分析与回归。
+ * 内容工厂 —— 信号 → AI 草稿 → 审核 → 派生；评测题目分析与回归。
  *
  * <p>生成接口只建任务并立即返回 jobId，AI 在后台线程执行；前端轮询
  * {@code GET /admin/content/jobs/{id}} 获取产出。AI 只出草稿，发布仍走原有审核链路。</p>

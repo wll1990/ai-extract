@@ -15,6 +15,10 @@ import {
 } from '@/lib/api/sales';
 import { listSkills } from '@/lib/api/skill';
 import { getUser } from '@/lib/storage';
+import { ActionLegend } from '@/components/sales/ActionLegend';
+import { Button } from '@/components/ui/Button';
+import { PageHelp } from '@/components/ui/PageHelp';
+import { useScrollOnPageChange } from '@/lib/useScrollOnPageChange';
 
 interface TranscriptSegment {
   seq: number;
@@ -27,6 +31,7 @@ export default function CoachLedgerPage() {
   const [rows, setRows] = useState<CoachLedgerRow[]>([]);
   const [requests, setRequests] = useState<CoachRequestRow[]>([]);
   const [page, setPage] = useState(1);
+  useScrollOnPageChange(page);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,68 +157,97 @@ export default function CoachLedgerPage() {
   };
 
   return (
-    <div className="mx-auto max-w-5xl p-6" data-tour="coach-ledger">
-      <h1 className="text-xl font-semibold text-gray-900">教练台账</h1>
-      <p className="mb-4 text-sm text-gray-500">
-        谁找你复盘过。默认只看摘要；对方授权后才能看原文。
-      </p>
-
-      <div className="mb-3 flex gap-4 text-sm">
-        <button
-          type="button"
-          onClick={() => {
-            setTab('history');
-            setPage(1);
-          }}
-          className={tab === 'history' ? 'font-medium text-gray-900' : 'text-gray-500'}
-        >
-          复盘记录
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setTab('requests');
-            setPage(1);
-          }}
-          className={tab === 'requests' ? 'font-medium text-gray-900' : 'text-gray-500'}
-        >
-          待我补充
-        </button>
-      </div>
-
-      {error && (
-        <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
+    <div className="min-h-screen bg-surface px-6 py-8" data-tour="coach-ledger">
+      <div className="mx-auto max-w-[1200px]">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[28px] font-bold leading-tight text-foreground">教练台账</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              同事用你的分身做的复盘，以及他们请你补充的问题。默认只看摘要；对方授权后才能看原文。
+            </p>
+          </div>
+          <PageHelp
+            title="教练台账使用说明"
+            intro="你作为教练，能在这里看到谁用你的分身复盘过，并回复同事请你补充的问题。"
+            steps={[
+              { title: '看复盘记录', desc: '每次同事用你的分身复盘都会留一条记录；点「查看原文」需要对方授权。' },
+              { title: '处理请求', desc: '「待我补充」是同事请你补充判断的请求；可以逐条或批量回复。' },
+              { title: '标记已读', desc: '只是把未读状态改为已读，不等于回复；回复后请求才进入已回复。' },
+              { title: '转交', desc: '请求不属于你时，转交给其他有教练分身权限的同事。' },
+            ]}
+            actions={[
+              { label: '复盘记录 / 待我补充', desc: '切换两个列表；切换会重置到第 1 页。' },
+              { label: '查看原文', desc: '仅当发起人勾选「允许教练看原文」时可见；否则只能看摘要。' },
+              { label: '标记已读', desc: '把请求从未读改为待处理，不回复内容；可批量。' },
+              { label: '回复', desc: '给发起人补充你的判断；批量回复会把同一内容发给选中的全部请求。' },
+              { label: '转交', desc: '把请求交给其他教练；一次只能转交一条。' },
+              { label: '状态筛选 / 只看指派给我的', desc: '筛选待处理、已回复或全部请求，只影响列表。' },
+            ]}
+            notes={[
+              '教练台账只展示用你的分身发起的复盘，不会展示其他教练的记录。',
+              '转交和回复都会通知发起人；已回复的请求仍保留在列表里。',
+            ]}
+          />
         </div>
-      )}
+
+        <div className="mb-3 inline-flex items-center gap-1 rounded-xl border border-border bg-surface-2 p-1">
+          {([
+            ['history', '复盘记录'],
+            ['requests', '待我补充'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setTab(key); setPage(1); }}
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                tab === key ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <ActionLegend
+          className="mb-4"
+          items={[
+            { label: '查看原文', desc: '只在发起人授权时出现；未授权时只能看摘要。' },
+            { label: '标记已读 / 回复', desc: '已读只是状态，回复才会把内容发给发起人；可批量回复。' },
+            { label: '转交', desc: '把请求交给其他教练；只影响请求负责人，不改复盘归属。' },
+          ]}
+        />
+
+        {error && (
+          <div className="mb-3 rounded-xl border border-danger/30 bg-danger-bg px-4 py-2.5 text-sm text-danger">
+            {error}
+          </div>
+        )}
 
       {tab === 'history' ? (
-        <div className="overflow-hidden rounded border border-gray-200">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-600">
+        <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
+          <table className="w-full min-w-[820px] text-left text-sm">
+            <thead className="bg-surface text-xs text-muted-foreground">
               <tr>
-                <th className="px-4 py-2">销售</th>
-                <th className="px-4 py-2">客户</th>
-                <th className="px-4 py-2">主题</th>
-                <th className="px-4 py-2">摘要</th>
-                <th className="px-4 py-2">原文</th>
+                <th className="px-4 py-3 font-medium">销售</th>
+                <th className="px-4 py-3 font-medium">客户</th>
+                <th className="px-4 py-3 font-medium">主题</th>
+                <th className="px-4 py-3 font-medium">摘要</th>
+                <th className="px-4 py-3 font-medium">原文</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
-                    加载中…
-                  </td>
+                  <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">加载中…</td>
                 </tr>
               )}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={5} className="px-4 py-12 text-center text-muted-foreground">
                     {hasPublished === false ? (
                       <>
                         你还没有已发布的分身，同事暂时无法找你复盘。
-                        <Link href="/admin/skills/upload" className="ml-2 text-blue-600 hover:underline">
+                        <Link href="/admin/skills/upload" className="ml-2 text-primary hover:underline">
                           先上传素材创建分身 →
                         </Link>
                       </>
@@ -225,11 +259,11 @@ export default function CoachLedgerPage() {
               )}
               {!loading &&
                 rows.map(r => (
-                  <tr key={r.sessionId} className="border-t border-gray-100">
-                    <td className="px-4 py-2">{r.reviewerName || '—'}</td>
-                    <td className="px-4 py-2">{r.customerName || '—'}</td>
-                    <td className="px-4 py-2">{r.topic || '—'}</td>
-                    <td className="max-w-xs truncate px-4 py-2 text-gray-600">
+                  <tr key={r.sessionId} className="border-t border-border hover:bg-surface">
+                    <td className="px-4 py-3 text-foreground">{r.reviewerName || '—'}</td>
+                    <td className="px-4 py-3 text-foreground">{r.customerName || '—'}</td>
+                    <td className="px-4 py-3 text-muted-foreground">{r.topic || '—'}</td>
+                    <td className="max-w-xs truncate px-4 py-3 text-xs text-muted-foreground">
                       {r.summary
                         || (r.reportStatus === 'failed'
                           ? `生成失败：${r.reportError || '未知原因'}`
@@ -237,17 +271,18 @@ export default function CoachLedgerPage() {
                             ? '报告生成中'
                             : '未生成报告')}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-3">
                       {r.transcriptShared ? (
                         <button
                           type="button"
                           onClick={() => openTranscript(r)}
-                          className="text-blue-600 hover:underline"
+                          title="发起人已授权，可查看完整对话"
+                          className="text-xs text-primary hover:underline"
                         >
                           查看原文
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400">未授权</span>
+                        <span className="text-xs text-muted-foreground-2">未授权</span>
                       )}
                     </td>
                   </tr>
@@ -257,79 +292,90 @@ export default function CoachLedgerPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm">
             <select
               value={statusFilter}
               onChange={e => { setStatusFilter(e.target.value as 'pending' | 'done' | ''); setPage(1); }}
-              className="rounded border border-gray-300 px-2 py-1"
+              className="rounded-md border border-border-strong bg-surface px-2 py-1 text-xs text-foreground"
+              title="筛选请求状态；只影响列表"
             >
               <option value="pending">待处理</option>
               <option value="done">已回复</option>
               <option value="">全部状态</option>
             </select>
-            <label className="flex items-center gap-1 text-gray-600">
+            <label className="flex items-center gap-1 text-xs text-muted-foreground">
               <input type="checkbox" checked={mineOnly} onChange={e => { setMineOnly(e.target.checked); setPage(1); }} />
               只看指派给我的
             </label>
             {selected.size > 0 && (
               <div className="ml-auto flex items-center gap-2">
-                <span className="text-xs text-gray-500">已选 {selected.size} 条</span>
-                <button type="button" disabled={busy} onClick={runMarkRead}
-                  className="rounded border border-gray-300 px-3 py-1 text-xs disabled:opacity-50">标记已读</button>
-                <button type="button" disabled={busy} onClick={() => openReply(Array.from(selected), `回复 ${selected.size} 条请求`)}
-                  className="rounded bg-blue-600 px-3 py-1 text-xs text-white disabled:opacity-50">批量回复</button>
-                <button type="button" onClick={() => setSelected(new Set())}
-                  className="text-xs text-gray-500 hover:underline">取消</button>
+                <span className="text-xs text-muted-foreground">已选 {selected.size} 条</span>
+                <Button variant="neutral" size="sm" disabled={busy} onClick={runMarkRead}
+                  title="只改未读状态，不发送回复">
+                  标记已读
+                </Button>
+                <Button variant="primary" size="sm" disabled={busy} onClick={() => openReply(Array.from(selected), `回复 ${selected.size} 条请求`)}
+                  title="同一内容会发给选中的全部请求">
+                  批量回复
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())}>取消选择</Button>
               </div>
             )}
           </div>
 
-          {loading && <p className="py-8 text-center text-sm text-gray-500">加载中…</p>}
+          {loading && <p className="py-10 text-center text-sm text-muted-foreground">加载中…</p>}
           {!loading && requests.length === 0 && (
-            <p className="py-8 text-center text-sm text-gray-500">
+            <p className="rounded-xl border border-border bg-surface-2 py-12 text-center text-sm text-muted-foreground">
               {statusFilter === 'pending' ? '暂时没有待处理请求' : '没有符合条件的请求'}
             </p>
           )}
           {!loading && requests.map(r => {
             const unread = !r.readAt && r.status === 'pending';
             return (
-              <div key={r.id} className={`rounded border p-3 ${unread ? 'border-blue-200 bg-blue-50/40' : 'border-gray-200'}`}>
+              <div key={r.id} className={`rounded-xl border p-4 ${
+                unread ? 'border-primary/30 bg-primary-light/30' : 'border-border bg-surface-2'
+              }`}>
                 <div className="flex items-start gap-3">
                   <input type="checkbox" className="mt-1"
                     checked={selected.has(r.id)} onChange={() => toggleSel(r.id)} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-gray-900">
+                      <span className="text-sm font-semibold text-foreground">
                         {r.reviewerName || '同事'} · {r.customerName || '未命名客户'}
                         <span className={`ml-2 rounded-full px-2 py-0.5 text-[11px] ${
-                          r.status === 'done' ? 'bg-green-100 text-green-700'
-                            : r.status === 'cancelled' ? 'bg-gray-100 text-gray-500'
-                              : unread ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
+                          r.status === 'done' ? 'bg-success-bg text-success'
+                            : r.status === 'cancelled' ? 'bg-surface text-muted-foreground'
+                              : unread ? 'bg-primary-light text-primary' : 'bg-warning-bg text-warning-text'
                         }`}>
                           {r.status === 'done' ? '已回复' : r.status === 'cancelled' ? '已撤回' : unread ? '未读' : '待处理'}
                         </span>
                       </span>
-                      <span className="text-xs text-gray-500">{new Date(r.requestedAt).toLocaleString()}</span>
+                      <span className="text-xs text-muted-foreground">{new Date(r.requestedAt).toLocaleString()}</span>
                     </div>
-                    <p className="mt-1 text-sm text-gray-600">{r.message || '没有留言'}</p>
+                    <p className="mt-1.5 text-sm text-foreground">{r.message || '没有留言'}</p>
                     {r.replyContent && (
-                      <p className="mt-1 rounded bg-gray-50 px-2 py-1 text-xs text-gray-600">
+                      <p className="mt-1.5 rounded-lg bg-surface px-2.5 py-1.5 text-xs text-muted-foreground">
                         你的回复：{r.replyContent}
                       </p>
                     )}
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                      <Link href={`/sales/coach/requests/${r.sessionId}`} className="text-blue-600 hover:underline">查看复盘</Link>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-3 text-xs">
+                      <Link href={`/sales/coach/requests/${r.sessionId}`} className="text-primary hover:underline">
+                        查看复盘
+                      </Link>
                       {r.status === 'pending' && (
                         <>
                           {unread && (
                             <button type="button" disabled={busy}
                               onClick={async () => { await markCoachRequestsRead([r.id]); await load(); }}
-                              className="text-gray-600 hover:underline disabled:opacity-50">标记已读</button>
+                              title="只改未读状态，不发送回复"
+                              className="text-muted-foreground hover:underline disabled:opacity-50">标记已读</button>
                           )}
                           <button type="button" onClick={() => openReply([r.id], `${r.reviewerName || '同事'} · ${r.customerName || '未命名客户'}`)}
-                            className="text-blue-600 hover:underline">回复</button>
+                            title="补充你的判断，发送给发起人"
+                            className="text-primary hover:underline">回复</button>
                           <button type="button" onClick={() => openTransfer([r.id], `${r.reviewerName || '同事'} · ${r.customerName || '未命名客户'}`)}
-                            className="text-gray-600 hover:underline">转交</button>
+                            title="把这条请求交给其他教练"
+                            className="text-muted-foreground hover:underline">转交</button>
                         </>
                       )}
                     </div>
@@ -341,61 +387,50 @@ export default function CoachLedgerPage() {
         </div>
       )}
 
-      <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-        <button
-          disabled={page <= 1 || loading}
-          onClick={() => setPage(p => p - 1)}
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-        >
-          上一页
-        </button>
-        <span className="text-gray-500">
-          {page} / {totalPages}
-        </span>
-        <button
-          disabled={page >= totalPages || loading}
-          onClick={() => setPage(p => p + 1)}
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-        >
-          下一页
-        </button>
+        <div className="mt-3 flex items-center justify-end gap-2 text-sm">
+          <Button variant="neutral" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}>
+            上一页
+          </Button>
+          <span className="text-muted-foreground">{page} / {totalPages}</span>
+          <Button variant="neutral" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)}>
+            下一页
+          </Button>
+        </div>
       </div>
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
           onClick={() => !busy && setModal(null)}>
           <div role="dialog" aria-modal="true" aria-label={modal.title}
-            className="w-full max-w-md rounded bg-white p-5"
+            className="w-full max-w-md rounded-2xl bg-surface p-5 shadow-xl"
             onClick={e => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">
+              <h3 className="text-base font-semibold text-foreground">
                 {modal.type === 'reply' ? '回复教练请求' : '转交给其他同事'}
               </h3>
-              <button type="button" aria-label="关闭" onClick={() => !busy && setModal(null)} className="text-gray-400">✕</button>
+              <button type="button" aria-label="关闭" onClick={() => !busy && setModal(null)} className="text-muted-foreground">✕</button>
             </div>
-            <p className="mb-3 text-xs text-gray-500">{modal.title}</p>
+            <p className="mb-3 text-xs text-muted-foreground">{modal.title}</p>
             {modal.type === 'reply' ? (
               <textarea
                 value={replyText}
                 onChange={e => setReplyText(e.target.value)}
                 rows={5}
                 placeholder="给发起人的回复建议…（同一内容会回复给选中全部）"
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-border-strong bg-surface-2 px-3 py-2 text-sm text-foreground"
               />
             ) : (
               <select value={transferTo} onChange={e => setTransferTo(e.target.value)}
-                className="w-full rounded border border-gray-300 px-3 py-2 text-sm">
+                className="w-full rounded-lg border border-border-strong bg-surface-2 px-3 py-2 text-sm text-foreground">
                 <option value="">选择转交对象</option>
                 {coaches.map(c => <option key={c.id} value={c.id}>{c.name}（{c.role}）</option>)}
               </select>
             )}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" disabled={busy} onClick={() => setModal(null)}
-                className="rounded border px-4 py-1.5 text-sm disabled:opacity-50">取消</button>
-              <button type="button" disabled={busy} onClick={submitModal}
-                className="rounded bg-blue-600 px-4 py-1.5 text-sm text-white disabled:opacity-50">
+              <Button variant="neutral" disabled={busy} onClick={() => setModal(null)}>取消</Button>
+              <Button variant="primary" disabled={busy} onClick={submitModal}>
                 {busy ? '提交中…' : '提交'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -410,19 +445,19 @@ export default function CoachLedgerPage() {
             role="dialog"
             aria-modal="true"
             aria-label={transcript.title}
-            className="max-h-[75vh] w-full max-w-2xl overflow-auto rounded bg-white p-5"
+            className="max-h-[75vh] w-full max-w-2xl overflow-auto rounded-2xl bg-surface p-5 shadow-xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-medium">{transcript.title}</h3>
-              <button type="button" aria-label="关闭" onClick={() => setTranscript(null)} className="text-gray-400">
+              <h3 className="text-base font-semibold text-foreground">{transcript.title}</h3>
+              <button type="button" aria-label="关闭" onClick={() => setTranscript(null)} className="text-muted-foreground">
                 ✕
               </button>
             </div>
             <div className="space-y-2">
               {transcript.segments.map(s => (
-                <div key={s.seq} className="rounded bg-gray-50 p-2 text-sm">
-                  <span className="mr-2 text-xs text-gray-400">第 {s.seq} 段</span>
+                <div key={s.seq} className="rounded-lg bg-surface-2 p-2 text-sm text-foreground">
+                  <span className="mr-2 text-xs text-muted-foreground">第 {s.seq} 段</span>
                   <span className="whitespace-pre-wrap">{s.text}</span>
                 </div>
               ))}

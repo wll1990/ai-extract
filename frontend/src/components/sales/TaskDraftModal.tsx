@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { NextStep, createTasks } from '@/lib/api/sales';
+import { Button } from '@/components/ui/Button';
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -113,65 +114,77 @@ export function TaskDraftModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded bg-white p-5">
-        <h3 className="mb-1 text-base font-medium">生成跟进任务</h3>
-        <p className="mb-3 text-xs text-gray-500">
-          最多选 3 条；每条都可以改标题、渠道、截止时间和话术。
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-auto rounded-2xl bg-surface p-5 shadow-xl">
+        <h3 className="mb-1 text-base font-semibold text-foreground">生成跟进任务</h3>
+        <p className="mb-3 text-xs leading-5 text-muted-foreground">
+          把报告里的「下一步」复制成待办。最多选 3 条；每条都能改标题、渠道、截止时间和话术，
+          创建后到「跟进任务」页完成。
         </p>
         <div className="space-y-3">
           {rows.map((row, i) => (
-            <div key={i} className="rounded border border-gray-200 p-3">
+            <div key={i} className="rounded-xl border border-border bg-surface-2 p-3">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={row.selected} onChange={() => toggle(i)} />
-                <span className="text-gray-700">选中第 {i + 1} 条</span>
+                <span className="font-medium text-foreground">第 {i + 1} 条</span>
+                <span className="text-xs text-muted-foreground">
+                  {row.selected ? '会创建为跟进任务' : '不创建'}
+                </span>
               </label>
               {row.selected && (
                 <div className="mt-2 space-y-2">
-                  <input
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="任务标题"
-                    value={row.title}
-                    onChange={e => update(i, { title: e.target.value })}
-                  />
-                  <div className="grid grid-cols-2 gap-2">
+                  <label className="block text-xs text-muted-foreground">
+                    任务标题
                     <input
-                      className="rounded border border-gray-300 px-3 py-2 text-sm"
-                      placeholder="渠道：电话/微信/邮件"
-                      value={row.channel}
-                      onChange={e => update(i, { channel: e.target.value })}
+                      className="mt-1 w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
+                      placeholder="如：周五前电话确认预算审批进度"
+                      value={row.title}
+                      onChange={e => update(i, { title: e.target.value })}
                     />
-                    <input
-                      type="datetime-local"
-                      className="rounded border border-gray-300 px-3 py-2 text-sm"
-                      value={row.dueAt}
-                      onChange={e => update(i, { dueAt: e.target.value })}
-                    />
+                  </label>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className="block text-xs text-muted-foreground">
+                      渠道（可选）
+                      <input
+                        className="mt-1 w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
+                        placeholder="电话 / 微信 / 邮件"
+                        value={row.channel}
+                        onChange={e => update(i, { channel: e.target.value })}
+                      />
+                    </label>
+                    <label className="block text-xs text-muted-foreground">
+                      截止时间（可选）
+                      <input
+                        type="datetime-local"
+                        className="mt-1 w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
+                        value={row.dueAt}
+                        onChange={e => update(i, { dueAt: e.target.value })}
+                      />
+                    </label>
                   </div>
-                  <textarea
-                    rows={2}
-                    className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="跟进话术/要点"
-                    value={row.content}
-                    onChange={e => update(i, { content: e.target.value })}
-                  />
+                  <label className="block text-xs text-muted-foreground">
+                    跟进话术 / 要点（可选）
+                    <textarea
+                      rows={2}
+                      className="mt-1 w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
+                      placeholder="照着说什么、要确认哪些信息"
+                      value={row.content}
+                      onChange={e => update(i, { content: e.target.value })}
+                    />
+                  </label>
                 </div>
               )}
             </div>
           ))}
         </div>
-        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-        <div className="mt-4 flex justify-end gap-2">
-          <button type="button" onClick={onClose} className="rounded border px-3 py-2 text-sm">
-            取消
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={saving}
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-          >
-            {saving ? '创建中…' : `创建 ${rows.filter(r => r.selected).length} 条`}
-          </button>
+        {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          同名任务会自动跳过，不会重复创建；创建后仍可在任务页编辑或转交。
+        </p>
+        <div className="mt-3 flex justify-end gap-2">
+          <Button variant="neutral" onClick={onClose}>取消</Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>
+            {saving ? '创建中…' : `创建 ${rows.filter(r => r.selected).length} 条任务`}
+          </Button>
         </div>
       </div>
     </div>

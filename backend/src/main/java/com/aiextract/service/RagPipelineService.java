@@ -90,9 +90,18 @@ public class RagPipelineService {
      * @param externalQuery  跨企业/匿名调用：不把提问写入知识缺口与检索日志
      */
     public record RagContext(UUID skillId, UUID conversationId, String originalQuery,
-                             boolean externalQuery) {
+                             boolean externalQuery, boolean recordRetrievalLog) {
+        public RagContext(UUID skillId, UUID conversationId, String originalQuery, boolean externalQuery) {
+            this(skillId, conversationId, originalQuery, externalQuery, true);
+        }
+
         public RagContext(UUID skillId, UUID conversationId, String originalQuery) {
-            this(skillId, conversationId, originalQuery, false);
+            this(skillId, conversationId, originalQuery, false, true);
+        }
+
+        /** 试问通道：只检索不落检索日志，避免颗粒「被引用次数」虚高 */
+        public static RagContext trial(UUID skillId, String originalQuery) {
+            return new RagContext(skillId, UUID.randomUUID(), originalQuery, false, false);
         }
     }
 
@@ -461,7 +470,8 @@ public class RagPipelineService {
             }
         }
 
-        // tier 分层 + 批量写入检索日志
+        // tier 分层 + 批量写入检索日志（试问通道不写，避免引用次数虚高）
+        boolean recordRetrievalLog = ragCtx == null || ragCtx.recordRetrievalLog();
         Map<UUID, String> tiers = new java.util.LinkedHashMap<>();
         List<com.aiextract.model.GrainRetrieveLog> logs = new ArrayList<>();
         int pos = 1;
@@ -471,6 +481,9 @@ public class RagPipelineService {
                 tiers.put(r.grain().getId(), "high");
             } else if (sim >= refThreshold) {
                 tiers.put(r.grain().getId(), "ref");
+            }
+            if (!recordRetrievalLog) {
+                continue;
             }
             boolean external = ragCtx != null && ragCtx.externalQuery();
             logs.add(com.aiextract.model.GrainRetrieveLog.builder()
@@ -555,6 +568,10 @@ public class RagPipelineService {
     public void writeKnowledgeGap(String query, UUID spaceId, RagContext ragCtx, String matchInfo) {
         // 跨企业/匿名提问不进入本企业知识缺口，避免外部用户的提问被归属企业看到
         if (ragCtx != null && ragCtx.externalQuery()) {
+            return;
+        }
+        // 试问通道的提问不是真实业务缺口，即使调用方忘了传 recordKnowledgeGap 也不落库
+        if (ragCtx != null && !ragCtx.recordRetrievalLog()) {
             return;
         }
         if (query == null || query.trim().length() < 5) {

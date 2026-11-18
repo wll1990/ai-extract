@@ -116,6 +116,9 @@ public interface IndustryCaseRepository extends JpaRepository<IndustryCase, UUID
     org.springframework.data.domain.Page<IndustryCase> findByCompanyIdAndStatusAndGenerationJobIdIsNotNullOrderByCreatedAtDesc(
             UUID companyId, String status, Pageable pageable);
 
+    /** 待审 AI 案例草稿数：用于阻止在未处理完上一批草稿时继续生成 */
+    long countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(UUID companyId, String status);
+
     /** 当前可见范围内出现过的场景标签（案例列表筛选下拉用去重值，不写死枚举）。 */
     @Query("SELECT DISTINCT c.sceneTag FROM IndustryCase c WHERE " +
             "c.sceneTag IS NOT NULL AND c.sceneTag <> '' AND " +
@@ -154,6 +157,22 @@ public interface IndustryCaseRepository extends JpaRepository<IndustryCase, UUID
                                           @Param("sceneTag") String sceneTag,
                                           @Param("selfId") UUID selfId,
                                           Pageable pageable);
+
+    /**
+     * 对练开练用：按场景标签取一条可检索的 active 案例。
+     *
+     * <p>开练接口是普通 HTTP JSON 请求，不能在这里调用向量模型；
+     * 用 SQL 精确匹配场景标签代替 ANN，只用于补客户背景。</p>
+     */
+    @Query("SELECT c FROM IndustryCase c WHERE "
+            + "((:companyId IS NULL AND c.companyId IS NULL) OR c.companyId = :companyId) "
+            + "AND c.status = 'active' AND c.sceneTag = :sceneTag "
+            + "AND (c.effectiveAt IS NULL OR c.effectiveAt <= CURRENT_TIMESTAMP) "
+            + "AND (c.expireAt IS NULL OR c.expireAt > CURRENT_TIMESTAMP) "
+            + "ORDER BY c.updatedAt DESC")
+    List<IndustryCase> findActiveForPractice(@Param("companyId") UUID companyId,
+                                             @Param("sceneTag") String sceneTag,
+                                             Pageable pageable);
 
     /** 某条案例派生出的新版本（AI 整理 / 人工修订），按版本倒序。 */
     List<IndustryCase> findBySupersedesIdOrderByVersionDesc(UUID supersedesId);

@@ -64,6 +64,10 @@ DELETE FROM public.knowledge_entry WHERE title LIKE 'QA-' || :'qa_run_id' || '-%
 DELETE FROM public.industry_case WHERE title LIKE 'QA-' || :'qa_run_id' || '-%';
 DELETE FROM public.knowledge_upload_task WHERE file_name LIKE 'QA-' || :'qa_run_id' || '-%';
 DELETE FROM public.case_upload_task WHERE file_name LIKE 'QA-' || :'qa_run_id' || '-%';
+-- 对练知识/案例开关（GOLD-PRACTICE-01 开启后必须复位，避免影响后续用例）
+DELETE FROM public.company_setting
+ WHERE company_id = '0a000000-0000-0000-0000-000000000001'
+   AND setting_key = 'practice.kc_enabled';
 
 -- 评测
 DELETE FROM public.evaluation_review

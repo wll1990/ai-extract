@@ -54,6 +54,17 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
     List<Object[]> countGrainsByScene(@Param("spaceId") UUID spaceId);
 
     /**
+     * 活跃但尚未完成向量化的颗粒数 —— 发布门槛用。
+     *
+     * <p>embedding 不在 JPA 映射里（原生 SQL 写入），只能用原生查询判断；
+     * 只统计 active，避免把草稿/废弃颗粒算进发布阻断项。</p>
+     */
+    @Query(value = "SELECT count(*) FROM experience_grain " +
+            "WHERE space_id = :spaceId AND status = 'active' AND embedding IS NULL",
+            nativeQuery = true)
+    long countActiveWithoutEmbedding(@Param("spaceId") UUID spaceId);
+
+    /**
      * 批量：多空间每场景颗粒计数 — 一次 IN 查询替代 N 次单空间查询。
      *
      * @param spaceIds 空间 ID 列表
@@ -239,6 +250,11 @@ public interface ExperienceGrainRepository extends JpaRepository<ExperienceGrain
      * @param id id
      * @param embedding embedding
      */
+    /**
+     * 写回向量。事务只包这一条 UPDATE —— 调用方（异步重建/纠偏）通常没有外层事务，
+     * 加在方法上而不是 Service 上，避免把 embedding HTTP 调用圈进事务。
+     */
+    @org.springframework.transaction.annotation.Transactional
     @Modifying(flushAutomatically = true)
     @Query(value = "UPDATE experience_grain SET embedding = CAST(:embedding AS VECTOR) WHERE id = :id", nativeQuery = true)
     int updateEmbedding(@Param("id") UUID id, @Param("embedding") String embedding);

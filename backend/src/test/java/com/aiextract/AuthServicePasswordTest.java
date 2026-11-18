@@ -8,6 +8,8 @@ import com.aiextract.repository.UserRepository;
 import com.aiextract.service.AuthService;
 import com.aiextract.service.OssService;
 import com.aiextract.service.UserSecurityService;
+import com.aiextract.service.session.CreatedSession;
+import com.aiextract.service.session.SessionService;
 import com.aiextract.util.JwtUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -41,6 +43,7 @@ class AuthServicePasswordTest {
     @Mock private SpaceRepository spaceRepository;
     @Mock private OssService ossService;
     @Mock private UserSecurityService userSecurityService;
+    @Mock private SessionService sessionService;
 
     @InjectMocks private AuthService authService;
 
@@ -62,8 +65,8 @@ class AuthServicePasswordTest {
             u.setTokenVersion(u.getTokenVersion() + 1);
             return null;
         }).when(userSecurityService).onAuthoritiesChanged(user);
-        when(jwtUtil.generateToken(eq(userId), eq(companyId), eq("employee"), anyLong(), eq(4L)))
-                .thenReturn("new-token");
+        when(sessionService.create(user, null, null))
+                .thenReturn(new CreatedSession("new-token", null));
 
         String token = authService.changePassword(userId, "Old12345", "New12345");
 

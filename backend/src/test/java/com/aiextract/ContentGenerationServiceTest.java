@@ -68,6 +68,10 @@ class ContentGenerationServiceTest {
                 accessService, companyScopeService, selfProvider);
     }
 
+    private ContentSignalService.Signal signal(String text) {
+        return new ContentSignalService.Signal(null, "价格异议", text, null);
+    }
+
     @Test
     void persistCase_textProfileAndQuote_writtenAsValidJson() throws Exception {
         when(caseRepository.existsByCompanyScopeAndLowerTitle(any(), anyString())).thenReturn(false);
@@ -81,7 +85,7 @@ class ContentGenerationServiceTest {
                 """);
 
         IndustryCase saved = service().persistCase(UUID.randomUUID(), companyId, "预算异议",
-                draft, List.of("客户说预算没批"));
+                draft, List.of(signal("客户说预算没批"), signal("  客户说预算没批 ")));
 
         JsonNode profile = objectMapper.readTree(saved.getCustomerProfile());
         assertEquals("制造业/采购总监/预算未批", profile.path("描述").asText());
@@ -89,6 +93,11 @@ class ContentGenerationServiceTest {
         assertTrue(quotes.isArray());
         assertEquals("我们再等等预算", quotes.get(0).asText());
         assertEquals(IndustryCase.STATUS_PENDING, saved.getStatus());
+        // 同文本证据只保留一条，且保留信号自己的场景而不是请求场景
+        JsonNode evidence = objectMapper.readTree(saved.getEvidence());
+        assertEquals(1, evidence.size());
+        assertEquals("价格异议", evidence.get(0).path("sceneTag").asText());
+        assertEquals("conversation", evidence.get(0).path("type").asText());
     }
 
     @Test
@@ -112,7 +121,7 @@ class ContentGenerationServiceTest {
                 """);
 
         var saved = service().persistEvalItems(UUID.randomUUID(), companyId, dataset, "价格异议",
-                items, List.of("客户嫌贵"), 5);
+                items, List.of(signal("客户嫌贵")), 5);
 
         assertEquals(1, saved.size());
         assertEquals("新题", saved.get(0).getQuestion());
@@ -131,7 +140,7 @@ class ContentGenerationServiceTest {
                 """);
 
         IndustryCase saved = service().persistCase(UUID.randomUUID(), companyId, "价格异议",
-                draft, List.of("客户嫌贵"));
+                draft, List.of(signal("客户嫌贵")));
 
         JsonNode profile = objectMapper.readTree(saved.getCustomerProfile());
         assertEquals("精密制造", profile.path("行业").asText());

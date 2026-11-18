@@ -14,8 +14,9 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { apiClient } from '@/lib/api/client';
-import { chat, submitFeedback, fetchRecommendedQuestions } from '@/lib/api/skill';
+import {
+  chat, submitFeedback, fetchRecommendedQuestions, fetchSceneTags, type SceneTagCount,
+} from '@/lib/api/skill';
 import { useConversations } from './useConversations';
 
 /** 后端未给文案时按错误码兜底，保证用户看到的是「为什么」而不是一句「不可用」 */
@@ -41,11 +42,6 @@ interface SkillInfo {
   ownerQuote?: string;
 }
 
-interface SceneTag {
-  tag: string;
-  count: number;
-}
-
 export type ChatMode = 'qa' | 'talk' | 'practice';
 
 interface Message {
@@ -66,6 +62,8 @@ interface QaChatInputs {
   onResetPracticeRef: React.MutableRefObject<() => void>;
   /** C 端分享页显式 Bearer（内部页不传 = 零行为变化） */
   authToken?: string;
+  /** 游客分享页：未领证前不发起需要认证的后台请求 */
+  guestMode?: boolean;
   /** 游客免费额度用尽（后端 limit 事件）：pendingText 为被拦截的消息，注册后可重发 */
   onLimit?: (info: { used: number; limit: number; pendingText: string }) => void;
 }
@@ -73,7 +71,7 @@ interface QaChatInputs {
 export function useQaChat({
   skillId, skillInfo, chatMode,
   setChatMode, setModeSelected, onResetPracticeRef,
-  authToken, onLimit,
+  authToken, guestMode, onLimit,
 }: QaChatInputs) {
   const abortRef = useRef<AbortController | null>(null);
 
@@ -90,15 +88,17 @@ export function useQaChat({
   const [suggestedQuestions, setSuggestedQuestions] = useState<string[]>([]);
 
   // 场景标签
-  const [sceneTags, setSceneTags] = useState<SceneTag[]>([]);
+  const [sceneTags, setSceneTags] = useState<SceneTagCount[]>([]);
 
   useEffect(() => {
-    if (!skillId) return;
-    apiClient<SceneTag[]>(`/skills/${skillId}/scene-tags`,
-      authToken ? { headers: { Authorization: `Bearer ${authToken}` } } : {})
+    // 分享落地页尚无游客身份：不发起需要认证的后台请求，避免 401 误触发注册抽屉
+    if (!skillId || (guestMode && !authToken)) return;
+    // 统一走 lib/api/skill：无 token 时不带 Authorization，B 端继续用 Cookie；
+    // 失败只降级为空标签，不触发全局 401 跳登录。
+    fetchSceneTags(skillId, authToken)
       .then(tags => setSceneTags(Array.isArray(tags) ? tags : []))
       .catch(() => {});
-  }, [skillId, authToken]);
+  }, [skillId, authToken, guestMode]);
 
   // 会话历史（内嵌 useConversations）
   const msgSetter = {
@@ -108,7 +108,7 @@ export function useQaChat({
   };
   const { conversations, currentConvId, setCurrentConvId, showHistory, setShowHistory,
     loadConversations, switchConversation, handleDeleteConversation, handleRenameConversation,
-    handleExportConversation } = useConversations(skillId, chatMode, msgSetter, authToken);
+    handleExportConversation } = useConversations(skillId, chatMode, msgSetter, authToken, guestMode);
 
   const handleQaSend = useCallback((overrideText?: string) => {
     const text = (overrideText ?? inputValue).trim();

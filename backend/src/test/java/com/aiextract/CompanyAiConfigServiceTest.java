@@ -8,8 +8,10 @@ import com.aiextract.dto.CompanyAiTestRequest;
 import com.aiextract.dto.CompanyAiTestResult;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.CompanyAiConfig;
+import com.aiextract.repository.CompanyAiConfigHistoryRepository;
 import com.aiextract.repository.CompanyAiConfigRepository;
 import com.aiextract.repository.TokenUsageLogRepository;
+import com.aiextract.repository.UserRepository;
 import com.aiextract.service.ChatClientResolver;
 import com.aiextract.service.CompanyAiConfigService;
 import com.aiextract.service.CompanyChatClientFactory;
@@ -42,6 +44,8 @@ import static org.mockito.Mockito.withSettings;
 class CompanyAiConfigServiceTest {
 
     private CompanyAiConfigRepository repository;
+    private CompanyAiConfigHistoryRepository historyRepository;
+    private UserRepository userRepository;
     private PartnerCrypto crypto;
     private ChatClientResolver resolver;
     private SalesAuditService audit;
@@ -53,14 +57,16 @@ class CompanyAiConfigServiceTest {
     @BeforeEach
     void setUp() {
         repository = mock(CompanyAiConfigRepository.class);
+        historyRepository = mock(CompanyAiConfigHistoryRepository.class);
+        userRepository = mock(UserRepository.class);
         crypto = mock(PartnerCrypto.class);
         resolver = mock(ChatClientResolver.class);
         audit = mock(SalesAuditService.class);
         usageRepository = mock(TokenUsageLogRepository.class);
         factory = mock(CompanyChatClientFactory.class);
         outboundUrlValidator = mock(com.aiextract.config.OutboundUrlValidator.class);
-        service = new CompanyAiConfigService(repository, crypto, resolver, audit, usageRepository, factory,
-                outboundUrlValidator);
+        service = new CompanyAiConfigService(repository, historyRepository, userRepository, crypto, resolver,
+                audit, usageRepository, factory, outboundUrlValidator);
         ReflectionTestUtils.setField(service, "platformModelName", "deepseek-chat");
         ReflectionTestUtils.setField(service, "platformBaseUrl", "https://api.deepseek.com");
         TokenContext.clear();
@@ -87,6 +93,44 @@ class CompanyAiConfigServiceTest {
         assertEquals("disabled", view.status());
         assertTrue(view.fallbackEnabled());
         assertEquals(0L, view.inputTokensThisMonth());
+        assertEquals("platform_key", view.effectiveMode());
+        assertEquals("deepseek-chat", view.effectiveModel());
+        assertEquals("https://api.deepseek.com", view.effectiveBaseUrl());
+    }
+
+    @Test
+    void disabledWithoutFallback_reportsUnavailable() {
+        UUID companyId = UUID.randomUUID();
+        CompanyAiConfig cfg = CompanyAiConfig.builder()
+                .id(UUID.randomUUID()).companyId(companyId).provider("deepseek")
+                .baseUrl("https://api.deepseek.com").apiKeyCipher("cipher").keyLast4("5678")
+                .modelName("deepseek-chat").status("disabled").fallbackEnabled(false)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build();
+        when(repository.findFirstByCompanyIdOrderByUpdatedAtDesc(companyId)).thenReturn(Optional.of(cfg));
+        when(usageRepository.sumByCompanySince(any(), any())).thenReturn(null);
+
+        CompanyAiConfigView view = service.get(companyId);
+
+        assertEquals("unavailable", view.effectiveMode());
+        assertFalse(view.fallbackEnabled());
+    }
+
+    @Test
+    void enable_restoresStatusAndEvicts() {
+        UUID companyId = UUID.randomUUID();
+        CompanyAiConfig cfg = CompanyAiConfig.builder()
+                .id(UUID.randomUUID()).companyId(companyId).provider("deepseek")
+                .baseUrl("https://api.deepseek.com").apiKeyCipher("cipher").keyLast4("5678")
+                .modelName("deepseek-chat").status("disabled").fallbackEnabled(true)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now()).build();
+        when(repository.findFirstByCompanyIdOrderByUpdatedAtDesc(companyId)).thenReturn(Optional.of(cfg));
+
+        service.enable(companyId);
+
+        assertEquals("enabled", cfg.getStatus());
+        verify(repository).save(cfg);
+        verify(resolver).evict(companyId);
+        verify(historyRepository).save(any());
     }
 
     @Test

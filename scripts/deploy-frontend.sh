@@ -21,6 +21,13 @@ npm run build
 cp -R .next/static .next/standalone/.next/static
 [ -d public ] && cp -R public .next/standalone/public
 
+# npm workspace 会把 react/react-dom/scheduler 提升到仓库根 node_modules，
+# Next standalone 在 workspace 下不会自动带上；缺了会在 SSR 阶段报
+# Cannot find module 'react/jsx-runtime'（静态 chunk 全部 500）。
+for pkg in react react-dom scheduler; do
+  [ -d "../node_modules/$pkg" ] && cp -R "../node_modules/$pkg" .next/standalone/node_modules/
+done
+
 echo "产物: .next/standalone/"
 echo "上传开始"
 

@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 
 import reactor.core.publisher.Flux;
@@ -47,6 +48,17 @@ public class TokenAwareChatModel implements ChatModel {
         this.companyId = companyId;
     }
 
+    /** 必须委托真实模型：ChatClient 用 default options 构建 Prompt，类型错会被 OpenAI 模型强转失败。 */
+    @Override
+    public ChatOptions getDefaultOptions() {
+        return delegate.getDefaultOptions();
+    }
+
+    @Override
+    public ChatOptions getOptions() {
+        return delegate.getOptions();
+    }
+
     // ============================================================
     // 同步调用 — Usage 通常可靠，仍计算 prompt_chars 做基准
     // ============================================================
@@ -61,7 +73,7 @@ public class TokenAwareChatModel implements ChatModel {
 
         // 同步调用可从响应体直接拿到完整输出内容
         String responseContent = response.getResult() != null && response.getResult().getOutput() != null
-                ? response.getResult().getOutput().getContent() : "";
+                ? response.getResult().getOutput().getText() : "";
         int completionChars = responseContent != null ? responseContent.length() : 0;
 
         int inputTokens;
@@ -69,7 +81,7 @@ public class TokenAwareChatModel implements ChatModel {
 
         if (usage != null && usage.getTotalTokens() > 0) {
             inputTokens = (int) (long) usage.getPromptTokens();
-            outputTokens = (int) (long) usage.getGenerationTokens();
+            outputTokens = (int) (long) usage.getCompletionTokens();
             TokenEstimationCalibrator.observe(modelName, promptChars, inputTokens);
         } else {
             inputTokens = estimateTokens(promptChars);
@@ -103,7 +115,7 @@ public class TokenAwareChatModel implements ChatModel {
                 .doOnNext(resp -> {
                     // 累积响应内容（用于 completion_chars）
                     if (resp.getResult() != null && resp.getResult().getOutput() != null) {
-                        String content = resp.getResult().getOutput().getContent();
+                        String content = resp.getResult().getOutput().getText();
                         if (content != null) {
                             fullResponse.append(content);
                         }
@@ -123,7 +135,7 @@ public class TokenAwareChatModel implements ChatModel {
                     if (usage != null && usage.getTotalTokens() > 0 && usage.getPromptTokens() > 0) {
                         // API 返回了完整 Usage → 用真实值，chars 仍落库做基准
                         inputTokens = (int) (long) usage.getPromptTokens();
-                        outputTokens = (int) (long) usage.getGenerationTokens();
+                        outputTokens = (int) (long) usage.getCompletionTokens();
                         TokenEstimationCalibrator.observe(modelName, promptChars, inputTokens);
                     } else {
                         // API 未返回 Usage（流式默认不带）→ 从字符数估算
@@ -164,7 +176,7 @@ public class TokenAwareChatModel implements ChatModel {
             return 0;
         }
         return prompt.getInstructions().stream()
-                .mapToInt(msg -> msg.getContent() != null ? msg.getContent().length() : 0)
+                .mapToInt(msg -> msg.getText() != null ? msg.getText().length() : 0)
                 .sum();
     }
 

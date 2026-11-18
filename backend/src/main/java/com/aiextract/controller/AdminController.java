@@ -1,11 +1,12 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.PageResponse;
 import com.aiextract.config.TokenContext;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -41,7 +42,6 @@ public class AdminController {
     private final UserRepository userRepository;
     private final com.aiextract.service.AdminService adminService;
     private final com.aiextract.service.AuthService authService;
-    private final JwtUtil jwtUtil;
 
     /** 平台端地址（C端对外链接用，nginx 8088→platform） */
     @Value("${app.platform.url:http://localhost:3001}")
@@ -51,7 +51,7 @@ public class AdminController {
     @Value("${app.frontend.url:http://localhost:3000}")
     private String frontendUrl;
 
-    /** 从 SecurityContext 取 token（JwtAuthFilter 已从 Cookie/Header 提取并设置） */
+    /** 从 SecurityContext 取 token（SessionAuthFilter 已从 Cookie/Header 提取并设置） */
     private String getToken() {
         return (String) org.springframework.security.core.context.SecurityContextHolder
                 .getContext().getAuthentication().getCredentials();
@@ -186,7 +186,7 @@ public class AdminController {
         // expireDays 不传或传 0 = 永久有效
         int expireDays = body.containsKey("expireDays") ? ((Number) body.get("expireDays")).intValue() : 0;
         String inviteCode = interviewService.generateInviteCode(companyId, expireDays,
-            jwtUtil.getUserIdFromToken(getToken()));
+            CurrentUser.id());
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("inviteCode", inviteCode);

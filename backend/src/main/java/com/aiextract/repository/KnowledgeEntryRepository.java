@@ -115,6 +115,9 @@ public interface KnowledgeEntryRepository extends JpaRepository<KnowledgeEntry, 
     org.springframework.data.domain.Page<KnowledgeEntry> findByCompanyIdAndStatusAndGenerationJobIdIsNotNullOrderByCreatedAtDesc(
             UUID companyId, String status, Pageable pageable);
 
+    /** 待审 AI 知识草稿数：用于阻止在未处理完上一批草稿时继续生成，避免堆积重复内容 */
+    long countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(UUID companyId, String status);
+
     /**
      * 更新向量嵌入 — pgvector 类型 JDBC 无法正确处理，用原生 SQL。
      * 照 {@code ExperienceGrainRepository.updateEmbedding} 的写法。

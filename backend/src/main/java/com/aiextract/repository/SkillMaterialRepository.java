@@ -105,6 +105,15 @@ public interface SkillMaterialRepository extends JpaRepository<SkillMaterial, UU
     @Query("SELECT sm FROM SkillMaterial sm WHERE sm.skillId = :skillId AND (sm.materialType <> :excludeType OR sm.materialType IS NULL) ORDER BY sm.createdAt DESC")
     Page<SkillMaterial> findBySkillIdExcludingType(@Param("skillId") UUID skillId, @Param("excludeType") String excludeType, Pageable pageable);
 
+    /** 分页查分身素材，排除指定类型并按状态过滤。NULL materialType 视为用户上传。 */
+    @Query("SELECT sm FROM SkillMaterial sm WHERE sm.skillId = :skillId "
+        + "AND (sm.materialType <> :excludeType OR sm.materialType IS NULL) "
+        + "AND sm.status = :status ORDER BY sm.createdAt DESC")
+    Page<SkillMaterial> findBySkillIdExcludingTypeAndStatus(@Param("skillId") UUID skillId,
+                                                           @Param("excludeType") String excludeType,
+                                                           @Param("status") String status,
+                                                           Pageable pageable);
+
     /** 从一批 skillId 中找出至少有一条可用非 interview 素材的。NULL materialType 视为用户上传。 */
     @Query("SELECT DISTINCT sm.skillId FROM SkillMaterial sm WHERE sm.skillId IN :skillIds "
         + "AND (sm.materialType <> 'interview' OR sm.materialType IS NULL) "

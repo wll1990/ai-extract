@@ -1,5 +1,7 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.dto.ReportDetailResponse;
@@ -37,7 +39,6 @@ public class ReportController {
 
     private final ReportService reportService;
     private final ReportRepository reportRepository;
-    private final com.aiextract.util.JwtUtil jwtUtil;
     private final com.aiextract.service.ReportStorageService reportStorageService;
 
     private static final String SHARE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -50,7 +51,7 @@ public class ReportController {
     }
 
     private UUID getCurrentUserId() {
-        return jwtUtil.getUserIdFromToken(getToken());
+        return CurrentUser.id();
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -85,7 +86,7 @@ public class ReportController {
     /** 按分身ID获取报告元信息（需属主校验） */
     @GetMapping("/by-skill/{skillId}")
     public ApiResponse<ReportDetailResponse> getReportBySkill(@PathVariable String skillId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         Report report = reportService.getReportBySkillId(UUID.fromString(skillId), userId);
         ReportDetailResponse response = reportService.getReport(report.getId().toString());
         return ApiResponse.success(response);
@@ -94,7 +95,7 @@ public class ReportController {
     /** 按分身ID获取报告HTML（新标签页预览用，需属主校验） */
     @GetMapping(value = "/by-skill/{skillId}/html", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> getReportHtmlBySkill(@PathVariable String skillId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         Report report = reportService.getReportBySkillId(UUID.fromString(skillId), userId);
         if (report.getHtmlPath() == null || report.getHtmlPath().isEmpty()) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -213,7 +214,7 @@ public class ReportController {
 
     @GetMapping("/by-session/{sessionId}/html")
     public ResponseEntity<?> getReportHtmlBySession(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         ReportService.ReportHtmlResult result = reportService.getReportHtmlBySession(
                 UUID.fromString(sessionId), userId);
         if (!result.ready()) {

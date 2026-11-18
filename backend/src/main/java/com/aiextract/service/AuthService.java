@@ -45,6 +45,7 @@ public class AuthService {
     private final CompanyRepository companyRepository;
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final JwtUtil jwtUtil;
+    private final com.aiextract.service.session.SessionService sessionService;
     private final PasswordEncoder passwordEncoder;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final OssService ossService;
@@ -59,7 +60,7 @@ public class AuthService {
      * @return Token及用户信息
      * @throws BusinessException 如果用户不存在（404）、密码错误（401）或账户已禁用（403）
      */
-    @Transactional(readOnly = true)
+    @Transactional(rollbackFor = Exception.class)
     public LoginResponse login(LoginRequest request) {
         UUID companyId;
         if (request.getInviteToken() != null && !request.getInviteToken().isBlank()) {
@@ -107,15 +108,18 @@ public class AuthService {
             throw new BusinessException(HttpStatus.LOCKED.value(), ErrorMessages.ACCOUNT_DISABLED);
         }
 
-        // 生成Token（带安全版本号：改权限后旧 token 立即失效）
-        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
-                jwtUtil.getDefaultExpirationMillis(), versionOf(user),
-                Boolean.TRUE.equals(user.getMustChangePassword()));
-
-        // 查询企业名称
-        Company company = companyRepository.findById(user.getCompanyId())
-                .orElse(null);
+        // 企业已归档/停用时不允许再登录：会话签发前拦截，避免发出一个立刻该失效的凭证
+        Company company = user.getCompanyId() == null ? null
+                : companyRepository.findById(user.getCompanyId()).orElse(null);
+        if (company != null && company.getStatus() != null
+                && !"active".equals(company.getStatus())) {
+            log.warn("企业已停用，拒绝登录, companyId: {}, userId: {}", company.getId(), user.getId());
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "企业已停用，请联系管理员");
+        }
         String companyName = company != null ? company.getName() : null;
+
+        // 生成不透明会话（DB 真相源 + Redis 主读；改权限后 epoch 递增即失效）
+        String token = sessionService.create(user, null, null).token();
 
         // 构建响应
         UserInfoResponse userInfo = buildUserInfoResponse(user, companyName);
@@ -195,9 +199,8 @@ public class AuthService {
         spaceRepository.save(space);
         log.info("注册自动创建空间, userId: {}, role: {}, spaceId: {}", user.getId(), request.getRole(), space.getId());
 
-        // 生成Token（带安全版本号：改权限后旧 token 立即失效）
-        String token = jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
-                jwtUtil.getDefaultExpirationMillis(), versionOf(user));
+        // 生成不透明会话（DB 真相源 + Redis 主读；改权限后 epoch 递增即失效）
+        String token = sessionService.create(user, null, null).token();
 
         // 构建响应
         UserInfoResponse userInfo = buildUserInfoResponse(user, company.getName());
@@ -316,11 +319,6 @@ public class AuthService {
      * @param companyName 企业名称
      * @return UserInfoResponse
      */
-    /** 安全版本号（历史数据可能为 null，按 0 处理） */
-    private static long versionOf(User user) {
-        return user.getTokenVersion() == null ? 0L : user.getTokenVersion();
-    }
-
     private UserInfoResponse buildUserInfoResponse(User user, String companyName) {
         // 注意：此方法被 login/register 复用，彼时 SecurityContext 尚未建立，
         // 故从 role 映射表派生（与 JwtUtil 签发时的 permissions claim 同源）。
@@ -365,8 +363,8 @@ public class AuthService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         log.info("用户修改密码 userId={}", userId);
-        return jwtUtil.generateToken(user.getId(), user.getCompanyId(), user.getRole(),
-                jwtUtil.getDefaultExpirationMillis(), versionOf(user));
+        // 旧会话已由 onAuthoritiesChanged 通过 epoch 全部失效；为当前设备签发新会话
+        return sessionService.create(user, null, null).token();
     }
 
     /** 管理端停用/启用账号：不允许操作自己、超管，以及其他企业的用户 */

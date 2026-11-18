@@ -12,7 +12,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 const input = 'w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground';
 
 /**
- * 知识编辑（仅 draft/pending）：审批发现问题时可直接修正，不必废弃重建。
+ * 知识编辑（仅 draft/pending）：审核发现问题时可直接修正，不必废弃重建。
  * 已生效内容不允许直接改，需「基于此版本修改」生成新草稿。
  */
 export default function KnowledgeEditPage({ params }: { params: { id: string } }) {
@@ -49,7 +49,7 @@ export default function KnowledgeEditPage({ params }: { params: { id: string } }
       return;
     }
     if (!expireAt) {
-      alert('请设置失效时间（审批生效时使用）');
+      alert('请设置失效时间（通过并生效时使用）');
       return;
     }
     setSaving(true);
@@ -90,7 +90,7 @@ export default function KnowledgeEditPage({ params }: { params: { id: string } }
         ← 返回详情
       </button>
       <h1 className="mb-1 text-xl font-bold text-foreground">编辑知识</h1>
-      <p className="mb-5 text-sm text-muted-foreground">当前状态：{entry.status === 'draft' ? '草稿' : '待审核'}，修改后仍需审批才会生效。</p>
+      <p className="mb-5 text-sm text-muted-foreground">当前状态：{entry.status === 'draft' ? '草稿' : '待审核'}，修改后仍需审核才会生效。</p>
 
       <div className="space-y-3">
         <label className="block">

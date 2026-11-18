@@ -21,6 +21,7 @@ import com.aiextract.service.KnowledgeCaseService;
 import com.aiextract.service.KnowledgeCleaningService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -69,6 +70,13 @@ public class AdminKnowledgeController {
     private final ContentImportService contentImportService;
     private final PromptLoader promptLoader;
     private final com.aiextract.service.ContentDeletionService contentDeletionService;
+
+    /** 线上聊天实际使用的阈值：检索测试据此标记「会不会进入分身回答」。 */
+    @Value("${app.rag.kc-knowledge-min-similarity:0.45}")
+    private double knowledgeMinSimilarity;
+
+    @Value("${app.rag.kc-case-min-similarity:0.50}")
+    private double caseMinSimilarity;
 
     // ==================== 查询 ====================
 
@@ -179,10 +187,21 @@ public class AdminKnowledgeController {
         if (body.get("topK") instanceof Number n) {
             topK = Math.max(1, Math.min(n.intValue(), 20));
         }
+        // 知识与案例各测各的：知识库页只测知识，案例库页只测案例；all 仅保留给旧调用
+        String scope = body.get("scope") instanceof String s ? s.trim() : "all";
+        if (!"all".equals(scope) && !"knowledge".equals(scope) && !"case".equals(scope)) {
+            throw new BusinessException(400, "scope 只能是 knowledge / case / all");
+        }
+        boolean wantKnowledge = !"case".equals(scope);
+        boolean wantCase = !"knowledge".equals(scope);
         UUID companyId = TokenContext.getCompanyId();
         KnowledgeCaseRetriever.KnowledgeCaseHits hits;
         try {
-            hits = knowledgeCaseRetriever.retrieve(query, companyId, topK);
+            // 诊断模式：用更低的「近失下限」召回，才能解释「为什么这条没被引用」。
+            // 每条结果带 effective 标记，前端据此区分「会进入分身」和「未达阈值」。
+            hits = knowledgeCaseRetriever.retrieve(query, companyId, topK,
+                    KnowledgeCaseRetriever.DIAGNOSTIC_KNOWLEDGE_MIN_SIMILARITY,
+                    KnowledgeCaseRetriever.DIAGNOSTIC_CASE_MIN_SIMILARITY);
         } catch (RuntimeException e) {
             // 检索依赖外部向量模型：额度不足/服务不可用时给 503，而不是 500
             throw new BusinessException(503, "检索服务暂不可用（向量模型调用失败），请稍后重试");
@@ -190,10 +209,32 @@ public class AdminKnowledgeController {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("query", query);
         result.put("topK", topK);
-        result.put("knowledge", hits.knowledge());
-        result.put("cases", hits.cases());
-        result.put("knowledgeCount", hits.knowledge().size());
-        result.put("caseCount", hits.cases().size());
+        result.put("scope", scope);
+        result.put("knowledgeThreshold", knowledgeMinSimilarity);
+        result.put("caseThreshold", caseMinSimilarity);
+        result.put("knowledge", wantKnowledge ? hits.knowledge().stream().map(h -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", h.id());
+            m.put("title", h.title());
+            m.put("content", h.content());
+            m.put("category", h.category());
+            m.put("source", h.source());
+            m.put("similarity", h.similarity());
+            m.put("effective", h.similarity() >= knowledgeMinSimilarity);
+            return m;
+        }).toList() : java.util.List.of());
+        result.put("cases", wantCase ? hits.cases().stream().map(h -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", h.id());
+            m.put("title", h.title());
+            m.put("sceneTag", h.sceneTag());
+            m.put("objection", h.objection());
+            m.put("similarity", h.similarity());
+            m.put("effective", h.similarity() >= caseMinSimilarity);
+            return m;
+        }).toList() : java.util.List.of());
+        result.put("knowledgeCount", wantKnowledge ? hits.knowledge().size() : 0);
+        result.put("caseCount", wantCase ? hits.cases().size() : 0);
         return ApiResponse.success(result);
     }
 

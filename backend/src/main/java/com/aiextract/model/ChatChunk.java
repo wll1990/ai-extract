@@ -262,6 +262,9 @@ public class ChatChunk {
     public Integer getGrainCount() { return grainCount; }
     public String getAvgScore() { return avgScore; }
     public String getAvgSimilarity() { return avgSimilarity; }
+    public String getSourceNames() { return sourceNames; }
+    public String getKnowledgeId() { return knowledgeId; }
+    public String getCaseId() { return caseId; }
     public String getSourceType() { return sourceType; }
     public String getSourceTitle() { return sourceTitle; }
     public String getAction() { return action; }

@@ -24,15 +24,18 @@ export interface MsgSetter {
   clearMessages: () => void;
 }
 
-export function useConversations(skillId: string, mode: string, msgSetter: MsgSetter, authToken?: string) {
+export function useConversations(skillId: string, mode: string, msgSetter: MsgSetter,
+                                 authToken?: string, guestMode = false) {
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
 
   const loadConversations = useCallback(() => {
-    if (!skillId) return;
+    // 游客分享页尚未领证时后台拉历史会 401，会误弹注册/登录抽屉；
+    // 领到游客证（authToken）后再加载，历史会在进聊天时补齐。
+    if (!skillId || (guestMode && !authToken)) return;
     listConversations(skillId, authToken).then(setConversations).catch(() => {});
-  }, [skillId, authToken]);
+  }, [skillId, authToken, guestMode]);
 
   const switchConversation = useCallback(async (convId: string) => {
     setCurrentConvId(convId);

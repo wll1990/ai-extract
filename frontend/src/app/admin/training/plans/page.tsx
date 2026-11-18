@@ -13,6 +13,7 @@ import EmptyState from '@/components/ui/EmptyState';
 import { Pagination } from '@/components/ui/Pagination';
 import { Toast } from '@/components/ui/Toast';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
 
 type Tab = 'plans' | 'cohorts';
 
@@ -180,6 +181,14 @@ export default function AdminTrainingPlansPage() {
                 { title: '建批次分配', desc: '计划发布后建批次，选择学员批量分配；分配后学员在「我的培训」看到任务。' },
                 { title: '看进度与复核', desc: '在批次进度里跟踪完成情况；考试和陪练提交后由导师复核，全部通过后认证。' },
               ]}
+              actions={[
+                { label: 'AI 生成计划', desc: '按一句训练目标从已生效知识和已发布分身里生成草稿计划；生成后仍需预览、调整、发布。', tone: 'primary' },
+                { label: '＋ 新建计划', desc: '手工创建空白计划，创建后进入编辑页添加阶段和任务。' },
+                { label: '培训计划 / 培训批次', desc: '计划是模板，批次是发给学员的一次执行；发布后的计划按快照执行。' },
+                { label: '编辑 / 批次', desc: '进入计划编辑页；可从已发布版本创建批次并分配学员。' },
+                { label: '查看进度', desc: '进入批次详情，查看学员完成情况并复核考试/陪练。' },
+                { label: '结班 / 取消 / 归档', desc: '推进批次生命周期；归档后不再接收新学员，历史记录保留。' },
+              ]}
               notes={[
                 '发布后修改内容需要新建版本重新发布，已分配学员继续按旧快照学习。',
                 '知识或案例被下线/过期会导致学员打不开资料，发布前系统会拦截。',
@@ -187,18 +196,12 @@ export default function AdminTrainingPlansPage() {
             />
             {tab === 'plans' && (
               <>
-                <button
-                  onClick={openGenerate}
-                  className="rounded-full border border-primary px-5 py-2.5 text-sm font-medium text-primary hover:bg-primary-light"
-                >
+                <Button variant="secondary" onClick={openGenerate}>
                   ✨ AI 生成计划
-                </button>
-                <button
-                  onClick={() => { setShowCreate(s => !s); setShowGenerate(false); }}
-                  className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-                >
+                </Button>
+                <Button variant="primary" onClick={() => { setShowCreate(s => !s); setShowGenerate(false); }}>
                   {showCreate ? '收起' : '＋ 新建计划'}
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -210,15 +213,15 @@ export default function AdminTrainingPlansPage() {
             ['plans', `培训计划${planTotal ? `（${planTotal}）` : ''}`],
             ['cohorts', `培训批次${cohortTotal ? `（${cohortTotal}）` : ''}`],
           ] as [Tab, string][]).map(([key, label]) => (
-            <button
+            <Button
               key={key}
+              variant={tab === key ? 'primary' : 'neutral'}
+              size="sm"
               onClick={() => setTab(key)}
-              className={`rounded-full px-4 py-2 text-sm transition-colors ${
-                tab === key ? 'bg-primary text-white' : 'border border-border text-foreground hover:bg-primary-light'
-              }`}
+              title={key === 'plans' ? '管理计划模板与发布版本' : '管理已发布的培训班次与学员进度'}
             >
               {label}
-            </button>
+            </Button>
           ))}
         </div>
 
@@ -266,14 +269,11 @@ export default function AdminTrainingPlansPage() {
                   </div>
                 )}
                 <div className="flex justify-end gap-2">
-                  <button onClick={() => setShowGenerate(false)}
-                    className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-primary-light">
-                    取消
-                  </button>
-                  <button onClick={onGenerate} disabled={generating}
-                    className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                  <Button variant="neutral" onClick={() => setShowGenerate(false)}>取消</Button>
+                  <Button variant="primary" onClick={onGenerate} disabled={generating}
+                    title="生成草稿计划并进入编辑页；发布前都可修改">
                     {generating ? '生成中…（约 10-30 秒）' : '生成草稿计划'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -293,10 +293,10 @@ export default function AdminTrainingPlansPage() {
                     className="w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground" />
                 </div>
                 <div className="flex justify-end">
-                  <button onClick={onCreate} disabled={creating}
-                    className="rounded-full bg-primary px-5 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+                  <Button variant="primary" onClick={onCreate} disabled={creating}
+                    title="创建空白计划并进入编辑页，添加阶段和任务后再发布">
                     {creating ? '创建中…' : '创建并编辑'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -311,8 +311,9 @@ export default function AdminTrainingPlansPage() {
                 onKeyDown={e => { if (e.key === 'Enter') applySearch(); }}
                 placeholder="搜索计划名…"
                 className="w-56 rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground" />
-              <button onClick={applySearch}
-                className="rounded-md bg-primary px-4 py-2 text-sm text-white hover:opacity-90">搜索</button>
+              <Button variant="primary" onClick={applySearch} title="按计划名搜索；回车效果相同">
+                搜索
+              </Button>
             </div>
 
             {planError && (
@@ -362,10 +363,11 @@ export default function AdminTrainingPlansPage() {
                           {p.updatedAt ? new Date(p.updatedAt).toLocaleString() : '—'}
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => router.push(`/admin/training/plans/${p.id}`)}
-                            className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground hover:bg-primary-light">
+                          <Button variant="neutral" size="sm"
+                            onClick={() => router.push(`/admin/training/plans/${p.id}`)}
+                            title="编辑计划；发布后可从已发布版本创建批次并分配学员">
                             编辑 / 批次
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     ))}
@@ -434,12 +436,13 @@ export default function AdminTrainingPlansPage() {
                         </td>
                         <td className="px-4 py-3 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button onClick={() => router.push(`/admin/training/cohorts/${c.id}`)}
-                              className="rounded-full border border-border px-3 py-1.5 text-xs text-foreground hover:bg-primary-light">
+                            <Button variant="neutral" size="sm"
+                              onClick={() => router.push(`/admin/training/cohorts/${c.id}`)}
+                              title="查看学员完成情况、复核考试/陪练并确认认证">
                               查看进度
-                            </button>
+                            </Button>
                             {COHORT_NEXT_STATUS[c.status]?.map(next => (
-                              <button key={next.status}
+                              <Button key={next.status} variant="ghost" size="sm"
                                 onClick={async () => {
                                   if (!confirm(`确认将批次「${c.name}」标记为${next.label}？`)) return;
                                   try {
@@ -449,9 +452,9 @@ export default function AdminTrainingPlansPage() {
                                     setToast(e instanceof Error ? e.message : '状态更新失败');
                                   }
                                 }}
-                                className="rounded-full px-3 py-1.5 text-xs text-primary hover:bg-primary-light">
+                                title={`把批次标记为${next.label}；历史记录保留`}>
                                 {next.label}
-                              </button>
+                              </Button>
                             ))}
                           </div>
                         </td>

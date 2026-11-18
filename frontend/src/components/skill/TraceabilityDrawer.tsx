@@ -75,16 +75,21 @@ export function TraceabilityDrawer({ grainIds, avgSimilarity, open, onClose, org
     setLoading(true);
     setData([]);      // 切换消息时先清空，避免展示上一条的旧数据
     setError('');
-    apiClient(`/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`)
+    // 有 skillId 时走属主可读接口：/admin/grains/traceability 要求 GRAIN_MANAGE，
+    // 销冠点开自己的分身溯源会 403
+    const url = skillId
+      ? `/skills/${skillId}/trial/traceability?grainIds=${encodeURIComponent(grainIds)}`
+      : `/admin/grains/traceability?grainIds=${encodeURIComponent(grainIds)}`;
+    apiClient(url)
       .then(r => setData((r as any) || []))
       .catch((e: unknown) => {
         const status = (e as { status?: number })?.status;
         setError(status === 403
-          ? '当前账号无权查看经验溯源（需要颗粒管理权限）'
+          ? '当前账号无权查看这条经验的溯源'
           : '溯源加载失败，请稍后重试');
       })
       .finally(() => setLoading(false));
-  }, [open, grainIds]);
+  }, [open, grainIds, skillId]);
 
   // 组织分身：查 spaceId → skillId 映射
   useEffect(() => {

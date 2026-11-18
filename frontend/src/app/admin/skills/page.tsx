@@ -1,9 +1,11 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { listSkills, updateSkillStatus, restoreSkill, retrySkillPipeline } from '@/lib/api/skill';
+import { publishSkill } from '@/lib/api/audit';
 import ShareModal from '@/components/admin/ShareModal';
 import ImPublishModal from '@/components/admin/ImPublishModal';
 import { listImBots } from '@/lib/api/im';
@@ -24,6 +26,9 @@ export default function AdminSkillsPage() {
   const [error, setError] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  /** 发布被门槛拦住时的阻塞项，按分身 ID 内联展示 */
+  const [publishBlockers, setPublishBlockers] = useState<Record<string, string[]>>({});
 
   const loadFeishuBots = () => {
     listImBots().then(bots => setFeishuBoundIds(new Set(bots.map(b => b.skillId)))).catch(() => {});
@@ -35,6 +40,7 @@ export default function AdminSkillsPage() {
       .then(d => {
         setSkills(d.content);
         setTotalPages(Math.max(1, d.totalPages || 1));
+        setTotal(d.total ?? (d.content?.length ?? 0));
       })
       .catch((e: unknown) => {
         setSkills([]);
@@ -187,48 +193,59 @@ export default function AdminSkillsPage() {
             <h2 className="mb-3 text-sm font-semibold text-muted-foreground-2">生成中/未激活 · {inactiveSkills.length}位</h2>
             <div className="space-y-2">
               {inactiveSkills.map((s: any) => (
-                <div key={s.id} className="flex items-center justify-between rounded-lg bg-surface-2 p-4 shadow-sm opacity-60">
-                  <div className="flex items-center gap-4">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-border text-muted-foreground-2 font-bold text-sm">{(s.ownerName || '?')[0]}</div>
-                    <div>
-                      <p className="font-medium text-muted-foreground-2">{s.ownerName}</p>
-                      <p className="text-xs text-muted-foreground-2">{STATUS_LABELS[s.status] || s.status}</p>
+                <React.Fragment key={s.id}>
+                  <div className="flex items-center justify-between rounded-lg bg-surface-2 p-4 shadow-sm opacity-60">
+                    <div className="flex items-center gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-border text-muted-foreground-2 font-bold text-sm">{(s.ownerName || '?')[0]}</div>
+                      <div>
+                        <p className="font-medium text-muted-foreground-2">{s.ownerName}</p>
+                        <p className="text-xs text-muted-foreground-2">{STATUS_LABELS[s.status] || s.status}</p>
+                      </div>
                     </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      try {
-                        if (s.status === 'discarded') {
-                          await restoreSkill(s.id);
-                        } else if (s.status === 'paused') {
-                          // 暂停的分身恢复上线，不应被送去重新审核
-                          await updateStatus(s.id, 'published');
-                        } else {
-                          await updateStatus(s.id, 'reviewing');
+                    <button
+                      onClick={async () => {
+                        try {
+                          if (s.status === 'discarded') {
+                            await restoreSkill(s.id);
+                          } else if (s.status === 'paused') {
+                            // 暂停的分身恢复上线：走发布接口才能拿到结构化的阻塞项
+                            const result = await publishSkill(s.id, 'publish');
+                            if (!result.passed) {
+                              setPublishBlockers(prev => ({ ...prev, [s.id]: result.blockers || [] }));
+                              return;
+                            }
+                            setPublishBlockers(prev => {
+                              const next = { ...prev };
+                              delete next[s.id];
+                              return next;
+                            });
+                          } else {
+                            await updateStatus(s.id, 'reviewing');
+                          }
+                          loadData();
+                        } catch (e) {
+                          alert(e instanceof Error ? e.message : '操作失败');
                         }
-                        loadData();
-                      } catch (e) {
-                        alert(e instanceof Error ? e.message : '操作失败');
-                      }
-                    }}
-                    className="rounded-lg px-3 py-1.5 text-xs text-success hover:bg-success-bg">
-                    {s.status === 'discarded' ? '恢复' : '激活'}
-                  </button>
-                </div>
+                      }}
+                      className="rounded-lg px-3 py-1.5 text-xs text-success hover:bg-success-bg">
+                      {s.status === 'discarded' ? '恢复' : '激活'}
+                    </button>
+                  </div>
+                  {publishBlockers[s.id]?.length > 0 && (
+                    <div className="mt-1 rounded-lg border border-orange/30 bg-orange/5 px-4 py-2 text-xs text-orange">
+                      <p className="mb-1 font-medium">暂不能发布：</p>
+                      <ul className="list-disc space-y-0.5 pl-4">
+                        {publishBlockers[s.id].map((b, i) => <li key={i}>{b}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </div>
           </div>
         )}
 
-        {totalPages > 1 && (
-          <div className="mb-6 flex items-center justify-center gap-3 text-sm">
-            <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">上一页</button>
-            <span className="text-muted-foreground">{page} / {totalPages}</span>
-            <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-              className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">下一页</button>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} totalElements={total} onPageChange={setPage} loading={loading} />
 
         {/* Feishu publish modal */}
         {feishuSkill && (

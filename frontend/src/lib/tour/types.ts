@@ -82,7 +82,7 @@ export interface TourData {
 export const DEMO_COMPANY_ID = 'd0000000-0000-0000-0000-000000000001';
 
 /** 当前导览版本；章节文案变更时递增，旧进度自动失效 */
-export const TOUR_VERSION = 1;
+export const TOUR_VERSION = 2;
 
 /** 页面锚点常量 */
 export const ANCHORS = {

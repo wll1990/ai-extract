@@ -55,14 +55,20 @@ class SalesReviewReportParserTest {
     }
 
     @Test
-    void rejectsMismatchedQuote() {
+    void dropsMismatchedQuoteButKeepsSegment() throws Exception {
         String raw = """
                 {"summary":"x","strengths":[{"point":"p","evidence":[{"segmentId":"%s","quote":"不存在的原话"}]}],
                  "weaknesses":[],"risks":[],"customerSignals":[],"nextSteps":[],"leadDraft":{}}
                 """.formatted(segmentId);
 
-        assertThrows(IllegalArgumentException.class,
-                () -> parser.parse(withSummaryEvidence(raw), Set.of(segmentId), Map.of(segmentId, "客户：预算 30 万")));
+        SalesReviewReportParser.ParsedReport parsed = parser.parse(
+                withSummaryEvidence(raw), Set.of(segmentId), Map.of(segmentId, "客户：预算 30 万"));
+
+        JsonNode evidence = objectMapper.readTree(parsed.payloadJson())
+                .path("strengths").get(0).path("evidence").get(0);
+        assertEquals(segmentId.toString(), evidence.path("segmentId").asText());
+        assertTrue(evidence.path("quote").isMissingNode() || evidence.path("quote").isNull(),
+                "对不上的原文必须丢弃，避免把模型转写当成真实引用");
     }
 
     @Test

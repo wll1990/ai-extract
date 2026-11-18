@@ -88,10 +88,10 @@ export default function SkillOwnerInsightsPage() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => router.push(canUseTestConsole
-              ? `/admin/insights/${skillId}/test`
+              ? `/my/skills/${skillId}/trial`
               : `/skill/${skillId}`)}
               className="text-sm bg-primary text-white rounded-lg px-4 py-2">
-              🧪 测试对话
+              🧪 试问台
             </button>
             <button onClick={() => router.push(`/skill/${skillId}`)}
               className="text-sm rounded-lg px-4 py-2 border">

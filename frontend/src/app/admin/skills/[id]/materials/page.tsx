@@ -1,5 +1,6 @@
 'use client';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { Pagination } from '@/components/ui/Pagination';
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { listMaterials, deleteMaterial, submitManualText, retryMaterial, updateMaterialStatus, type MaterialItem } from '@/lib/api/materials';
@@ -10,12 +11,19 @@ import {
   MATERIAL_FILTER_STATUSES,
 } from '@/lib/material-status';
 
+const PAGE_SIZE = 20;
+
 export default function MaterialsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [materials, setMaterials] = useState<MaterialItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  // 服务端分页：接口本来就支持 page/size，前端不再一次性拉全量
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [reloadKey, setReloadKey] = useState(0);
 
   // 手动补录弹窗
   const [manualModal, setManualModal] = useState<{ open: boolean; materialId: string; fileName: string }>({ open: false, materialId: '', fileName: '' });
@@ -35,16 +43,13 @@ export default function MaterialsPage() {
         return;
       }
       try {
-        // 一次取全部分页，避免只看到前 20 条
-        const first = await listMaterials(id, 1, 100);
-        let all = first.content;
-        for (let p = 2; p <= first.totalPages; p++) {
-          const next = await listMaterials(id, p, 100);
-          all = all.concat(next.content);
-        }
-        setMaterials(all);
-        // 全部素材到达终态时停止轮询；否则每 3 秒刷新
-        if (all.length > 0 && all.every(m => TERMINAL_STATUSES.has(m.status))) {
+        const d = await listMaterials(id, page, PAGE_SIZE, filter);
+        const items = d.content || [];
+        setMaterials(items);
+        setTotal(d.total ?? 0);
+        setTotalPages(Math.max(1, d.totalPages ?? 1));
+        // 当前页没有正在处理中的素材时停止轮询；否则每 3 秒刷新当前页
+        if (items.length > 0 && items.every(m => TERMINAL_STATUSES.has(m.status))) {
           stop();
         }
       } catch (e) {
@@ -56,11 +61,12 @@ export default function MaterialsPage() {
     fetchData();
     timer = setInterval(fetchData, 3000);
     return () => { if (timer) clearInterval(timer); };
-  }, [id]);
+  }, [id, page, filter, reloadKey]);
 
   if (loading) return <LoadingSpinner />;
 
-  const filtered = filter === 'all' ? materials : materials.filter(m => m.status === filter);
+  const filtered = materials;
+  const refresh = () => setReloadKey(k => k + 1);
 
   return (
     <div className="max-w-5xl mx-auto p-6">
@@ -78,7 +84,7 @@ export default function MaterialsPage() {
       {/* 状态筛选 */}
       <div className="flex gap-2 mb-4">
         {['all', ...MATERIAL_FILTER_STATUSES].map(s => (
-          <button key={s} onClick={() => setFilter(s)}
+          <button key={s} onClick={() => { setFilter(s); setPage(1); }}
             className={`px-3 py-1 rounded-full text-xs ${filter === s ? 'bg-primary text-white' : 'bg-primary-light text-muted-foreground hover:bg-border'}`}>
             {s === 'all' ? '全部' : STATUS_LABELS[s] || s}
           </button>
@@ -122,7 +128,7 @@ export default function MaterialsPage() {
                     {['parse_failed', 'cleaning_failed', 'rejected'].includes(m.status) && (
                       <button onClick={() => {
                         retryMaterial(m.id)
-                          .then(() => location.reload())
+                          .then(() => refresh())
                           .catch((e: unknown) => alert(e instanceof Error ? e.message : '重试失败'));
                       }}
                         className="text-primary hover:underline text-xs mr-2">重试</button>
@@ -135,7 +141,7 @@ export default function MaterialsPage() {
                       <button onClick={() => {
                         if (!confirm('放弃这个素材？放弃后不会参与萃取，可随时恢复。')) return;
                         updateMaterialStatus(id, m.id, 'discarded')
-                          .then(() => location.reload())
+                          .then(() => refresh())
                           .catch((e: unknown) => alert(e instanceof Error ? e.message : '操作失败'));
                       }}
                         className="text-warning hover:underline text-xs mr-2">放弃</button>
@@ -143,7 +149,7 @@ export default function MaterialsPage() {
                     {m.status === 'discarded' && (
                       <button onClick={() => {
                         updateMaterialStatus(id, m.id, 'uploaded')
-                          .then(() => location.reload())
+                          .then(() => refresh())
                           .catch((e: unknown) => alert(e instanceof Error ? e.message : '恢复失败'));
                       }}
                         className="text-primary hover:underline text-xs mr-2">恢复</button>
@@ -151,7 +157,7 @@ export default function MaterialsPage() {
                     <button onClick={() => {
                       if (!confirm('确认删除？')) return;
                       deleteMaterial(id, m.id)
-                        .then(() => setMaterials(prev => prev.filter(x => x.id !== m.id)))
+                        .then(() => { if (materials.length === 1 && page > 1) setPage(page - 1); else refresh(); })
                         .catch((e: unknown) => alert(e instanceof Error ? e.message : '删除失败，请稍后重试'));
                     }}
                       className="text-red-500 hover:underline text-xs">删除</button>
@@ -162,6 +168,9 @@ export default function MaterialsPage() {
           </table>
         </div>
       )}
+
+      <Pagination page={page} totalPages={totalPages} totalElements={total}
+        onPageChange={p => setPage(p)} loading={loading} />
 
       {/* 手动补录弹窗 */}
       {manualModal.open && (
@@ -183,8 +192,8 @@ export default function MaterialsPage() {
                   try {
                     await submitManualText(manualModal.materialId, manualText);
                     setManualModal({ open: false, materialId: '', fileName: '' });
-                    // 刷新列表
-                    listMaterials(id).then(d => setMaterials(d.content));
+                    // 刷新列表（留在当前页与筛选条件上）
+                    refresh();
                   } catch { alert('提交失败，请重试'); }
                   setSubmitting(false);
                 }}

@@ -97,8 +97,14 @@ export default function H5InterviewStartPage() {
     try {
       const stored = localStorage.getItem('c_auth');
       const token = stored ? JSON.parse(stored)?.token : null;
+      if (!token) {
+        setError('请先登录或注册');
+        setStopping(false);
+        return;
+      }
       const r = await fetch(`/api/v1/interviews/${activeSession.sessionId}/cancel`, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: { Authorization: `Bearer ${token}` },
       });
       const d = await r.json();

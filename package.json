@@ -12,5 +12,8 @@
     "qa:quick": "node scripts/qa/run.mjs --profile=quick",
     "qa:release": "node scripts/qa/run.mjs --profile=release",
     "qa:nightly": "node scripts/qa/run.mjs --profile=nightly"
+  },
+  "devDependencies": {
+    "three": "^0.160.0"
   }
 }

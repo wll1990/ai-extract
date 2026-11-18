@@ -16,7 +16,10 @@ const PUBLIC_PATHS = ['/login', '/register', '/portal'];
 const PUBLIC_PREFIXES = ['/s/', '/h5/', '/i/', '/public/', '/portal/'];
 
 // 静态资源和 API 路由不拦截
-const SKIP_PREFIXES = ['/_next', '/api', '/assets', '/favicon.ico', '/robots.txt'];
+const SKIP_PREFIXES = [
+  '/_next', '/api', '/assets', '/robots.txt',
+  '/favicon.ico', '/favicon-32.png', '/icon-512.png', '/apple-touch-icon.png',
+];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -50,5 +53,5 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   // 匹配所有路径，排除静态文件
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|robots.txt).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|favicon-32.png|icon-512.png|apple-touch-icon.png|robots.txt).*)'],
 };

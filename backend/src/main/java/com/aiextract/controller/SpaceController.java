@@ -1,5 +1,7 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.CompanyScopeService;
@@ -7,7 +9,6 @@ import com.aiextract.config.TokenContext;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Space;
 import com.aiextract.repository.SpaceRepository;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -42,7 +43,6 @@ public class SpaceController {
     private final com.aiextract.repository.ExperienceGrainRepository grainRepository;
     private final com.aiextract.service.SpaceService spaceService;
     private final CompanyScopeService companyScopeService;
-    private final JwtUtil jwtUtil;
     private final ObjectMapper objectMapper;
 
     private String getToken() {
@@ -50,7 +50,7 @@ public class SpaceController {
     }
 
     private UUID getCurrentUserId() {
-        return jwtUtil.getUserIdFromToken(getToken());
+        return CurrentUser.id();
     }
 
     @GetMapping

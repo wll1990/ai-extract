@@ -312,7 +312,7 @@ export default function AdminKnowledgeNewPage() {
         ) : tab === 'upload' ? (
           <div className="space-y-4 rounded-xl border border-border bg-surface-2 p-6">
             <p className="text-sm text-muted-foreground">
-              上传文档（pdf/docx/txt/md/pptx/csv/html），系统按章节切片后由模型提炼事实型知识卡；原文分块不落库、不参与检索。萃取结果先进入预览，确认采纳后进入知识库「待审核」，审批通过才生效。
+              上传文档（pdf/docx/txt/md/pptx/csv/html），系统按章节切片后由模型提炼事实型知识卡；原文分块不落库、不参与检索。萃取结果先进入预览，确认采纳后进入知识库「待审核」，审核通过才生效。
             </p>
             <p className="text-xs text-muted-foreground">
               单文件 ≤20MB；解析后正文 ≤50 万字（约 500 页）。产品说明书这类大文件请按手册/产品线/章节拆分后再传——一次上传越大，萃取越慢、越容易混进无关内容。

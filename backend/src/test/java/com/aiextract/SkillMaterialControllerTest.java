@@ -2,6 +2,7 @@ package com.aiextract;
 
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.RolePermissions;
+import com.aiextract.config.TokenContext;
 import com.aiextract.controller.SkillMaterialController;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Skill;
@@ -15,7 +16,6 @@ import com.aiextract.service.MaterialAuditService;
 import com.aiextract.service.FileStorageService;
 import com.aiextract.service.MaterialCleaningScheduler;
 import com.aiextract.service.MaterialCleaningService;
-import com.aiextract.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
@@ -59,7 +60,6 @@ class SkillMaterialControllerTest {
     @Mock private MaterialCleaningService cleaningService;
     @Mock private MaterialCleaningScheduler cleaningScheduler;
     @Mock private MaterialAuditService auditService;
-    @Mock private JwtUtil jwtUtil;
     @Mock private UserRepository userRepository;
     @Mock private SpaceRepository spaceRepository;
     @Mock private CompanyScopeService companyScopeService;
@@ -70,44 +70,44 @@ class SkillMaterialControllerTest {
     @BeforeEach
     void setUp() {
         controller = new SkillMaterialController(materialRepository, skillRepository, grainRepository,
-                cleaningService, cleaningScheduler, auditService, jwtUtil, userRepository, spaceRepository,
+                cleaningService, cleaningScheduler, auditService, userRepository, spaceRepository,
                 companyScopeService, new ObjectMapper(), fileStorageService);
+        TokenContext.set(UUID.randomUUID(), null);
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken("tester", TOKEN, List.of()));
+                new UsernamePasswordAuthenticationToken(UUID.randomUUID(), TOKEN,
+                        List.of(new SimpleGrantedAuthority(RolePermissions.COMPANY_ADMIN))));
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        TokenContext.clear();
     }
 
     @Test
     void companyAdmin_otherCompanySkillList_throws403() {
         UUID skillId = UUID.randomUUID();
-        when(jwtUtil.getRoleFromToken(TOKEN)).thenReturn(RolePermissions.COMPANY_ADMIN);
         doThrow(new BusinessException(403, "无权访问其他企业的分身"))
                 .when(companyScopeService).assertSkillOwnership(skillId);
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> controller.listMaterials(skillId, 1, 20));
+                () -> controller.listMaterials(skillId, 1, 20, null));
         assertEquals(403, e.getErrorCode());
     }
 
     @Test
     void companyAdmin_ownCompanySkillList_passes() {
         UUID skillId = UUID.randomUUID();
-        when(jwtUtil.getRoleFromToken(TOKEN)).thenReturn(RolePermissions.COMPANY_ADMIN);
         when(materialRepository.findBySkillIdExcludingType(any(), any(), any()))
                 .thenReturn(Page.empty());
 
-        assertDoesNotThrow(() -> controller.listMaterials(skillId, 1, 20));
+        assertDoesNotThrow(() -> controller.listMaterials(skillId, 1, 20, null));
         verify(companyScopeService).assertSkillOwnership(skillId);
     }
 
     @Test
     void companyAdmin_otherCompanySpaceUpload_throws403BeforeWrite() {
         UUID spaceId = UUID.randomUUID();
-        when(jwtUtil.getRoleFromToken(TOKEN)).thenReturn(RolePermissions.COMPANY_ADMIN);
         doThrow(new BusinessException(403, "无权访问其他企业的空间"))
                 .when(companyScopeService).assertSpaceOwnership(spaceId);
         MockMultipartFile file = new MockMultipartFile(
@@ -125,15 +125,17 @@ class SkillMaterialControllerTest {
         UUID ownerId = UUID.randomUUID();
         UUID skillId = UUID.randomUUID();
         UUID spaceId = UUID.randomUUID();
-        when(jwtUtil.getRoleFromToken(TOKEN)).thenReturn(RolePermissions.EMPLOYEE);
-        when(jwtUtil.getUserIdFromToken(TOKEN)).thenReturn(currentUserId);
+        TokenContext.set(currentUserId, null);
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(currentUserId, TOKEN,
+                        List.of(new SimpleGrantedAuthority(RolePermissions.EMPLOYEE))));
         when(skillRepository.findById(skillId))
                 .thenReturn(Optional.of(Skill.builder().id(skillId).spaceId(spaceId).status("published").build()));
         when(spaceRepository.findById(spaceId))
                 .thenReturn(Optional.of(space(spaceId, ownerId)));
 
         BusinessException e = assertThrows(BusinessException.class,
-                () -> controller.listMaterials(skillId, 1, 20));
+                () -> controller.listMaterials(skillId, 1, 20, null));
         assertEquals(403, e.getErrorCode());
     }
 

@@ -8,6 +8,10 @@ spring:
     username: ${PG_USER:wanglei}
     password: ${PG_PASSWORD:}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      # 主库不可用时快速失败并返回 503，不能挂到默认 30s 连接超时
+      connection-timeout: 5000
+      validation-timeout: 3000
 
   # ---- JPA / Hibernate ----
   jpa:
@@ -36,11 +40,14 @@ spring:
       port: ${REDIS_PORT:6379}
       username: ${REDIS_USERNAME:}
       password: ${REDIS_PASSWORD:}
+      # 认证主读走 Redis：故障时必须快速失败并回源 DB，不能挂在默认 60s 命令超时上
+      timeout: 2s
+      connect-timeout: 2s
 
   # ---- JSON 序列化 ----
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
+  # Boot 4 使用 Jackson 3；java.time 默认输出 ISO-8601 字符串。
+  # 不再配置 write-dates-as-timestamps（该开关已移到 DateTimeFeature，
+  # Boot 的 spring.jackson.serialization 映射不认这个枚举名）。
 
   # ---- FreeMarker（报告 HTML/Word 渲染） ----
   # 开启 HTML 自动转义：报告内容来自用户素材与 AI，未转义会形成存储型 XSS
@@ -54,24 +61,25 @@ spring:
     openai:
       api-key: ${DEEPSEEK_API_KEY}
       base-url: https://api.deepseek.com
+      # 报告/萃取的非流式调用可能跑 1-2 分钟；2.0 走官方 SDK(OkHttp)，
+      # 超时只能在这里配置，RestClientCustomizer 不再生效。
+      timeout: 180s
       chat:
-        options:
-          model: deepseek-chat
-          temperature: 0.1        # 0=确定性最高 1=创意最高，萃取需要稳定结果
-          max-tokens: 8192
+        # 2.0 起 chat.options.* 已废弃，直接挂在 chat 下
+        model: deepseek-chat
+        temperature: 0.1        # 0=确定性最高 1=创意最高，萃取需要稳定结果
+        max-tokens: 8192
 
-    # ---- pgvector 向量存储 ----
-    vectorstore:
-      pgvector:
-        host: ${PG_HOST:localhost}
-        port: ${PG_PORT:5432}
-        database: ${PG_DATABASE:aiextract}
-        username: ${PG_USER:wanglei}
-        password: ${PG_PASSWORD:}
-        initialize-schema: true
-        index-type: hnsw          # HNSW 图索引：构建慢但查询快，适合读多写少
-        distance-type: cosine_distance
-        dimensions: 1024          # DashScope text-embedding-v4 输出维度
+    # pgvector starter 已移除：检索全部走 GrainRetriever 原生 SQL + com.pgvector.PGvector，
+    # 不再自动装配 VectorStore / 创建 vector_store 表。
+
+    # MCP Client：默认关闭；配置好外部 MCP server 后设 MCP_CLIENT_ENABLED=true
+    mcp:
+      client:
+        enabled: ${MCP_CLIENT_ENABLED:false}
+        name: ai-extract
+        version: 1.0.0
+        request-timeout: 10s
 
   # ---- @Scheduled 线程池 ----
   # 默认池只有 1 个线程：评测 Worker 的 tick 可能跑几十秒，会把心跳任务饿死，
@@ -124,10 +132,9 @@ ai:
       sample-rate: 16000
       format: pcm
 
-# ---- JWT 认证 ----
+# ---- 注册邀请令牌（用户登录态已迁到 Redis 会话） ----
 jwt:
   secret: ${JWT_SECRET}
-  expiration: 86400000           # 24 小时（毫秒）
   cookie-secure: false           # 生产环境改为 true（仅 HTTPS 下发）
 
 # ---- 合作方对接 ----
@@ -162,6 +169,19 @@ app:
   auth:
     query-token:
       mode: enforce          # enforce=仅 SSE 白名单路径接受 ?token=；log=灰度放行并告警
+    session:
+      b-end-idle-ttl: 2h          # B 端无操作 2h 失效
+      b-end-absolute-ttl: 12h     # B 端会话绝对上限
+      c-guest-idle-ttl: 7d
+      c-user-idle-ttl: 30d
+      c-absolute-ttl: 90d
+      max-devices-per-user: 5
+      single-session: false       # true = 新登录踢旧端
+      touch-threshold: 0.5        # 剩余 TTL 低于 50% 才续期
+      negative-cache-seconds: 5   # 无效 token 的进程内负缓存
+      cookie-max-age: 30d         # HttpOnly Cookie 的浏览器保留上限（服务端 TTL 更短）
+      cleanup-retention-days: 7   # 绝对过期后保留 7 天再物理删除（审计兜底）
+      retry-interval-ms: 30000    # Redis 撤销失败后的补偿重放周期
     rate-limit:
       # 固定窗口：账号 60 次/15 分钟、IP 300 次/15 分钟。
       # 原 10/30 会把正常 QA 回归和办公室 NAT 误伤成 429，且账号维度仍能挡住暴力破解。
@@ -215,6 +235,7 @@ app:
       ip-per-min: 60           # 单 IP 全局上限，兜底防 DDoS
       guest-per-min: 6         # C 端游客限频
       user-per-min: 20         # C 端注册用户限频
+      partner-per-min: 20      # 合作方接入限频（此前落到 default=-1，不限频）
       employee-per-min: 30     # B 端员工限频
       b-end-im-per-min: -1     # IM 回调不限频（-1 跳过）
 
@@ -331,7 +352,9 @@ app:
     min-similarity: 0.25          # 颗粒最低相似度阈值，低于此值不进 LLM（触发边界规则）
     top-k: 5                      # 单次检索最大返回颗粒数
     kc-top-k: 3                   # 知识/案例追加检索每类最大返回数（Phase B）
-    kc-knowledge-min-similarity: 0.35  # 知识命中最低相似度阈值（事实型，分布尖锐）
+    # 0.35 时无关内容（如「客户骂我」命中「退款口径」）也能过线：实测无关样本集中在 0.36–0.42。
+    # 0.45 留出可解释的安全边界；检索测试会单独用诊断阈值展示「近失命中」。
+    kc-knowledge-min-similarity: 0.45  # 知识命中最低相似度阈值
     kc-case-min-similarity: 0.50       # 案例命中最低相似度阈值（叙事型，挡掉「泛销售」基底噪音）
     # 上下文预检：预算 = (context-max-tokens - output-reserve-tokens) × safety-ratio
     # DeepSeek 真实窗口 64K；多厂商接入后由 ProviderCatalog 按模型覆盖
@@ -348,6 +371,14 @@ app:
   chat:
     timeout-seconds: 180           # Flux SSE 流超时，AI 慢响应时防止误杀
 
+  # ---- 工作流执行器 ----
+  workflow:
+    worker-interval-ms: 5000
+    worker-initial-delay-ms: 15000
+    runs-per-tick: 2
+    max-attempts: 3
+    lease-seconds: 60
+
   # ---- IM 渠道接入（飞书/钉钉/企微） ----
   im:
     bridge-url: ${IM_BRIDGE_URL:http://localhost:3010}    # Node 飞书桥地址（与 scripts/start-feishu-bot.sh 的 3010 一致）
@@ -357,6 +388,7 @@ app:
 
   # ---- Practice 对练追问策略 ----
   practice:
+    kc-default-enabled: false     # 对练是否检索知识/案例的全局默认；企业可在线覆盖（company_setting）
     max-retries-per-angle: 2      # 同一角度最多追问次数
     question-templates:           # 追问话术模板，%s 替换为反例标签
       - "在「%s」方面，你是怎么应对的？"

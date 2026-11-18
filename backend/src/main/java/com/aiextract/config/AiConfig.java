@@ -6,6 +6,7 @@ import com.aiextract.service.TokenUsageService;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,26 +21,31 @@ import java.util.concurrent.Executor;
 @Configuration
 public class AiConfig {
 
-    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    @Value("${spring.ai.openai.chat.model:deepseek-chat}")
     private String modelName;
 
-    @Value("${spring.ai.openai.chat.options.max-tokens:8192}")
+    @Value("${spring.ai.openai.chat.max-tokens:8192}")
     private int maxTokens;
 
-    @Value("${spring.ai.openai.chat.options.temperature:0.7}")
+    @Value("${spring.ai.openai.chat.temperature:0.7}")
     private double temperature;
 
     /** 平台 ChatClient：未配置企业 Key / 无企业上下文时使用 */
     @Bean("platformChatClient")
-    public ChatClient platformChatClient(ChatModel chatModel, TokenUsageService tokenUsageService) {
-        return ChatClient.builder(
+    public ChatClient platformChatClient(ChatModel chatModel, TokenUsageService tokenUsageService,
+                                         java.util.List<ToolCallbackProvider> toolCallbackProviders) {
+        ChatClient.Builder builder = ChatClient.builder(
             new TokenAwareChatModel(chatModel, tokenUsageService, modelName, null)
         ).defaultOptions(OpenAiChatOptions.builder()
                 .model(modelName)
                 .maxTokens(maxTokens)
                 .temperature(temperature)
-                .build()
-        ).build();
+        );
+        if (!toolCallbackProviders.isEmpty()) {
+            builder.defaultToolCallbacks(
+                    toolCallbackProviders.toArray(new ToolCallbackProvider[0]));
+        }
+        return builder.build();
     }
 
     /** 租户代理：所有注入 ChatClient 的代码无感切换到企业 Key */
@@ -47,20 +53,6 @@ public class AiConfig {
     @Primary
     public ChatClient chatClient(ChatClientResolver resolver) {
         return TenantChatClientProxy.of(resolver);
-    }
-
-    /**
-     * RestClient 超时：报告/萃取的非流式 LLM 调用可能跑 1-2 分钟。
-     * 默认客户端（classpath 存在 OkHttp 时）读超时只有 10s，长 prompt 必然超时。
-     */
-    @Bean
-    public org.springframework.boot.web.client.RestClientCustomizer aiRestClientTimeoutCustomizer() {
-        return builder -> {
-            var factory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-            factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
-            factory.setReadTimeout(java.time.Duration.ofSeconds(180));
-            builder.requestFactory(factory);
-        };
     }
 
     /** Token 记录异步线程池 */
@@ -177,7 +169,7 @@ public class AiConfig {
         return executor;
     }
 
-    /** 内容智能生成线程池 — 知识/案例/考题/派生，和评测候选生成隔离 */
+    /** 内容工厂生成线程池 — 知识/案例/考题/派生，和评测候选生成隔离 */
     @Bean("contentGenerationExecutor")
     public Executor contentGenerationExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();

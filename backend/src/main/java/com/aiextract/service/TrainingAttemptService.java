@@ -86,6 +86,7 @@ public class TrainingAttemptService {
     private final TrainingRateLimiter rateLimiter;
     private final TrainingProgressService progressService;
     private final ChatStreamService chatStreamService;
+    private final QueryGate queryGate;
     private final ChatStreamAdapter chatStreamAdapter;
     private final PromptLoader promptLoader;
     private final ObjectMapper objectMapper;
@@ -563,6 +564,19 @@ public class TrainingAttemptService {
         if (request.getSceneTag() == null || request.getSceneTag().isBlank()) {
             request.setSceneTag(nvl(task.getSceneTag(), ""));
         }
+
+        // 培训内部调用绕过 Controller，这里补 L1+L2；次数由 TrainingRateLimiter 单独控制
+        String blocked = queryGate.auditSimple(request.getMessage());
+        if (blocked == null) {
+            blocked = queryGate.auditAuxiliaryField("场景描述", request.getSceneContext(), 2000, true);
+        }
+        if (blocked == null) {
+            blocked = queryGate.auditAuxiliaryField("对练角度", request.getPracticeAngles(), 2000, true);
+        }
+        if (blocked != null) {
+            return Flux.just(ChatChunk.error(blocked), ChatChunk.done());
+        }
+
         return chatStreamService.respondPractice(
                 attempt.getSkillId(), request, TokenContext.get(), currentRole());
     }

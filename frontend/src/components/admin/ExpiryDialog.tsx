@@ -35,7 +35,7 @@ export function ExpiryDialog({ open, title = '设置失效时间', description, 
       <div className="w-full max-w-sm rounded-xl bg-surface p-5 shadow-xl" onClick={e => e.stopPropagation()}>
         <h3 className="mb-1 text-base font-semibold text-foreground">{title}</h3>
         <p className="mb-3 text-xs text-muted-foreground">
-          {description || '审批后到期自动停止被分身检索；到期前可再次调整。'}
+          {description || '通过后到期自动停止被分身检索；到期前可再次调整。'}
         </p>
         <div className="mb-2 flex gap-2">
           {[3, 6, 12].map(m => (

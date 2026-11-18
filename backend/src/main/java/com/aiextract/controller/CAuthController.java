@@ -1,11 +1,12 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.dto.CLoginRequest;
 import com.aiextract.dto.CRegisterRequest;
 import com.aiextract.dto.GuestSessionResponse;
 import com.aiextract.service.CAuthService;
-import com.aiextract.util.JwtUtil;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -30,7 +31,7 @@ import java.util.UUID;
  * <p>权限（SecurityConfig）：login=permitAll；register=hasRole(C_GUEST)（游客升级语义）；
  * me=authenticated。
  * login 和 registerNew 设 c_token HttpOnly Cookie —— 供前端中间件统一检查登录态；
- * 真正 API 鉴权仍走 Authorization: Bearer  header（JwtAuthFilter）。</p>
+ * 真正 API 鉴权仍走 Authorization: Bearer  header（SessionAuthFilter）。</p>
  *
  * @author AI Extract Team
  * @since 2026-07-19
@@ -43,7 +44,6 @@ import java.util.UUID;
 public class CAuthController {
 
     private final CAuthService cAuthService;
-    private final JwtUtil jwtUtil;
 
     @Value("${jwt.cookie-secure:false}")
     private boolean cookieSecure;
@@ -52,8 +52,7 @@ public class CAuthController {
     private int cUserTokenTtlDays;
 
     private UUID extractUserId() {
-        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-        return jwtUtil.getUserIdFromToken(token);
+        return CurrentUser.id();
     }
 
     /**

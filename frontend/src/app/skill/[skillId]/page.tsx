@@ -76,6 +76,12 @@ export default function SkillChatPage() {
   const [traceAvgSim, setTraceAvgSim] = useState<number | undefined>(undefined);
   const [isOrgSkill, setIsOrgSkill] = useState(false);
 
+  // 试问入口：属主或管理员才显示（后端仍会二次校验）
+  const [selfId, setSelfId] = useState<string | null>(null);
+  const [isSkillAdmin, setIsSkillAdmin] = useState(false);
+  const [skillOwnerId, setSkillOwnerId] = useState<string | null>(null);
+  const canShowTrial = isSkillAdmin || (!!skillOwnerId && skillOwnerId === selfId);
+
   // 知识/案例引用 chip：有管理权限可跳详情，其他用户只弹「检索参考」说明
   const [canManageKc, setCanManageKc] = useState(false);
   const [citationInfo, setCitationInfo] = useState<{
@@ -84,7 +90,11 @@ export default function SkillChatPage() {
 
   useEffect(() => {
     getCurrentUser()
-      .then(u => setCanManageKc((u.permissions || []).includes('KNOWLEDGE_MANAGE')))
+      .then(u => {
+        setCanManageKc((u.permissions || []).includes('KNOWLEDGE_MANAGE'));
+        setSelfId(u.id ?? null);
+        setIsSkillAdmin((u.permissions || []).includes('SKILL_MANAGE'));
+      })
       .catch(() => {});
   }, []);
 
@@ -101,6 +111,7 @@ export default function SkillChatPage() {
         if (d?.grainCount) setGrainCount(d.grainCount);
         if (d?.sceneTags) setSceneCount(d.sceneTags.length);
         if (d?.tags) setSkillTags(d.tags);
+        if (d?.ownerId) setSkillOwnerId(d.ownerId);
       })
       .catch(() => {})
       .finally(() => setDetailFetched(true));
@@ -168,6 +179,16 @@ export default function SkillChatPage() {
               </button>
             ))}
           </div>
+
+          {canShowTrial && (
+            <button
+              onClick={() => router.push(`/my/skills/${skillId}/trial`)}
+              className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-surface"
+              title="试问：看引用了哪几条经验，答偏了可以直接改"
+            >
+              🧪 试问
+            </button>
+          )}
 
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShareTarget(!shareTarget)}

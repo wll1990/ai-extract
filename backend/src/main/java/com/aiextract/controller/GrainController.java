@@ -1,12 +1,13 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.ExperienceGrain;
 import com.aiextract.model.Space;
 import com.aiextract.repository.ExperienceGrainRepository;
 import com.aiextract.repository.SpaceRepository;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,12 +34,11 @@ public class GrainController {
 
     private final ExperienceGrainRepository grainRepository;
     private final SpaceRepository spaceRepository;
-    private final JwtUtil jwtUtil;
     private final com.aiextract.service.AdminGrainService adminGrainService;
 
     private UUID extractUserId() {
         String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-        return jwtUtil.getUserIdFromToken(token);
+        return CurrentUser.id();
     }
 
     private ExperienceGrain requireOwnGrain(UUID grainId, UUID userId) {

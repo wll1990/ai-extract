@@ -10,6 +10,8 @@ import {
 import { apiClient } from '@/lib/api/client';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
+import { useScrollOnPageChange } from '@/lib/useScrollOnPageChange';
 
 const PAGE_SIZE = 20;
 
@@ -24,6 +26,7 @@ export default function EvaluationRunsPage() {
   const [runs, setRuns] = useState<EvaluationRun[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  useScrollOnPageChange(page);
   const [status, setStatus] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +74,17 @@ export default function EvaluationRunsPage() {
       .catch(() => setSkills([]));
   }, []);
 
+  // 从评测中心的流程条跳过来时直接展开表单；空列表时也默认展开，避免「没有数据也不知道点哪」
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('create') === '1') {
+      setShowCreate(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!loading && runs.length === 0 && datasets.length > 0 && skills.length > 0) setShowCreate(true);
+  }, [loading, runs.length, datasets.length, skills.length]);
+
   // 版本下拉只列已发布（冻结）版本：自由文本输错会被后端静默回落到当前版本
   useEffect(() => {
     setDatasetVersion('');
@@ -101,6 +115,7 @@ export default function EvaluationRunsPage() {
   }, [trendDatasetId]);
 
   const datasetName = (id: string) => datasets.find(d => d.id === id)?.name || id.slice(0, 8);
+  const skillName = (id: string) => skills.find(s => s.id === id)?.name || `分身 ${id.slice(0, 8)}`;
   const selectedDataset = datasets.find(d => d.id === datasetId);
 
   const runAction = async (fn: () => Promise<unknown>) => {
@@ -146,48 +161,68 @@ export default function EvaluationRunsPage() {
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
       <div className="mx-auto max-w-[1080px]" data-tour="eval-runs">
-        <PageHelp
-          title="评测运行怎么用"
-          intro="一次运行 = 用指定分身回答某个已发布题集的全部题目，并给出分数和证据。运行是异步的，可以离开页面。"
-          steps={[
-            { title: '新建运行', desc: '选择已发布题集、已发布版本和已发布的个体分身；组织分身暂不支持评测。' },
-            { title: '等待执行', desc: '后台逐题答题与评分，页面显示完成进度；中途可以取消。' },
-            { title: '逐题复核', desc: '对回答逐条确认、改分或标记无法判断，理由必填；改分会进入最终均分。' },
-            { title: '定稿与趋势', desc: '定稿生成报告；同一题集多次运行可在右侧看均分与通过率趋势。' },
-          ]}
-          notes={[
-            '只有执行失败的题能重试；业务低分不能通过重试刷分。',
-            '已取消的批次不能重试，需要重新新建运行；取消时未执行的题目会标记为已取消。',
-            '逐题最终分=人工改分优先，否则取 AI 原分；定稿后才能生成报告，刷新页面会自动加载。',
-            '模型或提示词变更前后各跑一次同一回归题集，用于确认有没有退化（当前不会自动触发）。',
-          ]}
-        />
-
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="mb-1 text-[28px] font-bold text-foreground">评测运行</h1>
             <p className="text-sm text-muted-foreground">
               选题集冻结版本与分身，后台自动答题、评分、复核、定稿出报告
             </p>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => router.push('/admin/evaluations/compare')}
-              className="rounded-full border border-border px-4 py-2.5 text-sm text-foreground hover:bg-primary-light">
-              版本对比
-            </button>
-            <button onClick={() => router.push('/admin/evaluations')}
-              className="rounded-full border border-border px-4 py-2.5 text-sm text-foreground hover:bg-primary-light">
-              题集管理
-            </button>
-            <button onClick={() => { setShowCreate(s => !s); setFormError(null); }}
-              className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-white hover:opacity-90">
-              {showCreate ? '收起' : '＋ 新建运行'}
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <PageHelp
+              title="评测运行怎么用"
+              intro="一次运行 = 用指定分身回答某个已发布题集的全部题目，并给出分数和证据。运行是异步的，可以离开页面。"
+              steps={[
+                { title: '新建运行', desc: '选择已发布题集、已发布版本和已发布的个体分身；组织分身暂不支持评测。' },
+                { title: '等待执行', desc: '后台逐题答题与评分，页面显示完成进度；中途可以取消。' },
+                { title: '逐题复核', desc: '对回答逐条确认、改分或标记无法判断，理由必填；改分会进入最终均分。' },
+                { title: '定稿与趋势', desc: '定稿生成报告；同一题集多次运行可在右侧看均分与通过率趋势。' },
+              ]}
+              actions={[
+                { label: '新建运行', desc: '选择已发布题集（可指定已发布版本）和已发布个体分身，创建后立即在后台答题；连点只会创建一个批次。', tone: 'primary' },
+                { label: '看结果', desc: '进入本次运行详情：计数卡、逐题回答与检索证据、人工复核和定稿报告。' },
+                { label: '取消', desc: '仅运行中的批次可用。已完成的题目证据保留，未执行的题目标记为已取消；取消后不能重试。', tone: 'danger' },
+                { label: '重试失败题', desc: '仅已完成/已取消且存在执行错误时出现，只重跑执行失败（error）的题，不处理业务低分。' },
+                { label: '版本对比', desc: '同一题集不同版本/不同分身的运行结果对比；基线不按分身过滤，默认取最近完成的一次。' },
+                { label: '题集管理', desc: '回到题集列表，新建、提交审核、发布或创建新版本。' },
+                { label: '质量基线（选题集看趋势）', desc: '选择题集后展示最近 10 次已完成运行的均分、通过率与通过/失败/错误数，用于看模型或提示词变更前后的退化。' },
+              ]}
+              notes={[
+                '只有执行失败的题能重试；业务低分不能通过重试刷分。',
+                '已取消的批次不能重试，需要重新新建运行；取消时未执行的题目会标记为已取消。',
+                '逐题最终分=人工改分优先，否则取 AI 原分；定稿后才能生成报告，刷新页面会自动加载。',
+                '模型或提示词变更前后各跑一次同一回归题集，用于确认有没有退化（当前不会自动触发）。',
+              ]}
+            />
+            <Button variant="neutral" onClick={() => router.push('/admin/evaluations/compare')}>版本对比</Button>
+            <Button variant="neutral" onClick={() => router.push('/admin/evaluations')}>题集管理</Button>
+            <Button variant="primary" onClick={() => { setShowCreate(s => !s); setFormError(null); }}>
+              {showCreate ? '收起新建' : '＋ 新建运行'}
+            </Button>
           </div>
         </div>
 
         {showCreate && (
           <div className="mb-5 rounded-xl border border-border bg-surface-2 p-5 space-y-3">
+            {(datasets.length === 0 || skills.length === 0) && (
+              <div className="rounded-lg border border-warning-text/30 bg-warning-bg px-3 py-2 text-xs leading-5 text-warning-text">
+                还不能开始评测：
+                {datasets.length === 0 && (
+                  <span> 没有已发布题集，请先到「题集管理」完成 提交审核 → 通过 → 发布。</span>
+                )}
+                {skills.length === 0 && (
+                  <span> 没有已发布分身，请先到「分身管理」发布一个个体分身（组织分身暂不支持评测）。</span>
+                )}
+                <span className="ml-1 inline-flex gap-2">
+                  {datasets.length === 0 && (
+                    <button className="underline" onClick={() => router.push('/admin/evaluations')}>去题集管理</button>
+                  )}
+                  {skills.length === 0 && (
+                    <button className="underline" onClick={() => router.push('/admin/skills')}>去分身管理</button>
+                  )}
+                </span>
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-4">
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground">题集（已发布）*</label>
@@ -229,15 +264,18 @@ export default function EvaluationRunsPage() {
           </div>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">运行状态</span>
           <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}
             className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground">
             <option value="">全部状态</option>
             {Object.entries(RUN_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
+          <span className="ml-2 text-xs font-medium text-muted-foreground">质量基线</span>
           <select value={trendDatasetId} onChange={e => setTrendDatasetId(e.target.value)}
+            aria-label="选择题集查看质量趋势"
             className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground">
-            <option value="">质量基线（选题集看趋势）</option>
+            <option value="">选题集看最近 10 次趋势</option>
             {datasets.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
@@ -302,10 +340,69 @@ export default function EvaluationRunsPage() {
         {loading ? <LoadingSpinner /> : (
           <>
             {runs.length === 0 ? (
-              <div className="py-20 text-center">
-                <span className="text-5xl">▶️</span>
-                <h2 className="mt-4 text-lg font-semibold text-foreground">还没有评测运行</h2>
-                <p className="mt-2 text-sm text-muted-foreground">点击「新建运行」选择已发布题集与分身后开始。</p>
+              <div className="rounded-xl border border-border bg-surface px-6 py-10">
+                <h2 className="text-lg font-semibold text-foreground">还没有评测运行</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  一次运行 = 用指定分身答完一个已发布题集，并给出分数与证据。按下面的顺序做完即可。
+                </p>
+                <ol className="mt-5 space-y-3">
+                  <li className="flex gap-3">
+                    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
+                      datasets.length > 0 ? 'bg-success-bg text-success' : 'bg-primary text-white'
+                    }`}>{datasets.length > 0 ? '✓' : '1'}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">准备一个已发布题集</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {datasets.length > 0
+                          ? `已有 ${datasets.length} 个可用题集。`
+                          : '题集需要「提交审核 → 审核通过 → 发布」，发布后版本冻结。'}
+                      </p>
+                      {datasets.length === 0 && (
+                        <Button variant="secondary" size="sm" className="mt-2" onClick={() => router.push('/admin/evaluations')}>
+                          去题集管理
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
+                      skills.length > 0 ? 'bg-success-bg text-success' : datasets.length > 0 ? 'bg-primary text-white' : 'bg-surface-2 text-muted-foreground'
+                    }`}>{skills.length > 0 ? '✓' : '2'}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">准备一个已发布分身</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {skills.length > 0
+                          ? `已有 ${skills.length} 个可选分身。组织分身暂不支持评测。`
+                          : '只能评测已发布的个体分身；没有的话先去发布一个。'}
+                      </p>
+                      {skills.length === 0 && (
+                        <Button variant="secondary" size="sm" className="mt-2" onClick={() => router.push('/admin/skills')}>
+                          去分身管理
+                        </Button>
+                      )}
+                    </div>
+                  </li>
+                  <li className="flex gap-3">
+                    <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
+                      datasets.length > 0 && skills.length > 0 ? 'bg-primary text-white' : 'bg-surface-2 text-muted-foreground'
+                    }`}>3</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">选择题集版本与分身，创建运行</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        创建后后台逐题答题评分，可以离开页面；完成后逐题复核并定稿出报告。
+                      </p>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="mt-2"
+                        disabled={datasets.length === 0 || skills.length === 0}
+                        onClick={() => { setShowCreate(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                      >
+                        新建运行
+                      </Button>
+                    </div>
+                  </li>
+                </ol>
               </div>
             ) : (
               <div className="rounded-xl border border-border bg-surface-2 overflow-hidden">
@@ -322,7 +419,7 @@ export default function EvaluationRunsPage() {
                     <div className="col-span-4 min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">{datasetName(r.datasetId)}</p>
                       <p className="truncate text-xs text-muted-foreground">
-                        v{r.datasetVersion} · 分身 {r.skillId.slice(0, 8)} · 累计 {r.totalItems} 题
+                        v{r.datasetVersion} · {skillName(r.skillId)} · 累计 {r.totalItems} 题
                       </p>
                     </div>
                     <span className="col-span-2">

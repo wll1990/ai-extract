@@ -4,6 +4,7 @@ import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.config.PromptLoader;
+import com.aiextract.config.PromptSecurity;
 import com.aiextract.config.TokenContext;
 import com.aiextract.dto.CreateInterviewRequest;
 import com.aiextract.dto.InterviewMessageResponse;
@@ -1034,13 +1035,14 @@ public class InterviewService {
         params.put("topic", session.getTopic());
         params.put("phase", session.getCurrentPhase());
         params.put("phase_label", phaseLabel(session.getCurrentPhase()));
-        params.put("expert_knowledge", expertKnowledge != null ? expertKnowledge : "");
+        params.put("expert_knowledge", PromptSecurity.wrapUntrusted(expertKnowledge));
         params.put("domain", domain);
 
         String templateName = "expert".equals(session.getInterviewType())
             ? "interview_system_expert.md"
             : "interview_system.md";
-        return promptLoader.format(templateName, params, domain);
+        return promptLoader.format(templateName, params, domain)
+            + "\n\n" + PromptSecurity.BOUNDARY;
     }
 
     /**

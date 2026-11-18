@@ -14,6 +14,8 @@ import { RagPieChart } from '@/components/admin/RagPieChart';
 import { GrainRankTable } from '@/components/admin/GrainRankTable';
 import { KnowledgeGapPanel } from '@/components/admin/KnowledgeGapPanel';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { getUser } from '@/lib/storage';
+import { Permission } from '@/lib/permissions';
 
 /**
  * 单分身数据详情 v2 —— 三面板统一升级。
@@ -34,6 +36,11 @@ export default function SkillInsightDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // 测试台权限与属主数据页一致：有看板或分身管理权限才显示，避免点进去 403
+  const permissions = (getUser() as { permissions?: string[] } | null)?.permissions ?? [];
+  const canUseTestConsole = permissions.includes(Permission.DASHBOARD_VIEW)
+    || permissions.includes(Permission.SKILL_MANAGE);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,12 +120,22 @@ export default function SkillInsightDetailPage() {
         >
           ← 返回全局看板
         </button>
-        <button
-          onClick={() => router.push(`/admin/insights/${skillId}/feedback`)}
-          className="text-sm bg-[#F1F5F9] text-[#334155] rounded-lg px-4 py-2 hover:bg-[#E2E8F0] transition-colors font-medium"
-        >
-          📋 反馈审查 →
-        </button>
+        <div className="flex items-center gap-2">
+          {canUseTestConsole && (
+            <button
+              onClick={() => router.push(`/my/skills/${skillId}/trial`)}
+              className="text-sm bg-[#2563EB] text-white rounded-lg px-4 py-2 hover:bg-[#1D4ED8] transition-colors font-medium"
+            >
+              🧪 试问台
+            </button>
+          )}
+          <button
+            onClick={() => router.push(`/admin/insights/${skillId}/feedback`)}
+            className="text-sm bg-[#F1F5F9] text-[#334155] rounded-lg px-4 py-2 hover:bg-[#E2E8F0] transition-colors font-medium"
+          >
+            📋 反馈审查 →
+          </button>
+        </div>
       </div>
 
       {error && (

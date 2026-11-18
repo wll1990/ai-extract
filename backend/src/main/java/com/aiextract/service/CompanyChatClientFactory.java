@@ -1,17 +1,23 @@
 package com.aiextract.service;
 
+import com.aiextract.config.ProviderCatalog;
 import com.aiextract.config.TokenAwareChatModel;
+import com.openai.client.OpenAIClient;
+import com.openai.client.OpenAIClientImpl;
+import com.openai.core.ClientOptions;
+import com.openai.core.http.HttpClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.retry.RetryUtils;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.openai.http.okhttp.SpringAiOpenAiHttpClient;
+import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.reactive.function.client.WebClient;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -24,14 +30,16 @@ import java.util.UUID;
 public class CompanyChatClientFactory {
 
     private final TokenUsageService usage;
+    private final ToolCallingManager toolCallingManager;
+    private final List<ToolCallbackProvider> toolCallbackProviders;
 
-    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    @Value("${spring.ai.openai.chat.model:deepseek-chat}")
     private String model;
 
-    @Value("${spring.ai.openai.chat.options.max-tokens:8192}")
+    @Value("${spring.ai.openai.chat.max-tokens:8192}")
     private int maxTokens;
 
-    @Value("${spring.ai.openai.chat.options.temperature:0.1}")
+    @Value("${spring.ai.openai.chat.temperature:0.1}")
     private double temperature;
 
     /** 兼容旧调用：使用 OpenAI 兼容默认路径与平台输出上限 */
@@ -45,17 +53,41 @@ public class CompanyChatClientFactory {
      */
     public ChatClient create(UUID companyId, String baseUrl, String apiKey, String modelName,
                              String completionsPath, int maxOutputTokens) {
-        OpenAiApi api = new OpenAiApi(baseUrl, apiKey, completionsPath, "/v1/embeddings",
-                RestClient.builder(), WebClient.builder(),
-                RetryUtils.DEFAULT_RESPONSE_ERROR_HANDLER);
+        // 2.0 起 OpenAI SDK 自行追加 /chat/completions，路径前缀必须折进 baseUrl
+        String chatBaseUrl = ProviderCatalog.resolveChatBaseUrl(baseUrl, completionsPath);
+
+        HttpClient httpClient = SpringAiOpenAiHttpClient.builder()
+                .timeout(Duration.ofSeconds(180))
+                .build();
+        ClientOptions clientOptions = ClientOptions.builder()
+                .httpClient(httpClient)
+                .baseUrl(chatBaseUrl)
+                .apiKey(apiKey)
+                .timeout(Duration.ofSeconds(180))
+                .maxRetries(1)
+                .build();
+        OpenAIClient openAiClient = new OpenAIClientImpl(clientOptions);
+
         OpenAiChatOptions options = OpenAiChatOptions.builder()
                 .model(modelName)
                 .maxTokens(maxOutputTokens)
                 .temperature(temperature)
                 .build();
-        OpenAiChatModel chatModel = new OpenAiChatModel(api, options);
-        return ChatClient.builder(new TokenAwareChatModel(chatModel, usage, modelName, companyId))
-                .defaultOptions(options)
+        OpenAiChatModel chatModel = OpenAiChatModel.builder()
+                .openAiClient(openAiClient)
+                .toolCallingManager(toolCallingManager)
+                .options(options)
                 .build();
+        ChatClient.Builder builder = ChatClient.builder(
+                        new TokenAwareChatModel(chatModel, usage, modelName, companyId))
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .model(modelName)
+                        .maxTokens(maxOutputTokens)
+                        .temperature(temperature));
+        if (!toolCallbackProviders.isEmpty()) {
+            builder.defaultToolCallbacks(
+                    toolCallbackProviders.toArray(new ToolCallbackProvider[0]));
+        }
+        return builder.build();
     }
 }

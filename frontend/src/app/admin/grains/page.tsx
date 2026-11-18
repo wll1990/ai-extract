@@ -1,4 +1,5 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 
 import React, { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -115,16 +116,18 @@ function SkillGrainList({ skillId }: { skillId: string }) {
   const [sort, setSort] = useState('helpful');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const size = 50;
 
   useEffect(() => {
     setLoading(true);
     setError('');
-    apiClient<{ content: GrainRow[]; totalPages?: number }>(
+    apiClient<{ content: GrainRow[]; totalPages?: number; total?: number }>(
       `/admin/grains?skillId=${skillId}&sort=${sort}&page=${page}&size=${size}`)
       .then(d => {
         setGrains(d.content || []);
         setTotalPages(Math.max(1, d.totalPages || 1));
+        setTotal(d.total ?? (d.content?.length ?? 0));
       })
       .catch((e: unknown) => {
         setGrains([]);
@@ -180,15 +183,7 @@ function SkillGrainList({ skillId }: { skillId: string }) {
             </div>
           ))}
         </div>
-        {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}
-              className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">上一页</button>
-            <span className="text-muted-foreground">第 {page} / {totalPages} 页</span>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}
-              className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40">下一页</button>
-          </div>
-        )}
+        <Pagination page={page} totalPages={totalPages} totalElements={total} onPageChange={setPage} loading={loading} />
       </div>
     </div>
   );

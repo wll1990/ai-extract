@@ -88,6 +88,22 @@ export function resolveDomain(pathname: string, items: NavItem[]): NavDomainKey 
   return best?.domain ?? null;
 }
 
+/**
+ * 在整组菜单里选出唯一的高亮项。
+ *
+ * <p>只按前缀判断会让「/admin/content」和「/admin/content/review」同时高亮：
+ * 父路径是子路径的前缀。这里取命中的最长路径，保证同一时刻只有一个菜单被选中。</p>
+ */
+export function activeNavPath(currentPath: string, items: ReadonlyArray<{ path: string }>): string | null {
+  let best: string | null = null;
+  for (const item of items) {
+    if (isNavActive(currentPath, item.path) && (!best || item.path.length > best.length)) {
+      best = item.path;
+    }
+  }
+  return best;
+}
+
 /** 当前路径是否命中该菜单项（含详情页与别名路径） */
 export function isNavActive(currentPath: string, navPath: string): boolean {
   if (currentPath === navPath) return true;

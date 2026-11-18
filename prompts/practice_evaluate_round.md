@@ -13,6 +13,9 @@
 ## 销冠参考答案
 "{championAnswer}"
 
+## 知识与案例参考
+{kc_context}
+
 ## 追问情况
 第 {retryCount} 次追问（最多 {maxRetries} 次）
 

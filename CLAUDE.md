@@ -52,16 +52,17 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 
 ### 权限体系（单一真相源）
 
-`Permission` 常量分级 → `RolePermissions.ROLE_MAP`（角色→权限码）→ JWT 自包含 claim → SecurityConfig 校验：
+`Permission` 常量分级 → `RolePermissions.ROLE_MAP`（角色→权限码）→ **Redis 不透明会话**（DB 兜底）→ SecurityConfig 校验：
 
 1. [Permission](backend/src/main/java/com/aiextract/config/Permission.java)：权限码常量（Platform 级/Company 级/Basic 级/C 端服务等级）
-2. [RolePermissions](backend/src/main/java/com/aiextract/config/RolePermissions.java)：`ROLE_MAP` 唯一映射表，三个消费点同源（JwtAuthFilter、`/auth/me`、SecurityConfig）
-3. [JwtUtil](backend/src/main/java/com/aiextract/util/JwtUtil.java)：JWT 含 `userId/companyId/role/permissions/jti`
+2. [RolePermissions](backend/src/main/java/com/aiextract/config/RolePermissions.java)：`ROLE_MAP` 唯一映射表，三个消费点同源（SessionAuthFilter、`/auth/me`、SecurityConfig）
+3. [JwtUtil](backend/src/main/java/com/aiextract/util/JwtUtil.java)：**只签发注册邀请令牌**，不再签发/校验用户 token
 4. [SecurityConfig](backend/src/main/java/com/aiextract/config/SecurityConfig.java)：**默认 `denyAll()`**，接口显式白名单，规则顺序敏感
-5. [JwtAuthFilter](backend/src/main/java/com/aiextract/config/JwtAuthFilter.java)：Bearer→query param 双通道；标准 JWT + 合作方 JWT（`?token=`+`appId`）双链；Redis 黑名单撤销（fail-open）
+5. [SessionAuthFilter](backend/src/main/java/com/aiextract/config/SessionAuthFilter.java)：`token` header/Bearer/Cookie/SSE query 四通道；合作方 H5 走 code exchange；Redis+DB 均不可用才 503
 6. [CompanyScopeService](backend/src/main/java/com/aiextract/config/CompanyScopeService.java)：ThreadLocal 请求级缓存 `companyId→spaceIds`，`isSuperAdmin()`（有 `COMPANY_MANAGE`）跳过企业隔离
 7. [TokenContext](backend/src/main/java/com/aiextract/config/TokenContext.java)：ThreadLocal 传 userId/companyId，`TaskDecorator` 跨线程
 8. [NavConfigController](backend/src/main/java/com/aiextract/controller/NavConfigController.java)：后端按权限过滤菜单下发，消除前端 route→permission drift
+9. [SessionService](backend/src/main/java/com/aiextract/service/session/SessionService.java)：不透明 token（只存 SHA-256），Redis 主读 + `auth_session` 兜底 + 用户级 epoch；多设备/踢下线/降级回源
 
 ### 三条核心链路
 
@@ -81,6 +82,9 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 - [DashScopeEmbeddingService](backend/src/main/java/com/aiextract/service/DashScopeEmbeddingService.java)：阿里 DashScope `text-embedding-v4` 1024 维
 - [PromptLoader](backend/src/main/java/com/aiextract/config/PromptLoader.java)：40+ .md 模板，领域感知 + L1 本地/L2 Redis 双层缓存
 - [DomainConfigLoader](backend/src/main/java/com/aiextract/config/DomainConfigLoader.java)：领域 YAML 层级继承（`sales.b2b_enterprise` 继承 `sales`）
+- [ToolConfig](backend/src/main/java/com/aiextract/config/ToolConfig.java) + `PlatformTools`：显式 `ToolCallback`（手写 schema），已挂到平台/租户 ChatClient
+- `spring-ai-starter-mcp-client`：默认关闭（`MCP_CLIENT_ENABLED=false`），配置外部 MCP server 后开启
+- [WorkflowEngine](backend/src/main/java/com/aiextract/service/workflow/WorkflowEngine.java) / [WorkflowRunStore](backend/src/main/java/com/aiextract/service/workflow/WorkflowRunStore.java)：轻量状态机，`FOR UPDATE SKIP LOCKED` + 租约 + 指数退避
 
 ### 三种模式
 
@@ -94,6 +98,8 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 
 ### 关键约定
 
+- 用户登录态 = Redis 不透明会话（`auth_session` 兜底）；`JwtUtil` 只签发注册邀请令牌；旧用户 JWT 硬切不再接受
+- 三方 App 嵌入 H5：合作方后端 HMAC 签 code → URL `#code=` → `/c/auth/partner/exchange` 换会话；不保留合作方自签 JWT
 - 历史消息角色：前端用 `'ai'`，**DB 存 `'assistant'`**，渲染时两者都要匹配
 - 已发布分身 (`status='published'`) 才持久化对话，未发布分身使用临时 UUID
 - SSE 统一走 `frontend/src/lib/sse.ts`（逐行 JSON + raw 两种格式），禁止内联 fetch 手写解析

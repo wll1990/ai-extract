@@ -27,6 +27,7 @@ release-gate.sh         # 发版门禁入口
 ## 安全
 
 - 默认只读、默认不跑 LLM；写操作需 `QA_ALLOW_WRITE=1`，LLM 需 `QA_ALLOW_LLM=1`。
+- `release-gate.sh` 例外：默认注入 `QA_ALLOW_LLM=1`，发版会真实跑聊天黄金用例（含 GOLD-KNOW-02 / GOLD-CASE-02 / GOLD-PRACTICE-01）；紧急可用 `QA_ALLOW_LLM=0` 跳过。
 - 只写 QA 租户，对象名带 `QA-<runId>-`，清理按 runId。
 - DB 断言通过 `ssh mindforge psql` 执行，本地不连生产库。
 - `.qa.env`、`reports/qa/` 已 gitignore。

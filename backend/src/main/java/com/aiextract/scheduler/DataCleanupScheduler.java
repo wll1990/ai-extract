@@ -24,12 +24,25 @@ public class DataCleanupScheduler {
 
     private static final String LOG_RAG_CLEANUP_DONE = "清理过期RAG检索日志完成, {}行";
     private static final String LOG_ANALYTICS_CLEANUP_DONE = "清理过期埋点数据完成, {}行";
+    /** 试问会话是演练数据，保留 90 天足够回溯 */
+    private static final int TRIAL_RETENTION_DAYS = 90;
+    /** 纠偏记录是审计链路，保留 180 天 */
+    private static final int REFINE_RETENTION_DAYS = 180;
 
     private final GrainRetrieveLogRepository grainRetrieveLogRepository;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final com.aiextract.repository.KnowledgeCaseRetrieveLogRepository knowledgeCaseRetrieveLogRepository;
     private final com.aiextract.repository.TokenUsageLogRepository tokenUsageLogRepository;
     private final com.aiextract.repository.AdminAuditLogRepository adminAuditLogRepository;
+    private final com.aiextract.repository.SkillTrialSessionRepository trialSessionRepository;
+    private final com.aiextract.repository.SkillTrialMessageRepository trialMessageRepository;
+    private final com.aiextract.repository.GrainRefineDraftRepository refineDraftRepository;
+    private final com.aiextract.repository.AuthSessionRepository authSessionRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${app.auth.session.cleanup-retention-days:7}")
+    private int authSessionRetentionDays;
+
+    private static final int AUTH_SESSION_BATCH = 1000;
 
     /** DATA-02 主表保留月数（默认近 3 个月，历史搬归档不删除） */
     @org.springframework.beans.factory.annotation.Value("${app.retention.months:3}")
@@ -86,6 +99,57 @@ public class DataCleanupScheduler {
             if (deleted > 0) { log.info(LOG_ANALYTICS_CLEANUP_DONE, deleted); }
         } catch (Exception e) {
             log.error("清理埋点数据失败", e);
+        }
+    }
+
+    /**
+     * 每天凌晨 3:20 清理过期试问会话与纠偏草稿。
+     *
+     * <p>先删消息再删会话：外键已有 ON DELETE CASCADE，但按时间批量删时
+     * 显式两步能避免大事务里 CASCADE 逐行回扫。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Scheduled(cron = "0 20 3 * * ?")
+    public void cleanupTrialData() {
+        try {
+            java.time.LocalDateTime trialCutoff =
+                    java.time.LocalDateTime.now().minusDays(TRIAL_RETENTION_DAYS);
+            int messages = trialMessageRepository.deleteOlderThan(trialCutoff);
+            int sessions = trialSessionRepository.deleteOlderThan(trialCutoff);
+            java.time.LocalDateTime refineCutoff =
+                    java.time.LocalDateTime.now().minusDays(REFINE_RETENTION_DAYS);
+            int drafts = refineDraftRepository.deleteOlderThan(refineCutoff);
+            if (messages + sessions + drafts > 0) {
+                log.info("清理试问/纠偏数据完成：消息 {} 行，会话 {} 行，草稿 {} 行",
+                        messages, sessions, drafts);
+            }
+        } catch (Exception e) {
+            log.error("清理试问/纠偏数据失败", e);
+        }
+    }
+
+    /**
+     * 每天凌晨 3:50 物理删除绝对过期超过保留期的会话。
+     *
+     * <p>已撤销/过期会话是审计数据，按天分批删除，避免长事务锁表。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Scheduled(cron = "0 50 3 * * ?")
+    public void cleanupAuthSessions() {
+        try {
+            java.time.Instant cutoff = java.time.Instant.now()
+                    .minus(authSessionRetentionDays, java.time.temporal.ChronoUnit.DAYS);
+            int total = 0;
+            int deleted;
+            do {
+                deleted = authSessionRepository.deleteExpiredBefore(cutoff, AUTH_SESSION_BATCH);
+                total += deleted;
+            } while (deleted >= AUTH_SESSION_BATCH);
+            if (total > 0) {
+                log.info("清理过期会话完成, {}行", total);
+            }
+        } catch (Exception e) {
+            log.error("清理过期会话失败", e);
         }
     }
 

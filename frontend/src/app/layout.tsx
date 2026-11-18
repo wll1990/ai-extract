@@ -7,6 +7,14 @@ import { TourProvider } from '@/components/tour/TourProvider';
 export const metadata: Metadata = {
   title: 'AI经验萃取平台',
   description: 'AI驱动的销售经验萃取与传承平台',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/favicon-32.png', type: 'image/png', sizes: '32x32' },
+      { url: '/icon-512.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: '/apple-touch-icon.png',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

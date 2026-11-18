@@ -178,6 +178,7 @@ class EvaluationAnswerServiceTest {
                                 UUID.randomUUID(), "价格手册", "内容", "price", "出处", 0.71)),
                         List.of(new KnowledgeCaseRetriever.CaseHit(
                                 UUID.randomUUID(), "某客户续费案例", "复购", "复购", "win",
+                                "{\"industry\":\"制造业\"}", "观望 → 认可", "报价 → 试用 → 签约",
                                 "价格异议", "先算 ROI", "话术", "可复用", "无", "出处", 0.62))));
     }
 

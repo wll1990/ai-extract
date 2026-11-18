@@ -8,13 +8,13 @@ import java.util.Set;
  *
  * <p>三个派生消费点从同一份映射表读取，保证一致性：
  * <ol>
- *   <li>{@link com.aiextract.config.JwtAuthFilter} — 登录时查映射表，设为 Spring Security GrantedAuthority</li>
+ *   <li>{@link com.aiextract.config.SessionAuthFilter} — 登录时查映射表，设为 Spring Security GrantedAuthority</li>
  *   <li>{@link com.aiextract.service.AuthService#getCurrentUser} — /auth/me 返回 permissions 字段</li>
  *   <li>业务代码 — 通过 {@link #hasPermission} 替代硬编码字符串角色比较</li>
  * </ol></p>
  *
  * <h3>新增角色</h3>
- * 只需在 {@link #ROLE_MAP} 加一行映射。SecurityConfig、JwtAuthFilter、/auth/me、前端导航
+ * 只需在 {@link #ROLE_MAP} 加一行映射。SecurityConfig、SessionAuthFilter、/auth/me、前端导航
  * 全部自动生效，无需额外改动。
  *
  * <h3>修改已有角色权限</h3>
@@ -113,6 +113,11 @@ public final class RolePermissions {
      * @param role 角色字符串（如 "super_admin"、"company_admin"、"employee"）
      * @return 权限码集合，未知角色返回空集合
      */
+    /** 判断一个 authority 是否是角色名（区别于权限码），供 Controller 从 SecurityContext 反推 role。 */
+    public static boolean isRole(String value) {
+        return value != null && ROLE_MAP.containsKey(value);
+    }
+
     public static Set<String> getPermissions(String role) {
         return ROLE_MAP.getOrDefault(role, Set.of());
     }

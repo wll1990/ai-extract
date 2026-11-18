@@ -8,6 +8,7 @@ export function useExperts() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
   const pageRef = useRef(1);
   const [keyword, setKeyword] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -31,7 +32,8 @@ export function useExperts() {
         getExperts(pg, 12, keyword || undefined, statusFilter || undefined),
         getCompositeDetail().catch(() => null),
       ]);
-      setExperts(expData.content || []); setTotalPages(expData.totalPages || 1); setComposite(compData);
+      setExperts(expData.content || []); setTotalPages(expData.totalPages || 1);
+      setTotal(expData.total ?? (expData.content?.length ?? 0)); setComposite(compData);
     } catch (e) {
       console.error(e);
       setExperts([]);
@@ -59,7 +61,7 @@ export function useExperts() {
     : experts;
 
   return { experts, filteredExperts, industries, industryFilter, setIndustryFilter,
-    composite, loading, error, page, totalPages, pageRef, keyword, setKeyword,
+    composite, loading, error, page, totalPages, total, pageRef, keyword, setKeyword,
     statusFilter, setStatusFilter, toast, setToast, showToast, actionLoading, setActionLoading,
     showUpload, setShowUpload, showPreview, setShowPreview, compositeLoading, setCompositeLoading,
     previewData, setPreviewData, reviewGrains, setReviewGrains, loadData, regenerateComposite };

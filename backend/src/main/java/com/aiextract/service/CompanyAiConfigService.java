@@ -3,14 +3,18 @@ package com.aiextract.service;
 import com.aiextract.common.AiErrorMapper;
 import com.aiextract.config.PartnerCrypto;
 import com.aiextract.config.TokenContext;
+import com.aiextract.dto.CompanyAiConfigHistoryView;
 import com.aiextract.dto.CompanyAiConfigRequest;
 import com.aiextract.dto.CompanyAiConfigView;
 import com.aiextract.dto.CompanyAiTestRequest;
 import com.aiextract.dto.CompanyAiTestResult;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.CompanyAiConfig;
+import com.aiextract.model.CompanyAiConfigHistory;
+import com.aiextract.repository.CompanyAiConfigHistoryRepository;
 import com.aiextract.repository.CompanyAiConfigRepository;
 import com.aiextract.repository.TokenUsageLogRepository;
+import com.aiextract.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -33,6 +37,8 @@ import java.util.UUID;
 public class CompanyAiConfigService {
 
     private final CompanyAiConfigRepository repository;
+    private final CompanyAiConfigHistoryRepository historyRepository;
+    private final UserRepository userRepository;
     private final PartnerCrypto crypto;
     private final ChatClientResolver resolver;
     private final SalesAuditService audit;
@@ -40,7 +46,7 @@ public class CompanyAiConfigService {
     private final CompanyChatClientFactory factory;
     private final com.aiextract.config.OutboundUrlValidator outboundUrlValidator;
 
-    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    @Value("${spring.ai.openai.chat.model:deepseek-chat}")
     private String platformModelName;
 
     @Value("${spring.ai.openai.base-url:https://api.deepseek.com}")
@@ -52,6 +58,11 @@ public class CompanyAiConfigService {
                 usageRepository.sumByCompanySince(companyId, LocalDate.now().withDayOfMonth(1));
         long input = usage == null || usage.getInputTokens() == null ? 0 : usage.getInputTokens();
         long output = usage == null || usage.getOutputTokens() == null ? 0 : usage.getOutputTokens();
+        boolean enabled = cfg != null && "enabled".equals(cfg.getStatus());
+        boolean fallbackEnabled = cfg == null || cfg.isFallbackEnabled();
+        String effectiveMode = enabled
+                ? "company_key"
+                : (fallbackEnabled ? "platform_key" : "unavailable");
         return new CompanyAiConfigView(
                 cfg != null,
                 cfg != null ? cfg.getProvider() : "deepseek",
@@ -59,10 +70,25 @@ public class CompanyAiConfigService {
                 cfg == null ? null : cfg.getBaseUrl(),
                 cfg == null ? null : cfg.getKeyLast4(),
                 cfg == null ? "disabled" : cfg.getStatus(),
-                cfg == null || cfg.isFallbackEnabled(),
+                fallbackEnabled,
                 true,
                 input,
-                output);
+                output,
+                effectiveMode,
+                enabled ? cfg.getModelName() : platformModelName,
+                enabled ? cfg.getBaseUrl() : platformBaseUrl,
+                cfg == null ? null : cfg.getUpdatedAt(),
+                cfg == null ? null : userName(cfg.getUpdatedBy()));
+    }
+
+    /** 配置历史：只回放元数据，帮助管理员判断「当前状态是怎么来的」。 */
+    public java.util.List<CompanyAiConfigHistoryView> history(UUID companyId) {
+        return historyRepository.findTop20ByCompanyIdOrderByCreatedAtDesc(companyId).stream()
+                .map(h -> new CompanyAiConfigHistoryView(
+                        h.getId(), h.getAction(), h.getProvider(), h.getModelName(), h.getBaseUrl(),
+                        h.getKeyLast4(), h.isFallbackEnabled(), h.getActorId(), h.getActorName(),
+                        h.getCreatedAt()))
+                .toList();
     }
 
     @Transactional
@@ -71,7 +97,11 @@ public class CompanyAiConfigService {
         String modelName = resolveModelName(req.modelName(), provider);
         validateEndpoint(provider, req.baseUrl());
         CompanyAiConfig cfg = repository.findFirstByCompanyIdOrderByUpdatedAtDesc(companyId)
-                .orElseGet(() -> newConfig(companyId, provider));
+                .orElse(null);
+        boolean created = cfg == null;
+        if (cfg == null) {
+            cfg = newConfig(companyId, provider);
+        }
         cfg.setProvider(provider);
         cfg.setModelName(modelName);
         cfg.setBaseUrl(req.baseUrl().trim());
@@ -96,6 +126,9 @@ public class CompanyAiConfigService {
                         "baseUrl", cfg.getBaseUrl(),
                         "keyLast4", cfg.getKeyLast4(),
                         "fallbackEnabled", cfg.isFallbackEnabled()));
+        recordHistory(companyId,
+                created ? CompanyAiConfigHistory.ACTION_CREATED : CompanyAiConfigHistory.ACTION_UPDATED,
+                cfg);
         return get(companyId);
     }
 
@@ -116,7 +149,7 @@ public class CompanyAiConfigService {
                     com.aiextract.config.ProviderCatalog.maxOutputTokens(provider));
             client.prompt()
                     .user("ping")
-                    .options(OpenAiChatOptions.builder().maxTokens(1).build())
+                    .options(OpenAiChatOptions.builder().maxTokens(1))
                     .call()
                     .content();
             audit.record("ai.model.test", "company_ai_config", null,
@@ -148,6 +181,23 @@ public class CompanyAiConfigService {
                 Map.of("keyLast4", cfg.getKeyLast4(),
                         "previousKeyLast4", previousKeyLast4 == null ? "" : previousKeyLast4,
                         "previousKeyRetained", false));
+        recordHistory(companyId, CompanyAiConfigHistory.ACTION_ROTATED, cfg);
+    }
+
+    @Transactional
+    public void enable(UUID companyId) {
+        CompanyAiConfig cfg = require(companyId);
+        if ("enabled".equals(cfg.getStatus())) {
+            return;
+        }
+        cfg.setStatus("enabled");
+        cfg.setUpdatedBy(TokenContext.get());
+        cfg.setUpdatedAt(LocalDateTime.now());
+        repository.save(cfg);
+        resolver.evict(companyId);
+        audit.record("ai.model.enable", "company_ai_config", cfg.getId(),
+                Map.of("fallbackEnabled", cfg.isFallbackEnabled()));
+        recordHistory(companyId, CompanyAiConfigHistory.ACTION_ENABLED, cfg);
     }
 
     @Transactional
@@ -160,6 +210,36 @@ public class CompanyAiConfigService {
         resolver.evict(companyId);
         audit.record("ai.model.disable", "company_ai_config", cfg.getId(),
                 Map.of("fallbackEnabled", cfg.isFallbackEnabled()));
+        recordHistory(companyId, CompanyAiConfigHistory.ACTION_DISABLED, cfg);
+    }
+
+    /** 历史记录只做展示与追责，不参与运行时解析；失败不能影响主操作。 */
+    private void recordHistory(UUID companyId, String action, CompanyAiConfig cfg) {
+        try {
+            UUID actorId = TokenContext.get();
+            historyRepository.save(CompanyAiConfigHistory.builder()
+                    .id(UUID.randomUUID())
+                    .companyId(companyId)
+                    .action(action)
+                    .provider(cfg.getProvider())
+                    .modelName(cfg.getModelName())
+                    .baseUrl(cfg.getBaseUrl())
+                    .keyLast4(cfg.getKeyLast4())
+                    .fallbackEnabled(cfg.isFallbackEnabled())
+                    .actorId(actorId)
+                    .actorName(userName(actorId))
+                    .createdAt(LocalDateTime.now())
+                    .build());
+        } catch (Exception e) {
+            log.warn("记录企业 AI 配置历史失败 companyId={} action={}", companyId, action, e);
+        }
+    }
+
+    private String userName(UUID userId) {
+        if (userId == null) {
+            return null;
+        }
+        return userRepository.findById(userId).map(u -> u.getName()).orElse(null);
     }
 
     private CompanyAiConfig require(UUID companyId) {

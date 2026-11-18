@@ -1,5 +1,7 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.config.SseAdapter;
 import com.aiextract.dto.ChatMessageRequest;
@@ -7,7 +9,8 @@ import com.aiextract.dto.CreateInterviewRequest;
 import com.aiextract.dto.InterviewMessageResponse;
 import com.aiextract.dto.InterviewSessionResponse;
 import com.aiextract.service.InterviewService;
-import com.aiextract.util.JwtUtil;
+import com.aiextract.service.QueryGate;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,7 +45,7 @@ import java.util.UUID;
 public class InterviewController {
 
     private final InterviewService interviewService;
-    private final JwtUtil jwtUtil;
+    private final QueryGate queryGate;
 
     /** 平台端地址（C端对外链接用，nginx 8088→platform） */
     @Value("${app.platform.url:http://localhost:3001}")
@@ -62,6 +65,14 @@ public class InterviewController {
                 .orElse("employee");
     }
 
+    private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
+
     /**
      * 创建访谈会话
      *
@@ -71,7 +82,7 @@ public class InterviewController {
     @PostMapping
     public ApiResponse<InterviewSessionResponse> createInterview(
             @Valid @RequestBody CreateInterviewRequest request) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         String role = extractRole();
         String interviewType = request.getInterviewType() != null ? request.getInterviewType() : "sales";
         InterviewSessionResponse response = interviewService.createSession(request, userId, interviewType, role);
@@ -86,7 +97,7 @@ public class InterviewController {
      */
     @GetMapping("/{sessionId}")
     public ApiResponse<InterviewSessionResponse> getSession(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         InterviewSessionResponse response = interviewService.getSession(sessionId, userId);
         return ApiResponse.success(response);
     }
@@ -104,9 +115,15 @@ public class InterviewController {
     @PostMapping(value = "/{sessionId}/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chat(
             @PathVariable String sessionId,
-            @Valid @RequestBody ChatMessageRequest request) {
+            @Valid @RequestBody ChatMessageRequest request,
+            HttpServletRequest httpRequest) {
         log.info("收到访谈消息, sessionId: {}", sessionId);
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
+        var blocked = queryGate.audit(request.getMessage(), userId, extractRole(),
+                getClientIp(httpRequest));
+        if (blocked != null) {
+            return SseAdapter.fromFlux(blocked);
+        }
         return SseAdapter.fromFlux(interviewService.processMessageFlux(sessionId, request.getMessage(), userId));
     }
 
@@ -118,7 +135,7 @@ public class InterviewController {
      */
     @GetMapping("/{sessionId}/messages")
     public ApiResponse<List<InterviewMessageResponse>> getMessages(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         List<InterviewMessageResponse> messages = interviewService.getMessages(sessionId, userId);
         return ApiResponse.success(messages);
     }
@@ -134,7 +151,7 @@ public class InterviewController {
     @PostMapping(value = "/{sessionId}/resume", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter resume(@PathVariable String sessionId) {
         log.info("恢复访谈, sessionId: {}", sessionId);
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         return SseAdapter.fromFlux(interviewService.resumeSessionFlux(sessionId, userId));
     }
 
@@ -146,7 +163,7 @@ public class InterviewController {
      */
     @PostMapping("/{sessionId}/force-complete")
     public ApiResponse<Map<String, Object>> forceComplete(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         String resultId = interviewService.forceCompleteSession(sessionId, userId);
         Map<String, Object> result = new java.util.LinkedHashMap<>();
         result.put("sessionId", resultId);
@@ -156,7 +173,7 @@ public class InterviewController {
     /** 重新萃取颗粒 — 仅已完成且萃取失败的访谈可用 */
     @PostMapping("/{sessionId}/retry-extraction")
     public ApiResponse<Void> retryExtraction(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         interviewService.retryExtraction(sessionId, userId);
         return ApiResponse.success();
     }
@@ -170,7 +187,7 @@ public class InterviewController {
             @RequestBody Map<String, String> body) {
         String phase = body.getOrDefault("phase", "opening");
         log.info("用户标记阶段完成, sessionId: {}, phase: {}", sessionId, phase);
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         return SseAdapter.fromFlux(interviewService.markPhaseCompleteFlux(sessionId, phase, userId));
     }
 
@@ -179,14 +196,14 @@ public class InterviewController {
      */
     @PostMapping(value = "/{sessionId}/supplement", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter supplement(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         log.info("用户触发补充模式请求, sessionId: {}", sessionId);
         return SseAdapter.fromFlux(interviewService.supplementSessionFlux(sessionId, userId));
     }
 
     @PostMapping("/{sessionId}/restart")
     public ApiResponse<Map<String, Object>> restart(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         String newSessionId = interviewService.restartSession(sessionId, userId);
         return ApiResponse.success(Map.of("sessionId", newSessionId));
     }
@@ -199,7 +216,7 @@ public class InterviewController {
      */
     @PostMapping("/{sessionId}/pause")
     public ApiResponse<Void> pause(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         interviewService.pauseSession(sessionId, userId);
         return ApiResponse.success();
     }
@@ -209,7 +226,7 @@ public class InterviewController {
      */
     @PostMapping("/{sessionId}/cancel")
     public ApiResponse<Void> cancel(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         interviewService.cancelSession(sessionId, userId);
         return ApiResponse.success();
     }
@@ -219,7 +236,7 @@ public class InterviewController {
      */
     @GetMapping("/{sessionId}/grains")
     public ApiResponse<List<Map<String, Object>>> getGrains(@PathVariable String sessionId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         return ApiResponse.success(interviewService.getSessionGrains(sessionId, userId));
     }
 
@@ -230,7 +247,7 @@ public class InterviewController {
      */
     @GetMapping("/active")
     public ApiResponse<Map<String, Object>> getActiveSessions() {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         Map<String, Object> result = interviewService.getActiveSessions(userId);
         return ApiResponse.success(result);
     }
@@ -238,8 +255,8 @@ public class InterviewController {
     /** C 端用户发起个人访谈邀请 — 不绑定企业，仅用邀请者昵称 */
     @PostMapping("/invite")
     public ApiResponse<Map<String, Object>> createPersonalInvite(@RequestBody Map<String, String> body) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
-        String role = jwtUtil.getRoleFromToken(getToken());
+        UUID userId = CurrentUser.id();
+        String role = CurrentUser.role();
         if (!"c_user".equals(role) && !"c_partner".equals(role)) {
             return ApiResponse.error(403, "仅 C 端用户可发起个人邀请");
         }

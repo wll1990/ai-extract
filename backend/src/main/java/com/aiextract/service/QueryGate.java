@@ -4,7 +4,9 @@ import com.aiextract.config.QueryGateConfig;
 import com.aiextract.model.ChatChunk;
 import com.aiextract.repository.SkillMessageRepository;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
 import jakarta.annotation.Nullable;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +76,9 @@ public class QueryGate {
     @Autowired(required = false)
     private MeterRegistry meterRegistry;
 
+    /** 运行时开关快照 — 由 5 秒定时任务刷新，避免每个请求多次 Redis GET。 */
+    private volatile boolean runtimeEnabled = true;
+
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
 
@@ -98,7 +103,7 @@ public class QueryGate {
         phonePattern = Pattern.compile(config.getSensitivePatterns().getPhone());
         idCardPattern = Pattern.compile(config.getSensitivePatterns().getIdCard());
         promptInjectionPatterns = config.getSensitivePatterns().getPromptInjection().stream()
-            .map(Pattern::compile)
+            .map(p -> Pattern.compile(p, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE))
             .toList();
 
         // Micrometer（可选，未引入 actuator 时跳过）
@@ -111,15 +116,20 @@ public class QueryGate {
         // 从 Redis 加载违禁词词表
         reloadTrieFromRedis();
 
+        // 启动时初始化运行时开关，避免前 5 秒仍用默认值
+        refreshEnabledSwitch();
+
         // Redis Pub/Sub 即时刷新 — 使用 Spring 内置容器，自动管理连接和重连
-        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
-        container.setConnectionFactory(redisTemplate.getConnectionFactory());
-        container.addMessageListener((MessageListener) (message, pattern) -> {
-            log.info("QueryGate 收到词表更新通知，重新加载 Trie");
-            reloadTrieFromRedis();
-        }, Collections.singletonList(new ChannelTopic(REDIS_BANNED_WORDS_UPDATE_CHANNEL)));
-        container.afterPropertiesSet();
-        container.start();
+        if (redisTemplate.getConnectionFactory() != null) {
+            RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+            container.setConnectionFactory(redisTemplate.getConnectionFactory());
+            container.addMessageListener((MessageListener) (message, pattern) -> {
+                log.info("QueryGate 收到词表更新通知，重新加载 Trie");
+                reloadTrieFromRedis();
+            }, Collections.singletonList(new ChannelTopic(REDIS_BANNED_WORDS_UPDATE_CHANNEL)));
+            container.afterPropertiesSet();
+            container.start();
+        }
     }
 
     /**
@@ -129,6 +139,22 @@ public class QueryGate {
     @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
     void scheduledReloadTrie() {
         reloadTrieFromRedis();
+    }
+
+    /** 定时刷新运行时开关；Redis 异常时 fail-open。 */
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 5000)
+    void refreshEnabledSwitch() {
+        try {
+            String v = redisTemplate.opsForValue().get(REDIS_ENABLED_KEY);
+            runtimeEnabled = !"false".equals(v);
+        } catch (Exception e) {
+            runtimeEnabled = true; // fail-open
+        }
+    }
+
+    /** 请求内判定：本地快照 + YAML 开关，零 Redis 往返。 */
+    private boolean isEnabled() {
+        return runtimeEnabled && config.isEnabled();
     }
 
     // ============================================================
@@ -149,17 +175,8 @@ public class QueryGate {
                                   @Nullable UUID userId,
                                   @Nullable String role,
                                   String clientIp) {
-        // ── 运行时开关（Redis 优先，秒级生效，无需重启） ──
-        try {
-            String redisSwitch = redisTemplate.opsForValue().get(REDIS_ENABLED_KEY);
-            if ("false".equals(redisSwitch)) return null;
-        } catch (Exception e) {
-            // Redis 不可用时 fall-through 到 YAML 开关（fail-open）
-            log.debug("Redis 不可用，回退 YAML 开关: {}", e.getMessage());
-        }
-
-        // ── YAML 启动默认值 ──
-        if (!config.isEnabled()) return null;
+        // ── 运行时开关（5 秒刷新的本地快照 + YAML 开关） ──
+        if (!isEnabled()) return null;
 
         // ── Layer 1: 基础合法性（0ms，全角色） ──
         Flux<ChatChunk> l1 = auditBasic(message);
@@ -194,19 +211,77 @@ public class QueryGate {
      */
     @Nullable
     public String auditSimple(@Nullable String message) {
-        if (!config.isEnabled()) return null;
+        if (!isEnabled()) return null;
 
         Flux<ChatChunk> blocked = auditBasic(message);
         if (blocked != null) {
-            ChatChunk chunk = blocked.blockFirst();
-            return chunk != null ? chunk.getContent() : "消息校验未通过";
+            return errorText(blocked);
         }
         blocked = auditContent(message);
         if (blocked != null) {
-            ChatChunk chunk = blocked.blockFirst();
-            return chunk != null ? chunk.getContent() : "消息校验未通过";
+            return errorText(blocked);
         }
         return null;
+    }
+
+    /** ChatChunk.error 写的是 message 字段；这里兼容 content，避免把真实原因吞掉。 */
+    private String errorText(Flux<ChatChunk> blocked) {
+        ChatChunk chunk = blocked.blockFirst();
+        if (chunk == null) return "消息校验未通过";
+        if (chunk.getMessage() != null) return chunk.getMessage();
+        return chunk.getContent() != null ? chunk.getContent() : "消息校验未通过";
+    }
+
+    /**
+     * 附加字段校验 — 只做长度与注入检测，不占用限频/每日额度。
+     * 用于 message 之外的前端可控字段：history / sceneContext / practiceAngles / conversation。
+     *
+     * @param fieldName      字段中文名，用于日志与提示
+     * @param value          字段值
+     * @param maxChars       最大长度
+     * @param checkInjection 是否做注入正则（纯历史文本建议 false，避免误杀）
+     * @return null = 放行；非 null = 用户可见错误文案
+     */
+    @Nullable
+    public String auditAuxiliaryField(String fieldName, @Nullable String value,
+                                      int maxChars, boolean checkInjection) {
+        if (!isEnabled() || value == null || value.isBlank()) {
+            return null;
+        }
+
+        if (value.length() > maxChars) {
+            log.info("QueryGate aux: {} 超长被拦截 length={} limit={}", fieldName, value.length(), maxChars);
+            blockCounter("1_basic", "aux_too_long").increment();
+            return fieldName + "内容过长，请精简后重试";
+        }
+
+        if (checkInjection) {
+            for (Pattern p : promptInjectionPatterns) {
+                if (p.matcher(value).find()) {
+                    log.warn("QueryGate aux: {} 命中注入检测 pattern={}", fieldName, p.pattern());
+                    blockCounter("2_content", "aux_prompt_injection").increment();
+                    return "抱歉，我无法处理该请求";
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 把一段用户可见文案包装成「错误 + 结束」的流，供 Controller 短路返回。 */
+    public Flux<ChatChunk> blocked(String message) {
+        return Flux.just(ChatChunk.error(message), ChatChunk.done());
+    }
+
+    /**
+     * 仅限频（L3）— 用于没有单一 message 字段、但会调用 LLM 的入口：
+     * 对练评分、对练总结评价。避免这些入口绕过限频。
+     */
+    @Nullable
+    public Flux<ChatChunk> auditRateOnly(@Nullable UUID userId, @Nullable String role, String clientIp) {
+        if (!isEnabled()) {
+            return null;
+        }
+        return auditRate(userId, role, clientIp);
     }
 
     // ============================================================
@@ -258,12 +333,13 @@ public class QueryGate {
      */
     @Nullable
     private Flux<ChatChunk> auditContent(String message) {
-        // ── 违禁词 Trie 匹配 ──
+        // ── 违禁词 Trie 匹配（词表插入时已小写，匹配也必须小写，否则大小写可绕过） ──
         TrieNode trie = this.bannedWordsTrie;  // volatile 读，获取最新快照
-        for (int i = 0; i < message.length(); i++) {
+        String lowered = message.toLowerCase(java.util.Locale.ROOT);
+        for (int i = 0; i < lowered.length(); i++) {
             TrieNode node = trie;
-            for (int j = i; j < message.length(); j++) {
-                node = node.children.get(message.charAt(j));
+            for (int j = i; j < lowered.length(); j++) {
+                node = node.children.get(lowered.charAt(j));
                 if (node == null) break;
                 if (node.isEnd) {
                     // 命中违禁词 — 静默拦截，不告诉攻击者具体原因
@@ -343,9 +419,12 @@ public class QueryGate {
         return switch (role) {
             case "c_guest"    -> config.getRateLimit().getGuestPerMin();
             case "c_user"     -> config.getRateLimit().getUserPerMin();
+            case "c_partner"  -> config.getRateLimit().getPartnerPerMin();
             case "employee",
-                 "super_admin" -> config.getRateLimit().getEmployeePerMin();
-            default           -> config.getRateLimit().getBEndImPerMin();  // IM 回调等未知角色
+                 "super_admin",
+                 "company_admin" -> config.getRateLimit().getEmployeePerMin();
+            // 未知角色不能落到 -1（不限频），按员工档保守处理
+            default -> config.getRateLimit().getEmployeePerMin();
         };
     }
 
@@ -435,7 +514,7 @@ public class QueryGate {
             TrieNode root = new TrieNode();
             for (String word : words) {
                 if (word == null || word.isBlank()) continue;
-                insertTrie(root, word.trim().toLowerCase());
+                insertTrie(root, word.trim().toLowerCase(java.util.Locale.ROOT));
             }
             this.bannedWordsTrie = root;
             log.info("QueryGate 违禁词词表已加载 count={}", words.size());
@@ -458,12 +537,35 @@ public class QueryGate {
     // ============================================================
 
     private Counter blockCounter(String layer, String reason) {
+        if (meterRegistry == null) {
+            return NoopCounter.INSTANCE;
+        }
         return blockCounters.computeIfAbsent(layer + ":" + reason, k ->
             Counter.builder("query_gate_blocks_total")
                 .description("QueryGate 拦截的消息数")
                 .tag("layer", layer)
                 .tag("reason", reason)
                 .register(meterRegistry));
+    }
+
+    /** 未引入 actuator 时的空计数器 — 拦截路径绝不能因为指标缺失而抛异常。 */
+    private enum NoopCounter implements Counter {
+        INSTANCE;
+
+        @Override
+        public void increment(double amount) {
+            // no-op
+        }
+
+        @Override
+        public double count() {
+            return 0d;
+        }
+
+        @Override
+        public Meter.Id getId() {
+            return new Meter.Id("query_gate_noop", Tags.empty(), null, null, Meter.Type.COUNTER);
+        }
     }
 
     // ============================================================

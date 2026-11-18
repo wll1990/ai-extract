@@ -1,16 +1,23 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
+import { FlowSteps } from '@/components/ui/FlowSteps';
+import { ActionLegend } from '@/components/sales/ActionLegend';
 import { ReviewSession, listReviews, requestReport } from '@/lib/api/sales';
 import { StatusBadge } from '@/components/sales/StatusBadge';
 import { Permission } from '@/lib/permissions';
 import { getUser } from '@/lib/storage';
+import { useScrollOnPageChange } from '@/lib/useScrollOnPageChange';
 
 export default function ReviewsPage() {
+  const router = useRouter();
   const [rows, setRows] = useState<ReviewSession[]>([]);
   const [page, setPage] = useState(1);
+  useScrollOnPageChange(page);
   const [totalPages, setTotalPages] = useState(1);
   const [scope, setScope] = useState<'mine' | 'company'>('mine');
   const [status, setStatus] = useState('');
@@ -61,110 +68,143 @@ export default function ReviewsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">销售复盘</h1>
-          <p className="text-sm text-gray-500">
-            粘贴对话，找销冠分身复盘，报告可转线索和跟进任务。
-          </p>
+    <div className="min-h-screen bg-surface px-6 py-8">
+      <div className="mx-auto max-w-[1200px]">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[28px] font-bold leading-tight text-foreground">销售复盘</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              粘贴一次客户对话，让销冠分身复盘；报告能转成线索和跟进任务。
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <PageHelp
+              title="销售复盘使用说明"
+              intro="把一次客户对话交给销冠分身复盘，得到可执行的改进建议，并可以转成线索和跟进任务。"
+              steps={[
+                { title: '新建复盘', desc: '选择一位已发布的销冠分身，粘贴或上传这次对话的文本。' },
+                { title: '等待报告', desc: '报告在后台生成，通常几十秒；状态会从「生成中」变为「报告已生成」。' },
+                { title: '读报告', desc: '点客户名进详情，看摘要、亮点、问题、下一步动作和引用的销冠经验。' },
+                { title: '转线索 / 建任务', desc: '有价值的客户转成线索；把报告的下一步建成跟进任务。' },
+              ]}
+              actions={[
+                { label: '新建复盘', desc: '选择教练分身并提交对话文本；提交后自动进入详情并开始生成报告。', tone: 'primary' },
+                { label: '客户名 / 查看', desc: '打开复盘详情，才能转线索、生成跟进任务或沉积为知识/案例。' },
+                { label: '重新生成', desc: '仅在该版本报告生成失败时出现；会新增一个报告版本，旧版本保留。' },
+                { label: '状态筛选', desc: '按「待生成 / 报告已生成 / 已转线索」过滤列表，不影响数据。' },
+                { label: '我的 / 全公司', desc: '只有具备全公司查看权限的管理者能切换；销售默认只看自己发起的复盘。' },
+              ]}
+              notes={[
+                '对话越完整（包含客户异议和你的回应），复盘越具体。',
+                '报告生成失败会在详情里显示原因；模型 Key 余额不足时请联系管理员。',
+              ]}
+            />
+            <Button variant="primary" onClick={() => router.push('/sales/reviews/new')} data-tour="review-new-cta">
+              ＋ 新建复盘
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <PageHelp
-            title="销售复盘使用说明"
-            intro="把一次客户对话交给销冠分身复盘，得到可执行的改进建议，并可以转成线索和跟进任务。"
-            steps={[
-              { title: '新建复盘', desc: '选择一位已发布的销冠分身，粘贴或上传这次对话的文本。' },
-              { title: '等待报告', desc: '报告在后台生成，通常几十秒；刷新列表可看到状态变为「已完成」。' },
-              { title: '读报告', desc: '点进详情看摘要、亮点、问题、下一步动作，以及引用到的销冠经验。' },
-              { title: '转线索 / 建任务', desc: '有价值的客户可以直接转成线索，并把下一步动作建成跟进任务。' },
-            ]}
-            notes={[
-              '对话越完整（包含客户异议和你的回应），复盘越具体。',
-              '报告生成失败会在详情里显示原因；模型 Key 余额不足时请联系管理员。',
-            ]}
-          />
-          <Link
-            href="/sales/reviews/new"
-            data-tour="review-new-cta"
-            className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            新建复盘
-          </Link>
-        </div>
-      </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <select
-          value={status}
-          onChange={e => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="rounded border border-gray-300 px-3 py-2 text-sm"
-        >
-          <option value="">全部状态</option>
-          <option value="active">待生成</option>
-          <option value="report_ready">报告已生成</option>
-          <option value="converted">已转线索</option>
-        </select>
-        {canViewAll && (
-          <div className="flex rounded border border-gray-300 text-sm">
-            {(['mine', 'company'] as const).map(s => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => {
-                  setScope(s);
-                  setPage(1);
-                }}
-                className={`px-3 py-2 ${scope === s ? 'bg-gray-900 text-white' : 'text-gray-700'}`}
-              >
-                {s === 'mine' ? '我的' : '全公司'}
-              </button>
-            ))}
+        <FlowSteps
+          compact
+          className="mb-4"
+          steps={[
+            { id: 'create', title: '新建复盘', desc: '选教练、贴对话', status: rows.length === 0 ? 'current' : 'done', onClick: () => router.push('/sales/reviews/new'), actionLabel: '新建' },
+            { id: 'report', title: '生成报告', desc: '等待 30–90 秒', status: rows.some(r => r.status === 'report_ready' || r.status === 'converted') ? 'done' : 'todo' },
+            { id: 'convert', title: '转线索 / 建任务', desc: '在详情页完成', status: rows.some(r => r.status === 'converted') ? 'done' : 'todo' },
+            { id: 'follow', title: '在线索里跟进', desc: '记录活动与下一步', status: 'todo', onClick: () => router.push('/sales/leads'), actionLabel: '去线索' },
+          ]}
+        />
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2">
+          <span className="text-xs text-muted-foreground">状态</span>
+          {[
+            ['', '全部'],
+            ['active', '待生成'],
+            ['report_ready', '报告已生成'],
+            ['converted', '已转线索'],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => { setStatus(value); setPage(1); }}
+              className={`rounded-md px-2.5 py-1 text-xs transition-colors ${
+                status === value
+                  ? 'bg-primary-light font-medium text-primary'
+                  : 'text-muted-foreground hover:bg-surface'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          {canViewAll && (
+            <div className="ml-auto flex items-center gap-1 rounded-lg border border-border bg-surface p-0.5">
+              {(['mine', 'company'] as const).map(s => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { setScope(s); setPage(1); }}
+                  className={`rounded-md px-2.5 py-1 text-xs ${
+                    scope === s ? 'bg-primary text-white' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {s === 'mine' ? '我的' : '全公司'}
+                </button>
+              ))}
+            </div>
+          )}
+          <Button variant="ghost" size="sm" onClick={() => { void load(); }} disabled={loading}>
+            {loading ? '刷新中…' : '刷新'}
+          </Button>
+        </div>
+
+        <ActionLegend
+          className="mb-4"
+          items={[
+            { label: '新建复盘', desc: '提交一次客户对话，系统会调教练分身生成报告。', tone: 'primary' },
+            { label: '重新生成', desc: '只在该版本生成失败时出现；新增版本，不覆盖旧报告。' },
+            { label: '状态筛选 / 我的·全公司', desc: '只改变列表范围，不改动数据；全公司视图需要管理者权限。' },
+          ]}
+        />
+
+        {error && (
+          <div className="mb-3 rounded-xl border border-danger/30 bg-danger-bg px-4 py-2.5 text-sm text-danger">
+            {error}
           </div>
         )}
-      </div>
 
-      {error && (
-        <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded border border-gray-200">
+      <div className="overflow-hidden rounded-xl border border-border bg-surface-2">
         <table className="w-full text-left text-sm">
-          <thead className="bg-gray-50 text-gray-600">
+          <thead className="bg-surface text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-2">客户</th>
-              <th className="px-4 py-2">主题</th>
-              <th className="px-4 py-2">教练</th>
-              <th className="px-4 py-2">状态</th>
-              <th className="px-4 py-2">报告</th>
-              <th className="px-4 py-2">创建时间</th>
+              <th className="px-4 py-3 font-medium">客户</th>
+              <th className="px-4 py-3 font-medium">主题</th>
+              <th className="px-4 py-3 font-medium">教练</th>
+              <th className="px-4 py-3 font-medium">状态</th>
+              <th className="px-4 py-3 font-medium">报告</th>
+              <th className="px-4 py-3 font-medium">创建时间</th>
+              <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                   加载中…
                 </td>
               </tr>
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                   {status ? (
                     '没有符合筛选条件的复盘，试试切换状态'
                   ) : (
                     <span className="inline-flex flex-col items-center gap-3">
                       <span>还没有复盘。选一位销冠分身，把今天的一段客户对话粘进来，几十秒后就能看到具体反馈。</span>
-                      <Link href="/sales/reviews/new"
-                        className="rounded bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">
+                      <Button variant="primary" onClick={() => router.push('/sales/reviews/new')}>
                         新建第一条复盘
-                      </Link>
+                      </Button>
                     </span>
                   )}
                 </td>
@@ -172,35 +212,46 @@ export default function ReviewsPage() {
             )}
             {!loading &&
               rows.map(r => (
-                <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2">
+                <tr key={r.id} className="border-t border-border hover:bg-surface">
+                  <td className="px-4 py-3">
                     <Link
                       href={`/sales/reviews/${r.id}`}
-                      className="text-blue-600 hover:underline"
+                      className="font-medium text-foreground hover:text-primary"
                     >
                       {r.customerName || '未命名客户'}
                     </Link>
                   </td>
-                  <td className="px-4 py-2 text-gray-700">{r.topic || '—'}</td>
-                  <td className="px-4 py-2 text-gray-700">{r.coachName || '—'}</td>
-                  <td className="px-4 py-2">
+                  <td className="px-4 py-3 text-muted-foreground">{r.topic || '—'}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{r.coachName || '—'}</td>
+                  <td className="px-4 py-3">
                     <StatusBadge status={displayStatus(r)} />
                   </td>
-                  <td className="px-4 py-2 text-gray-700">
+                  <td className="px-4 py-3 text-muted-foreground">
                     {r.latestReport ? (
-                      <span className="flex items-center gap-1" title={r.latestReport.errorMessage || undefined}>
-                        v{r.latestReport.version} · <StatusBadge status={r.latestReport.status} />
+                      <span className="flex flex-wrap items-center gap-1.5" title={r.latestReport.errorMessage || undefined}>
+                        <span className="tabular-nums">v{r.latestReport.version}</span>
+                        <StatusBadge status={r.latestReport.status} />
                         {r.latestReport.status === 'failed' && (
-                          <button onClick={() => retryReport(r.id)}
-                            className="text-xs text-blue-600 hover:underline">重新生成</button>
+                          <button
+                            onClick={() => retryReport(r.id)}
+                            title="重新生成会新增一个报告版本，不覆盖旧版本"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            重新生成
+                          </button>
                         )}
                       </span>
                     ) : (
-                      <span className="text-gray-400">未生成</span>
+                      <span className="text-muted-foreground-2">未生成</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-gray-500">
+                  <td className="px-4 py-3 text-xs text-muted-foreground">
                     {new Date(r.createdAt).toLocaleString()}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => router.push(`/sales/reviews/${r.id}`)}>
+                      查看
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -209,23 +260,14 @@ export default function ReviewsPage() {
       </div>
 
       <div className="mt-3 flex items-center justify-end gap-2 text-sm">
-        <button
-          disabled={page <= 1 || loading}
-          onClick={() => setPage(p => p - 1)}
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-        >
+        <Button variant="neutral" size="sm" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}>
           上一页
-        </button>
-        <span className="text-gray-500">
-          {page} / {totalPages}
-        </span>
-        <button
-          disabled={page >= totalPages || loading}
-          onClick={() => setPage(p => p + 1)}
-          className="rounded border px-3 py-1.5 disabled:opacity-50"
-        >
+        </Button>
+        <span className="text-muted-foreground">{page} / {totalPages}</span>
+        <Button variant="neutral" size="sm" disabled={page >= totalPages || loading} onClick={() => setPage(p => p + 1)}>
           下一页
-        </button>
+        </Button>
+      </div>
       </div>
     </div>
   );

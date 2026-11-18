@@ -77,7 +77,7 @@ public class EvaluationRunService {
     private final ObjectMapper objectMapper;
 
     /** 默认模型标识（写入 model_config 快照；用于报告说明口径） */
-    @Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    @Value("${spring.ai.openai.chat.model:deepseek-chat}")
     private String defaultModel;
 
     // ==================== 建批次 ====================

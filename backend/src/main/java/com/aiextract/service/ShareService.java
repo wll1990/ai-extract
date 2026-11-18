@@ -16,7 +16,6 @@ import com.aiextract.repository.SkillRepository;
 import com.aiextract.repository.SkillShareRepository;
 import com.aiextract.repository.SpaceRepository;
 import com.aiextract.repository.UserRepository;
-import com.aiextract.util.JwtUtil;
 import com.aiextract.util.JsonUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,7 +64,7 @@ public class ShareService {
     private final SkillMessageRepository skillMessageRepository;
     private final SkillService skillService;
     private final ShareRateLimiter rateLimiter;
-    private final JwtUtil jwtUtil;
+    private final com.aiextract.service.session.SessionService sessionService;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final ObjectMapper objectMapper;
     private final com.aiextract.config.CompanyScopeService companyScopeService;
@@ -73,11 +72,6 @@ public class ShareService {
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
 
-    @Value("${app.share.guest-token-ttl-days:7}")
-    private int guestTokenTtlDays;
-
-    @Value("${app.share.c-user-token-ttl-days:30}")
-    private int cUserTokenTtlDays;
 
     // ============================================================
     // 管理端
@@ -490,10 +484,7 @@ public class ShareService {
     }
 
     private String issueToken(User user) {
-        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
-        long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        long version = user.getTokenVersion() == null ? 0L : user.getTokenVersion();
-        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L, version);
+        return sessionService.create(user, null, null).token();
     }
 
     private GuestSessionResponse buildSession(User user, String token) {

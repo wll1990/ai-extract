@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
   CoachSupplement,
@@ -27,6 +28,10 @@ import { ConvertLeadModal } from '@/components/sales/ConvertLeadModal';
 import { TaskDraftModal } from '@/components/sales/TaskDraftModal';
 import { CoachSupplementPanel } from '@/components/sales/CoachSupplementPanel';
 import { PreviousReviewPanel } from '@/components/sales/PreviousReviewPanel';
+import { ActionLegend } from '@/components/sales/ActionLegend';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { PageHelp } from '@/components/ui/PageHelp';
 import { getUser } from '@/lib/storage';
 
 export default function ReviewDetailPage() {
@@ -43,15 +48,20 @@ export default function ReviewDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leadOpen, setLeadOpen] = useState(false);
-  const [taskOpen, setTaskOpen] = useState(false);
+  const [taskSource, setTaskSource] = useState<ReviewReport | null>(null);
+  const [taskLoading, setTaskLoading] = useState(false);
   const [precipitating, setPrecipitating] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [confirmState, setConfirmState] = useState<
+    { kind: 'regenerate' } | { kind: 'precipitate'; target: 'case' | 'knowledge' } | null
+  >(null);
   const router = useRouter();
 
   const onPrecipitate = async (target: 'case' | 'knowledge') => {
     const label = target === 'case' ? '案例' : '知识';
-    if (!window.confirm(`把本次复盘沉淀为${label}草稿？生成后可在${label}详情页继续编辑并审批。`)) return;
     setPrecipitating(true);
     setError(null);
+    setConfirmState(null);
     try {
       const res = await precipitateReview(reviewId, target);
       const role = (getUser() as { role?: string } | null)?.role;
@@ -167,6 +177,9 @@ export default function ReviewDetailPage() {
   }, [reportStatus, reviewId]);
 
   const onGenerate = async () => {
+    setGenerating(true);
+    setError(null);
+    setConfirmState(null);
     try {
       await requestReport(reviewId);
       setReport(await getReport(reviewId));
@@ -175,7 +188,54 @@ export default function ReviewDetailPage() {
       setSelectedReportId(list[0]?.id ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : '生成失败');
+    } finally {
+      setGenerating(false);
     }
+  };
+
+  const requestGenerate = () => {
+    const current = reports[0] ?? report;
+    if (current?.status === 'ready') {
+      setConfirmState({ kind: 'regenerate' });
+      return;
+    }
+    void onGenerate();
+  };
+
+  /**
+   * 版本列表只回元数据（payload=null），直接开弹窗会因为没有 nextSteps 而永远不渲染。
+   * 优先复用详情/版本缓存里的全量报告，缺失时按版本 ID 补拉一次。
+   */
+  const openTaskModal = async () => {
+    const meta = reports[0] ?? report;
+    if (!meta) {
+      setError('报告不存在，请刷新后重试');
+      return;
+    }
+    const cached = [meta, report, selectedReportFull].find(
+      r => r?.id === meta.id && r.payload,
+    );
+    if (cached?.payload) {
+      if (cached.payload.nextSteps?.length) setTaskSource(cached);
+      else setError('这份报告没有可用的「下一步」动作，无法生成跟进任务');
+      return;
+    }
+    setTaskLoading(true);
+    setError(null);
+    try {
+      const full = await getReportVersion(reviewId, meta.id);
+      if (full.payload?.nextSteps?.length) setTaskSource(full);
+      else setError('这份报告没有可用的「下一步」动作，无法生成跟进任务');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '报告内容加载失败，请稍后重试');
+    } finally {
+      setTaskLoading(false);
+    }
+  };
+
+  const requestPrecipitate = (target: 'case' | 'knowledge') => {
+    if (precipitating) return;
+    setConfirmState({ kind: 'precipitate', target });
   };
 
   const onToggleShare = async (share: boolean) => {
@@ -191,8 +251,8 @@ export default function ReviewDetailPage() {
     }
   };
 
-  if (loading) return <div className="p-6 text-sm text-gray-500">加载中…</div>;
-  if (!detail) return <div className="p-6 text-sm text-red-600">{error || '复盘不存在'}</div>;
+  if (loading) return <div className="p-6 text-sm text-muted-foreground">加载中…</div>;
+  if (!detail) return <div className="p-6 text-sm text-danger">{error || '复盘不存在'}</div>;
 
   const s = detail.session;
   const currentUserId = (getUser() as { id?: string } | null)?.id;
@@ -213,105 +273,171 @@ export default function ReviewDetailPage() {
     ? (newerMeta.id === report?.id && report.payload ? report : newerMeta)
     : undefined;
   const canConvert = latestReport?.status === 'ready' && !s.leadId;
+  const canCreateTasks = isLatest && latestReport?.status === 'ready';
+  const statusHint = (() => {
+    if (!latestReport) return '下一步：点「生成报告」，分身会基于这段对话产出复盘。';
+    if (latestReport.status === 'queued' || latestReport.status === 'generating') {
+      return '报告生成中，通常 30–90 秒；可以先离开，完成后会自动保存。';
+    }
+    if (latestReport.status === 'failed') {
+      return '报告生成失败，可点「重新生成报告」再试；连续失败请联系管理员检查模型 Key。';
+    }
+    if (s.status === 'converted') {
+      return '已转线索：去「线索」继续记录跟进，报告仍可随时回看。';
+    }
+    if (!s.leadId) {
+      return '报告已就绪：先读结论，再决定「转线索」或把下一步「生成跟进任务」。';
+    }
+    return '报告已就绪：可以继续「生成跟进任务」，或把这次经验沉淀成知识/案例草稿。';
+  })();
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-gray-900">{s.customerName || '未命名客户'}</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            {s.topic || '无主题'} · 教练 {s.coachName || '—'} · {s.transcriptChars} 字
-          </p>
+    <div className="mx-auto max-w-[1200px] px-6 py-8">
+      <Link href="/sales/reviews" className="text-xs text-muted-foreground hover:text-primary">
+        ← 返回销售复盘
+      </Link>
+
+      <section className="mt-2 rounded-xl border border-border bg-surface-2 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-[26px] font-bold leading-tight text-foreground">
+                {s.customerName || '未命名客户'}
+              </h1>
+              <StatusBadge status={s.status} />
+              {latestReport && <StatusBadge status={latestReport.status} />}
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {s.topic || '无主题'} · 教练 {s.coachName || '—'} · {s.transcriptChars} 字
+              {s.createdAt ? ` · ${new Date(s.createdAt).toLocaleString()}` : ''}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <PageHelp
+              title="销售复盘详情使用说明"
+              intro="这份页面把一次客户对话变成可执行动作：先生成报告，再决定转线索、建跟进任务，或沉淀成知识/案例草稿。"
+              steps={[
+                { title: '读报告', desc: '报告包含摘要、亮点、问题、客户信号和下一步动作；可切换历史版本对比。' },
+                { title: '转线索', desc: '只有最新版报告已生成且尚未转过线索时才显示。' },
+                { title: '建跟进任务', desc: '把报告的「下一步」变成待办，最多选 3 条，可改标题、渠道和截止时间。' },
+                { title: '沉淀经验', desc: '沉淀为案例/知识会生成草稿，管理员审核通过后才生效。' },
+              ]}
+              actions={[
+                { label: '生成报告 / 重新生成报告', desc: '调用所选教练分身复盘这段对话。已有报告时重新生成会新增版本，不覆盖旧版本。', tone: 'primary' },
+                { label: '转线索', desc: '把客户和需求存进线索池，同一份复盘只能转一次；转完状态变为「已转线索」。' },
+                { label: '生成跟进任务', desc: '把报告里的下一步动作变成跟进任务，可逐条改标题、渠道、截止时间和话术。' },
+                { label: '沉淀为案例 / 沉淀为知识', desc: '把本次复盘整理成案例或知识草稿，进入对应库审核；不会直接生效。' },
+                { label: '允许教练看原文', desc: '勾选后教练能在教练台账查看完整对话；不勾选只看到摘要，之后可随时改。' },
+              ]}
+              notes={[
+                '历史版本只读：切换回最新版才能转线索、生成跟进任务或沉淀。',
+                '报告生成失败不会扣掉已有版本，可重试；连续失败请检查模型 Key。',
+              ]}
+            />
+            {reports.length > 1 && (
+              <select
+                value={selectedReport?.id ?? ''}
+                onChange={e => setSelectedReportId(e.target.value)}
+                className="h-9 rounded-[10px] border border-border-strong bg-surface px-2 text-sm text-foreground"
+                title="切换报告版本；历史版本只读"
+              >
+                {reports.map((r, i) => (
+                  <option key={r.id} value={r.id}>
+                    v{r.version}
+                    {i === 0 ? '（最新）' : ''}
+                  </option>
+                ))}
+              </select>
+            )}
+            {isLatest &&
+              (!latestReport ||
+                latestReport.status === 'failed' ||
+                latestReport.status === 'ready') && (
+                <Button
+                  variant="primary"
+                  onClick={requestGenerate}
+                  disabled={generating}
+                  title={latestReport ? '重新生成会新增一个版本，旧版本保留' : '让分身基于这段对话生成复盘报告'}
+                >
+                  {generating
+                    ? '提交中…'
+                    : latestReport ? '重新生成报告' : '生成报告'}
+                </Button>
+              )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2" data-tour="review-actions">
-          <StatusBadge status={s.status} />
+
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-4" data-tour="review-actions">
+          {canConvert && (
+            <Button
+              variant="secondary"
+              onClick={() => setLeadOpen(true)}
+              title="把客户和需求存进线索池；同一份复盘只能转一次"
+            >
+              转线索
+            </Button>
+          )}
+          {canCreateTasks && (
+            <Button
+              variant="neutral"
+              onClick={() => void openTaskModal()}
+              disabled={taskLoading}
+              title="把报告的「下一步」变成跟进任务，最多选 3 条"
+            >
+              {taskLoading ? '加载报告…' : '生成跟进任务'}
+            </Button>
+          )}
+          {canCreateTasks && (
+            <>
+              <Button
+                variant="neutral"
+                disabled={precipitating}
+                onClick={() => requestPrecipitate('case')}
+                title="生成案例草稿，需管理员在案例库审核后才生效"
+              >
+                沉淀为案例
+              </Button>
+              <Button
+                variant="neutral"
+                disabled={precipitating}
+                onClick={() => requestPrecipitate('knowledge')}
+                title="生成知识草稿，需管理员在知识库审核后才生效"
+              >
+                沉淀为知识
+              </Button>
+            </>
+          )}
           {isOwner && (
-            <label className="flex items-center gap-1 text-xs text-gray-600">
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
               <input
                 type="checkbox"
                 checked={s.shareTranscriptWithCoach}
                 onChange={e => onToggleShare(e.target.checked)}
               />
               允许教练看原文
+              <span className="text-muted-foreground-2">（不勾选只看摘要）</span>
             </label>
           )}
-          {reports.length > 1 && (
-            <select
-              value={selectedReport?.id ?? ''}
-              onChange={e => setSelectedReportId(e.target.value)}
-              className="rounded border border-gray-300 px-2 py-2 text-sm"
-            >
-              {reports.map((r, i) => (
-                <option key={r.id} value={r.id}>
-                  v{r.version}
-                  {i === 0 ? '（最新）' : ''}
-                </option>
-              ))}
-            </select>
-          )}
-          {isLatest &&
-            (!latestReport ||
-              latestReport.status === 'failed' ||
-              latestReport.status === 'ready') && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    latestReport?.status === 'ready' &&
-                    !window.confirm('重新生成会新增一个版本，确认继续？')
-                  ) {
-                    return;
-                  }
-                  void onGenerate();
-                }}
-                className="rounded bg-blue-600 px-4 py-2 text-sm text-white"
-              >
-                {latestReport ? '重新生成报告' : '生成报告'}
-              </button>
-            )}
-          {isLatest && canConvert && (
-            <button
-              type="button"
-              onClick={() => setLeadOpen(true)}
-              className="rounded border border-blue-300 px-3 py-2 text-sm text-blue-700"
-            >
-              转线索
-            </button>
-          )}
-          {isLatest && latestReport?.status === 'ready' && (
-            <button
-              type="button"
-              onClick={() => setTaskOpen(true)}
-              className="rounded border border-gray-300 px-3 py-2 text-sm"
-            >
-              生成任务
-            </button>
-          )}
-          {isLatest && latestReport?.status === 'ready' && (
-            <>
-              <button
-                type="button"
-                disabled={precipitating}
-                onClick={() => onPrecipitate('case')}
-                className="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
-              >
-                沉淀为案例
-              </button>
-              <button
-                type="button"
-                disabled={precipitating}
-                onClick={() => onPrecipitate('knowledge')}
-                className="rounded border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
-              >
-                沉淀为知识
-              </button>
-            </>
-          )}
         </div>
+      </section>
+
+      <div className="mt-3 rounded-xl border border-primary/30 bg-primary-light/40 px-4 py-2.5 text-sm text-primary">
+        {statusHint}
       </div>
 
+      <ActionLegend
+        className="mt-3"
+        items={[
+          { label: '生成报告 / 重新生成报告', desc: '让所选分身复盘这段对话；重新生成会新增版本，旧版本仍可查看。', tone: 'primary' },
+          { label: '转线索', desc: '把客户与需求存进线索池，之后在线索页记录跟进；一份复盘只能转一次。' },
+          { label: '生成跟进任务', desc: '把报告里的「下一步」变成待办，最多选 3 条，可改标题、渠道和截止时间。' },
+          { label: '沉淀为案例 / 知识', desc: '生成对应库的草稿，管理员审核通过后才生效，不会直接进入分身检索。' },
+          { label: '允许教练看原文', desc: '控制教练台账能看到摘要还是完整对话，随时可改。' },
+        ]}
+      />
+
       {error && (
-        <div className="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+        <div className="mt-3 rounded-xl border border-danger/30 bg-danger-bg px-4 py-2.5 text-sm text-danger">
           {error}
         </div>
       )}
@@ -320,11 +446,11 @@ export default function ReviewDetailPage() {
         <ReportWaitBanner report={latestReport} />
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-5 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           {!isLatest && (
-            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              历史版本，只读；转线索/生成任务请切回最新版。
+            <div className="rounded-xl border border-warning-text/30 bg-warning-bg px-4 py-2.5 text-sm text-warning-text">
+              历史版本只读；转线索、生成跟进任务请切回最新版。
             </div>
           )}
           {previous && (
@@ -338,8 +464,8 @@ export default function ReviewDetailPage() {
               <ReviewReportPanel report={selectedReport} segments={detail.segments} />
             </div>
           ) : (
-            <div className="rounded border border-gray-200 p-4 text-sm text-gray-500">
-              还没有报告。点右上角「生成报告」。
+            <div className="rounded-xl border border-border bg-surface-2 p-5 text-sm text-muted-foreground">
+              还没有报告。点右上角「生成报告」，分身会基于这段对话输出复盘。
             </div>
           )}
           {selectedReport && newerReport && !isLatest && (
@@ -363,21 +489,54 @@ export default function ReviewDetailPage() {
         </div>
 
         <aside className="space-y-4">
-          <section className="rounded border border-gray-200 p-4">
-            <h3 className="mb-2 text-sm font-medium text-gray-900">对话段落</h3>
+          <section className="rounded-xl border border-border bg-surface-2 p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">对话段落</h3>
+              <span className="text-[11px] text-muted-foreground">{detail.segments.length} 段</span>
+            </div>
             <div className="max-h-[60vh] space-y-2 overflow-auto">
               {detail.segments.map(seg => (
-                <div key={seg.id} className="rounded bg-gray-50 p-2 text-xs">
-                  <span className="mr-1 text-gray-400">
+                <div key={seg.id} className="rounded-lg bg-surface p-2 text-xs">
+                  <span className={`mr-1 font-medium ${
+                    seg.speaker === 'customer' ? 'text-warning-text' : 'text-primary'
+                  }`}>
                     {seg.speaker === 'customer' ? '客户' : seg.speaker === 'sales' ? '销售' : '未知'}
                   </span>
-                  <span className="whitespace-pre-wrap text-gray-800">{seg.text}</span>
+                  <span className="whitespace-pre-wrap text-foreground">{seg.text}</span>
                 </div>
               ))}
             </div>
           </section>
         </aside>
       </div>
+
+      <ConfirmDialog
+        open={confirmState !== null}
+        title={confirmState?.kind === 'regenerate' ? '重新生成报告？' : '沉淀为草稿？'}
+        confirmLabel={confirmState?.kind === 'regenerate' ? '重新生成' : '生成草稿'}
+        busy={generating || precipitating}
+        onCancel={() => setConfirmState(null)}
+        onConfirm={() => {
+          if (confirmState?.kind === 'regenerate') void onGenerate();
+          else if (confirmState?.kind === 'precipitate') void onPrecipitate(confirmState.target);
+        }}
+      >
+        {confirmState?.kind === 'regenerate' ? (
+          <>
+            <p>重新生成会新增一个报告版本，旧版本仍保留在版本下拉里。</p>
+            <p>生成需要调用模型，通常 30–90 秒；重复点击会重复消耗额度。</p>
+          </>
+        ) : (
+          <>
+            <p>
+              把本次复盘整理成
+              {confirmState?.kind === 'precipitate' && confirmState.target === 'case' ? '案例' : '知识'}
+              草稿。
+            </p>
+            <p>生成后可在对应库继续编辑；管理员审核通过后才会生效，不会直接进入分身检索。</p>
+          </>
+        )}
+      </ConfirmDialog>
 
       {leadOpen && (
         <ConvertLeadModal
@@ -394,14 +553,14 @@ export default function ReviewDetailPage() {
           }}
         />
       )}
-      {taskOpen && latestReport?.payload && (
+      {taskSource?.payload && (
         <TaskDraftModal
           reviewId={reviewId}
-          steps={latestReport.payload.nextSteps}
-          primaryAction={latestReport.payload.primaryAction}
-          onClose={() => setTaskOpen(false)}
+          steps={taskSource.payload.nextSteps ?? []}
+          primaryAction={taskSource.payload.primaryAction}
+          onClose={() => setTaskSource(null)}
           onCreated={() => {
-            setTaskOpen(false);
+            setTaskSource(null);
             void load(true);
           }}
         />
@@ -424,7 +583,7 @@ function ReportWaitBanner({ report }: { report: ReviewReport }) {
   const longWait = elapsedSec > 180;
 
   return (
-    <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+    <div className="mt-3 rounded-xl border border-warning-text/30 bg-warning-bg px-4 py-2.5 text-sm text-warning-text">
       {queued
         ? `排队中（已等待 ${elapsedSec} 秒），前面还有其他报告在生成`
         : `生成中（已 ${elapsedSec} 秒，通常 30–90 秒）`}

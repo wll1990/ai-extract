@@ -10,6 +10,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Toast } from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
 import { EvidencePanel } from '@/components/admin/EvidencePanel';
+import { ReviewFlowNote } from '@/components/admin/ReviewFlowNote';
 
 const TABS: Array<{ kind: ReviewKind; label: string; path: ReviewPathKind; detail: (d: ReviewDraft) => string }> = [
   { kind: 'knowledge', label: '知识', path: 'knowledge', detail: d => `/admin/knowledge/${d.id}` },
@@ -20,7 +21,7 @@ const TABS: Array<{ kind: ReviewKind; label: string; path: ReviewPathKind; detai
 const PAGE_SIZE = 20;
 
 /**
- * AI 草稿审核台：知识 / 案例 / 考题统一入口。
+ * AI 待审视图：知识 / 案例 / 考题统一入口。
  * 行内展示生成证据，一键通过或丢弃（丢弃必须填理由）。
  */
 export default function ContentReviewPage() {
@@ -94,12 +95,15 @@ export default function ContentReviewPage() {
       <Toast message={toast} onDone={() => setToast(null)} />
       <div className="mx-auto max-w-[1080px]">
         <div className="mb-4">
-          <Link href="/admin/content" className="text-sm text-muted-foreground hover:underline">← 返回内容智能</Link>
-          <h1 className="mt-2 text-[26px] font-bold text-foreground">AI 草稿审核</h1>
+          <Link href="/admin/content" className="text-sm text-muted-foreground hover:underline">← 返回内容工厂</Link>
+          <h1 className="mt-2 text-[26px] font-bold text-foreground">AI 待审内容</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            只列 AI 生成的待审草稿。每条都带生成依据；通过或丢弃后不再出现在这里。
+            审核对象是 AI 生成的「知识 / 案例 / 考题」内容，不是审核 AI 模型本身。
+            它们和知识库/案例库的「待我审」是同一批记录，通过/丢弃走同一条审核链路；每条都带生成依据。
           </p>
         </div>
+
+        <ReviewFlowNote className="mb-4" />
 
         <div className="mb-4 flex gap-2">
           {TABS.map(t => (

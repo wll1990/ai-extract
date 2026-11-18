@@ -277,19 +277,23 @@ public class SalesReviewReportParser {
                 throw new IllegalArgumentException("引用段落不属于本次会话：" + sid);
             }
             String quote = text(e, "quote");
-            if (quote != null && !quote.isBlank()) {
+            boolean keepQuote = quote != null && !quote.isBlank();
+            if (keepQuote) {
                 String source = squash(texts.getOrDefault(id, ""));
                 String needle = squash(quote);
                 // 引用可能跨段落切点：段落内找不到时再对比整篇原文
                 boolean matched = source.contains(needle)
                         || squash(String.join("", texts.values())).contains(needle);
                 if (!matched) {
-                    throw new IllegalArgumentException("引用原文与段落不匹配：" + sid);
+                    // 段落 ID 是真实的，只是模型转写原话有出入：保留段落引用、丢弃对不上的原文，
+                    // 避免整份报告因为一处引用漂移而永远生成失败（worker 会反复重试同一提示词）。
+                    log.warn("报告引用原文与段落不匹配，已丢弃该原文 segmentId={} quote={}", sid, quote);
+                    keepQuote = false;
                 }
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("segmentId", sid);
-            if (quote != null) {
+            if (keepQuote) {
                 m.put("quote", quote);
             }
             out.add(m);

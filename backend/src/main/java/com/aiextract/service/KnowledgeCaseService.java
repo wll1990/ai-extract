@@ -117,7 +117,7 @@ public class KnowledgeCaseService {
 
     /**
      * 企业内容提交到公共库：生成一条 company_id=null、status=pending 的候选，
-     * source_company_id 记录来源企业（只做溯源展示）。超管在公共 Tab 审批后成为公共知识。
+     * source_company_id 记录来源企业（只做溯源展示）。超管在公共 Tab 通过后成为公共知识。
      */
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeEntry submitKnowledgeToPublic(UUID id) {
@@ -263,7 +263,7 @@ public class KnowledgeCaseService {
         KnowledgeEntry k = knowledgeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(404, "知识不存在: " + id));
         if (!KnowledgeEntry.STATUS_DEPRECATED.equals(k.getStatus())) {
-            // 记住来源状态：草稿被“放弃”后恢复必须回草稿，不能绕过审批直接生效
+            // 记住来源状态：草稿被“放弃”后恢复必须回草稿，不能绕过审核直接生效
             k.setPreviousStatus(k.getStatus());
         }
         k.setStatus(KnowledgeEntry.STATUS_DEPRECATED);
@@ -310,7 +310,7 @@ public class KnowledgeCaseService {
     }
 
     /**
-     * 审批通过知识条目（pending/draft → active）。失效时间必填（三次评审#3）：
+     * 审核通过知识条目（pending/draft → active）。失效时间必填（三次评审#3）：
      * 优先用入参，入参为空时回退已有失效时间，两者皆空则拒绝。
      */
     @Transactional(rollbackFor = Exception.class)
@@ -318,10 +318,10 @@ public class KnowledgeCaseService {
         KnowledgeEntry k = knowledgeRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(404, "知识不存在: " + id));
         if (KnowledgeEntry.STATUS_DEPRECATED.equals(k.getStatus())) {
-            throw new BusinessException(400, "已废弃的知识不能审批");
+            throw new BusinessException(400, "已废弃的知识不能审核通过");
         }
         if (KnowledgeEntry.STATUS_ACTIVE.equals(k.getStatus())) {
-            throw new BusinessException(400, "该知识已生效，无需重复审批");
+            throw new BusinessException(400, "该知识已生效，无需重复通过");
         }
         List<String> blockers = ContentQualityGate.approvalBlockersKnowledge(
                 k.getTitle(), k.getContent(), k.getCategory(), k.isBookMode());
@@ -330,7 +330,7 @@ public class KnowledgeCaseService {
         }
         LocalDateTime effectiveExpire = expireAt != null ? expireAt : k.getExpireAt();
         if (effectiveExpire == null) {
-            throw new BusinessException(400, "审批通过必须指定失效时间");
+            throw new BusinessException(400, "审核通过必须指定失效时间");
         }
         k.setStatus(KnowledgeEntry.STATUS_ACTIVE);
         k.setExpireAt(effectiveExpire);
@@ -361,7 +361,7 @@ public class KnowledgeCaseService {
         if (source.getCompanyId() != null) {
             throw new BusinessException(400, "只能复制公共知识");
         }
-        // 未审核的公共候选不对租户开放，避免“复制后自行审批”绕过平台审核
+        // 未审核的公共候选不对租户开放，避免“复制后自行审核”绕过平台审核
         if (!KnowledgeEntry.STATUS_ACTIVE.equals(source.getStatus())) {
             throw new BusinessException(400, "只能复制已生效的公共知识");
         }
@@ -550,7 +550,7 @@ public class KnowledgeCaseService {
         maskCaseRequest(req, c.getCompanyId() == null);
         validateResult(req.getResult());
         validateJsonFields(req.getCustomerProfile(), req.getDialogueQuote());
-        // 编辑后重算准入问题：补齐了哪些、还缺哪些，审批时以此为准
+        // 编辑后重算准入问题：补齐了哪些、还缺哪些，审核时以此为准
         ContentQualityGate.QualityReport report = ContentQualityGate.checkCase(
                 req.getTitle(), req.getResult(), req.getObjection(), req.getCustomerProfile(),
                 req.getKeyActions(), req.getScripts(), req.getDialogueQuote(), req.getSource(),
@@ -635,16 +635,16 @@ public class KnowledgeCaseService {
         return c;
     }
 
-    /** 审批通过案例（pending/draft → active）。失效时间可选（案例可长期有效）。 */
+    /** 审核通过案例（pending/draft → active）。失效时间可选（案例可长期有效）。 */
     @Transactional(rollbackFor = Exception.class)
     public IndustryCase approveCase(UUID id, LocalDateTime expireAt) {
         IndustryCase c = caseRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(404, "案例不存在: " + id));
         if (IndustryCase.STATUS_DEPRECATED.equals(c.getStatus())) {
-            throw new BusinessException(400, "已废弃的案例不能审批");
+            throw new BusinessException(400, "已废弃的案例不能审核通过");
         }
         if (IndustryCase.STATUS_ACTIVE.equals(c.getStatus())) {
-            throw new BusinessException(400, "该案例已生效，无需重复审批");
+            throw new BusinessException(400, "该案例已生效，无需重复通过");
         }
         List<String> blockers = ContentQualityGate.approvalBlockersCase(
                 c.getTitle(), c.getResult(), c.getQualityIssues());
@@ -905,7 +905,7 @@ public class KnowledgeCaseService {
 
     /**
      * 以历史版本内容生成新草稿（回滚）：不直接改历史版本，
-     * 而是基于目标版本内容创建 version=max+1、supersedesId=当前条目的 draft，经审批后生效。
+     * 而是基于目标版本内容创建 version=max+1、supersedesId=当前条目的 draft，经通过后生效。
      */
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeEntry rollbackKnowledge(UUID currentId, UUID versionId) {
@@ -1091,7 +1091,7 @@ public class KnowledgeCaseService {
         }
     }
 
-    /** 编辑只允许在审批前：已生效走「基于此版本修改」，已废弃不可编辑 */
+    /** 编辑只允许在通过前：已生效走「基于此版本修改」，已废弃不可编辑 */
     private void assertEditable(String status, String label) {
         if (KnowledgeEntry.STATUS_ACTIVE.equals(status)) {
             throw new BusinessException(400, label + "已生效，不能直接编辑；请用「基于此版本修改」生成新草稿");
@@ -1105,7 +1105,7 @@ public class KnowledgeCaseService {
      * 恢复被废弃条目时的目标状态。
      *
      * <p>草稿/待审原样恢复；原先生效的，如果同 root 里已经有其他生效版本，
-     * 只能回到 pending 等人工重新审批，避免版本链出现两个 active。历史数据为空时按 pending 处理。</p>
+     * 只能回到 pending 等人工重新审核，避免版本链出现两个 active。历史数据为空时按 pending 处理。</p>
      */
     private String resolveRestoredStatus(UUID rootId, UUID id, String previousStatus,
                                          String draftStatus, String pendingStatus, String activeStatus,
@@ -1261,7 +1261,7 @@ public class KnowledgeCaseService {
         LocalDateTime now = LocalDateTime.now();
         for (KnowledgeEntry other : knowledgeRepository.findByRootIdAndStatus(
                 root, KnowledgeEntry.STATUS_ACTIVE)) {
-            if (!other.getId().equals(id)) {
+            if (!other.getId().equals(id) && !isNewerVersion(other.getVersion(), current.getVersion())) {
                 other.setPreviousStatus(KnowledgeEntry.STATUS_ACTIVE);
                 other.setStatus(KnowledgeEntry.STATUS_DEPRECATED);
                 other.setUpdatedAt(now);
@@ -1281,7 +1281,7 @@ public class KnowledgeCaseService {
         LocalDateTime now = LocalDateTime.now();
         for (IndustryCase other : caseRepository.findByRootIdAndStatus(
                 root, IndustryCase.STATUS_ACTIVE)) {
-            if (!other.getId().equals(id)) {
+            if (!other.getId().equals(id) && !isNewerVersion(other.getVersion(), current.getVersion())) {
                 other.setPreviousStatus(IndustryCase.STATUS_ACTIVE);
                 other.setStatus(IndustryCase.STATUS_DEPRECATED);
                 other.setUpdatedAt(now);
@@ -1368,7 +1368,7 @@ public class KnowledgeCaseService {
 
     /**
      * 事务提交后触发向量化；无事务上下文（单测）则同步执行。
-     * 仅 active 状态写向量：pending/draft/deprecated 审批前不参与检索，无需向量，
+     * 仅 active 状态写向量：pending/draft/deprecated 通过前不参与检索，无需向量，
      * 避免 create(默认 pending) 与 approve 重复调用 embedding（API 成本 ×2）。
      */
     private void scheduleReEmbed(KnowledgeEntry k) {
@@ -1602,7 +1602,7 @@ public class KnowledgeCaseService {
             }
             return new CaseRevisionResult(
                     title,
-                    str(map.get("customerProfile")),
+                    profileText(map.get("customerProfile")),
                     str(map.get("objection")),
                     str(map.get("emotionChange")),
                     str(map.get("keyActions")),
@@ -1619,6 +1619,34 @@ public class KnowledgeCaseService {
 
     private static String str(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    /**
+     * 异步向量化完成顺序不保证：旧版收尾时如果同链已有更高版本的 active，
+     * 不能把新版下线；让新版自己的收尾去下线旧版。
+     */
+    private static boolean isNewerVersion(Integer otherVersion, Integer currentVersion) {
+        return otherVersion != null && currentVersion != null && otherVersion > currentVersion;
+    }
+
+    /**
+     * 客户画像是 JSONB：模型可能返回对象，也可能返回 JSON 字符串。
+     *
+     * <p>生产事故：模型把输入里的原始 JSON 直接塞进字符串且未转义，整段 JSON 解析失败（502）。
+     * 现在两种形态都接受，统一序列化成 JSON 文本再交给 {@link #normalizeJsonObject}。</p>
+     */
+    private String profileText(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?> || value instanceof List<?>) {
+            try {
+                return objectMapper.writeValueAsString(value);
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return String.valueOf(value);
     }
 
     private static String nvl(String value) {

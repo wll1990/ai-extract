@@ -103,7 +103,7 @@ export function setLastShareCode(code: string): void {
 
 // ---- 请求层 ----
 
-async function cFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function cFetch<T>(path: string, options: RequestInit = {}, retried = false): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const auth = getCAuth();
   if (auth?.token) headers['Authorization'] = `Bearer ${auth.token}`;
@@ -112,6 +112,12 @@ async function cFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
   if (!res.ok) {
+    // 公开接口不该被浏览器里的过期游客凭证拖垮：清掉本地凭证后匿名重试一次
+    if ((res.status === 401 || res.status === 403) && path.startsWith('/public/')
+        && auth?.token && !retried && typeof window !== 'undefined') {
+      clearCAuth();
+      return cFetch<T>(path, options, true);
+    }
     if ((res.status === 401 || res.status === 403) && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('guest:auth-required'));
       throw new Error('AUTH_REQUIRED');

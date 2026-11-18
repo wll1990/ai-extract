@@ -10,6 +10,7 @@ import com.aiextract.model.TrainingAttempt;
 import com.aiextract.model.TrainingTask;
 import com.aiextract.model.TrainingTaskRecord;
 import com.aiextract.repository.EvaluationItemRepository;
+import com.aiextract.service.QueryGate;
 import com.aiextract.repository.SkillConversationRepository;
 import com.aiextract.repository.TrainingAssignmentRepository;
 import com.aiextract.repository.TrainingAttemptRepository;
@@ -72,6 +73,7 @@ class TrainingAttemptServiceTest {
     @Mock private com.aiextract.service.TrainingRateLimiter rateLimiter;
     @Mock private TrainingProgressService progressService;
     @Mock private ChatStreamService chatStreamService;
+    @Mock private QueryGate queryGate;
     @Mock private ChatStreamAdapter chatStreamAdapter;
     @Mock private PromptLoader promptLoader;
 
@@ -88,7 +90,7 @@ class TrainingAttemptServiceTest {
     void setUp() {
         service = new TrainingAttemptService(accessService, companyScopeService, recordRepository, assignmentRepository,
                 attemptRepository, reviewRepository, taskRepository, itemRepository, conversationRepository,
-                messageRepository, rateLimiter, progressService, chatStreamService, chatStreamAdapter,
+                messageRepository, rateLimiter, progressService, chatStreamService, queryGate, chatStreamAdapter,
                 promptLoader, objectMapper);
         TokenContext.set(userId, companyId);
         org.springframework.test.util.ReflectionTestUtils.setField(service, "maxPracticeMessages", 40);

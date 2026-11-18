@@ -13,7 +13,7 @@ import com.aiextract.repository.UserRepository;
 import com.aiextract.repository.InterviewSessionRepository;
 import com.aiextract.repository.SkillMessageRepository;
 import com.aiextract.repository.SpaceRepository;
-import com.aiextract.util.JwtUtil;
+import com.aiextract.service.session.SessionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,18 +50,12 @@ public class CAuthService {
     private final SkillMessageRepository skillMessageRepository;
     private final SpaceRepository spaceRepository;
     private final InterviewSessionRepository sessionRepository;
-    private final JwtUtil jwtUtil;
+    private final SessionService sessionService;
     private final PasswordEncoder passwordEncoder;
     private final AnalyticsEventRepository analyticsEventRepository;
     private final ObjectMapper objectMapper;
 
-    @Value("${app.share.c-user-token-ttl-days:30}")
-    private int cUserTokenTtlDays;
-
     private final OssService ossService;
-
-    @Value("${app.share.guest-token-ttl-days:7}")
-    private int guestTokenTtlDays;
 
     @Value("${app.share.guest-message-limit:5}")
     private int guestMessageLimit;
@@ -227,10 +221,7 @@ public class CAuthService {
     }
 
     private String issueToken(User user) {
-        boolean isGuest = User.STATUS_GUEST.equals(user.getStatus());
-        long ttlDays = isGuest ? guestTokenTtlDays : cUserTokenTtlDays;
-        long version = user.getTokenVersion() == null ? 0L : user.getTokenVersion();
-        return jwtUtil.generateToken(user.getId(), null, user.getRole(), ttlDays * 86_400_000L, version);
+        return sessionService.create(user, null, null).token();
     }
 
     private GuestSessionResponse buildSession(User user, String token) {

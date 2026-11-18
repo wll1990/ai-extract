@@ -1,11 +1,12 @@
 package com.aiextract.service;
 
-import com.aiextract.common.ErrorMessages;
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.config.PromptLoader;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.*;
 import com.aiextract.repository.*;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pgvector.PGvector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,7 @@ public class AdminGrainService {
     private final DomainConfigLoader domainConfigLoader;
     private final KnowledgeGapRepository knowledgeGapRepository;
     private final CandidateGrainRepository candidateGrainRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 候选颗粒审批的落库部分（事务内）。嵌入在事务外计算后传入。
@@ -134,7 +136,7 @@ public class AdminGrainService {
             throw new BusinessException(500, "颗粒向量写入失败（影响行数 " + updated + "）");
         }
         invalidateCache(g);
-        writeAudit("edit_grain", grainId, body.keySet().toString());
+        writeAudit("edit_grain", grainId, Map.of("fields", body.keySet()));
 
         return g;
     }
@@ -237,7 +239,7 @@ public class AdminGrainService {
             throw new BusinessException(500, "颗粒向量写入失败（影响行数 " + updated + "）");
         }
         resolveGapIfPresent(body, skillId);
-        writeAudit("create_grain", g.getId(), "{\"action\":\"create\"}");
+        writeAudit("create_grain", g.getId(), Map.of("action", "create"));
         return g;
     }
 
@@ -284,7 +286,7 @@ public class AdminGrainService {
         }
         g.setStatus("active");
         grainRepository.save(g);
-        writeAudit("restore_grain", grainId, "{\"action\":\"restore\"}");
+        writeAudit("restore_grain", grainId, Map.of("action", "restore"));
     }
 
     /** 废弃颗粒 */
@@ -294,7 +296,7 @@ public class AdminGrainService {
             .orElseThrow(() -> new BusinessException(404,"颗粒不存在: " + grainId));
         g.setStatus("deprecated");
         grainRepository.save(g);
-        writeAudit("deprecate_grain", grainId, "{\"action\":\"deprecate\"}");
+        writeAudit("deprecate_grain", grainId, Map.of("action", "deprecate"));
     }
 
     /**
@@ -353,8 +355,20 @@ public class AdminGrainService {
             .editedBy(by).editNote(note).createdAt(LocalDateTime.now()).build());
     }
 
-    /** 写操作审计。adminId 从请求上下文获取，无法获取时用 "system" 标记。 */
-    private void writeAudit(String action, UUID targetId, String detail) {
+    /**
+     * 写操作审计。adminId 从请求上下文获取，无法获取时用 "system" 标记。
+     *
+     * <p>detail 列是 JSONB，必须序列化成合法 JSON；曾经直接写
+     * {@code [expertThought, ...]} 导致提交时 22P02，整个颗粒编辑事务被回滚。</p>
+     */
+    private void writeAudit(String action, UUID targetId, Map<String, ?> detail) {
+        String detailJson;
+        try {
+            detailJson = objectMapper.writeValueAsString(detail);
+        } catch (JsonProcessingException e) {
+            log.warn("审计 detail 序列化失败 action={}: {}", action, e.getMessage());
+            detailJson = "{\"action\":\"" + action + "\"}";
+        }
         try {
             UUID adminId = null;
             try {
@@ -367,7 +381,7 @@ public class AdminGrainService {
             auditLogRepository.save(AdminAuditLog.builder()
                 .id(UUID.randomUUID())
                 .adminId(adminId != null ? adminId : UUID.fromString("00000000-0000-0000-0000-000000000000"))
-                .action(action).targetType("grain").targetId(targetId).detail(detail)
+                .action(action).targetType("grain").targetId(targetId).detail(detailJson)
                 .createdAt(LocalDateTime.now()).build());
         } catch (Exception e) { log.debug("审计日志写入失败: {}", e.getMessage()); }
     }

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getToken } from '@/lib/storage';
 import { API_BASE, apiClient, authHeaders} from '@/lib/api/client';
 import { csrfHeader } from '@/lib/csrf';
@@ -40,6 +41,7 @@ export default function ProductStep({
   showDemoModal, setShowDemoModal,
   onPreviewReport, onDownloadReport, onDataRefresh,
 }: Props) {
+  const router = useRouter();
   const [savingInline, setSavingInline] = useState(false);
   const [inlineEdit, setInlineEdit] = useState<Record<string, string>>(() => {
     // init from data
@@ -233,15 +235,32 @@ export default function ProductStep({
               <h3 className="text-sm font-semibold mb-1">🧪 发布前验证</h3>
               <p className="text-xs text-muted-foreground-2">在发布前测试AI分身的实际表现：对练、问答或AI自动模拟</p>
             </div>
-            <button onClick={() => setShowDemoModal(true)}
-              className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover">
-              🚀 开始验证
-            </button>
+            <div className="flex items-center gap-2">
+              {/* 试问台：发布前先自己问几句，看引用了哪几条经验、哪里答偏了 */}
+              <button onClick={() => router.push(`/my/skills/${skillId}/trial`)}
+                className="px-4 py-2.5 border border-border rounded-lg text-sm font-medium hover:bg-primary-light">
+                🧪 试问这个分身
+              </button>
+              <button onClick={() => setShowDemoModal(true)}
+                className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-hover">
+                🚀 开始验证
+              </button>
+            </div>
           </div>
           {demoEvals.length > 0 && (
             <div className="mt-3 flex items-center gap-2 text-xs text-green-600">
               <span>✅</span>
               <span>已完成 {demoEvals.length} 次验证{latestEval?.score != null && ` · 最高${latestEval.score}分`}</span>
+            </div>
+          )}
+          {(data.skillsSummary.trialCount ?? 0) > 0 && (
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground-2">
+              <span>🧪</span>
+              <span>
+                已试问 {data.skillsSummary.trialCount} 次
+                {(data.skillsSummary.refinedGrainCount ?? 0) > 0
+                  && ` · 纠正了 ${data.skillsSummary.refinedGrainCount} 条经验`}
+              </span>
             </div>
           )}
         </div>

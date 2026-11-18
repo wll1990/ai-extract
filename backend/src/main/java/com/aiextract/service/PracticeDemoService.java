@@ -40,6 +40,7 @@ public class PracticeDemoService {
     private final PromptLoader promptLoader;
     private final DomainConfigLoader domainConfigLoader;
     private final ObjectMapper objectMapper;
+    private final KnowledgeCaseContextService knowledgeCaseContextService;
 
     @Value("${app.evaluation.auto-demo-rounds:10}")
     private int autoDemoRounds;
@@ -142,6 +143,18 @@ public class PracticeDemoService {
      */
     public Map<String, Object> evaluatePracticeResponse(UUID skillId, String sceneTag,
             String customerMessage, String myResponse, String previousChampionAnswer, int retryCount) {
+        return evaluatePracticeResponse(skillId, sceneTag, customerMessage, myResponse,
+                previousChampionAnswer, retryCount, KnowledgeCaseContextService.emptyHits());
+    }
+
+    /**
+     * 对练单轮评估（含知识/案例参考）。
+     *
+     * <p>知识事实与案例完整打法只用于教练侧评价，不进入客户角色提示词。</p>
+     */
+    public Map<String, Object> evaluatePracticeResponse(UUID skillId, String sceneTag,
+            String customerMessage, String myResponse, String previousChampionAnswer, int retryCount,
+            KnowledgeCaseRetriever.KnowledgeCaseHits kcHits) {
         Skill skill = skillRepository.findById(skillId)
                 .orElseThrow(() -> new RuntimeException("Skill 不存在: " + skillId));
         String domain = domainConfigLoader.resolveDomain(skill);
@@ -156,13 +169,15 @@ public class PracticeDemoService {
         String championAnswer = bestGrain != null && bestGrain.getStandardScript() != null
                 ? bestGrain.getStandardScript() : "暂无参考话术";
 
+        String kcContext = knowledgeCaseContextService.buildCoachContext(kcHits);
         String prompt = promptLoader.format("practice_evaluate_round.md", Map.of(
                 "sceneTag", sceneTag != null ? sceneTag : "",
                 "customerMessage", customerMessage != null ? customerMessage : "",
                 "myResponse", myResponse != null ? myResponse : "",
                 "championAnswer", championAnswer,
                 "retryCount", String.valueOf(retryCount),
-                "maxRetries", String.valueOf(maxRetriesPerAngle)), domain);
+                "maxRetries", String.valueOf(maxRetriesPerAngle),
+                "kc_context", kcContext), domain);
 
         long t0 = System.currentTimeMillis();
         String raw = chatStreamAdapter.chat(prompt);
@@ -183,6 +198,10 @@ public class PracticeDemoService {
         r.put("grains", bestGrain != null
                 ? buildGrainTraces(new GrainMatch(MatchLevel.SEMANTIC, List.of(bestGrain), 0), false)
                 : List.of());
+        r.put("knowledgeSources", kcHits.knowledge().stream().map(k -> Map.of(
+                "id", k.id().toString(), "title", k.title(), "similarity", k.similarity())).toList());
+        r.put("caseSources", kcHits.cases().stream().map(c -> Map.of(
+                "id", c.id().toString(), "title", c.title(), "similarity", c.similarity())).toList());
         return r;
     }
 

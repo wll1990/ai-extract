@@ -50,6 +50,17 @@
         "as": "company_admin",
         "api": "POST /admin/cases/${draftId}/approve",
         "expect": { "status": 200, "json": { "data.status": "active" } }
+      },
+      {
+        "as": "company_admin",
+        "api": "GET /admin/cases/${draftId}",
+        "await": {
+          "sql": "select case when (select status from public.industry_case where id = :caseId) = 'deprecated' and (select status from public.industry_case where id = :draftId) = 'active' then 'done' else 'wait' end",
+          "until": ["done"],
+          "maxAttempts": 30,
+          "intervalMs": 5000
+        },
+        "expect": { "status": 200 }
       }
     ],
     "assertions": [

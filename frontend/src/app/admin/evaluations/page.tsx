@@ -1,14 +1,19 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  listDatasets, createDataset, submitDataset, reviewDataset, publishDataset, createVersion, copyDataset, addItem,
+  listDatasets, listRuns, createDataset, submitDataset, reviewDataset, publishDataset, createVersion, copyDataset, addItem,
   PURPOSE_LABELS, DATASET_STATUS_LABELS, DATASET_STATUS_CLS,
   type EvaluationDataset,
 } from '@/lib/api/evaluation';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
+import { FlowSteps } from '@/components/ui/FlowSteps';
+import { LibraryStats } from '@/components/admin/LibraryStats';
+import { useScrollOnPageChange } from '@/lib/useScrollOnPageChange';
 
 const PURPOSES = ['regression', 'acceptance', 'training'] as const;
 
@@ -17,11 +22,13 @@ export default function AdminEvaluationsPage() {
   const [datasets, setDatasets] = useState<EvaluationDataset[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  useScrollOnPageChange(page);
   const [purpose, setPurpose] = useState('');
   const [status, setStatus] = useState('');
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
 
   // 新建题集内联表单
@@ -30,6 +37,20 @@ export default function AdminEvaluationsPage() {
   const [createPurpose, setCreatePurpose] = useState('acceptance');
   const [createDescription, setCreateDescription] = useState('');
   const [creating, setCreating] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // 流程条用的全局计数：题库 / 已发布 / 待审 / 运行
+  const [flowCounts, setFlowCounts] = useState({ datasets: 0, published: 0, inReview: 0, runs: 0 });
+
+  const loadFlowCounts = useCallback(() => {
+    Promise.all([
+      listDatasets({ page: 1, size: 1 }).then(d => d.total || 0).catch(() => 0),
+      listDatasets({ status: 'published', page: 1, size: 1 }).then(d => d.total || 0).catch(() => 0),
+      listDatasets({ status: 'in_review', page: 1, size: 1 }).then(d => d.total || 0).catch(() => 0),
+      listRuns({ page: 1, size: 1 }).then(d => d.total || 0).catch(() => 0),
+    ]).then(([datasets, published, inReview, runs]) => setFlowCounts({ datasets, published, inReview, runs }));
+  }, []);
+
+  useEffect(() => { loadFlowCounts(); }, [loadFlowCounts]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -47,11 +68,13 @@ export default function AdminEvaluationsPage() {
 
   const runAction = async (fn: () => Promise<unknown>, then?: () => void) => {
     setActing(true);
+    setActionError(null);
     try {
       await fn();
       if (then) then(); else await load();
+      loadFlowCounts();
     } catch (e) {
-      alert(e instanceof Error ? e.message : '操作失败');
+      setActionError(e instanceof Error ? e.message : '操作失败');
     } finally {
       setActing(false);
     }
@@ -82,6 +105,7 @@ export default function AdminEvaluationsPage() {
   };
 
   const totalPages = Math.max(1, Math.ceil(total / 20));
+  const activeFilterCount = [purpose, status].filter(Boolean).length;
 
   /** 用 3 个常见销售异议问题快速建一个示例题集，直接进详情继续编辑/发布 */
   const createExampleDataset = async () => {
@@ -147,48 +171,54 @@ export default function AdminEvaluationsPage() {
                 { title: '④ 看过程与结果', desc: '在运行列表点「看结果」：上面是计数卡与均分，下面是逐题表；点单题「看回答与证据」查看 AI 回答、检索证据和分数。' },
                 { title: '⑤ 复核并定稿', desc: '逐题确认/改分/无法判断（理由必填），然后「定稿出报告」，报告可导出 Markdown。' },
               ]}
+              actions={[
+                { label: '＋ 新建题集', desc: '展开内联表单，创建空题集后进入详情逐题录入；用途决定后续出现在哪个入口。', tone: 'primary' },
+                { label: '运行与结果', desc: '创建运行、查看批次进度、逐题复核、定稿出报告。空列表会给出三步引导。' },
+                { label: '版本对比', desc: '对同一题集的不同版本/分身运行做对比；同版本才逐题可比，基线不按分身过滤。' },
+                { label: '编辑', desc: '进入题集详情，增删改题目、从知识/案例 AI 生成候选题（必须人工检查）。' },
+                { label: '提交审核', desc: '仅草稿可用。提交后进入待审核，题集内容暂不可改。' },
+                { label: '通过 / 退回', desc: '仅待审核可用。退回必须填写理由；通过后才可以发布。' },
+                { label: '发布', desc: '仅已通过可用。发布后版本冻结，才能被「新建运行」选用。' },
+                { label: '新版本', desc: '仅已发布可用。复制当前版本内容生成新草稿，改完重新走审核发布；旧版本仍可被运行选用。' },
+                { label: '复制', desc: '仅公共题集出现。复制一份企业私有题集后再改。' },
+                { label: '用示例题创建一个', desc: '快速生成含 3 道销售异议题的企业题集，用来先跑通流程；示例题仍需审核发布。' },
+              ]}
               notes={[
                 '结果在哪看：评测运行列表 → 某次运行「看结果」；报告在详情页顶部，刷新后自动加载。',
                 '最终分=人工改分优先；对比页也按最终分展示，同版本才逐题可比。',
                 '失败题可以直接「补知识/补案例」，补完生效后再跑一次同题集验证。',
+                '新建运行只列「已发布」题集版本和「已发布」个体分身；找不到选项时先检查这两件事。',
               ]}
             />
-            <button
-              onClick={() => router.push('/admin/evaluations/runs')}
-              className="rounded-full border border-border px-4 py-2.5 text-sm text-foreground hover:bg-primary-light transition-colors"
-            >
-              运行与结果
-            </button>
-            <button
-              onClick={() => router.push('/admin/evaluations/compare')}
-              className="rounded-full border border-border px-4 py-2.5 text-sm text-foreground hover:bg-primary-light transition-colors"
-            >
-              版本对比
-            </button>
-            <button
-              onClick={() => setShowCreate(s => !s)}
-              className="rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 transition-opacity"
-            >
-              {showCreate ? '收起' : '＋ 新建题集'}
-            </button>
+            <Button variant="neutral" onClick={() => router.push('/admin/evaluations/runs')}>运行与结果</Button>
+            <Button variant="neutral" onClick={() => router.push('/admin/evaluations/compare')}>版本对比</Button>
+            <Button variant="primary" onClick={() => setShowCreate(s => !s)}>
+              {showCreate ? '收起新建' : '＋ 新建题集'}
+            </Button>
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-2 px-4 py-3 text-xs text-muted-foreground">
-          <span className="font-semibold text-foreground">测试流程：</span>
-          <span>① 建题集并发布</span>
-          <span>→</span>
-          <span>② 新建运行（选题集 + 分身）</span>
-          <span>→</span>
-          <span>③ 点「看结果」逐题看回答与证据</span>
-          <span>→</span>
-          <span>④ 复核后定稿出报告</span>
-          <button onClick={() => router.push('/admin/evaluations/runs')}
-            className="ml-auto rounded-full border border-primary px-3 py-1 text-primary hover:bg-primary-light">
-            去看运行与结果
-          </button>
-        </div>
+        <LibraryStats
+          items={[
+            { key: 'all', label: '题集总数', value: flowCounts.datasets, active: !status, onClick: () => { setStatus(''); setPage(1); } },
+            { key: 'published', label: '已发布', value: flowCounts.published, tone: 'success', active: status === 'published', onClick: () => { setStatus('published'); setPage(1); } },
+            { key: 'review', label: '待审核', value: flowCounts.inReview, tone: 'warning', active: status === 'in_review', onClick: () => { setStatus('in_review'); setPage(1); } },
+            { key: 'runs', label: '运行记录', value: flowCounts.runs, onClick: () => router.push('/admin/evaluations/runs') },
+          ]}
+        />
 
+        <FlowSteps
+          compact
+          className="mb-4"
+          steps={[
+            { id: 'dataset', title: '建题集', desc: '', status: flowCounts.datasets > 0 ? 'done' : 'current', onClick: () => setShowCreate(true) },
+            { id: 'publish', title: '提交并发布', desc: '', status: flowCounts.published > 0 ? 'done' : flowCounts.inReview > 0 || flowCounts.datasets > 0 ? 'current' : 'todo', onClick: () => setStatus(flowCounts.inReview > 0 ? 'in_review' : 'draft') },
+            { id: 'run', title: '新建运行', desc: '', status: flowCounts.runs > 0 ? 'done' : flowCounts.published > 0 ? 'current' : 'todo', onClick: () => router.push('/admin/evaluations/runs?create=1') },
+            { id: 'review', title: '复核定稿', desc: '', status: flowCounts.runs > 0 ? 'current' : 'todo', onClick: () => router.push('/admin/evaluations/runs') },
+          ]}
+        />
+
+        {datasets.length === 0 && (
         <div className="mb-5 rounded-xl border border-border bg-surface-2 p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -205,6 +235,7 @@ export default function AdminEvaluationsPage() {
             </button>
           </div>
         </div>
+        )}
 
         {/* 新建题集内联表单 */}
         {showCreate && (
@@ -239,24 +270,57 @@ export default function AdminEvaluationsPage() {
           </div>
         )}
 
-        {/* 筛选 */}
-        <div className="mb-4 flex flex-wrap gap-2">
-          <select value={purpose} onChange={e => { setPurpose(e.target.value); setPage(1); }}
-            className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground">
-            <option value="">全部用途</option>
-            {PURPOSES.map(p => <option key={p} value={p}>{PURPOSE_LABELS[p]}</option>)}
-          </select>
-          <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}
-            className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground">
-            <option value="">全部状态</option>
-            {Object.entries(DATASET_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <input value={keyword} onChange={e => setKeyword(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') setPage(1); }}
-            placeholder="搜索题集名…"
-            className="rounded-md border border-border bg-surface-2 px-3 py-2 text-sm text-foreground w-56" />
-          <button onClick={() => setPage(1)} className="rounded-md bg-primary px-4 py-2 text-sm text-white hover:opacity-90">搜索</button>
+        {/* 工具栏：搜索 + 筛选，收进一个卡片 */}
+        <div className="mb-4 rounded-xl border border-border bg-surface p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-semibold text-foreground">题集列表</span>
+            {flowCounts.inReview > 0 && (
+              <button onClick={() => { setStatus('in_review'); setPage(1); }}
+                className="rounded-full border border-warning-text/40 bg-warning-bg px-2.5 py-1 text-[11px] font-medium text-warning-text">
+                待审核 {flowCounts.inReview}
+              </button>
+            )}
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <input value={keyword} onChange={e => setKeyword(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') setPage(1); }}
+                placeholder="搜索题集名…"
+                className="h-9 w-64 rounded-[10px] border border-border-strong bg-surface px-3 text-sm text-foreground" />
+              <Button variant="primary" onClick={() => setPage(1)}>搜索</Button>
+              <Button variant="neutral" onClick={() => setFiltersOpen(v => !v)}>
+                筛选{activeFilterCount > 0 ? ` ${activeFilterCount}` : ''}
+              </Button>
+            </div>
+          </div>
+          {filtersOpen && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
+              <select value={purpose} onChange={e => { setPurpose(e.target.value); setPage(1); }}
+                className="h-9 rounded-[10px] border border-border-strong bg-surface px-3 text-sm text-foreground">
+                <option value="">全部用途</option>
+                {PURPOSES.map(p => <option key={p} value={p}>{PURPOSE_LABELS[p]}</option>)}
+              </select>
+              <select value={status} onChange={e => { setStatus(e.target.value); setPage(1); }}
+                className="h-9 rounded-[10px] border border-border-strong bg-surface px-3 text-sm text-foreground">
+                <option value="">全部状态</option>
+                {Object.entries(DATASET_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+              {activeFilterCount > 0 && (
+                <button onClick={() => { setPurpose(''); setStatus(''); setPage(1); }}
+                  className="h-9 rounded-[10px] px-3 text-xs text-muted-foreground hover:text-foreground">
+                  清空筛选
+                </button>
+              )}
+            </div>
+          )}
         </div>
+
+        {actionError && (
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3 rounded-xl border border-danger/30 bg-danger-bg px-4 py-3 text-sm text-danger">
+            <span className="min-w-0 leading-6">{actionError}</span>
+            <button onClick={() => setActionError(null)} className="shrink-0 text-xs underline hover:no-underline">
+              关闭
+            </button>
+          </div>
+        )}
 
         {error && (
           <div className="mb-4 rounded-xl bg-danger-bg border border-red-200 px-4 py-3 text-sm text-danger">
@@ -331,15 +395,7 @@ export default function AdminEvaluationsPage() {
             )}
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-                <button disabled={page <= 1} onClick={() => setPage(p => p - 1)}
-                  className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">上一页</button>
-                <span className="text-muted-foreground">{page} / {totalPages}（共 {total} 条）</span>
-                <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}
-                  className="rounded-md border border-border px-3 py-1.5 disabled:opacity-40 hover:bg-primary-light">下一页</button>
-              </div>
-            )}
+            <Pagination page={page} totalPages={totalPages} totalElements={total} onPageChange={setPage} loading={loading} />
           </>
         )}
       </div>

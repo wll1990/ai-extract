@@ -1,8 +1,9 @@
 package com.aiextract.controller;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.config.RolePermissions;
 import com.aiextract.config.TokenContext;
-import com.aiextract.config.TokenRevocationService;
+import com.aiextract.service.session.SessionService;
 import com.aiextract.dto.LoginRequest;
 import com.aiextract.dto.LoginResponse;
 import com.aiextract.dto.RegisterRequest;
@@ -42,15 +43,15 @@ public class AuthController {
 
     private final AuthService authService;
     private final JwtUtil jwtUtil;
-    private final TokenRevocationService tokenRevocationService;
+    private final SessionService sessionService;
     private final com.aiextract.service.AuthRateLimiter authRateLimiter;
     private final com.aiextract.common.ClientIpResolver clientIpResolver;
 
     @org.springframework.beans.factory.annotation.Value("${jwt.cookie-secure:false}")
     private boolean cookieSecure;
 
-    @org.springframework.beans.factory.annotation.Value("${jwt.expiration}")
-    private long jwtExpirationMs;
+    @org.springframework.beans.factory.annotation.Value("${app.auth.session.cookie-max-age:30d}")
+    private java.time.Duration cookieMaxAge;
 
     @PostMapping("/login")
     public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
@@ -68,7 +69,7 @@ public class AuthController {
                                                HttpServletResponse httpResponse,
                                                HttpServletRequest httpRequest) {
         // 只限制匿名注册；管理员带 token 批量建号不受此限
-        if (!hasValidToken(httpRequest)) {
+        if (!isAuthenticated()) {
             authRateLimiter.checkRegister(clientIpResolver.resolve(httpRequest));
         }
         UUID inviteCompanyId = null;
@@ -80,20 +81,23 @@ public class AuthController {
             }
         }
 
-        String token = getTokenFromSecurityContext();
+        var authentication = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        boolean authenticated = authentication != null && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof UUID;
         String callerRole = null;
         UUID callerCompanyId = null;
         Set<String> callerPermissions = Set.of();
-        if (token != null) {
-            try {
-                callerRole = jwtUtil.getRoleFromToken(token);
-                callerCompanyId = jwtUtil.getCompanyIdFromToken(token);
-                callerPermissions = jwtUtil.getPermissionsFromToken(token);
-            } catch (Exception e) {
-                callerRole = null;
-                callerCompanyId = null;
-                callerPermissions = Set.of();
-            }
+        if (authenticated) {
+            callerCompanyId = TokenContext.getHomeCompanyId();
+            callerPermissions = authentication.getAuthorities().stream()
+                    .map(a -> a.getAuthority())
+                    .filter(a -> !RolePermissions.isRole(a))
+                    .collect(java.util.stream.Collectors.toSet());
+            callerRole = authentication.getAuthorities().stream()
+                    .map(a -> a.getAuthority())
+                    .filter(RolePermissions::isRole)
+                    .findFirst().orElse(null);
         }
 
         // 匿名注册：企业归属只认服务端签发的邀请令牌，忽略请求体 companyId
@@ -113,25 +117,19 @@ public class AuthController {
                 callerRole == null && inviteCompanyId != null);
         LoginResponse response = authService.register(request);
         // 仅自注册时设置 Cookie：管理员创建其他用户时已有自己的有效 token，不覆盖
-        if (!hasValidToken(httpRequest)) {
+        if (!isAuthenticated()) {
             setTokenCookie(httpResponse, response.getToken());
             setCsrfCookie(httpResponse);
         }
         return ApiResponse.success(response);
     }
 
-    /** 检查请求是否携带有效 Bearer token（判断是否为已登录管理员操作） */
-    private boolean hasValidToken(HttpServletRequest request) {
-        String authHeader = request.getHeader(org.springframework.http.HttpHeaders.AUTHORIZATION);
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            try {
-                jwtUtil.getUserIdFromToken(authHeader.substring(7));
-                return true;
-            } catch (Exception e) {
-                return false;
-            }
-        }
-        return false;
+    /** 当前请求是否已通过会话认证（header/cookie/Bearer 均可）。 */
+    private boolean isAuthenticated() {
+        var authentication = org.springframework.security.core.context.SecurityContextHolder
+                .getContext().getAuthentication();
+        return authentication != null && authentication.isAuthenticated()
+                && authentication.getPrincipal() instanceof UUID;
     }
 
     /** 修改自己的密码：成功后返回新 token 并刷新 Cookie */
@@ -151,13 +149,9 @@ public class AuthController {
 
     @GetMapping("/me")
     public ApiResponse<UserInfoResponse> getCurrentUser() {
-        String token = getTokenFromSecurityContext();
-        if (token == null || token.isBlank()) {
-            return ApiResponse.error(401, "未登录");
-        }
-        UUID userId = jwtUtil.getUserIdFromToken(token);
+        UUID userId = TokenContext.get();
         if (userId == null) {
-            return ApiResponse.error(401, "token无效");
+            return ApiResponse.error(401, "未登录");
         }
         UserInfoResponse response = authService.getCurrentUser(userId);
         return ApiResponse.success(response);
@@ -208,14 +202,9 @@ public class AuthController {
         String token = getTokenFromSecurityContext();
         if (token != null) {
             try {
-                String jti = jwtUtil.getJtiFromToken(token);
-                long remaining = (jwtUtil.getExpirationFromToken(token).getTime()
-                        - System.currentTimeMillis()) / 1000;
-                if (remaining > 0) {
-                    tokenRevocationService.revokeToken(jti, remaining);
-                }
+                sessionService.revoke(token);
             } catch (Exception e) {
-                log.warn("登出撤销 token 失败", e);
+                log.warn("登出撤销会话失败", e);
             }
         }
         return ApiResponse.success();
@@ -235,7 +224,7 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setSecure(cookieSecure);
         cookie.setPath("/");
-        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
+        cookie.setMaxAge((int) cookieMaxAge.toSeconds());
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
     }
@@ -252,7 +241,7 @@ public class AuthController {
         cookie.setHttpOnly(false);
         cookie.setSecure(cookieSecure);
         cookie.setPath("/");
-        cookie.setMaxAge((int) (jwtExpirationMs / 1000));
+        cookie.setMaxAge((int) cookieMaxAge.toSeconds());
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
     }

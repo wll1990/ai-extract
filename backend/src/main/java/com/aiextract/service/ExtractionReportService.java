@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 import org.springframework.ui.freemarker.FreeMarkerTemplateUtils;
+import org.springframework.web.util.HtmlUtils;
 
 import java.io.StringWriter;
 import java.time.LocalDate;
@@ -69,7 +70,10 @@ public class ExtractionReportService {
             return html;
         } catch (Exception e) {
             log.error("FreeMarker 渲染失败", e);
-            return "<html><body><h1>报告渲染失败</h1><p>" + e.getMessage() + "</p></body></html>";
+            String msg = e.getMessage() == null ? "未知错误" : e.getMessage();
+            return "<html><body><h1>报告渲染失败</h1><p>"
+                + HtmlUtils.htmlEscape(msg)
+                + "</p></body></html>";
         }
     }
 
@@ -271,7 +275,8 @@ public class ExtractionReportService {
         return String.format("""
             <!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><title>报告 · %s</title>
             <style>body{font-family:'PingFang SC',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#F7F8FA;margin:0}.card{background:#fff;border-radius:12px;padding:48px;text-align:center;max-width:480px;box-shadow:0 2px 12px rgba(0,0,0,0.06)}h1{font-size:24px;color:#1A2B4C;margin-bottom:16px}p{color:#6B7280;font-size:15px}.status{display:inline-block;margin-top:16px;padding:8px 20px;border-radius:20px;font-size:14px;background:#FFF3E0;color:#E65100}</style></head><body>
-            <div class="card"><h1>📋 报告生成中</h1><p>%s</p><div class="status">⏳ 请稍后刷新</div></div></body></html>""", ownerName, statusMsg);
+            <div class="card"><h1>📋 报告生成中</h1><p>%s</p><div class="status">⏳ 请稍后刷新</div></div></body></html>""",
+            HtmlUtils.htmlEscape(ownerName), HtmlUtils.htmlEscape(statusMsg));
     }
 
     private String cleanJson(String raw) {

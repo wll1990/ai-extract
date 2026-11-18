@@ -1,5 +1,7 @@
 package com.aiextract.service;
 
+import com.aiextract.config.PromptSecurity;
+
 import com.aiextract.config.DomainConfigLoader;
 import com.aiextract.model.ChatChunk;
 import com.aiextract.model.EvaluationItem;
@@ -56,7 +58,7 @@ public class EvaluationAnswerService {
     @Value("${app.rag.kc-top-k:3}")
     private int kcTopK;
 
-    @Value("${app.rag.kc-knowledge-min-similarity:0.35}")
+    @Value("${app.rag.kc-knowledge-min-similarity:0.45}")
     private double kcKnowledgeMinSimilarity;
 
     @Value("${app.rag.kc-case-min-similarity:0.50}")
@@ -85,7 +87,7 @@ public class EvaluationAnswerService {
 
         String systemPrompt = promptAssembly.buildSkillSystemPrompt(
                 skill, grains.grains(), grains.tiers(), grains.similarities(), EVALUATION_MODE, null)
-                + buildKnowledgeCaseContext(kcHits);
+                + PromptSecurity.wrapUntrusted(buildKnowledgeCaseContext(kcHits));
         // conversationId 用一次性 UUID：评测不读任何历史消息，也不会写入消息表
         List<Map<String, String>> messages = promptAssembly.buildChatMessages(
                 systemPrompt, question, UUID.randomUUID(), null);

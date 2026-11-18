@@ -261,7 +261,7 @@ export default function AdminCasesNewPage() {
                 <button onClick={() => setSourceKind('book')}
                   className={`rounded-xl border p-3 text-left ${sourceKind === 'book' ? 'border-primary bg-primary-light' : 'border-border bg-surface hover:bg-surface-2'}`}>
                   <p className="text-sm font-medium text-foreground">书籍 / 课程案例</p>
-                  <p className="mt-1 text-xs text-muted-foreground">二手案例，只提取信息完整的客户故事，一律先落「草稿」并标注书名章节，补齐后才能审批。</p>
+                  <p className="mt-1 text-xs text-muted-foreground">二手案例，只提取信息完整的客户故事，一律先落「草稿」并标注书名章节，补齐后才能审核。</p>
                 </button>
               </div>
               {sourceKind === 'book' && (
@@ -306,7 +306,7 @@ export default function AdminCasesNewPage() {
                   {task.status === 'done' ? `（产出 ${task.producedCount} 个）` : ''}
                 </p>
                 {task.sourceKind === 'book' && (
-                  <p className="mt-1 text-xs text-primary">书籍模式：案例已标注书名与章节，且全部为草稿，需补齐字段后审批。</p>
+                  <p className="mt-1 text-xs text-primary">书籍模式：案例已标注书名与章节，且全部为草稿，需补齐字段后审核。</p>
                 )}
                 {(task.skippedCount ?? 0) > 0 && (
                   <p className="mt-1 text-xs text-muted-foreground">已跳过 {task.skippedCount} 条（重复、结果不明或超出单次上限）。</p>

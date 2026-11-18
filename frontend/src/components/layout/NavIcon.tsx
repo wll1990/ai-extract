@@ -14,6 +14,7 @@ import {
   ClipboardText,
   Coins,
   Diamond,
+  Factory,
   FilmSlate,
   Flask,
   FolderSimple,
@@ -69,6 +70,7 @@ const ICONS: Record<string, Icon> = {
   场景地图: Path,
   数据看板: ChartLineUp,
   评测中心: Flask,
+  内容工厂: Factory,
 
   运营总览: SquaresFour,
   用户管理: Users,

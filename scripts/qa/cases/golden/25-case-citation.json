@@ -1,0 +1,81 @@
+[
+  {
+    "id": "GOLD-CASE-02",
+    "set": "golden",
+    "priority": "P0",
+    "domain": "knowledge",
+    "roles": ["company_admin", "employee"],
+    "llm": true,
+    "sourceBug": null,
+    "steps": [
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases",
+        "body": {
+          "title": "QA-${runId}-案例引用命中",
+          "customerProfile": "{\"industry\":\"精密制造\",\"scale\":\"500人\",\"role\":\"采购总监\"}",
+          "funnelStage": "objection",
+          "sceneTag": "预算冻结",
+          "objection": "客户年度预算被冻结，但生产线改造需求真实存在，担心今年签不了。",
+          "emotionChange": "焦虑 → 试探 → 认可",
+          "advanceNodes": "需求确认 → 预算冻结 → 拆分年度合同 → 试点先行 → 续签",
+          "keyActions": "把整体改造拆成当年度试点与次年扩容两段合同，试点走部门预算。",
+          "scripts": "先用试点验证改造收益，明年扩容时预算口径就变成已验证项。",
+          "result": "win",
+          "reusablePoints": "预算冻结时先做小规模试点，用结果换次年预算。",
+          "failurePoints": "第一版方案按整体报价，直接撞上预算冻结。",
+          "source": "QA 黄金链路",
+          "expireAt": "2027-12-31T23:59:59"
+        },
+        "expect": {
+          "status": 200
+        },
+        "save": {
+          "caseId": "data.id"
+        }
+      },
+      {
+        "as": "company_admin",
+        "api": "POST /admin/cases/${caseId}/approve",
+        "expect": {
+          "status": 200
+        }
+      },
+      {
+        "as": "employee",
+        "sse": true,
+        "api": "POST /skills/0a000000-0000-0000-0000-000000000032/chat",
+        "body": {
+          "message": "客户年度预算被冻结，但生产线改造需求是真的，这种预算冻结的客户怎么推进？",
+          "sessionId": "QA-${runId}-case-citation"
+        },
+        "await": {
+          "sql": "select (embedding is not null)::text from public.industry_case where id = :caseId",
+          "until": ["true"],
+          "maxAttempts": 30,
+          "intervalMs": 5000
+        },
+        "expect": {
+          "status": 200,
+          "eventTypes": ["meta", "content", "source", "done"],
+          "contentNonEmpty": true,
+          "sourceType": "case",
+          "sourceTitleContains": "QA-${runId}-案例引用命中"
+        },
+        "timeout": 120000
+      }
+    ],
+    "assertions": [
+      {
+        "type": "db",
+        "sql": "select status from public.industry_case where id = :caseId",
+        "expect": "active"
+      },
+      {
+        "type": "db",
+        "sql": "select (embedding is not null)::text from public.industry_case where id = :caseId",
+        "expect": "true"
+      }
+    ]
+  }
+]

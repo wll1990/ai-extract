@@ -6,6 +6,7 @@ import {
   cancelCoachSupplement,
   requestCoachSupplement,
 } from '@/lib/api/sales';
+import { Button } from '@/components/ui/Button';
 
 export function CoachSupplementPanel({
   reviewId,
@@ -59,31 +60,38 @@ export function CoachSupplementPanel({
   };
 
   return (
-    <section className="rounded border border-purple-200 bg-purple-50/40 p-4">
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-purple-900">真人教练补充</h3>
+    <section className="rounded-xl border border-border bg-surface-2 p-4">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">真人教练补充</h3>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            AI 报告为主；需要人的判断时，可以请分身教练补充一句。
+          </p>
+        </div>
         {isOwner && !data.selfCoach && data.status !== 'pending' && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setOpen(v => !v)}
-            className="text-xs text-purple-700 hover:underline"
+            title="向分身教练发起补充请求；可附上希望他重点看的问题"
           >
-            请教练补充
-          </button>
+            {open ? '收起' : '请教练补充'}
+          </Button>
         )}
         {isOwner && !data.selfCoach && data.status === 'pending' && (
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={cancel}
-            className="text-xs text-gray-500 hover:underline"
+            title="撤回尚未回复的补充请求；不会删除已有补充"
           >
             撤回请求
-          </button>
+          </Button>
         )}
       </div>
 
       {data.selfCoach && (
-        <p className="text-sm text-purple-800">
+        <p className="text-sm text-foreground">
           你本人就是这个分身的教练，无需发起请求。
           <a href={`/sales/coach/requests/${reviewId}`} className="ml-1 underline hover:no-underline">
             直接去教练工作台补充 →
@@ -91,28 +99,28 @@ export function CoachSupplementPanel({
         </p>
       )}
       {!data.selfCoach && !data.status && notes.length === 0 && (
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-muted-foreground">
           AI 报告为主；需要人判断时，可以请教练补充一句。
         </p>
       )}
       {data.status === 'pending' && (
-        <p className="text-sm text-purple-800">已请求教练补充，等待回复。</p>
+        <p className="text-sm text-foreground">已请求教练补充，等待回复。</p>
       )}
       {data.status === 'done' && notes.length === 0 && (
-        <p className="text-sm text-gray-500">教练已完成，但没有留言。</p>
+        <p className="text-sm text-muted-foreground">教练已完成，但没有留言。</p>
       )}
       {data.status === 'cancelled' && (
-        <p className="text-sm text-gray-500">本次补充请求已撤回，可以重新发起。</p>
+        <p className="text-sm text-muted-foreground">本次补充请求已撤回，可以重新发起。</p>
       )}
 
       {notes.length > 0 && (
         <ul className="mt-3 space-y-2">
           {notes.map(n => (
-            <li key={n.id} className="rounded bg-white p-3 text-sm">
-              <div className="mb-1 text-xs text-gray-500">
+            <li key={n.id} className="rounded-lg bg-surface p-3 text-sm">
+              <div className="mb-1 text-xs text-muted-foreground">
                 {n.coachName} · {new Date(n.createdAt).toLocaleString()}
               </div>
-              <p className="whitespace-pre-wrap text-gray-800">{n.content}</p>
+              <p className="whitespace-pre-wrap text-foreground">{n.content}</p>
             </li>
           ))}
         </ul>
@@ -125,30 +133,25 @@ export function CoachSupplementPanel({
             value={message}
             onChange={e => setMessage(e.target.value)}
             maxLength={500}
-            className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm"
             placeholder="想请教练重点看什么？（可不填）"
           />
-          <label className="flex items-center gap-2 text-xs text-gray-600">
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
             <input type="checkbox" checked={share} onChange={e => setShare(e.target.checked)} />
             同时授权教练查看完整原文
           </label>
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded border px-3 py-1.5 text-sm"
-            >
-              取消
-            </button>
-            <button
-              type="button"
+            <Button variant="neutral" size="sm" onClick={() => setOpen(false)}>取消</Button>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={submit}
               disabled={saving}
-              className="rounded bg-purple-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              title="发送补充请求给分身教练；勾选后可同时授权查看原文"
             >
               {saving ? '发送中…' : '发送请求'}
-            </button>
+            </Button>
           </div>
         </div>
       )}

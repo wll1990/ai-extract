@@ -28,10 +28,9 @@ public class CorsConfig {
 
     private CorsConfiguration buildConfig() {
         CorsConfiguration config = new CorsConfiguration();
-        // 开发环境多端口（3000/3001）走 setAllowedOrigins 精确匹配
+        // 精确白名单：带 Cookie 的会话不允许通配 Origin，
+        // 否则任意站点都能以用户身份读取响应（allowCredentials=true 时尤其危险）。
         config.setAllowedOrigins(allowedOrigins);
-        // allowedOriginPatterns 兜底动态端口，Spring 5.3+
-        config.addAllowedOriginPattern("*");
         config.addAllowedMethod("*");
         config.addAllowedHeader("*");
         config.setAllowCredentials(true);

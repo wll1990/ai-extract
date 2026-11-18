@@ -17,6 +17,13 @@ import { getContentHealth, deriveContent, pollContentJob, type ContentHealth, ty
 import { EvidencePanel } from '@/components/admin/EvidencePanel';
 import { ExpiryDialog } from '@/components/admin/ExpiryDialog';
 import { DerivedContentModal } from '@/components/admin/DerivedContentModal';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { getCurrentUser } from '@/lib/api/auth';
+import {
+  Archive, ArrowCounterClockwise, ArrowsSplit, Check, Copy, FirstAidKit,
+  PaperPlaneTilt, PencilSimple, Trash,
+} from '@phosphor-icons/react';
 
 const PROFILE_LABELS: Record<string, string> = { industry: '行业', scale: '规模', role: '关键角色' };
 
@@ -84,7 +91,9 @@ export default function AdminCaseDetailPage() {
   const [derived, setDerived] = useState<DerivedContent | null>(null);
   const [deriveOpen, setDeriveOpen] = useState(false);
   const [deriving, setDeriving] = useState(false);
+  const [deriveConfirmOpen, setDeriveConfirmOpen] = useState(false);
   const [showApprove, setShowApprove] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +118,10 @@ export default function AdminCaseDetailPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    getCurrentUser().then(u => setIsSuperAdmin(u.role === 'super_admin')).catch(() => {});
+  }, []);
+
   const openSourceFile = useCallback(async () => {
     try {
       const file = await getCaseSourceFile(id);
@@ -128,8 +141,11 @@ export default function AdminCaseDetailPage() {
     }
   };
 
+  const requestDerive = () => setDeriveConfirmOpen(true);
+
   const onDerive = async () => {
     if (!c) return;
+    setDeriveConfirmOpen(false);
     setDeriving(true);
     try {
       const accepted = await deriveContent('case', c.id);
@@ -179,7 +195,7 @@ export default function AdminCaseDetailPage() {
 
   const onRollback = (v: IndustryCase) => {
     if (!c) return;
-    if (!window.confirm(`以 v${v.version} 的内容生成新草稿？当前版本不会被修改，新草稿审批后才会生效。`)) return;
+    if (!window.confirm(`以 v${v.version} 的内容生成新草稿？当前版本不会被修改，新草稿通过后才会生效。`)) return;
     runAction(async () => {
       const draft = await rollbackCase(c.id, v.id);
       router.push(`/admin/cases/${draft.id}`);
@@ -218,7 +234,10 @@ export default function AdminCaseDetailPage() {
 
   const onCopy = () => {
     if (!c) return;
-    runAction(() => copyCase(c.id));
+    runAction(async () => {
+      const copy = await copyCase(c.id);
+      router.push(`/admin/cases/${copy.id}`);
+    });
   };
 
   const onDiscardDraft = () => {
@@ -247,37 +266,73 @@ export default function AdminCaseDetailPage() {
 
   const st = effectiveStatus(c.status, c.expireAt);
   const isDraft = c.status === 'draft';
+  // 公共案例只有平台超管能写；企业账号只读 + 复制
+  const canWrite = isSuperAdmin || c.companyId !== null;
   const quoteList = parseQuotes(c.dialogueQuote);
   const pendingRevisions = revisions.filter(r => r.status === 'draft' || r.status === 'pending');
   const changedFields = previous
     ? DIFF_FIELDS.filter(f =>
         (previous[f.key] as unknown as string | null) !== (c[f.key] as unknown as string | null))
     : [];
+  const nextStep = !canWrite
+    ? '公共案例由平台维护，企业账号只读。需要修改请先「复制到本企业」，再改副本。'
+    : c.qualityIssues && (c.status === 'draft' || c.status === 'pending')
+    ? '未达生效标准：先点「编辑」补齐客户画像/核心异议/关键动作/话术/结果，再通过并生效。'
+    : st === 'active'
+      ? c.embeddingStatus === 'indexed'
+        ? '已生效并完成索引，分身可以引用。要改内容用「AI 改写」；不再使用请点「下架」。'
+        : '已生效，但索引还没完成，分身暂时引用不到；请等待自动重试或点「重建索引」。'
+      : st === 'expired'
+        ? '已过期，分身不再引用；需要继续使用请审核或创建新版本。'
+        : c.status === 'deprecated'
+          ? '已下架，分身不再引用；30 天内可点「重新上架」。'
+          : c.status === 'pending'
+            ? '待审核：确认客户画像、异议、动作和结果无误后点「通过并生效」。'
+            : '草稿：先「编辑」补齐字段，再点「通过并生效」。';
 
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
-      <div className="mx-auto max-w-[880px]">
+      <div className="mx-auto max-w-[1200px]">
         <div className="mb-4 flex items-center justify-between">
           <button onClick={() => router.push('/admin/cases')} className="text-sm text-muted-foreground hover:text-foreground">
             ← 返回案例库
           </button>
           <PageHelp
             title="案例详情使用说明"
-            intro="案例记录一次真实客户推进过程，分身回答时会引用相似案例。这里可以看全文、做 AI 改写并确认新版本。"
+            intro="案例记录一次真实客户推进过程，分身回答「这类客户怎么打」时会引用相似案例。按钮按「主操作 → 内容工具 → 生命周期」排列。"
             steps={[
-              { title: '看全文', desc: '客户画像、推进过程、复盘要点都在下方；有修订时会展示与旧版的差异。' },
-              { title: 'AI 改写', desc: '输入修改要求：草稿/待审案例会被直接覆盖；已生效案例会生成新版本草稿，原版本在审批前保持生效。' },
-              { title: '采用或放弃', desc: '草稿确认后点「采用」才会生效；不满意点「放弃草稿」，原版本继续生效。' },
-              { title: '审批', desc: '待审核案例点「审批」后变为已生效，可被分身检索引用。' },
+              { title: '先看是否达标', desc: '草稿/待审若显示「未达生效标准」或「建议补充」，先点「编辑」补齐客户画像、核心异议、动作/话术、结果等字段。' },
+              { title: '通过并生效', desc: '补齐后点「通过并生效」并设置失效时间；通过后异步生成向量，索引完成后分身才会检索到。' },
+              { title: '看版本差异', desc: 'AI 改写已生效案例会生成新版本草稿，并按字段展示差异；审核新版本后旧版才下线。' },
+              { title: '维护与复盘', desc: '用「AI 体检」查字段缺失与同场景对照；用「AI 派生」生成知识卡、评测题和场景微练（只预览、不保存）；索引异常用「重建索引」。' },
+              { title: '下线或恢复', desc: '不再使用点「下架」（立即停止引用，30 天内可重新上架）；确认永不需要时才「彻底删除」。' },
+            ]}
+            actions={[
+              { label: '通过并生效', desc: '仅草稿/待审可用，且存在未达标字段时会被禁用（需先补齐）。通过后变「已生效」并异步索引，可设置失效时间。', tone: 'primary' },
+              { label: '编辑', desc: '仅草稿/待审可用，直接改标题、客户画像、异议、动作、话术、推进节点和结果。已生效案例不能直接改。' },
+              { label: 'AI 改写', desc: '输入修改要求生成新内容：草稿/待审直接覆盖；已生效生成新版本草稿，旧版在通过前继续生效。' },
+              { label: 'AI 体检', desc: '确定性检查：结果、场景、异议、动作、话术、可复用点、时效与重复；列出同场景成功/失败案例供对照。不改内容。' },
+              { label: 'AI 派生', desc: '点击后先弹确认：基于本条案例生成「知识卡 + 评测题 + 场景微练」。结果只预览、不自动落库，需按提示复制到知识库/评测中心/培训计划。' },
+              { label: '重建索引', desc: '仅「已生效但索引未完成/失败」时出现。异步重新向量化，稍后刷新看索引徽标。' },
+              { label: '提交到公共库', desc: '仅本企业已生效案例可用。生成公共待审候选，平台审核通过后所有企业可见；提交前请确认不含客户敏感信息。' },
+              { label: '放弃草稿', desc: '仅草稿可用。标记当前草稿为下架并回到原版本，不删除记录。' },
+              { label: '复制到本企业', desc: '仅公共案例出现。复制一份企业私有草稿后再改，不改动公共原文。' },
+              { label: '下架', desc: '立即停止被分身引用，30 天内可恢复；已下架案例仍可查看版本和引用历史。', tone: 'danger' },
+              { label: '重新上架', desc: '仅已下架可用。原本生效的重新索引并参与检索；草稿/待审回到待处理状态。' },
+              { label: '彻底删除', desc: '不可恢复，仅草稿/待审/已下架可用；删除前校验派生版本和培训任务引用。', tone: 'danger' },
+              { label: '查看原始文档', desc: '有上传来源时出现，打开解析前的原文件（只读）。' },
+              { label: '查看 / 以此版本修改', desc: '版本历史中「查看」打开该版本全文；「以此版本修改」用旧版本内容生成新草稿，不改历史版本。' },
             ]}
             notes={[
+              '审核 ≠ 立刻可检索：通过后还要等索引徽标变成「已索引」，否则分身仍然引用不到。',
               '「下架」=立即停止引用，30 天内可重新上架；「彻底删除」=不可恢复，仅草稿/待审/已下架可用。',
-              '公共案例需要先「复制」到本企业再修改。',
+              '公共案例需要先「复制到本企业」再修改。',
             ]}
           />
         </div>
 
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="mb-6 rounded-2xl border border-border bg-surface p-6">
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="mb-1 text-[26px] font-bold text-foreground">{c.title}</h1>
             <p className="text-sm text-muted-foreground">
@@ -292,14 +347,6 @@ export default function AdminCaseDetailPage() {
                 </button>
               )}
             </p>
-            {c.generated && (
-              <div className="mt-2 rounded-lg border border-primary/30 bg-primary-light px-3 py-2">
-                <p className="text-xs font-medium text-primary">AI 生成草稿 · 生成依据</p>
-                <div className="mt-1">
-                  <EvidencePanel evidence={c.evidence ?? null} jobId={c.generationJobId} />
-                </div>
-              </div>
-            )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
             <span className="flex items-center gap-1.5">
@@ -318,75 +365,87 @@ export default function AdminCaseDetailPage() {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap gap-2">
-          {(c.status === 'pending' || c.status === 'draft') && (
+        {!canWrite && (
+          <div className="mb-4 rounded-lg border border-warning-text/30 bg-warning-bg px-3 py-2 text-xs leading-5 text-warning-text">
+            公共案例由平台维护，企业账号只读；需要修改请先「复制到本企业」，改自己企业的副本。
+          </div>
+        )}
+
+        <div className="mb-5 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-5 text-muted-foreground">
+          <b className="text-foreground">下一步：</b>{nextStep}
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-y border-border py-3">
+          {canWrite && (c.status === 'pending' || c.status === 'draft') && (
             <>
-              <button onClick={() => router.push(`/admin/cases/${c.id}/edit`)} disabled={acting}
-                className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2 disabled:opacity-50">
-                编辑
-              </button>
-              <button onClick={onApprove} disabled={acting || !!c.qualityIssues}
-                title={c.qualityIssues ? '请先补齐未达标的字段' : undefined}
-                className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-                审批生效
-              </button>
+              <Button variant="primary" onClick={onApprove} disabled={acting || !!c.qualityIssues}
+                title={c.qualityIssues ? '请先补齐未达标的字段' : undefined}>
+                <Check size={16} weight="bold" />通过并生效
+              </Button>
+              <Button variant="neutral" onClick={() => router.push(`/admin/cases/${c.id}/edit`)} disabled={acting}>
+                <PencilSimple size={16} />编辑
+              </Button>
             </>
           )}
-          <button onClick={onSuggest} disabled={acting}
-            className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-            AI 改写
-          </button>
-          <button onClick={onHealth} disabled={acting}
-            className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2 disabled:opacity-50">
-            AI 体检
-          </button>
-          <button onClick={onDerive} disabled={deriving}
-            className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-            {deriving ? '派生中…' : 'AI 一源多用'}
-          </button>
-          {st === 'active' && c.embeddingStatus !== 'indexed' && (
-            <button onClick={onReindex} disabled={acting}
-              className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-              重建索引
-            </button>
+          {canWrite && (
+            <Button variant="secondary" onClick={onSuggest} disabled={acting} title="按指令改内容；已生效案例会生成新版本草稿">
+              <PencilSimple size={16} />AI 改写
+            </Button>
           )}
-          {c.companyId !== null && c.status === 'active' && (
-            <button onClick={onSubmitPublic} disabled={acting}
-              className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-surface-2 disabled:opacity-50">
-              提交到公共库
-            </button>
+          {c.companyId === null && !isSuperAdmin && (
+            <Button variant="secondary" onClick={onCopy} disabled={acting}>
+              <Copy size={16} />复制到本企业
+            </Button>
           )}
-          {isDraft && (
-            <button onClick={onDiscardDraft} disabled={acting}
-              className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-surface-2 disabled:opacity-50">
-              放弃草稿
-            </button>
+          <Button variant="neutral" onClick={onHealth} disabled={acting} title="只做确定性检查，不改内容">
+            <FirstAidKit size={16} />AI 体检
+          </Button>
+          <Button variant="secondary" onClick={requestDerive} disabled={deriving}
+            title="生成知识卡、评测题与场景微练，仅预览不保存">
+            <ArrowsSplit size={16} />{deriving ? '派生中…' : 'AI 派生'}
+          </Button>
+
+          <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
+
+          {canWrite && st === 'active' && c.embeddingStatus !== 'indexed' && (
+            <Button variant="secondary" onClick={onReindex} disabled={acting}>
+              <ArrowCounterClockwise size={16} />重建索引
+            </Button>
           )}
-          {c.companyId === null && (
-            <button onClick={onCopy} disabled={acting}
-              className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2 disabled:opacity-50">
-              复制到本企业
-            </button>
+          {canWrite && c.companyId !== null && c.status === 'active' && (
+            <Button variant="neutral" onClick={onSubmitPublic} disabled={acting}>
+              <PaperPlaneTilt size={16} />提交到公共库
+            </Button>
           )}
-          {c.status !== 'deprecated' && (
-            <button onClick={onDeprecate} disabled={acting}
-              className="rounded-full border border-border px-4 py-2 text-sm text-danger hover:bg-danger-bg disabled:opacity-50">
-              下架
-            </button>
+          {canWrite && isDraft && (
+            <Button variant="neutral" onClick={onDiscardDraft} disabled={acting}>
+              <Archive size={16} />放弃草稿
+            </Button>
           )}
-          {c.status === 'deprecated' && (
-            <button onClick={onRestore} disabled={acting}
-              className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-              重新上架
-            </button>
+          {canWrite && c.status !== 'deprecated' && (
+            <Button variant="danger" onClick={onDeprecate} disabled={acting}>
+              <Archive size={16} />下架
+            </Button>
           )}
-          {c.status !== 'active' && (
-            <button onClick={onDelete} disabled={acting}
-              className="rounded-full border border-danger px-4 py-2 text-sm text-danger hover:bg-danger-bg disabled:opacity-50">
-              彻底删除
-            </button>
+          {canWrite && c.status === 'deprecated' && (
+            <Button variant="secondary" onClick={onRestore} disabled={acting}>
+              <ArrowCounterClockwise size={16} />重新上架
+            </Button>
+          )}
+          {canWrite && c.status !== 'active' && (
+            <Button variant="danger" onClick={onDelete} disabled={acting}>
+              <Trash size={16} />彻底删除
+            </Button>
           )}
         </div>
+        <p className="mb-5 text-[11px] leading-5 text-muted-foreground">
+          AI 改写：改内容，已生效会生成新版本草稿 · AI 体检：只查问题不改内容 ·
+          AI 派生：生成本条案例的知识卡、评测题与场景微练，仅预览不保存
+        </p>
+        </div>
+
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-4">
 
         {c.qualityIssues && (c.status === 'draft' || c.status === 'pending') && (
           <div className="mb-4 rounded-xl border border-red-200 bg-danger-bg px-4 py-3 text-sm text-danger">
@@ -511,9 +570,19 @@ export default function AdminCaseDetailPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div className="rounded-xl border border-border bg-surface-2 p-4">
-            <h2 className="mb-2 text-sm font-semibold text-foreground">版本历史</h2>
+        {c.generated && (
+          <div className="rounded-xl border border-primary/30 bg-primary-light px-4 py-3">
+            <p className="text-xs font-medium text-primary">AI 生成草稿 · 生成依据</p>
+            <div className="mt-1">
+              <EvidencePanel evidence={c.evidence ?? null} jobId={c.generationJobId} />
+            </div>
+          </div>
+        )}
+
+          </div>
+          <aside className="space-y-4 lg:sticky lg:top-6">
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <h2 className="mb-3 text-sm font-semibold text-foreground">版本历史</h2>
             {versions.length === 0 ? (
               <p className="text-sm text-muted-foreground">暂无历史版本</p>
             ) : (
@@ -567,6 +636,7 @@ export default function AdminCaseDetailPage() {
               </ul>
             )}
           </div>
+          </aside>
         </div>
       </div>
 
@@ -574,7 +644,7 @@ export default function AdminCaseDetailPage() {
         open={showRevision}
         title="AI 改写案例"
         behaviorNote={c.status === 'active'
-          ? '已生效内容：生成新版本草稿，审批通过后才替换旧版。'
+          ? '已生效内容：生成新版本草稿，审核通过后才替换旧版。'
           : '草稿/待审内容：直接覆盖当前条目，不额外生成版本。'}
         submitLabel={c.status === 'active' ? '生成新版本草稿' : '直接改写'}
         entryTitle={c.title}
@@ -651,12 +721,28 @@ export default function AdminCaseDetailPage() {
         </div>
       )}
 
-      <DerivedContentModal open={deriveOpen} source={derived} onClose={() => setDeriveOpen(false)} />
+      <DerivedContentModal open={deriveOpen} source={derived} sourceType="case"
+        onClose={() => setDeriveOpen(false)} />
+
+      <ConfirmDialog
+        open={deriveConfirmOpen}
+        title="用这条案例做 AI 派生？"
+        confirmLabel="开始派生"
+        onConfirm={onDerive}
+        onCancel={() => setDeriveConfirmOpen(false)}
+      >
+        <p>AI 会基于本条案例的客户画像、异议、动作和话术生成知识卡、评测题和场景微练。</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>结果只用于预览和复制，不会自动入库、不会生成草稿，也不会修改原案例。</li>
+          <li>生成通常需要 10–60 秒；重复点击会重复消耗模型额度。</li>
+          <li>生成后请人工检查，再复制到知识库、评测中心或培训计划。</li>
+        </ul>
+      </ConfirmDialog>
 
       <ExpiryDialog
         open={showApprove}
-        title="审批生效"
-        description={`「${c.title}」审批后会被分身检索，可设置失效时间。`}
+        title="通过并生效"
+        description={`「${c.title}」通过后会被分身检索，可设置失效时间。`}
         onCancel={() => setShowApprove(false)}
         onConfirm={iso => {
           setShowApprove(false);

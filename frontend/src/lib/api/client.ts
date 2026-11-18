@@ -35,10 +35,19 @@ export class ApiError extends Error {
  * 同域部署时浏览器会自动附带 Cookie；跨域部署或 C 端再用 localStorage 里的
  * Bearer token 兜底（后端 JwtAuthFilter 优先读 Authorization header）。
  */
+export interface ApiOptions extends RequestInit {
+  /**
+   * 可选请求（如场景标签、推荐问题）失败时只抛错，不清凭证、不跳登录。
+   * 必需请求保持默认 false，401 仍然统一回登录页。
+   */
+  skipAuthRedirect?: boolean;
+}
+
 export async function apiClient<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiOptions = {},
 ): Promise<T> {
+  const { skipAuthRedirect, ...requestInit } = options;
   const headers: Record<string, string> = {};
 
   if (!(options.body instanceof FormData)) {
@@ -47,6 +56,12 @@ export async function apiClient<T>(
 
   if (options.headers) {
     Object.assign(headers, options.headers as Record<string, string>);
+  }
+
+  // 调用方可能把空 token 拼成 `Bearer undefined/null`；这种头会顶掉 Cookie
+  // 认证并被后端判 401。统一当作未提供，走下面的 Cookie / token 兜底。
+  if (headers['Authorization'] && /^Bearer\s*(?:undefined|null)?$/i.test(headers['Authorization'].trim())) {
+    delete headers['Authorization'];
   }
 
   // C端 Bearer token 降级（B端 Cookie 认证时后端仍兼容 Bearer）
@@ -72,7 +87,7 @@ export async function apiClient<T>(
 
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'same-origin',
-    ...options,
+    ...requestInit,
     headers,
   });
 
@@ -80,6 +95,10 @@ export async function apiClient<T>(
     if (res.status === 401 && isActingSwitching()) {
       // 切换视角的探针失败：交给切换流程回退，不能把用户踢出登录
       throw new ApiError('切换企业视角失败', res.status, res.status);
+    }
+    // 可选请求失败（例如场景标签）：交给调用方降级，不把整个会话踢掉
+    if (res.status === 401 && skipAuthRedirect) {
+      throw new ApiError('登录已过期', res.status, res.status);
     }
     if (res.status === 401 && typeof window !== 'undefined') {
       const path = window.location.pathname;

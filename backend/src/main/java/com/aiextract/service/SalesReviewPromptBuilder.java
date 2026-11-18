@@ -1,6 +1,7 @@
 package com.aiextract.service;
 
 import com.aiextract.config.PromptLoader;
+import com.aiextract.config.PromptSecurity;
 import com.aiextract.model.ReviewMessage;
 import com.aiextract.model.ReviewReport;
 import com.aiextract.model.ReviewSegment;
@@ -83,15 +84,18 @@ public class SalesReviewPromptBuilder {
         }
         if (report != null && report.getPayload() != null && !report.getPayload().isBlank()) {
             // 五区块全文让追问能引用具体要点，而不只是摘要
-            sb.append("报告全文（JSON）：\n").append(truncate(report.getPayload(), 8000)).append('\n');
+            sb.append("报告全文（JSON）：\n")
+              .append(PromptSecurity.wrapUntrusted(truncate(report.getPayload(), 8000)))
+              .append('\n');
         }
         if (coachNotes != null && !coachNotes.isBlank()) {
             sb.append("教练补充：\n").append(coachNotes).append('\n');
         }
         sb.append("对话原文：\n");
         // 复盘创建时已限制 30000 字，这里不再二次截断，避免后半段无法追问
-        sb.append(session.getTranscript() == null ? "" : session.getTranscript());
-        return sb.toString();
+        sb.append(PromptSecurity.wrapUntrusted(
+                session.getTranscript() == null ? "" : session.getTranscript()));
+        return sb.toString() + "\n\n" + PromptSecurity.BOUNDARY;
     }
 
     public List<Map<String, String>> buildChatMessages(String system, UUID sessionId, String content) {

@@ -30,10 +30,15 @@ export default function ReportViewer({
   const [loading, setLoading] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // 带 Bearer 拉取 HTML 内容，绕过 iframe src 直接请求无法带 auth header 的问题
+  // 绕过 iframe src 无法带 auth header 的问题；B 端没 token 时走 Cookie，
+  // 不能拼出 `Bearer `（空值）把 Cookie 认证顶掉。
   useEffect(() => {
     setLoading(true);
-    fetch(htmlUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } })
+    const token = localStorage.getItem('token');
+    fetch(htmlUrl, {
+      credentials: 'same-origin',
+      ...(token ? { headers: { Authorization: `Bearer ${token}` } } : {}),
+    })
       .then(r => r.text())
       .then(setHtmlContent)
       .catch(() => {})

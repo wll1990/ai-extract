@@ -18,6 +18,10 @@ export interface AuditDashboard {
     sceneTags: string[]; sceneCoverage: Record<string, number>; avgWeight: number;
     dimensionAvg?: Record<string, number>;
     qualityDistribution?: Record<string, number>;
+    /** 试问台：该分身累计试问会话数 / 被纠偏过的颗粒数 / 最近一次试问时间 */
+    trialCount?: number;
+    refinedGrainCount?: number;
+    lastTrialAt?: string | null;
   };
   materials: Array<{
     id: string; fileName: string; fileType: string; fileSize?: number; version: number; status: string;

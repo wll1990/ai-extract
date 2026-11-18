@@ -88,9 +88,9 @@ public class User {
     private Boolean isActive;
 
     /**
-     * 安全版本号：改角色/停用账号时 +1，已签发 JWT 中的 ver claim 与之不符即失效。
+     * 会话 epoch：改角色/停用账号时 +1，Redis 会话中的 epoch 与之不符即失效。
      *
-     * <p>默认 0；改造前签发的 token 没有 ver claim，按 0 处理，因此在版本号 bump 之前保持兼容。</p>
+     * <p>默认 0；所有会话在签发时快照该值，全端撤销只需递增此值，无需逐条删除会话。</p>
      */
     @Column(name = "token_version", nullable = false)
     @Builder.Default

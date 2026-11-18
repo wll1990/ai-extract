@@ -43,7 +43,7 @@
         "body": {
           "name": "QA-${runId}-线索",
           "contactName": "王总",
-          "contactPhone": "13800000000",
+          "contactPhone": "138${shortId}00",
           "needSummary": "预算受限，需要回报周期材料与分阶段付款方案"
         },
         "expect": { "status": 200, "json": { "data.created": true } },

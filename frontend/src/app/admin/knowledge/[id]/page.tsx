@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  getKnowledge, getKnowledgeRevisions, approveKnowledge, deprecateKnowledge, deleteKnowledge,
+  getKnowledge, getKnowledgeRevisions, approveKnowledge, deprecateKnowledge, deleteKnowledge, copyKnowledge,
   suggestKnowledgeRevision, getKnowledgeImprovements, reindexKnowledge, submitKnowledgeToPublic,
   restoreKnowledge, getKnowledgeVersions, rollbackKnowledge, getKnowledgeReferences,
   getKnowledgeSourceFile,
@@ -19,6 +19,13 @@ import { getContentHealth, deriveContent, pollContentJob, type ContentHealth, ty
 import { EvidencePanel } from '@/components/admin/EvidencePanel';
 import { ExpiryDialog } from '@/components/admin/ExpiryDialog';
 import { DerivedContentModal } from '@/components/admin/DerivedContentModal';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { getCurrentUser } from '@/lib/api/auth';
+import {
+  Archive, ArrowCounterClockwise, ArrowsSplit, Check, Copy, FirstAidKit,
+  PaperPlaneTilt, PencilSimple, Trash,
+} from '@phosphor-icons/react';
 
 const STATUS_CLS: Record<string, string> = {
   draft: 'bg-gray-100 text-gray-600',
@@ -47,6 +54,8 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
   const [derived, setDerived] = useState<DerivedContent | null>(null);
   const [deriveOpen, setDeriveOpen] = useState(false);
   const [deriving, setDeriving] = useState(false);
+  const [deriveConfirmOpen, setDeriveConfirmOpen] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +79,10 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    getCurrentUser().then(u => setIsSuperAdmin(u.role === 'super_admin')).catch(() => {});
+  }, []);
 
   const openSourceFile = useCallback(async () => {
     try {
@@ -117,7 +130,7 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
 
   const onRollback = (v: KnowledgeEntry) => {
     if (!entry) return;
-    if (!window.confirm(`以 v${v.version} 的内容生成新草稿？当前版本不会被修改，新草稿审批后才会生效。`)) return;
+    if (!window.confirm(`以 v${v.version} 的内容生成新草稿？当前版本不会被修改，新草稿通过后才会生效。`)) return;
     runAction(async () => {
       const draft = await rollbackKnowledge(entry.id, v.id);
       router.push(`/admin/knowledge/${draft.id}`);
@@ -165,6 +178,14 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
 
   const onSuggest = () => setShowRevision(true);
 
+  const onCopyToCompany = () => {
+    if (!entry) return;
+    runAction(async () => {
+      const copy = await copyKnowledge(entry.id);
+      router.push(`/admin/knowledge/${copy.id}`);
+    });
+  };
+
   const onHealth = async () => {
     try {
       setHealth(await getContentHealth('knowledge', id));
@@ -174,7 +195,10 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
     }
   };
 
+  const requestDerive = () => setDeriveConfirmOpen(true);
+
   const onDerive = async () => {
+    setDeriveConfirmOpen(false);
     setDeriving(true);
     try {
       const accepted = await deriveContent('knowledge', id);
@@ -210,24 +234,56 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
   const st = effectiveStatus(entry.status, entry.expireAt);
   const isDraft = entry.status === 'draft';
   const pendingRevisions = revisions.filter(r => r.status === 'draft' || r.status === 'pending');
+  // 公共知识只有平台超管能写；企业账号只读 + 复制
+  const canWrite = isSuperAdmin || entry.companyId !== null;
+  const nextStep = !canWrite
+    ? '公共知识由平台维护，企业账号只读。需要修改请先「复制到本企业」，再改副本。'
+    : st === 'active'
+    ? entry.embeddingStatus === 'indexed'
+      ? '已生效并完成索引，分身可以引用。要改内容用「AI 改写」；不再使用请点「下架」。'
+      : '已生效，但索引还没完成，分身暂时引用不到；请等待自动重试或点「重建索引」。'
+    : st === 'expired'
+      ? '已过期，分身不再引用；需要继续使用请审核或创建新版本。'
+      : entry.status === 'deprecated'
+        ? '已下架，分身不再引用；30 天内可点「重新上架」。'
+        : entry.status === 'pending'
+          ? '待审核：确认内容无误后点「通过并生效」并设置失效时间。'
+          : '草稿：先「编辑」补齐内容，再点「通过并生效」。';
 
   return (
     <div className="min-h-screen bg-surface px-6 py-8">
-      <div className="mx-auto max-w-[1080px]">
+      <div className="mx-auto max-w-[1200px]">
         <div className="mb-4 flex items-center justify-between">
           <button onClick={() => router.push('/admin/knowledge')} className="text-sm text-muted-foreground hover:text-foreground">
             ← 返回知识库
           </button>
           <PageHelp
             title="知识详情使用说明"
-            intro="这里可以查看知识全文、版本变化，并对 AI 改写出的新版本做采用或放弃。"
+            intro="这里查看知识全文、版本变化和引用情况，并完成「通过并生效 / 改写 / 下架」等维护动作。按钮按「主操作 → 内容工具 → 生命周期」从左到右排列。"
             steps={[
-              { title: '看全文', desc: '标题下方是正文；旧版与新版有差异时会自动展开逐行对比（绿色新增、红色删除）。' },
-              { title: 'AI 改写', desc: '输入修改要求：草稿/待审条目会被直接覆盖；已生效条目会生成新版本草稿，原版本在审批前保持生效。' },
-              { title: '采用或放弃', desc: '草稿确认无误后点「采用」，知识才会生效；不满意点「放弃」，原版本继续生效。' },
-              { title: '审批', desc: '待审核的知识点「审批」后变为已生效，可以被分身检索引用。' },
+              { title: '先看当前状态', desc: '标题上方的状态标签说明它现在能不能被分身引用：草稿/待审不会引用，已生效且索引完成才会被检索。' },
+              { title: '处理待办', desc: '草稿或待审时，主操作是「通过并生效」；内容不满意先「编辑」改字段，或用「AI 改写」按指令重写。' },
+              { title: '看版本差异', desc: 'AI 改写已生效内容会生成新版本草稿，页面自动展开逐行差异（绿色新增、红色删除）；审核新版本后旧版才下线。' },
+              { title: '日常维护', desc: '已生效内容用「AI 体检」查重复/过期/不可检索；用「AI 派生」生成本条知识的评测题和场景微练（只预览、不保存）；索引异常用「重建索引」。' },
+              { title: '下线或恢复', desc: '不再使用点「下架」（立即停止引用，30 天内可重新上架）；确认永不需要时才「彻底删除」。' },
+            ]}
+            actions={[
+              { label: '通过并生效', desc: '仅草稿/待审可用。通过后变「已生效」，并异步生成向量；索引完成后分身才会检索到。可设置失效时间。', tone: 'primary' },
+              { label: '编辑', desc: '仅草稿/待审可用，直接改标题、正文、分类、来源等字段。已生效内容不能直接改，需走「AI 改写」生成新版本。' },
+              { label: 'AI 改写', desc: '输入修改要求生成新内容。草稿/待审会直接覆盖本条；已生效会生成新版本草稿，旧版在通过前继续生效。' },
+              { label: 'AI 体检', desc: '只做确定性检查（重复、过期、不可检索、字段缺失），不是打分，也不改内容。给出问题、严重度和建议。' },
+              { label: 'AI 派生', desc: '点击后先弹确认：基于本条知识生成评测题和场景微练（知识不再派生 FAQ 回知识库，避免重复）。结果只预览、不自动落库，需按提示复制到评测中心/培训计划。' },
+              { label: '重建索引', desc: '仅「已生效但索引未完成/失败」时出现。重新调用向量模型；异步执行，稍后刷新看索引徽标。' },
+              { label: '提交到公共库', desc: '仅本企业已生效知识可用。生成公共待审候选，平台审核通过后所有企业可见；提交前自动强脱敏。' },
+              { label: '放弃草稿', desc: '仅草稿可用。把当前草稿标记为下架并回到原版本，不删除记录；原版本不受影响。' },
+              { label: '下架', desc: '立即停止被分身引用，30 天内可恢复。已下架内容仍可查看版本和引用历史。', tone: 'danger' },
+              { label: '重新上架', desc: '仅已下架可用。回到下架前状态：原本生效的重新索引并参与检索；草稿/待审回到待处理。' },
+              { label: '彻底删除', desc: '不可恢复，且仅草稿/待审/已下架可用。删除前校验派生版本和培训任务引用，避免版本链断裂。', tone: 'danger' },
+              { label: '查看原始文档', desc: '有上传来源时出现，打开解析前的原文件（只读）。' },
+              { label: '查看 / 以此版本修改', desc: '版本历史里的「查看」跳到该版本全文；「以此版本修改」用旧版本内容生成新草稿，不改历史版本。' },
             ]}
             notes={[
+              '审核 ≠ 立刻可检索：通过后还要等索引徽标变成「已索引」，否则分身仍然引用不到。',
               '「下架」=立即停止引用，30 天内可重新上架；「彻底删除」=不可恢复，仅草稿/待审/已下架可用。',
               '彻底删除前会校验派生版本和培训任务引用，避免版本链断裂或学习任务失效。',
               '企业私有知识只有本企业可见；公共知识需要先复制到企业再修改。',
@@ -236,7 +292,7 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
         </div>
 
         <div className="mb-6 rounded-2xl border border-border bg-surface p-6">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
             <div className="min-w-0">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_CLS[st] || 'bg-gray-100 text-gray-600'}`}>
@@ -252,100 +308,90 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
               </div>
               <h1 className="text-[26px] font-bold leading-snug text-foreground">{entry.title}</h1>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {(entry.status === 'pending' || entry.status === 'draft') && (
-                <>
-                  <button onClick={() => router.push(`/admin/knowledge/${entry.id}/edit`)} disabled={acting}
-                    className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2 disabled:opacity-50">
-                    编辑
-                  </button>
-                  <button onClick={onApprove} disabled={acting}
-                    className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-                    审批生效
-                  </button>
-                </>
-              )}
-              <button onClick={onSuggest} disabled={acting}
-                className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-                AI 改写
-              </button>
-              <button onClick={onHealth} disabled={acting}
-                className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-surface-2 disabled:opacity-50">
-                AI 体检
-              </button>
-              <button onClick={onDerive} disabled={deriving}
-                className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-                {deriving ? '派生中…' : 'AI 一源多用'}
-              </button>
-              {st === 'active' && entry.embeddingStatus !== 'indexed' && (
-                <button onClick={onReindex} disabled={acting}
-                  className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-                  重建索引
-                </button>
-              )}
-              {entry.companyId !== null && entry.status === 'active' && (
-                <button onClick={onSubmitPublic} disabled={acting}
-                  className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-surface-2 disabled:opacity-50">
-                  提交到公共库
-                </button>
-              )}
-              {isDraft && (
-                <button onClick={onDiscardDraft} disabled={acting}
-                  className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-surface-2 disabled:opacity-50">
-                  放弃草稿
-                </button>
-              )}
-              {entry.status !== 'deprecated' && (
-                <button onClick={onDeprecate} disabled={acting}
-                  className="rounded-full border border-border px-4 py-2 text-sm text-danger hover:bg-danger-bg disabled:opacity-50">
-                  下架
-                </button>
-              )}
-              {entry.status === 'deprecated' && (
-                <button onClick={onRestore} disabled={acting}
-                  className="rounded-full border border-primary px-4 py-2 text-sm font-medium text-primary hover:bg-primary-light disabled:opacity-50">
-                  重新上架
-                </button>
-              )}
-              {entry.status !== 'active' && (
-                <button onClick={onDelete} disabled={acting}
-                  className="rounded-full border border-danger px-4 py-2 text-sm text-danger hover:bg-danger-bg disabled:opacity-50">
-                  彻底删除
-                </button>
-              )}
-            </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
-            <div><p className="text-xs text-muted-foreground">来源</p><p className="mt-0.5 text-foreground">{entry.source || '—'}</p></div>
-            <div><p className="text-xs text-muted-foreground">生效时间</p><p className="mt-0.5 text-foreground">{entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleString() : '—'}</p></div>
-            <div><p className="text-xs text-muted-foreground">失效时间</p><p className="mt-0.5 text-foreground">{entry.expireAt ? new Date(entry.expireAt).toLocaleString() : '不限期'}</p></div>
-            <div><p className="text-xs text-muted-foreground">更新时间</p><p className="mt-0.5 text-foreground">{new Date(entry.updatedAt).toLocaleString()}</p></div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
-            <span className="text-muted-foreground">来源文档</span>
-            <span className="text-foreground">{entry.sourceDocument || '—'}</span>
-            <span className="text-muted-foreground">卡片版本</span>
-            <span className="text-foreground">v{entry.version}</span>
-            <span className="text-muted-foreground">创建时间</span>
-            <span className="text-foreground">{new Date(entry.createdAt).toLocaleString()}</span>
-            {entry.sourceTaskId && (
-              <button onClick={openSourceFile} className="ml-auto text-primary underline hover:no-underline">
-                查看原始文档
-              </button>
-            )}
-          </div>
-
-          {entry.generated && (
-            <div className="mt-3 rounded-lg border border-primary/30 bg-primary-light px-3 py-2">
-              <p className="text-xs font-medium text-primary">AI 生成草稿 · 生成依据</p>
-              <div className="mt-1">
-                <EvidencePanel evidence={entry.evidence ?? null} jobId={entry.generationJobId} />
-              </div>
+          {!canWrite && (
+            <div className="mt-4 rounded-lg border border-warning-text/30 bg-warning-bg px-3 py-2 text-xs leading-5 text-warning-text">
+              公共知识由平台维护，企业账号只读；需要修改请先「复制到本企业」，改自己企业的副本。
             </div>
           )}
+
+          <div className="mt-3 rounded-lg bg-surface-2 px-3 py-2 text-xs leading-5 text-muted-foreground">
+            <b className="text-foreground">下一步：</b>{nextStep}
+          </div>
+
+          {/* 操作栏：主操作 → 内容工具 → 生命周期，三组用竖线隔开，避免一排按钮看不出主次 */}
+          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-4">
+            {canWrite && (entry.status === 'pending' || entry.status === 'draft') && (
+              <>
+                <Button variant="primary" onClick={onApprove} disabled={acting}>
+                  <Check size={16} weight="bold" />通过并生效
+                </Button>
+                <Button variant="neutral" onClick={() => router.push(`/admin/knowledge/${entry.id}/edit`)} disabled={acting}>
+                  <PencilSimple size={16} />编辑
+                </Button>
+              </>
+            )}
+            {canWrite && (
+              <Button variant="secondary" onClick={onSuggest} disabled={acting} title="按指令改正文；已生效内容会生成新版本草稿">
+                <PencilSimple size={16} />AI 改写
+              </Button>
+            )}
+            {entry.companyId === null && !isSuperAdmin && (
+              <Button variant="secondary" onClick={onCopyToCompany} disabled={acting}>
+                <Copy size={16} />复制到本企业
+              </Button>
+            )}
+            <Button variant="neutral" onClick={onHealth} disabled={acting} title="只做确定性检查，不改内容">
+              <FirstAidKit size={16} />AI 体检
+            </Button>
+            <Button variant="secondary" onClick={requestDerive} disabled={deriving}
+              title="生成评测题与场景微练，仅预览不保存">
+              <ArrowsSplit size={16} />{deriving ? '派生中…' : 'AI 派生'}
+            </Button>
+
+            <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
+
+            {canWrite && st === 'active' && entry.embeddingStatus !== 'indexed' && (
+              <Button variant="secondary" onClick={onReindex} disabled={acting}>
+                <ArrowCounterClockwise size={16} />重建索引
+              </Button>
+            )}
+            {canWrite && entry.companyId !== null && entry.status === 'active' && (
+              <Button variant="neutral" onClick={onSubmitPublic} disabled={acting}>
+                <PaperPlaneTilt size={16} />提交到公共库
+              </Button>
+            )}
+            {canWrite && isDraft && (
+              <Button variant="neutral" onClick={onDiscardDraft} disabled={acting}>
+                <Archive size={16} />放弃草稿
+              </Button>
+            )}
+            {canWrite && entry.status !== 'deprecated' && (
+              <Button variant="danger" onClick={onDeprecate} disabled={acting}>
+                <Archive size={16} />下架
+              </Button>
+            )}
+            {canWrite && entry.status === 'deprecated' && (
+              <Button variant="secondary" onClick={onRestore} disabled={acting}>
+                <ArrowCounterClockwise size={16} />重新上架
+              </Button>
+            )}
+            {canWrite && entry.status !== 'active' && (
+              <Button variant="danger" onClick={onDelete} disabled={acting}>
+                <Trash size={16} />彻底删除
+              </Button>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+            AI 改写：改正文，已生效会生成新版本草稿 · AI 体检：只查问题不改内容 ·
+            AI 派生：生成本条知识的评测题与场景微练，仅预览不保存
+          </p>
+
         </div>
+
+        <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-4">
 
         {pendingRevisions.length > 0 && (
           <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -399,7 +445,42 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
           </div>
         </div>
 
-        <div className="mt-4 grid gap-4 md:grid-cols-2">
+        {entry.generated && (
+          <div className="rounded-xl border border-primary/30 bg-primary-light px-4 py-3">
+            <p className="text-xs font-medium text-primary">AI 生成草稿 · 生成依据</p>
+            <div className="mt-1">
+              <EvidencePanel evidence={entry.evidence ?? null} jobId={entry.generationJobId} />
+            </div>
+          </div>
+        )}
+
+          </div>
+          <aside className="space-y-4 lg:sticky lg:top-6">
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <h2 className="text-sm font-semibold text-foreground">状态与来源</h2>
+            <dl className="mt-3 space-y-2 text-xs">
+              {[
+                ['来源', entry.source || '—'],
+                ['生效时间', entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleString() : '—'],
+                ['失效时间', entry.expireAt ? new Date(entry.expireAt).toLocaleString() : '不限期'],
+                ['更新时间', new Date(entry.updatedAt).toLocaleString()],
+                ['来源文档', entry.sourceDocument || '—'],
+                ['卡片版本', `v${entry.version}`],
+                ['创建时间', new Date(entry.createdAt).toLocaleString()],
+              ].map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-3">
+                  <dt className="shrink-0 text-muted-foreground">{label}</dt>
+                  <dd className="min-w-0 break-words text-right text-foreground">{value}</dd>
+                </div>
+              ))}
+            </dl>
+            {entry.sourceTaskId && (
+              <button onClick={openSourceFile} className="mt-3 text-xs text-primary hover:underline">
+                查看原始文档
+              </button>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-border bg-surface p-6">
             <h2 className="mb-3 text-sm font-semibold text-foreground">版本历史</h2>
             {versions.length === 0 ? (
@@ -457,6 +538,7 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
               </ul>
             )}
           </div>
+          </aside>
         </div>
       </div>
 
@@ -464,7 +546,7 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
         open={showRevision}
         title="AI 改写知识"
         behaviorNote={entry.status === 'active'
-          ? '已生效内容：生成新版本草稿，审批通过后才替换旧版。'
+          ? '已生效内容：生成新版本草稿，审核通过后才替换旧版。'
           : '草稿/待审内容：直接覆盖当前条目，不额外生成版本。'}
         submitLabel={entry.status === 'active' ? '生成新版本草稿' : '直接改写'}
         entryTitle={entry.title}
@@ -532,12 +614,28 @@ export default function KnowledgeDetailPage({ params }: { params: { id: string }
         </div>
       )}
 
-      <DerivedContentModal open={deriveOpen} source={derived} onClose={() => setDeriveOpen(false)} />
+      <DerivedContentModal open={deriveOpen} source={derived} sourceType="knowledge"
+        onClose={() => setDeriveOpen(false)} />
+
+      <ConfirmDialog
+        open={deriveConfirmOpen}
+        title="用这条知识做 AI 派生？"
+        confirmLabel="开始派生"
+        onConfirm={onDerive}
+        onCancel={() => setDeriveConfirmOpen(false)}
+      >
+        <p>AI 会基于本条知识生成评测题和场景微练，用来验证分身是否真的掌握，以及给新人陪练。</p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>结果只用于预览和复制，不会自动入库、不会生成草稿，也不会修改原文。</li>
+          <li>生成通常需要 10–60 秒；重复点击会重复消耗模型额度。</li>
+          <li>生成后请人工检查，再复制到评测中心或培训计划。</li>
+        </ul>
+      </ConfirmDialog>
 
       <ExpiryDialog
         open={showApprove}
-        title="审批生效"
-        description={`「${entry.title}」审批后会被分身检索，请选择失效时间。`}
+        title="通过并生效"
+        description={`「${entry.title}」通过后会被分身检索，请选择失效时间。`}
         onCancel={() => setShowApprove(false)}
         onConfirm={iso => {
           setShowApprove(false);

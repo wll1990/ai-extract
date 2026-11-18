@@ -39,7 +39,7 @@ class AuthControllerRegisterTest {
     private static final String SECRET = "unit-test-secret-key-for-jwt-0123456789abcdef";
 
     @Mock private AuthService authService;
-    @Mock private com.aiextract.config.TokenRevocationService tokenRevocationService;
+    @Mock private com.aiextract.service.session.SessionService sessionService;
 
     private JwtUtil jwtUtil;
     private AuthController controller;
@@ -48,13 +48,12 @@ class AuthControllerRegisterTest {
     void setUp() {
         jwtUtil = new JwtUtil();
         ReflectionTestUtils.setField(jwtUtil, "secret", SECRET);
-        ReflectionTestUtils.setField(jwtUtil, "expiration", 3_600_000L);
         jwtUtil.init();
-        controller = new AuthController(authService, jwtUtil, tokenRevocationService,
+        controller = new AuthController(authService, jwtUtil, sessionService,
                 org.mockito.Mockito.mock(com.aiextract.service.AuthRateLimiter.class),
                 new com.aiextract.common.ClientIpResolver());
         ReflectionTestUtils.setField(controller, "cookieSecure", false);
-        ReflectionTestUtils.setField(controller, "jwtExpirationMs", 3_600_000L);
+        ReflectionTestUtils.setField(controller, "cookieMaxAge", java.time.Duration.ofHours(1));
     }
 
     @AfterEach

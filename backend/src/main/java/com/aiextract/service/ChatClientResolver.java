@@ -30,7 +30,7 @@ public class ChatClientResolver {
     private final CompanyChatClientFactory factory;
     private final ConcurrentHashMap<UUID, CacheEntry> cache = new ConcurrentHashMap<>();
 
-    @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.chat.options.model:deepseek-chat}")
+    @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.chat.model:deepseek-chat}")
     private String platformModelName;
 
     public ChatClientResolver(@Qualifier("platformChatClient") ChatClient platformClient,

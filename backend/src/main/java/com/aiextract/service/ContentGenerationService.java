@@ -98,8 +98,14 @@ public class ContentGenerationService {
     /** 入队一条知识草稿任务，立即返回 jobId；AI 在后台线程执行。 */
     public UUID startKnowledgeGeneration(String sceneTag, List<String> signals) {
         UUID companyId = accessService.requireCompanyId();
+        long pendingDrafts = knowledgeRepository
+                .countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(companyId, "pending");
+        if (pendingDrafts > 0) {
+            throw BusinessException.conflict("CONTENT_PENDING_REVIEW",
+                    "还有 " + pendingDrafts + " 条 AI 知识草稿待审，请先处理后再生成新的");
+        }
         String scene = normalizeScene(sceneTag);
-        List<String> effective = collectSignals(scene, signals);
+        List<ContentSignalService.Signal> effective = collectSignals(scene, signals);
         String signalText = renderSignals(effective);
         String dedupe = "knowledge|" + scene + "|" + LocalDate.now() + "|" + fingerprint(signalText);
         ensureNotGeneratedToday(companyId, ContentGenerationJob.KIND_KNOWLEDGE, dedupe);
@@ -111,7 +117,8 @@ public class ContentGenerationService {
     }
 
     @Async("contentGenerationExecutor")
-    public void runKnowledgeJob(UUID jobId, UUID companyId, String scene, List<String> signals) {
+    public void runKnowledgeJob(UUID jobId, UUID companyId, String scene,
+                                List<ContentSignalService.Signal> signals) {
         try {
             KnowledgeEntry entry = draftKnowledge(jobId, companyId, scene, signals);
             selfProvider.getObject().finishJob(jobId, 1,
@@ -124,7 +131,7 @@ public class ContentGenerationService {
 
     @Transactional(rollbackFor = Exception.class)
     public KnowledgeEntry persistKnowledge(UUID jobId, UUID companyId, String scene,
-                                           JsonNode draft, List<String> signals) {
+                                           JsonNode draft, List<ContentSignalService.Signal> signals) {
         String title = text(draft, "title");
         String content = text(draft, "content");
         String category = text(draft, "category");
@@ -170,8 +177,14 @@ public class ContentGenerationService {
 
     public UUID startCaseGeneration(String sceneTag, List<String> signals, String conversation) {
         UUID companyId = accessService.requireCompanyId();
+        long pendingDrafts = caseRepository
+                .countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(companyId, "pending");
+        if (pendingDrafts > 0) {
+            throw BusinessException.conflict("CONTENT_PENDING_REVIEW",
+                    "还有 " + pendingDrafts + " 条 AI 案例草稿待审，请先处理后再生成新的");
+        }
         String scene = normalizeScene(sceneTag);
-        List<String> effective = collectSignals(scene, signals);
+        List<ContentSignalService.Signal> effective = collectSignals(scene, signals);
         String signalText = renderSignals(effective);
         String dedupe = "case|" + scene + "|" + LocalDate.now() + "|" + fingerprint(signalText);
         ensureNotGeneratedToday(companyId, ContentGenerationJob.KIND_CASE, dedupe);
@@ -184,7 +197,7 @@ public class ContentGenerationService {
 
     @Async("contentGenerationExecutor")
     public void runCaseJob(UUID jobId, UUID companyId, String scene,
-                           List<String> signals, String conversation) {
+                           List<ContentSignalService.Signal> signals, String conversation) {
         try {
             Map<String, String> vars = new HashMap<>();
             vars.put("scene_tag", scene);
@@ -205,7 +218,7 @@ public class ContentGenerationService {
 
     @Transactional(rollbackFor = Exception.class)
     public IndustryCase persistCase(UUID jobId, UUID companyId, String scene,
-                                    JsonNode draft, List<String> signals) {
+                                    JsonNode draft, List<ContentSignalService.Signal> signals) {
         String title = text(draft, "title");
         String result = text(draft, "result");
         if (title == null) {
@@ -263,7 +276,7 @@ public class ContentGenerationService {
             throw new BusinessException(409, "题集已提交审核或已发布，不能新增题目；请先退回草稿或新建版本");
         }
         String scene = normalizeScene(sceneTag);
-        List<String> signals = collectSignals(scene, null);
+        List<ContentSignalService.Signal> signals = collectSignals(scene, null);
         if (signals.isEmpty()) {
             throw new BusinessException(409, "还没有可用的真实失败信号，先积累缺口/错题再出题");
         }
@@ -279,7 +292,7 @@ public class ContentGenerationService {
 
     @Async("contentGenerationExecutor")
     public void runEvalItemJob(UUID jobId, UUID companyId, UUID datasetId, String scene,
-                               List<String> signals, int limit) {
+                               List<ContentSignalService.Signal> signals, int limit) {
         try {
             EvaluationDataset dataset = datasetRepository.findById(datasetId)
                     .orElseThrow(() -> new BusinessException(404, "题集不存在"));
@@ -301,7 +314,8 @@ public class ContentGenerationService {
     @Transactional(rollbackFor = Exception.class)
     public List<EvaluationItem> persistEvalItems(UUID jobId, UUID companyId,
                                                  EvaluationDataset dataset, String scene,
-                                                 JsonNode itemsNode, List<String> signals, int limit) {
+                                                 JsonNode itemsNode,
+                                                 List<ContentSignalService.Signal> signals, int limit) {
         if (itemsNode == null || !itemsNode.isArray() || itemsNode.isEmpty()) {
             throw new BusinessException(502, "AI 没有生成可用题目");
         }
@@ -411,7 +425,8 @@ public class ContentGenerationService {
             for (IssueCandidate candidate : candidates) {
                 try {
                     KnowledgeEntry entry = draftKnowledge(jobId, companyId, candidate.scene(),
-                            List.of("评测失败题：" + candidate.question()));
+                            List.of(new ContentSignalService.Signal("eval_issue", candidate.scene(),
+                                    "评测失败题：" + candidate.question(), null)));
                     created.add(entry.getId());
                 } catch (Exception e) {
                     errors.add(candidate.question() + ": " + describe(e));
@@ -424,7 +439,7 @@ public class ContentGenerationService {
         }
     }
 
-    // ==================== 派生（一源多用） ====================
+    // ==================== AI 派生 ====================
 
     public UUID startDerive(String sourceType, UUID sourceId) {
         UUID companyId = accessService.requireCompanyId();
@@ -452,11 +467,20 @@ public class ContentGenerationService {
     public void runDeriveJob(UUID jobId, String sourceType, String title, String material) {
         try {
             Map<String, String> vars = new HashMap<>();
-            vars.put("source_type", "case".equals(sourceType) ? "案例" : "知识");
+            boolean fromCase = "case".equals(sourceType);
+            vars.put("source_type", fromCase ? "案例" : "知识");
             vars.put("title", title);
             vars.put("material", truncate(material, 4000));
-            JsonNode result = parse(chatStreamAdapter.chat(
+            vars.put("derive_focus", fromCase
+                    ? "这是案例：先提炼 3-5 条可复用知识卡（放在 faqs 字段：question 写「场景+问题」，"
+                    + "answer 写可复用事实/打法），再生成评测题与场景微练。"
+                    : "这是知识条目：只生成评测题与场景微练；faqs 必须为空数组。");
+            ObjectNode result = (ObjectNode) parse(chatStreamAdapter.chat(
                     promptLoader.format(PROMPT_DERIVE, vars)), "派生内容");
+            // 知识来源不生成 FAQ：回灌知识库只会制造重复条目，价值低
+            if (!fromCase) {
+                result.putArray("faqs");
+            }
             selfProvider.getObject().finishJob(jobId, 1, result);
         } catch (Exception e) {
             log.warn("内容派生失败 job={}", jobId, e);
@@ -568,7 +592,7 @@ public class ContentGenerationService {
 
     /** 单个知识草稿：AI 调用 + 短事务落库（供知识/错题回流复用） */
     private KnowledgeEntry draftKnowledge(UUID jobId, UUID companyId, String scene,
-                                          List<String> signals) {
+                                          List<ContentSignalService.Signal> signals) {
         Map<String, String> vars = new HashMap<>();
         vars.put("scene_tag", scene);
         vars.put("signals", renderSignals(signals));
@@ -588,19 +612,32 @@ public class ContentGenerationService {
                 });
     }
 
-    private List<String> collectSignals(String scene, List<String> explicit) {
+    private List<ContentSignalService.Signal> collectSignals(String scene, List<String> explicit) {
         if (explicit != null && !explicit.isEmpty()) {
-            return explicit;
+            return dedupeSignals(explicit.stream()
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(s -> new ContentSignalService.Signal(null, scene, s.trim(), null))
+                    .toList());
         }
-        List<String> matched = signalService.recentSignals(50).stream()
+        List<ContentSignalService.Signal> recent = signalService.recentSignals(50);
+        List<ContentSignalService.Signal> matched = recent.stream()
                 .filter(s -> scene.equals(s.sceneTag()))
-                .map(ContentSignalService.Signal::text)
                 .limit(10)
                 .toList();
-        return matched.isEmpty()
-                ? signalService.recentSignals(10).stream()
-                    .map(ContentSignalService.Signal::text).toList()
-                : matched;
+        // 场景没有精确命中时退回最近 10 条（与旧行为一致：缺口之外还会带上实战/评测信号）
+        return dedupeSignals(matched.isEmpty() ? signalService.recentSignals(10) : matched);
+    }
+
+    /** 生成依据按文本去重：同一条失败题/缺口只保留第一次出现，避免证据面板刷屏。 */
+    private List<ContentSignalService.Signal> dedupeSignals(List<ContentSignalService.Signal> signals) {
+        Map<String, ContentSignalService.Signal> unique = new LinkedHashMap<>();
+        for (ContentSignalService.Signal signal : signals) {
+            String key = ContentSignalService.normalizeText(signal.text());
+            if (!key.isEmpty()) {
+                unique.putIfAbsent(key, signal);
+            }
+        }
+        return List.copyOf(unique.values());
     }
 
     private JsonNode idsResult(List<UUID> ids, List<String> errors) {
@@ -645,24 +682,26 @@ public class ContentGenerationService {
         }
     }
 
-    private String evidenceJson(String type, String scene, List<String> signals) {
+    private String evidenceJson(String type, String scene, List<ContentSignalService.Signal> signals) {
         ArrayNode arr = objectMapper.createArrayNode();
-        for (String s : signals == null ? List.<String>of() : signals) {
+        for (ContentSignalService.Signal signal : dedupeSignals(
+                signals == null ? List.of() : signals)) {
             ObjectNode item = arr.addObject();
-            item.put("type", type);
-            item.put("sceneTag", scene);
-            item.put("text", truncate(s, 300));
+            item.put("type", signal.type() == null || signal.type().isBlank() ? type : signal.type());
+            item.put("sceneTag", signal.sceneTag() == null || signal.sceneTag().isBlank()
+                    ? scene : signal.sceneTag());
+            item.put("text", truncate(signal.text(), 300));
         }
         return json(arr);
     }
 
-    private String renderSignals(List<String> signals) {
+    private String renderSignals(List<ContentSignalService.Signal> signals) {
         if (signals == null || signals.isEmpty()) {
             return "（无信号）";
         }
         StringBuilder sb = new StringBuilder();
-        for (String s : signals) {
-            sb.append("- ").append(truncate(s, 300)).append('\n');
+        for (ContentSignalService.Signal signal : signals) {
+            sb.append("- ").append(truncate(signal.text(), 300)).append('\n');
         }
         return truncate(sb.toString(), MAX_SIGNAL_CHARS);
     }

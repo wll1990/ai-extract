@@ -1,5 +1,7 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.exception.BusinessException;
 import com.aiextract.model.Company;
@@ -38,13 +40,11 @@ public class InternalShareController {
     private final JwtUtil jwtUtil;
 
     private UUID extractUserId() {
-        String token = (String) SecurityContextHolder.getContext().getAuthentication().getCredentials();
-        return jwtUtil.getUserIdFromToken(token);
+        return CurrentUser.id();
     }
 
     private String extractRole() {
-        return jwtUtil.getRoleFromToken(
-            (String) SecurityContextHolder.getContext().getAuthentication().getCredentials());
+        return CurrentUser.role();
     }
 
     /**

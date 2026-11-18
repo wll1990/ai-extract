@@ -63,6 +63,8 @@ public class QueryGateConfig {
         private int guestPerMin = 6;
         /** C 端注册用户限频 */
         private int userPerMin = 20;
+        /** 合作方（C 端 API 接入）限频 — 默认与注册用户一致 */
+        private int partnerPerMin = 20;
         /** B 端员工限频 */
         private int employeePerMin = 30;
         /** IM 回调不限频（飞书/钉钉自有反滥用机制） */

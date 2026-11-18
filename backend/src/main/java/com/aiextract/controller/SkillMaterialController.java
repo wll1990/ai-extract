@@ -1,5 +1,7 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ErrorMessages;
 import com.aiextract.common.UploadLimits;
 import com.aiextract.config.CompanyScopeService;
@@ -18,7 +20,6 @@ import com.aiextract.repository.SkillRepository;
 import com.aiextract.service.MaterialAuditService;
 import com.aiextract.service.MaterialCleaningService;
 import com.aiextract.service.MaterialCleaningScheduler;
-import com.aiextract.util.JwtUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +54,6 @@ public class SkillMaterialController {
     private final MaterialCleaningService cleaningService;
     private final MaterialCleaningScheduler cleaningScheduler;
     private final MaterialAuditService auditService;
-    private final JwtUtil jwtUtil;
     private final com.aiextract.repository.UserRepository userRepository;
     private final com.aiextract.repository.SpaceRepository spaceRepository;
     private final CompanyScopeService companyScopeService;
@@ -91,7 +91,7 @@ public class SkillMaterialController {
             assertSpaceAccess(spaceId);
         }
 
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         // 先整体校验，避免上传到一半才发现格式/大小不合法，留下半批数据
         for (MultipartFile file : files) {
             if (file.isEmpty()) { continue; }
@@ -160,7 +160,7 @@ public class SkillMaterialController {
             assertSpaceAccess(spaceId);
         }
 
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         Map<String, Object> result = cleaningService.uploadTextMaterial(text, spaceId, skillId, skillName, userId, domain, title);
         return ApiResponse.success(Map.of("uploaded", 1, "results", List.of(result)));
     }
@@ -168,8 +168,8 @@ public class SkillMaterialController {
     /** 分身列表（供上传时下拉选择，仅当前企业；员工只看自己的） */
     @GetMapping("/admin/skills/picker")
     public ApiResponse<List<Map<String, Object>>> picker() {
-        UUID currentUserId = jwtUtil.getUserIdFromToken(getToken());
-        String role = jwtUtil.getRoleFromToken(getToken());
+        UUID currentUserId = CurrentUser.id();
+        String role = CurrentUser.role();
 
         List<UUID> targetSpaceIds;
         if (RolePermissions.EMPLOYEE.equals(role)) {
@@ -231,18 +231,22 @@ public class SkillMaterialController {
         list.removeIf(m -> !rich.contains(UUID.fromString((String) m.get("id"))));
     }
 
-    /** 分身素材列表（分页） */
+    /** 分身素材列表（分页，可按状态过滤） */
     @GetMapping("/admin/skills/{skillId}/materials")
     public ApiResponse<Page<Map<String, Object>>> listMaterials(
             @PathVariable UUID skillId,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status) {
         assertSkillAccess(skillId);
         // 列表只返回安全字段：不暴露 fileUrl（存储路径）与 parsedContent（全文）
-        return ApiResponse.success(
-            materialRepository.findBySkillIdExcludingType(skillId, "interview",
-                    PageRequest.of(page - 1, size))
-                .map(this::toMaterialListItem));
+        boolean filterByStatus = status != null && !status.isBlank() && !"all".equals(status);
+        Page<SkillMaterial> result = filterByStatus
+                ? materialRepository.findBySkillIdExcludingTypeAndStatus(skillId, "interview", status,
+                        PageRequest.of(page - 1, size))
+                : materialRepository.findBySkillIdExcludingType(skillId, "interview",
+                        PageRequest.of(page - 1, size));
+        return ApiResponse.success(result.map(this::toMaterialListItem));
     }
 
     /** 素材列表投影 — 详情/全文请走 /materials/{id}/detail */
@@ -438,7 +442,7 @@ public class SkillMaterialController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "materialType", required = false) String materialType) {
         validateSkillOwnership(skillId);
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
 
         // 文件格式校验
         String originalName = file.getOriginalFilename();
@@ -458,8 +462,9 @@ public class SkillMaterialController {
         String objectKey = fileStorageService.saveMaterialFile(file, "material");
 
         // 创建素材记录
+        // id 由 @GeneratedValue 生成：手工塞 UUID 会让 Spring Data 走 merge，
+        // Hibernate 7 对「有 id 但库里不存在」的生成主键实体判为游离态直接抛 StaleObjectState。
         SkillMaterial material = SkillMaterial.builder()
-            .id(UUID.randomUUID())
             .skillId(skillId)
             .uploadedBy(userId)
             .fileName(originalName)
@@ -538,7 +543,7 @@ public class SkillMaterialController {
 
     /** employee/C 端属主校验 — space.isOwnedBy(currentUserId)。 */
     private void validateSpaceOwnership(UUID spaceId) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = CurrentUser.id();
         Space space = spaceRepository.findById(spaceId)
             .orElseThrow(() -> new BusinessException(404, "空间不存在"));
         if (!space.isOwnedBy(userId)) {
@@ -559,7 +564,7 @@ public class SkillMaterialController {
      * company_admin 只能操作本企业分身；super_admin 不受企业范围限制。
      */
     private void assertSkillAccess(UUID skillId) {
-        if (RolePermissions.EMPLOYEE.equals(jwtUtil.getRoleFromToken(getToken()))) {
+        if (RolePermissions.EMPLOYEE.equals(CurrentUser.role())) {
             validateSkillOwnership(skillId);
         } else {
             companyScopeService.assertSkillOwnership(skillId);
@@ -568,7 +573,7 @@ public class SkillMaterialController {
 
     /** 空间入口统一归属校验：employee 只能操作自己的空间，管理员限本企业。 */
     private void assertSpaceAccess(UUID spaceId) {
-        if (RolePermissions.EMPLOYEE.equals(jwtUtil.getRoleFromToken(getToken()))) {
+        if (RolePermissions.EMPLOYEE.equals(CurrentUser.role())) {
             validateSpaceOwnership(spaceId);
         } else {
             companyScopeService.assertSpaceOwnership(spaceId);

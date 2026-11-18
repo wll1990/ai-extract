@@ -42,10 +42,16 @@ function resolveBaseUrl(): string {
 const API_BASE = resolveBaseUrl();
 export { API_BASE };
 
+export interface ApiOptions extends RequestInit {
+  /** 可选请求 401 时只抛错，不清凭证、不跳登录 */
+  skipAuthRedirect?: boolean;
+}
+
 export async function apiClient<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiOptions = {},
 ): Promise<T> {
+  const { skipAuthRedirect, ...requestInit } = options;
   const headers: Record<string, string> = {};
 
   if (!(options.body instanceof FormData)) {
@@ -54,6 +60,11 @@ export async function apiClient<T>(
 
   if (options.headers) {
     Object.assign(headers, options.headers as Record<string, string>);
+  }
+
+  // 调用方把空 token 拼成 `Bearer undefined/null/空` 时，会顶掉 Cookie 认证。
+  if (headers['Authorization'] && /^Bearer\s*(?:undefined|null)?$/i.test(headers['Authorization'].trim())) {
+    delete headers['Authorization'];
   }
 
   // C 端 Bearer token（localStorage c_auth），无显式 Authorization 时自动补齐
@@ -74,11 +85,14 @@ export async function apiClient<T>(
 
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'same-origin',
-    ...options,
+    ...requestInit,
     headers,
   });
 
   if (!res.ok) {
+    if (res.status === 401 && skipAuthRedirect) {
+      throw new Error('登录已过期');
+    }
     if (res.status === 401 && typeof window !== 'undefined') {
       const path = window.location.pathname;
       // C 端分享页：派发事件由页面弹注册/登录抽屉

@@ -330,6 +330,83 @@ class KnowledgeCaseServiceTest {
         assertEquals(null, result.getSupersedesId());
     }
 
+    @Test
+    void suggestCaseRevision_profileAsObject_persistsValidJson() {
+        UUID id = UUID.randomUUID();
+        IndustryCase draft = IndustryCase.builder()
+                .id(id).companyId(companyId).title("原案例").result("win")
+                .version(1).status(IndustryCase.STATUS_DRAFT)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                .build();
+        when(caseRepository.findById(id)).thenReturn(Optional.of(draft));
+        when(promptLoader.format(eq("material_case_revise.md"), anyMap())).thenReturn("prompt");
+        when(chatStreamAdapter.chat(anyString())).thenReturn(
+                "{\"title\":\"新案例\",\"customerProfile\":{\"industry\":\"制造业\"},"
+                        + "\"objection\":\"价格异议\"}");
+
+        IndustryCase result = service.suggestCaseRevision(id, "改写");
+
+        assertTrue(result.getCustomerProfile().contains("制造业"));
+        assertTrue(result.getCustomerProfile().trim().startsWith("{"));
+    }
+
+    @Test
+    void suggestCaseRevision_profileAsEscapedString_persistsValidJson() {
+        UUID id = UUID.randomUUID();
+        IndustryCase draft = IndustryCase.builder()
+                .id(id).companyId(companyId).title("原案例").result("win")
+                .version(1).status(IndustryCase.STATUS_DRAFT)
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                .build();
+        when(caseRepository.findById(id)).thenReturn(Optional.of(draft));
+        when(promptLoader.format(eq("material_case_revise.md"), anyMap())).thenReturn("prompt");
+        when(chatStreamAdapter.chat(anyString())).thenReturn(
+                "{\"title\":\"新案例\",\"customerProfile\":\"{\\\"industry\\\":\\\"制造业\\\"}\"}");
+
+        IndustryCase result = service.suggestCaseRevision(id, "改写");
+
+        assertTrue(result.getCustomerProfile().contains("制造业"));
+    }
+
+    @Test
+    void finalizeCaseIndex_oldVersionDoesNotDeprecateNewerActive() {
+        UUID root = UUID.randomUUID();
+        IndustryCase v1 = versionedCase(root, 1, "active");
+        IndustryCase v2 = versionedCase(root, 2, "active");
+        when(caseRepository.findById(v1.getId())).thenReturn(Optional.of(v1));
+        when(caseRepository.findByRootIdAndStatus(root, IndustryCase.STATUS_ACTIVE))
+                .thenReturn(List.of(v1, v2));
+
+        service.finalizeCaseIndex(v1.getId());
+
+        assertEquals(IndustryCase.STATUS_ACTIVE, v2.getStatus(), "旧版收尾不能下线更高版本");
+        verify(caseRepository, never()).save(v2);
+    }
+
+    @Test
+    void finalizeCaseIndex_newerVersionDeprecatesOld() {
+        UUID root = UUID.randomUUID();
+        IndustryCase v1 = versionedCase(root, 1, "active");
+        IndustryCase v2 = versionedCase(root, 2, "active");
+        when(caseRepository.findById(v2.getId())).thenReturn(Optional.of(v2));
+        when(caseRepository.findByRootIdAndStatus(root, IndustryCase.STATUS_ACTIVE))
+                .thenReturn(List.of(v1, v2));
+
+        service.finalizeCaseIndex(v2.getId());
+
+        assertEquals(IndustryCase.STATUS_DEPRECATED, v1.getStatus());
+        assertEquals(IndustryCase.STATUS_ACTIVE, v2.getStatus());
+    }
+
+    private IndustryCase versionedCase(UUID root, int version, String status) {
+        return IndustryCase.builder()
+                .id(UUID.randomUUID()).rootId(root).companyId(companyId)
+                .title("v" + version).result("win").version(version).status(status)
+                .embeddingStatus("indexed")
+                .createdAt(LocalDateTime.now()).updatedAt(LocalDateTime.now())
+                .build();
+    }
+
     // ==================== 案例 CRUD ====================
 
     @Test

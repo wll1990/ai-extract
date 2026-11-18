@@ -44,6 +44,21 @@ public class PartnerApp {
     @Column(name = "contact_email", length = 100)
     private String contactEmail;
 
+    /** 一次性 code 有效期（秒） */
+    @Builder.Default
+    @Column(name = "code_ttl_seconds", nullable = false)
+    private Integer codeTtlSeconds = 60;
+
+    /** 合作方会话闲置 TTL（秒） */
+    @Builder.Default
+    @Column(name = "session_idle_ttl_seconds", nullable = false)
+    private Integer sessionIdleTtlSeconds = 7200;
+
+    /** 合作方会话绝对 TTL（秒） */
+    @Builder.Default
+    @Column(name = "session_absolute_ttl_seconds", nullable = false)
+    private Integer sessionAbsoluteTtlSeconds = 43200;
+
     @Column(name = "created_by")
     private UUID createdBy;
 

@@ -65,6 +65,13 @@ export function listSkills(page = 1, size = 50, status?: string, userId?: string
   return apiClient<{ content: SkillInfo[]; total: number; totalPages: number }>(`/skills/list?${params.toString()}`);
 }
 
+/** 我的分身（含未发布）— 严格只看当前账号空间下的分身 */
+export function listMySkills(page = 1, size = 20, status?: string): Promise<{ content: SkillInfo[]; total: number; totalPages: number }> {
+  const params = new URLSearchParams({ page: String(page), size: String(size) });
+  if (status) params.set('status', status);
+  return apiClient<{ content: SkillInfo[]; total: number; totalPages: number }>(`/skills/my?${params.toString()}`);
+}
+
 /** 更新分身状态 */
 export function updateSkillStatus(skillId: string, status: string): Promise<void> {
   return apiClient<void>(`/skills/${skillId}/status`, { method: 'PUT', body: JSON.stringify({ status }) });
@@ -80,10 +87,31 @@ export function retrySkillPipeline(skillId: string): Promise<{ reset: number; to
   return apiClient<{ reset: number; total: number }>(`/admin/skills/${skillId}/retry-pipeline`, { method: 'POST' });
 }
 
+export interface SceneTagCount {
+  tag: string;
+  count: number;
+}
+
+/**
+ * 分身场景标签。
+ *
+ * <p>可选展示数据：失败时只降级为空列表，不跳登录。B 端 authToken 为空时
+ * 不能拼 `Bearer undefined`，否则会顶掉 HttpOnly Cookie。</p>
+ */
+export function fetchSceneTags(skillId: string, authToken?: string): Promise<SceneTagCount[]> {
+  return apiClient<SceneTagCount[]>(`/skills/${skillId}/scene-tags`, {
+    headers: bearer(authToken),
+    skipAuthRedirect: true,
+  });
+}
+
 /** 推荐问题 */
 export function fetchRecommendedQuestions(skillId: string, sceneTag?: string, authToken?: string): Promise<string[]> {
   const params = sceneTag ? `?sceneTag=${encodeURIComponent(sceneTag)}` : '';
-  return apiClient<string[]>(`/skills/${skillId}/recommended-questions${params}`, { headers: bearer(authToken) });
+  return apiClient<string[]>(`/skills/${skillId}/recommended-questions${params}`, {
+    headers: bearer(authToken),
+    skipAuthRedirect: true,
+  });
 }
 
 /** 分身问答（SSE流式） */

@@ -17,6 +17,25 @@ export interface CompanyAiConfigView {
   platformFallbackAvailable: boolean;
   inputTokensThisMonth: number;
   outputTokensThisMonth: number;
+  /** company_key / platform_key / unavailable */
+  effectiveMode: 'company_key' | 'platform_key' | 'unavailable';
+  effectiveModel: string;
+  effectiveBaseUrl: string;
+  updatedAt: string | null;
+  updatedByName: string | null;
+}
+
+export interface CompanyAiConfigHistory {
+  id: string;
+  action: 'created' | 'updated' | 'rotated' | 'enabled' | 'disabled';
+  provider: string | null;
+  model: string | null;
+  baseUrl: string | null;
+  keyLast4: string | null;
+  fallbackEnabled: boolean;
+  actorId: string | null;
+  actorName: string | null;
+  createdAt: string;
 }
 
 export interface CompanyAiTestResult {
@@ -79,6 +98,14 @@ export function rotateCompanyAiKey(apiKey: string): Promise<void> {
   });
 }
 
+export function enableCompanyAiKey(): Promise<void> {
+  return apiClient('/admin/company/ai-model/enable', { method: 'POST' });
+}
+
 export function disableCompanyAiKey(): Promise<void> {
   return apiClient('/admin/company/ai-model/disable', { method: 'POST' });
+}
+
+export function getCompanyAiHistory(): Promise<CompanyAiConfigHistory[]> {
+  return apiClient('/admin/company/ai-model/history');
 }

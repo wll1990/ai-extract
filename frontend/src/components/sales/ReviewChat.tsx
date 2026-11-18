@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ReviewMessage, streamMessage } from '@/lib/api/sales';
 import { getUser } from '@/lib/storage';
+import { Button } from '@/components/ui/Button';
 
 function draftKeyFor(reviewId: string): string {
   const userId = (getUser() as { id?: string } | null)?.id ?? 'anonymous';
@@ -75,17 +76,22 @@ export function ReviewChat({
   };
 
   return (
-    <section className="rounded border border-gray-200 p-4">
-      <h3 className="mb-3 text-sm font-medium text-gray-900">继续问教练</h3>
-      <div className="mb-3 max-h-80 space-y-3 overflow-auto">
+    <section className="rounded-xl border border-border bg-surface-2 p-4">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-foreground">继续问教练</h3>
+        <span className="text-[11px] text-muted-foreground">基于本次报告继续追问，不需要重新复盘</span>
+      </div>
+      <div className="mb-3 mt-2 max-h-80 space-y-3 overflow-auto">
         {messages.length === 0 && (
-          <p className="text-sm text-gray-500">还没有追问。可以问「这个客户最该先解决什么」。</p>
+          <p className="rounded-lg bg-surface px-3 py-4 text-sm text-muted-foreground">
+            还没有追问。可以问「这个客户最该先解决什么」。
+          </p>
         )}
         {messages.map(m => (
           <div key={m.id} className={m.role === 'user' ? 'text-right' : 'text-left'}>
             <div
-              className={`inline-block max-w-[85%] whitespace-pre-wrap rounded px-3 py-2 text-sm ${
-                m.role === 'user' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-900'
+              className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-xl px-3 py-2 text-sm ${
+                m.role === 'user' ? 'bg-primary text-white' : 'bg-surface text-foreground'
               }`}
             >
               {m.content || '…'}
@@ -93,10 +99,10 @@ export function ReviewChat({
           </div>
         ))}
       </div>
-      {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
+      {error && <p className="mb-2 text-sm text-danger">{error}</p>}
       <div className="flex gap-2">
         <input
-          className="flex-1 rounded border border-gray-300 px-3 py-2 text-sm"
+          className="flex-1 rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm text-foreground"
           value={input}
           disabled={disabled || streaming}
           onChange={e => setInput(e.target.value)}
@@ -108,14 +114,14 @@ export function ReviewChat({
           }}
           placeholder={disabled ? '报告生成后可追问' : '输入问题，回车发送'}
         />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={send}
           disabled={disabled || streaming || !input.trim()}
-          className="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50"
+          title="把问题发给教练分身；回答会追加到下方对话，不会重新生成报告"
         >
           {streaming ? '回答中…' : '发送'}
-        </button>
+        </Button>
       </div>
     </section>
   );

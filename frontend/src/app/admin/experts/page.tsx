@@ -1,4 +1,5 @@
 'use client';
+import { Pagination } from '@/components/ui/Pagination';
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
@@ -328,21 +329,7 @@ export default function AdminExpertsPage() {
         )}
 
         {/* 分页 */}
-        {h.totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-center gap-4">
-            <button
-              onClick={() => h.loadData(h.page - 1)}
-              disabled={h.page <= 1}
-              className="rounded-lg border border-border-strong px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-30 disabled:cursor-not-allowed"
-            >上一页</button>
-            <span className="text-sm text-muted-foreground">第 {h.page} / {h.totalPages} 页</span>
-            <button
-              onClick={() => h.loadData(h.page + 1)}
-              disabled={h.page >= h.totalPages}
-              className="rounded-lg border border-border-strong px-4 py-2 text-sm text-primary hover:bg-primary-light disabled:opacity-30 disabled:cursor-not-allowed"
-            >下一页</button>
-          </div>
-        )}
+        <Pagination page={h.page} totalPages={h.totalPages} totalElements={h.total ?? 0} onPageChange={p => h.loadData(p)} loading={h.loading} />
       </div>
 
       {/* 上传弹窗 */}

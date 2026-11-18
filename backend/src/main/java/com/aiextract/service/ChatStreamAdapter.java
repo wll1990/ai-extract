@@ -1,14 +1,22 @@
 package com.aiextract.service;
 
+import com.aiextract.config.TokenContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.SynchronousSink;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -104,9 +112,9 @@ public class ChatStreamAdapter {
      */
     public Flux<Map<String, Object>> chatStream(List<Map<String, String>> messages,
                                                  Map<String, Object> context) {
-        // system 规则与用户/材料分离：材料里的「指令」不能覆盖系统规则
-        StringBuilder systemPrompt = new StringBuilder();
-        StringBuilder userPrompt = new StringBuilder();
+        // 供应商约束：只允许一条 system，且放在最前；空 assistant 消息会被拒绝。
+        StringBuilder systemContent = new StringBuilder();
+        List<Message> dialogMessages = new ArrayList<>(messages.size());
         String prevContent = null;
         String prevRole = null;
         for (Map<String, String> msg : messages) {
@@ -122,38 +130,36 @@ public class ChatStreamAdapter {
             }
             prevContent = content;
             prevRole = role;
-            if ("system".equals(role)) {
-                systemPrompt.append(content).append("\n\n");
-            } else if ("user".equals(role)) {
-                userPrompt.append("用户：").append(content).append("\n");
-            } else if ("assistant".equals(role)) {
-                userPrompt.append("助手：").append(content).append("\n");
+            switch (role == null ? "" : role) {
+                case "system" -> systemContent.append(content).append("\n\n");
+                case "assistant" -> {
+                    if (!content.isBlank()) {
+                        dialogMessages.add(new AssistantMessage(content));
+                    }
+                }
+                default -> dialogMessages.add(new UserMessage(content));
             }
         }
-        userPrompt.append("\n助手：");
 
-        String system = systemPrompt.toString();
-        String fullPrompt = userPrompt.toString();
-        // 日志：发送给大模型的请求
-        log.debug("LLM REQ chars={} preview={}",
-            fullPrompt.length(),
-            fullPrompt.length() > 500
-                ? fullPrompt.substring(0, 500).replace("\n", "\\n") + "..."
-                : fullPrompt.replace("\n", "\\n"));
-        // 复盘追问的 prompt 含客户隐私，默认不打印全文；排障时用 DEBUG 看截断预览
-        log.debug("LLM REQ fullPrompt chars={} preview={}",
-            fullPrompt.length(),
-            fullPrompt.length() > 500
-                ? fullPrompt.substring(0, 500).replace("\n", "\\n") + "..."
-                : fullPrompt.replace("\n", "\\n"));
+        List<Message> chatMessages = new ArrayList<>(dialogMessages.size() + 1);
+        if (!systemContent.isEmpty()) {
+            chatMessages.add(new SystemMessage(systemContent.toString().trim()));
+        }
+        chatMessages.addAll(dialogMessages);
+        if (chatMessages.isEmpty()) {
+            chatMessages.add(new UserMessage(""));
+        }
+        log.debug("LLM REQ messages={} systemChars={} dialogChars={}",
+            chatMessages.size(), systemContent.length(),
+            dialogMessages.stream().mapToInt(m -> m.getText() == null ? 0 : m.getText().length()).sum());
 
         AtomicInteger chunkCount = new AtomicInteger(0);
         AtomicLong totalChars = new AtomicLong(0);
         StringBuilder fullResponse = new StringBuilder();
 
         return chatClient.prompt()
-            .system(system)
-            .user(fullPrompt)
+            .messages(chatMessages)
+            .toolContext(toolContext())
             .stream()
             .chatResponse()
             // 注意：Reactor 的 map 不允许返回 null —— 映射函数一旦返回 null 就直接抛 NPE，
@@ -164,7 +170,7 @@ public class ChatStreamAdapter {
                 if (response.getResult() == null || response.getResult().getOutput() == null) {
                     return;
                 }
-                String content = response.getResult().getOutput().getContent();
+                String content = response.getResult().getOutput().getText();
                 if (content == null || content.isEmpty()) {
                     return;
                 }
@@ -189,5 +195,22 @@ public class ChatStreamAdapter {
             })
             .doOnError(error -> log.error("LLM ERR {}", error.getMessage()))
             .concatWithValues(Map.of("type", "done"));
+    }
+
+    /**
+     * 工具上下文：工具在模型回调线程执行，那里没有请求 ThreadLocal。
+     * 在请求线程捕获租户信息，显式传给 ToolContext（由 {@code SimpleToolCallback} 还原）。
+     */
+    private static Map<String, Object> toolContext() {
+        Map<String, Object> context = new HashMap<>(2);
+        UUID userId = TokenContext.get();
+        UUID companyId = TokenContext.getCompanyId();
+        if (userId != null) {
+            context.put("userId", userId.toString());
+        }
+        if (companyId != null) {
+            context.put("companyId", companyId.toString());
+        }
+        return context;
     }
 }

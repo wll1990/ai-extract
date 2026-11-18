@@ -8,7 +8,7 @@ import { Permission } from '@/lib/permissions';
 import {
   DOMAINS,
   DOMAIN_TITLE,
-  isNavActive,
+  activeNavPath,
   isNavDomainKey,
   resolveDomain,
   type NavBadges,
@@ -76,8 +76,7 @@ const NAV_ITEMS: NavItem[] = [
 
   { path: '/admin/knowledge', label: '知识库', permission: Permission.KNOWLEDGE_MANAGE, domain: 'knowledge' },
   { path: '/admin/cases', label: '案例库', permission: Permission.KNOWLEDGE_MANAGE, domain: 'knowledge' },
-  { path: '/admin/content', label: '内容智能', permission: Permission.KNOWLEDGE_MANAGE, domain: 'knowledge' },
-  { path: '/admin/content/review', label: 'AI 草稿审核', permission: Permission.KNOWLEDGE_MANAGE, domain: 'knowledge' },
+  { path: '/admin/content', label: '内容工厂', permission: Permission.KNOWLEDGE_MANAGE, domain: 'knowledge' },
   { path: '/knowledge/submissions', label: '提交知识', permission: Permission.KNOWLEDGE_SUBMIT, domain: 'knowledge' },
   { path: '/cases/submissions', label: '提交案例', permission: Permission.KNOWLEDGE_SUBMIT, domain: 'knowledge' },
   { path: '/admin/experts', label: '专家经验', permission: Permission.EXPERT_MANAGE, domain: 'knowledge' },
@@ -362,6 +361,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeDomain: NavDomainKey = pathDomain ?? domainOverride ?? domainsWithItems[0]?.key ?? 'daily';
   const activeItems = domainsWithItems.find(d => d.key === activeDomain)?.items ?? [];
   const activeTitle = DOMAIN_TITLE[activeDomain];
+  // 最长前缀唯一高亮：避免 /admin/content 与 /admin/content/review 同时选中
+  const activeItemPath = activeNavPath(pathname, activeItems);
 
   const switchDomain = (key: NavDomainKey) => {
     if (key === activeDomain) return;
@@ -748,7 +749,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
           <nav className="flex-1 overflow-y-auto px-2.5 pb-3" aria-label={`${activeTitle}菜单`}>
             {activeItems.map(item => {
-              const on = isNavActive(pathname, item.path);
+              const on = item.path === activeItemPath;
               const count = badges.items[item.path] || 0;
               return (
                 <button

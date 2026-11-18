@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, Suspense, useCallback } from 'react';
-import { useRouter, useSearchParams, useParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { getActiveSessions, restartSession } from '@/lib/api/interview';
 import { getToken } from '@/lib/storage';
 
@@ -15,9 +15,6 @@ interface InviteInfo {
 
 function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const partnerToken = searchParams.get('token');
-
   const [info, setInfo] = useState<InviteInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,20 +58,38 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
       .finally(() => setLoading(false));
   }, [inviteCode]);
 
+  // 三方 App 嵌入：从 URL fragment 读取一次性 code，换取会话后立即清除
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const raw = window.location.hash.startsWith('#') ? window.location.hash.slice(1) : '';
+    if (!raw) return;
+    const params = new URLSearchParams(raw);
+    const code = params.get('code');
+    const appId = params.get('appId');
+    if (!code || !appId) return;
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    fetch('/api/v1/c/auth/partner/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appId, code }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.code === 200 && d.data?.token) {
+          localStorage.setItem('c_auth', JSON.stringify({
+            token: d.data.token,
+            user: { userId: d.data.userId, nickname: d.data.nickname, status: 'registered' },
+          }));
+          window.location.reload();
+        } else {
+          setToasts(d.message || '合作方登录失败');
+        }
+      })
+      .catch(() => setToasts('网络错误'));
+  }, []);
+
   // 检查登录态
   const checkAuth = useCallback(async () => {
-    // Partner token
-    if (partnerToken) {
-      try {
-        const r = await fetch('/api/v1/c/auth/me', { headers: { Authorization: `Bearer ${partnerToken}` } });
-        const d = await r.json();
-        if (d.code === 200) {
-          localStorage.setItem('c_auth', JSON.stringify({ token: partnerToken, user: { userId: d.data.userId, nickname: d.data.nickname, status: d.data.status } }));
-          router.replace(`/h5/interview/m/${inviteCode}`);
-          return true;
-        }
-      } catch {}
-    }
     // B端 token（企业登录）
     try {
       const bToken = localStorage.getItem('token');
@@ -97,7 +112,7 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
       }
     } catch {}
     return false;
-  }, [partnerToken, inviteCode, router]);
+  }, [inviteCode, router]);
 
   useEffect(() => {
     checkAuth().then(a => { setAuthed(a); setAuthChecked(true); });
@@ -110,7 +125,12 @@ function H5InviteEntryContent({ inviteCode }: { inviteCode: string }) {
     setSubmitting(true); setToasts(null);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      const token = partnerToken || getToken();
+      let cToken: string | null = null;
+      try {
+        const stored = localStorage.getItem('c_auth');
+        cToken = stored ? JSON.parse(stored)?.token ?? null : null;
+      } catch { cToken = null; }
+      const token = cToken || getToken();
       if (token) headers['Authorization'] = `Bearer ${token}`;
       const r = await fetch('/api/v1/interviews', {
         method: 'POST', headers,

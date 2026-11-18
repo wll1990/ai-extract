@@ -74,6 +74,10 @@ public class SkillService {
     private final OrganizationSkillService orgSkillService;
     private final OssService ossService;
     private final com.aiextract.repository.AdminAuditLogRepository auditLogRepository;
+    private final PracticeKcSettingService practiceKcSettingService;
+    private final KnowledgeCaseContextService knowledgeCaseContextService;
+    private final KcScopeResolver kcScopeResolver;
+    private final com.aiextract.repository.IndustryCaseRepository industryCaseRepository;
 
     /** 发布门槛（管理端与 C 端共用同一份配置） */
     @org.springframework.beans.factory.annotation.Value("${app.publish.min-grains:10}")
@@ -139,6 +143,9 @@ public class SkillService {
             angles = practiceDemoService.getScenePracticeAngles(id, defaultScene);
         }
 
+        // 知识/案例注入（受公司级开关控制）：只补客户侧背景，不把打法/话术喂给扮演客户的模型
+        applyPracticeCaseContext(skill, sceneInfo, request);
+
         // 持久化：已发布分身创建 Conversation + 首条客户消息
         String conversationId = null;
         if ("published".equals(skill.getStatus())) {
@@ -167,6 +174,30 @@ public class SkillService {
                 .practiceAngles(angles)
                 .totalAngles(angles.size())
                 .build();
+    }
+
+    /**
+     * 对练逐轮评价：按公司开关决定是否检索知识/案例，作为教练侧参考。
+     *
+     * <p>开关关闭时零检索；开启时把知识事实与案例打法交给
+     * {@link PracticeDemoService}，不进入客户角色提示词。</p>
+     */
+    public Map<String, Object> evaluatePracticeRound(UUID skillId, String sceneTag, String customerMessage,
+                                                     String myResponse, String previousChampionAnswer, int retryCount) {
+        Skill skill = skillRepository.findById(skillId)
+                .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
+        UUID callerCompanyId = com.aiextract.config.TokenContext.getCompanyId();
+        KnowledgeCaseRetriever.KnowledgeCaseHits kcHits = KnowledgeCaseContextService.emptyHits();
+        if (practiceKcSettingService.isEnabledForSkill(skill, callerCompanyId)) {
+            String query = java.util.stream.Stream.of(sceneTag, customerMessage, myResponse)
+                    .filter(v -> v != null && !v.isBlank())
+                    .collect(Collectors.joining(" "));
+            UUID scopeCompanyId = kcScopeResolver.resolve(skill, callerCompanyId).companyId();
+            kcHits = knowledgeCaseContextService.retrieveSafely(query, scopeCompanyId,
+                    "practice-evaluate:" + skillId);
+        }
+        return practiceDemoService.evaluatePracticeResponse(skillId, sceneTag, customerMessage, myResponse,
+                previousChampionAnswer, retryCount, kcHits);
     }
 
     /**
@@ -510,6 +541,13 @@ public class SkillService {
         if (skill.getOwnerName() == null || skill.getOwnerName().isBlank()) {
             blockers.add("画像未完善：销冠姓名为必填");
         }
+        if (skill.getSpaceId() != null) {
+            long unembedded = grainRepository.countActiveWithoutEmbedding(skill.getSpaceId());
+            if (unembedded > 0) {
+                blockers.add("有 " + unembedded + " 条活跃颗粒尚未完成向量化，发布后这些内容无法被检索；"
+                        + "请等待自动重试，或先在颗粒页重建索引后再发布");
+            }
+        }
         SkillProfile profile = profileRepository.findBySkillId(skill.getId()).orElse(null);
         if (profile == null
                 || profile.getPersonality() == null || profile.getPersonality().isBlank()
@@ -555,7 +593,20 @@ public class SkillService {
         Skill skill = skillRepository.findById(UUID.fromString(skillId))
                 .orElseThrow(() -> new BusinessException(HttpStatus.NOT_FOUND.value(), ErrorMessages.SKILL_NOT_FOUND));
         String current = skill.getStatus();
+        if (status.equals(current)) {
+            // 同状态幂等：避免已发布分身因后续颗粒变化被「重新发布」拦住，也避免重复写库
+            log.info("分身状态未变化，忽略, skillId: {}, status: {}", skillId, status);
+            return;
+        }
         assertStatusTransition(current, status);
+        // 发布统一门槛：任何入口（含管理端通用状态接口）都不能绕过颗粒/场景/画像/向量校验
+        if ("published".equals(status)) {
+            List<String> blockers = publishBlockers(skill);
+            if (!blockers.isEmpty()) {
+                throw new BusinessException(HttpStatus.CONFLICT.value(),
+                        "发布条件未满足：" + String.join("；", blockers));
+            }
+        }
         skill.setStatus(status);
         if ("discarded".equals(status)) {
             skill.setDiscardedAt(LocalDateTime.now());
@@ -908,6 +959,41 @@ public class SkillService {
     }
 
     /**
+     * 用知识/案例补强对练场景（开关关闭时零检索）。
+     *
+     * <p>只把案例的客户侧字段写进客户角色设定（画像/情绪/核心顾虑），
+     * 关键动作、话术、可复用点属于学员要自己想的内容，不注入。</p>
+     */
+    private void applyPracticeCaseContext(Skill skill, PracticeStartResponse.PracticeSceneInfo sceneInfo,
+                                          PracticeStartRequest request) {
+        UUID callerCompanyId = com.aiextract.config.TokenContext.getCompanyId();
+        if (!practiceKcSettingService.isEnabledForSkill(skill, callerCompanyId)) {
+            return;
+        }
+        // 开练是普通 JSON 请求，不调用向量模型：按场景标签精确取一条 active 案例
+        String sceneTag = request.getScene() != null && !request.getScene().isBlank()
+                ? request.getScene() : sceneInfo.getTitle();
+        UUID scopeCompanyId = kcScopeResolver.resolve(skill, callerCompanyId).companyId();
+        var cases = industryCaseRepository.findActiveForPractice(scopeCompanyId, sceneTag,
+                org.springframework.data.domain.PageRequest.of(0, 1));
+        if (cases.isEmpty()) {
+            return;
+        }
+        com.aiextract.model.IndustryCase top = cases.get(0);
+        StringBuilder extra = new StringBuilder("\n【客户背景（来自真实案例，仅供你保持人物一致，禁止透露来源）】");
+        if (top.getCustomerProfile() != null && !top.getCustomerProfile().isBlank()) {
+            extra.append("\n- 画像：").append(top.getCustomerProfile());
+        }
+        if (top.getEmotionChange() != null && !top.getEmotionChange().isBlank()) {
+            extra.append("\n- 情绪：").append(top.getEmotionChange());
+        }
+        if (top.getObjection() != null && !top.getObjection().isBlank()) {
+            extra.append("\n- 核心顾虑：").append(top.getObjection());
+        }
+        sceneInfo.setSetting(sceneInfo.getSetting() + extra);
+    }
+
+    /**
      * 从指定场景标签加载对练场景信息
      */
     private PracticeStartResponse.PracticeSceneInfo loadSceneByTag(UUID skillId, UUID spaceId, String sceneTag) {
@@ -951,31 +1037,6 @@ public class SkillService {
                 "客户在「" + sceneTag + "」方面有真实顾虑，说话保留、试探你的专业性——考验你如何建立信任",
                 "客户提到过去在「" + sceneTag + "」方面的不愉快经历——考验你如何理解痛点并展示差异化",
                 "客户开始松动但仍犹豫，追问具体落地细节——考验你如何给出可执行的承诺并推进成交");
-    }
-
-    /**
-     * 构建对练System Prompt — AI扮演客户（训练伙伴模式）
-     *
-     * <p>AI客户隐藏训练伙伴身份，通过真实客户行为引导练习。
-     * 基于场景角度规划轮次，覆盖完所有角度后自然收尾。</p>
-     */
-    String buildPracticeSystemPrompt(Skill skill, PracticeRespondRequest request) {
-        String sceneContext = request.getSceneContext() != null ? request.getSceneContext() : "销售对练场景";
-        String history = request.getHistory() != null ? request.getHistory() : "（对话刚开始）";
-        int roundNumber = request.getRoundNumber() > 0 ? request.getRoundNumber() : 1;
-        int totalAngles = request.getTotalAngles() > 0 ? request.getTotalAngles() : 3;
-        String practiceAngles = request.getPracticeAngles() != null ? request.getPracticeAngles()
-                : "1. 客户提出核心顾虑，考验对方如何回应不确定性\n2. 客户分享过往不愉快经历，考验对方如何建立信任\n3. 客户追问执行细节，考验对方如何给出具体承诺";
-
-        String domain = domainConfigLoader.resolveDomain(skill);
-        return promptLoader.format("skill_practice_customer.md", Map.of(
-                "scene_context", sceneContext,
-                "practice_angles", practiceAngles,
-                "round_number", String.valueOf(roundNumber),
-                "total_angles", String.valueOf(totalAngles),
-                "history", history,
-                "last_message", request.getMessage()
-        ), domain);
     }
 
     /**
@@ -1387,6 +1448,9 @@ public class SkillService {
         detail.put("talkConfig", skill.getTalkConfig() != null ? skill.getTalkConfig() : "{}");
         detail.put("status", skill.getStatus());
         detail.put("spaceId", skill.getSpaceId() != null ? skill.getSpaceId().toString() : null);
+        // 属主判定用：前端据此决定是否显示「试问」入口（后端仍会二次校验）
+        detail.put("ownerId", space != null && space.getUserId() != null
+                ? space.getUserId().toString() : null);
         detail.put("introProfile", JsonUtil.parseStringMap(skill.getIntroProfile()));
         detail.put("recommendedQuestions", JsonUtil.parseStringList(skill.getRecommendedQuestions()));
 

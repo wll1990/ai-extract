@@ -17,6 +17,7 @@ import { Permission } from '@/lib/permissions';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import EmptyState from '@/components/ui/EmptyState';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
 import { Pagination } from '@/components/ui/Pagination';
 
 type Tab = 'learn' | 'mentor';
@@ -222,27 +223,38 @@ export default function MyTrainingPage() {
                 { title: '陪练 / 考试', desc: '陪练是与 AI 客户对话；考试按题目作答后交卷，由系统或导师评分。' },
                 { title: '认证', desc: '所有必修任务通过后自动进入认证；认证被撤销时会回到「待认证」。' },
               ]}
+              actions={[
+                { label: '刷新', desc: '重新拉取分配、任务和认证状态；不会改变任何学习记录。' },
+                { label: '我的学习 / 我带的批次', desc: '只有具备培训复核/管理权限的人能看到「我带的批次」。' },
+                { label: '展开任务 / 收起', desc: '展开后按阶段显示任务；已结束的考试/陪练点开会先看成绩。' },
+                { label: '开始 / 继续 / 再试一次', desc: '进入阅读、陪练或考试；未解锁时按钮不可点，先完成前置任务。' },
+                { label: '查看内容 / 查看成绩', desc: '已通过的任务可回看正文或历史成绩，不会重新发起一次尝试。' },
+                { label: '下载认证证书', desc: '必修全部通过并确认认证后出现；在新窗口打开可打印或另存 PDF。' },
+                { label: '绑定 IM / 解绑', desc: '绑定后培训提醒推到飞书/企微/钉钉；解绑只停止 IM 提醒，站内信仍在。' },
+              ]}
               notes={[
                 '资料显示「已过期或已下线」时，请联系管理员更新后重新下发。',
                 '考试和陪练有次数限制，失败后按计划配置进入补训。',
               ]}
             />
-            <button onClick={load} disabled={loading}
-              className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-primary-light disabled:opacity-50">
+            <Button variant="neutral" onClick={load} disabled={loading}>
               {loading ? '刷新中…' : '刷新'}
-            </button>
+            </Button>
           </div>
         </div>
 
         {canReview && (
           <div className="mb-5 flex gap-2">
             {([['learn', '我的学习'], ['mentor', '我带的批次']] as [Tab, string][]).map(([key, label]) => (
-              <button key={key} onClick={() => setTab(key)}
-                className={`rounded-full px-4 py-2 text-sm transition-colors ${
-                  tab === key ? 'bg-primary text-white' : 'border border-border text-foreground hover:bg-primary-light'
-                }`}>
+              <Button
+                key={key}
+                variant={tab === key ? 'primary' : 'neutral'}
+                size="sm"
+                onClick={() => setTab(key)}
+                title={key === 'learn' ? '查看分配给我的培训任务' : '查看我带班的批次与待复核任务'}
+              >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -262,15 +274,16 @@ export default function MyTrainingPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   {imBindings.map(b => (
-                    <button key={b.id} onClick={() => onUnbindIm(b.id)}
-                      className="rounded-full border border-border px-3 py-1 text-xs text-foreground hover:bg-primary-light">
+                    <Button key={b.id} variant="neutral" size="sm"
+                      onClick={() => onUnbindIm(b.id)}
+                      title="解绑后不再收到 IM 提醒，站内信不受影响">
                       {CHANNEL_LABELS[b.channelType] || b.channelType} · 解绑
-                    </button>
+                    </Button>
                   ))}
-                  <button onClick={onCreateBindCode} disabled={imLoading}
-                    className="rounded-full bg-primary px-4 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
+                  <Button variant="primary" size="sm" onClick={onCreateBindCode} disabled={imLoading}
+                    title="生成一次性绑定码，在机器人里发送「绑定 码」即可接收培训提醒">
                     {imLoading ? '生成中…' : imBindings.length > 0 ? '重新绑定' : '绑定 IM'}
-                  </button>
+                  </Button>
                 </div>
               </div>
               {imCode && (
@@ -345,6 +358,7 @@ export default function MyTrainingPage() {
                             <span
                               role="button"
                               tabIndex={0}
+                              title="在新窗口打开可打印的认证证书，可另存为 PDF"
                               onClick={e => { e.stopPropagation(); void openCertificate(a.id); }}
                               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); void openCertificate(a.id); } }}
                               className="cursor-pointer font-medium text-primary underline hover:no-underline"
@@ -599,14 +613,15 @@ function TaskList({ tasks, onOpen }: { tasks: TaskItem[]; onOpen: (task: TaskIte
                       </div>
                     )}
                   </div>
-                  <button disabled={locked}
+                  <Button
+                    variant={locked ? 'neutral' : 'primary'}
+                    size="sm"
+                    disabled={locked}
                     onClick={() => onOpen(task)}
-                    className={`rounded-full px-4 py-1.5 text-xs transition-colors ${
-                      locked
-                        ? 'border border-border text-muted-foreground'
-                        : 'bg-primary text-white hover:opacity-90'}`}>
+                    title={locked ? `未解锁：${task.blockingReasons.join('；') || '先完成前置任务'}` : `${action}：${task.title}`}
+                  >
                     {action}
-                  </button>
+                  </Button>
                 </div>
               );
             })}

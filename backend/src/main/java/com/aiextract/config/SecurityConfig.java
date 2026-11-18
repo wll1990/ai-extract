@@ -29,7 +29,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthFilter jwtAuthFilter;
+    private final SessionAuthFilter sessionAuthFilter;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -71,6 +71,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/c/auth/login").permitAll()
                         .requestMatchers(HttpMethod.POST, "/c/auth/register").hasAuthority(RolePermissions.C_GUEST)
                         .requestMatchers(HttpMethod.POST, "/c/auth/register/new").permitAll()
+                        // 三方 H5：一次性 code 换会话（code 单次使用 + 60s 过期）
+                        .requestMatchers(HttpMethod.POST, "/c/auth/partner/exchange").permitAll()
                         .requestMatchers(HttpMethod.GET, "/c/auth/me").authenticated()
 
                         // ── Swagger / 健康检查 ──
@@ -86,6 +88,9 @@ public class SecurityConfig {
                         // ── IM 内部接口（传输层 ↔ 后端，HMAC 签名在 Controller 校验） ──
                         .requestMatchers("/internal/im/**").permitAll()
 
+                        // ── 合作方内部接口（HMAC 签名在 Controller 校验） ──
+                        .requestMatchers("/internal/partner/**").permitAll()
+
                         // ── 前端埋点（fire-and-forget）──
                         .requestMatchers(HttpMethod.POST, "/analytics/event").permitAll()
 
@@ -94,6 +99,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/auth/me").authenticated()
                         .requestMatchers(HttpMethod.POST, "/auth/avatar").authenticated()
                         .requestMatchers(HttpMethod.POST, "/auth/change-password").authenticated()
+
+                        // ── 会话管理：仅本人（Service 内校验归属）──
+                        .requestMatchers("/auth/sessions", "/auth/sessions/**").authenticated()
 
                         // ── 对内分享 ──
                         .requestMatchers(HttpMethod.GET, "/i/*/info").permitAll()
@@ -117,6 +125,9 @@ public class SecurityConfig {
                         // 企业 AI Key：company_admin / super_admin（AI_MODEL_MANAGE）
                         .requestMatchers("/admin/company/ai-model/**").hasAuthority(Permission.AI_MODEL_MANAGE)
                         .requestMatchers("/admin/company/ai-model").hasAuthority(Permission.AI_MODEL_MANAGE)
+                        // 对练知识/案例检索开关：企业管理员可改（保存后实时生效）
+                        .requestMatchers("/admin/company/practice-kc/**").hasAuthority(Permission.SKILL_MANAGE)
+                        .requestMatchers("/admin/company/practice-kc").hasAuthority(Permission.SKILL_MANAGE)
                         // 企业管理员自助生成员工注册码（仅本企业、仅员工角色）
                         .requestMatchers("/admin/company/register-codes/**").hasAuthority(Permission.USER_MANAGE)
                         // 销售复盘：细粒度规则必须先于 /sales/** 通配
@@ -185,6 +196,8 @@ public class SecurityConfig {
                         // 账号停用/重置密码属于用户管理，不能只靠 DASHBOARD_VIEW
                         .requestMatchers(HttpMethod.PUT, "/admin/users/*/status").hasAuthority(Permission.USER_MANAGE)
                         .requestMatchers(HttpMethod.POST, "/admin/users/*/reset-password").hasAuthority(Permission.USER_MANAGE)
+                        // 管理员踢用户全部会话：必须在 /admin/** 的 DASHBOARD_VIEW 通配之前
+                        .requestMatchers(HttpMethod.DELETE, "/admin/users/*/sessions").hasAuthority(Permission.USER_MANAGE)
                         .requestMatchers("/admin/skills/*/materials/**").hasAuthority(Permission.MATERIAL_MANAGE)
                         .requestMatchers("/admin/skills/**").hasAuthority(Permission.SKILL_MANAGE)
                         .requestMatchers("/admin/conversations/**").hasAuthority(Permission.CONVERSATION_VIEW)
@@ -196,6 +209,9 @@ public class SecurityConfig {
 
                         // ── 颗粒操作 ──
                         .requestMatchers("/grains/**").authenticated()
+
+                        // ── 工作流 ──
+                        .requestMatchers("/workflows/**").authenticated()
 
                         // ── 分身状态变更：B端管理员 + C端注册用户（控制器内做属主校验） ──
                         .requestMatchers(HttpMethod.PUT, "/skills/*/status").hasAnyAuthority(Permission.SKILL_MANAGE, "c_user")
@@ -225,7 +241,7 @@ public class SecurityConfig {
                         // ── 默认拒绝：未显式声明的接口一律 403 ──
                         .anyRequest().denyAll())
 
-                .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(sessionAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

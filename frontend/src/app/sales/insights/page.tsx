@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { CommonIssues, createIssueKnowledge, getCommonIssues } from '@/lib/api/sales';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
 
 const PERIODS = [30, 90, 180];
 
@@ -58,6 +59,12 @@ export default function SalesInsightsPage() {
               { title: '看占比', desc: '每类显示出现在多少份复盘里，点开可回到具体复盘原话' },
               { title: '转培训', desc: '点「生成培训主题」会创建一条知识草稿，管理员确认后可用于分身检索和培训' },
             ]}
+            actions={[
+              { label: '近 30 / 90 / 180 天', desc: '切换统计周期，只重新聚合这段时间内的报告，不改数据。' },
+              { label: '生成培训主题（知识草稿）', desc: '按这一类问题生成一条知识草稿并跳转到知识详情；需管理员审核后才生效。', tone: 'primary' },
+              { label: '客户名标签', desc: '打开对应复盘详情，查看原话和上下文。' },
+              { label: '回到我的看板', desc: '回到个人视角；团队共性问题只对企业管理员开放。' },
+            ]}
             notes={[
               '归类是确定性的：每一条不足/风险按关键词命中最多的一类归入，不会被重复计数。',
               '只统计 weaknesses / risks；报告生成失败的复盘不参与。',
@@ -76,7 +83,7 @@ export default function SalesInsightsPage() {
               className={`rounded-lg border px-3 py-1.5 text-xs ${
                 days === p
                   ? 'border-primary bg-primary text-white'
-                  : 'border-border bg-white text-foreground hover:bg-primary-light/40'
+                  : 'border-border bg-surface-2 text-foreground hover:bg-primary-light/40'
               }`}
             >
               近 {p} 天
@@ -92,7 +99,7 @@ export default function SalesInsightsPage() {
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+          <div className="mb-4 rounded-xl border border-danger/30 bg-danger-bg px-4 py-3 text-sm text-danger">
             {error}
             <button onClick={load} className="ml-3 underline">重试</button>
           </div>
@@ -101,7 +108,7 @@ export default function SalesInsightsPage() {
         {loading && !data ? (
           <div className="py-16"><LoadingSpinner /></div>
         ) : !data || data.issues.length === 0 ? (
-          <div className="rounded-xl border border-border bg-white p-10 text-center text-sm text-muted-foreground">
+          <div className="rounded-xl border border-border bg-surface-2 p-10 text-center text-sm text-muted-foreground">
             近 {data?.periodDays ?? days} 天还没有足够的已完成报告，先完成几次复盘再看。
           </div>
         ) : (
@@ -111,7 +118,7 @@ export default function SalesInsightsPage() {
             </p>
             <div className="grid gap-4 md:grid-cols-2">
               {data.issues.map(issue => (
-                <section key={issue.key} className="rounded-xl border border-border bg-white p-5">
+                <section key={issue.key} className="rounded-xl border border-border bg-surface-2 p-5">
                   <div className="mb-2 flex items-start justify-between gap-2">
                     <h2 className="font-semibold text-foreground">{issue.label}</h2>
                     <span className="shrink-0 rounded bg-primary-light px-2 py-0.5 text-xs text-primary">
@@ -150,14 +157,15 @@ export default function SalesInsightsPage() {
                     </div>
                   )}
 
-                  <button
-                    type="button"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     disabled={creating === issue.key}
                     onClick={() => onCreateKnowledge(issue.key)}
-                    className="rounded-lg border border-primary px-3 py-1.5 text-xs text-primary hover:bg-primary-light/40 disabled:opacity-50"
+                    title="生成一条知识草稿并跳到知识详情；管理员审核后才生效"
                   >
                     {creating === issue.key ? '生成中…' : '生成培训主题（知识草稿）'}
-                  </button>
+                  </Button>
                 </section>
               ))}
             </div>

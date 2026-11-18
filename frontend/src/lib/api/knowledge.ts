@@ -351,6 +351,8 @@ export interface RetrievalTestHit {
   id: string;
   title: string;
   similarity: number;
+  /** 是否达到线上阈值；false = 只是「近失命中」，不会进入分身回答 */
+  effective?: boolean;
   category?: string;
   source?: string | null;
   content?: string;
@@ -360,13 +362,23 @@ export interface RetrievalTestHit {
 export interface RetrievalTestResult {
   query: string;
   topK: number;
+  /** 本次测试范围；knowledge/case 各测各的 */
+  scope?: 'all' | 'knowledge' | 'case';
+  /** 线上实际阈值（知识） */
+  knowledgeThreshold?: number;
+  /** 线上实际阈值（案例） */
+  caseThreshold?: number;
   knowledge: RetrievalTestHit[];
   cases: RetrievalTestHit[];
 }
 
-export function retrievalTest(query: string, topK = 5): Promise<RetrievalTestResult> {
+export function retrievalTest(
+  query: string,
+  topK = 5,
+  scope: 'all' | 'knowledge' | 'case' = 'all',
+): Promise<RetrievalTestResult> {
   return apiClient<RetrievalTestResult>('/admin/knowledge/retrieval-test', {
-    method: 'POST', body: JSON.stringify({ query, topK }),
+    method: 'POST', body: JSON.stringify({ query, topK, scope }),
   });
 }
 

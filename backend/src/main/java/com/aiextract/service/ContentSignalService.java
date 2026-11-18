@@ -3,6 +3,8 @@ package com.aiextract.service;
 import com.aiextract.config.CompanyScopeService;
 import com.aiextract.model.KnowledgeGap;
 import com.aiextract.repository.EvaluationRunItemRepository;
+import com.aiextract.repository.IndustryCaseRepository;
+import com.aiextract.repository.KnowledgeEntryRepository;
 import com.aiextract.repository.KnowledgeGapRepository;
 import com.aiextract.repository.TrainingTaskRecordRepository;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -32,6 +35,8 @@ public class ContentSignalService {
     private final KnowledgeGapRepository gapRepository;
     private final TrainingTaskRecordRepository recordRepository;
     private final EvaluationRunItemRepository runItemRepository;
+    private final KnowledgeEntryRepository knowledgeEntryRepository;
+    private final IndustryCaseRepository caseRepository;
     private final TrainingAccessService accessService;
     private final CompanyScopeService companyScopeService;
 
@@ -44,35 +49,57 @@ public class ContentSignalService {
                        int weight, List<String> samples, String recommendation) {
     }
 
-    public record NeedsView(int gaps, int trainingFailures, int evalFailures, List<Need> needs) {
+    public record NeedsView(int gaps, int trainingFailures, int evalFailures,
+                            long pendingAiKnowledge, long pendingAiCases, List<Need> needs) {
     }
 
-    /** 最近 N 条失败信号（生成单条草稿时用） */
+    /**
+     * 最近 N 条失败信号（生成单条草稿时用）。
+     *
+     * <p>同一句客户问题可能来自多个 skill 的 knowledge_gap，或在多次评测运行里重复失败；
+     * 这里按「规范化文本」保序去重，保留第一次出现的来源与场景，避免生成依据里同一句话刷屏。</p>
+     */
     public List<Signal> recentSignals(int limit) {
         UUID companyId = accessService.requireCompanyId();
         int max = Math.max(1, Math.min(limit <= 0 ? 20 : limit, 100));
-        List<Signal> signals = new ArrayList<>();
+        Map<String, Signal> unique = new LinkedHashMap<>();
 
         Set<UUID> spaceIds = companyScopeService.getSpaceIds(companyId);
         if (!spaceIds.isEmpty()) {
             for (KnowledgeGap gap : gapRepository
                     .findBySpaceIdInAndStatusOrderByAttemptedQueryCountDesc(
                             spaceIds, "open", PageRequest.of(0, max))) {
-                signals.add(new Signal("knowledge_gap", normalize(gap.getSceneTag()),
+                addSignal(unique, new Signal("knowledge_gap", normalize(gap.getSceneTag()),
                         gap.getQuery(), gap.getId().toString()));
             }
         }
         for (Object[] row : recordRepository.countFailedByScene(companyId)) {
             String scene = normalize((String) row[0]);
-            signals.add(new Signal("training_failure", scene,
+            addSignal(unique, new Signal("training_failure", scene,
                     "实战场景未通过：" + scene, scene));
         }
         for (Object[] row : runItemRepository.findRecentFailedItems(companyId, max)) {
             String question = String.valueOf(row[1]);
             String scene = normalize(row[2] == null ? null : String.valueOf(row[2]));
-            signals.add(new Signal("eval_issue", scene, question, String.valueOf(row[0])));
+            addSignal(unique, new Signal("eval_issue", scene, question, String.valueOf(row[0])));
         }
-        return signals;
+        return List.copyOf(unique.values());
+    }
+
+    /** 按规范化文本去重：空白差异、大小写差异视为同一条信号。 */
+    public static String normalizeText(String text) {
+        if (text == null) {
+            return "";
+        }
+        return text.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
+    }
+
+    private void addSignal(Map<String, Signal> unique, Signal signal) {
+        String key = normalizeText(signal.text());
+        if (key.isEmpty()) {
+            return;
+        }
+        unique.putIfAbsent(key, signal);
     }
 
     public NeedsView needs(int limit) {
@@ -110,7 +137,12 @@ public class ContentSignalService {
                 .sorted(Comparator.comparingInt(Need::weight).reversed())
                 .limit(max)
                 .toList();
-        return new NeedsView(gaps.size(), training.size(), eval.size(), needs);
+        long pendingAiKnowledge = knowledgeEntryRepository
+                .countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(companyId, "pending");
+        long pendingAiCases = caseRepository
+                .countByCompanyIdAndStatusAndGenerationJobIdIsNotNull(companyId, "pending");
+        return new NeedsView(gaps.size(), training.size(), eval.size(),
+                pendingAiKnowledge, pendingAiCases, needs);
     }
 
     private void addSample(Acc acc, String text) {

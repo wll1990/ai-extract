@@ -10,6 +10,7 @@ import {
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Toast } from '@/components/ui/Toast';
 import EmptyState from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
 
 interface SectionState<T> {
   data: T | null;
@@ -22,13 +23,14 @@ function initial<T>(): SectionState<T> {
 }
 
 /**
- * 内容智能：真实失败信号 → AI 草稿 → 人工审核。
+ * 内容工厂：真实失败信号 → AI 草稿 → 人工审核。
  *
- * 生成接口只返回 jobId，这里轮询任务状态；产出进入 AI 草稿审核台。
+ * 生成接口只返回 jobId，这里轮询任务状态；产出进入 AI 待审视图。
  */
 export default function AdminContentIntelligencePage() {
   const router = useRouter();
   const [needs, setNeeds] = useState<SectionState<ContentNeed[]>>(initial());
+  const [pendingAi, setPendingAi] = useState({ knowledge: 0, cases: 0 });
   const [dashboard, setDashboard] = useState<SectionState<ContentDashboard>>(initial());
   const [jobs, setJobs] = useState<SectionState<ContentJob[]>>(initial());
   const [acting, setActing] = useState<string | null>(null);
@@ -39,6 +41,7 @@ export default function AdminContentIntelligencePage() {
     try {
       const n = await getContentNeeds(20);
       setNeeds({ data: n.needs || [], loading: false, error: null });
+      setPendingAi({ knowledge: n.pendingAiKnowledge ?? 0, cases: n.pendingAiCases ?? 0 });
     } catch (e) {
       setNeeds({ data: null, loading: false, error: e instanceof Error ? e.message : '加载失败' });
     }
@@ -68,7 +71,13 @@ export default function AdminContentIntelligencePage() {
     loadJobs();
   }, [loadNeeds, loadDashboard, loadJobs]);
 
+  const pendingKnowledge = pendingAi.knowledge;
+  const pendingCases = pendingAi.cases;
+
   const generate = async (kind: 'knowledge' | 'case', need: ContentNeed) => {
+    if ((kind === 'knowledge' && pendingKnowledge > 0) || (kind === 'case' && pendingCases > 0)) {
+      return;
+    }
     const key = `${kind}:${need.sceneTag}`;
     setActing(key);
     try {
@@ -81,10 +90,10 @@ export default function AdminContentIntelligencePage() {
         setToast(job.errorMessage || '生成失败');
       } else {
         const ids = (job.result as { ids?: string[] } | null)?.ids ?? [];
-        setToast(`生成完成：${job.producedCount} 条草稿${ids.length ? '，已进入 AI 草稿审核' : ''}`);
+        setToast(`生成完成：${job.producedCount} 条待审草稿${ids.length ? '，可在「查看 AI 待审」处理' : ''}`);
         router.push('/admin/content/review');
       }
-      await Promise.all([loadJobs(), loadDashboard()]);
+      await Promise.all([loadJobs(), loadDashboard(), loadNeeds()]);
     } catch (e) {
       setToast(e instanceof Error ? e.message : '生成失败');
     } finally {
@@ -99,9 +108,10 @@ export default function AdminContentIntelligencePage() {
       <Toast message={toast} onDone={() => setToast(null)} />
       <div className="mx-auto max-w-[1200px]">
         <div className="mb-5">
-          <h1 className="mb-1 text-[28px] font-bold text-foreground">内容智能</h1>
+          <h1 className="mb-1 text-[28px] font-bold text-foreground">内容工厂</h1>
           <p className="text-sm text-muted-foreground">
-            用真实失败信号起草知识/案例/考题；AI 只出草稿，审核通过后才生效。
+            把真实失败信号批量加工成知识/案例/考题草稿。这里只生产草稿，不直接生效；
+            审核就在知识库/案例库/题集里完成，「查看 AI 待审」只是同一批待审记录的筛选视图。
           </p>
         </div>
 
@@ -159,24 +169,38 @@ export default function AdminContentIntelligencePage() {
           </>
         )}
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          <button onClick={() => router.push('/admin/content/review')}
-            className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90">
-            审核 AI 草稿
-          </button>
-          <button onClick={() => router.push('/admin/knowledge?status=pending')}
-            className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-primary-light">
-            知识待审列表
-          </button>
-          <button onClick={() => router.push('/admin/cases?status=pending')}
-            className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-primary-light">
-            案例待审列表
-          </button>
-          <button onClick={() => { loadNeeds(); loadDashboard(); loadJobs(); }}
-            className="rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-primary-light">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Button variant="primary" onClick={() => router.push('/admin/content/review')}>
+            查看 AI 待审
+          </Button>
+          <Button variant="neutral" onClick={() => router.push('/admin/knowledge?status=pending')}>
+            知识库待审
+          </Button>
+          <Button variant="neutral" onClick={() => router.push('/admin/cases?status=pending')}>
+            案例库待审
+          </Button>
+          <Button variant="ghost" onClick={() => { loadNeeds(); loadDashboard(); loadJobs(); }}>
             刷新
-          </button>
+          </Button>
         </div>
+        <p className="mb-5 -mt-2 text-[11px] leading-5 text-muted-foreground">
+          三个入口指向同一批待审记录：通过一次即生效，不需要在多个页面重复审核。手工录入的待审内容不会出现在「AI 待审」里。
+        </p>
+
+        {(pendingKnowledge > 0 || pendingCases > 0) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning-text/30 bg-warning-bg px-4 py-3 text-sm text-warning-text">
+            <span>
+              还有
+              {pendingKnowledge > 0 && ` ${pendingKnowledge} 条 AI 知识草稿`}
+              {pendingKnowledge > 0 && pendingCases > 0 && '、'}
+              {pendingCases > 0 && ` ${pendingCases} 条 AI 案例草稿`}
+              待审；处理完才能继续生成新的，避免重复堆积。
+            </span>
+            <Button variant="secondary" size="sm" onClick={() => router.push('/admin/content/review')}>
+              去处理
+            </Button>
+          </div>
+        )}
 
         <div className="mb-6">
           <h2 className="mb-2 text-sm font-semibold text-foreground">能力缺口（按场景）</h2>
@@ -214,17 +238,23 @@ export default function AdminContentIntelligencePage() {
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">{n.recommendation}</td>
                       <td className="px-4 py-3">
-                        <div className="flex flex-col gap-1">
-                          <button onClick={() => generate('knowledge', n)}
-                            disabled={acting === `knowledge:${n.sceneTag}`}
-                            className="rounded-full bg-primary px-3 py-1 text-xs text-white hover:opacity-90 disabled:opacity-50">
-                            {acting === `knowledge:${n.sceneTag}` ? '生成中…' : '生成知识草稿'}
-                          </button>
-                          <button onClick={() => generate('case', n)}
-                            disabled={acting === `case:${n.sceneTag}`}
-                            className="rounded-full border border-border px-3 py-1 text-xs text-foreground hover:bg-primary-light disabled:opacity-50">
-                            {acting === `case:${n.sceneTag}` ? '生成中…' : '生成案例草稿'}
-                          </button>
+                        <div className="flex w-[148px] flex-col gap-1.5">
+                          <Button variant="primary" size="sm" className="w-full"
+                            onClick={() => generate('knowledge', n)}
+                            disabled={pendingKnowledge > 0 || acting === `knowledge:${n.sceneTag}`}
+                            title={pendingKnowledge > 0 ? `已有 ${pendingKnowledge} 条知识草稿待审，先处理再生成` : undefined}>
+                            {acting === `knowledge:${n.sceneTag}`
+                              ? '生成中…'
+                              : pendingKnowledge > 0 ? `知识待审 ${pendingKnowledge} 条` : '生成知识草稿'}
+                          </Button>
+                          <Button variant="neutral" size="sm" className="w-full"
+                            onClick={() => generate('case', n)}
+                            disabled={pendingCases > 0 || acting === `case:${n.sceneTag}`}
+                            title={pendingCases > 0 ? `已有 ${pendingCases} 条案例草稿待审，先处理再生成` : undefined}>
+                            {acting === `case:${n.sceneTag}`
+                              ? '生成中…'
+                              : pendingCases > 0 ? `案例待审 ${pendingCases} 条` : '生成案例草稿'}
+                          </Button>
                         </div>
                       </td>
                     </tr>

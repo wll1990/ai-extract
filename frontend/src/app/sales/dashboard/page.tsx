@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getMySalesDashboard, type MySalesDashboard } from '@/lib/api/sales';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { PageHelp } from '@/components/ui/PageHelp';
+import { Button } from '@/components/ui/Button';
 import { getUser } from '@/lib/storage';
 
 const REVIEW_STATUS_LABELS: Record<string, string> = {
@@ -36,7 +37,7 @@ export default function MySalesDashboardPage() {
   if (error) {
     return (
       <div className="p-8">
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-danger">
           {error}
           <button onClick={load} className="ml-3 underline">重试</button>
         </div>
@@ -61,13 +62,9 @@ export default function MySalesDashboardPage() {
             </p>
           </div>
           {canViewTeam && (
-            <button
-              type="button"
-              onClick={() => router.push('/sales/insights')}
-              className="mr-2 rounded-lg border border-border bg-white px-3 py-2 text-xs text-foreground hover:bg-primary-light/40"
-            >
+            <Button variant="neutral" size="sm" onClick={() => router.push('/sales/insights')}>
               团队共性问题
-            </button>
+            </Button>
           )}
           <PageHelp
             title="我的销售看板"
@@ -76,6 +73,11 @@ export default function MySalesDashboardPage() {
               { title: '看复盘', desc: '本周/本月复盘数量与最近记录，点击进入复盘详情' },
               { title: '看线索', desc: '线索按阶段分布；amber 提示是 7 天无活动或已到下次跟进时间的线索' },
               { title: '处理待办', desc: '跟进任务逾期和今日到期优先处理，完成后数量会自动回落' },
+            ]}
+            actions={[
+              { label: '本周复盘 / 待跟进线索 / 待办跟进任务 / 本月转化', desc: '四张指标卡都是入口，点击跳到对应列表；数字只读，不会改数据。' },
+              { label: '团队共性问题', desc: '只有企业管理员可见，汇总全公司复盘的共性问题，用于定培训主题。' },
+              { label: '最近复盘', desc: '点任意一条进入复盘详情，可生成报告、转线索或建任务。' },
             ]}
             notes={['统计口径：本周从周一起，待跟进=跟进中且 7 天无活动或已到下次跟进时间。']}
           />
@@ -98,7 +100,7 @@ export default function MySalesDashboardPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           {/* 复盘趋势 */}
-          <section className="rounded-xl border border-border bg-white p-5">
+          <section className="rounded-xl border border-border bg-surface-2 p-5">
             <h2 className="mb-4 font-semibold text-foreground">近 8 周复盘</h2>
             {data.weekly.every(w => w.count === 0) ? (
               <p className="py-6 text-center text-sm text-muted-foreground">近 8 周还没有复盘记录</p>
@@ -120,7 +122,7 @@ export default function MySalesDashboardPage() {
           </section>
 
           {/* 线索分布 */}
-          <section className="rounded-xl border border-border bg-white p-5">
+          <section className="rounded-xl border border-border bg-surface-2 p-5">
             <h2 className="mb-4 font-semibold text-foreground">我的线索</h2>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Stat label="全部" value={data.leads.total} />
@@ -132,7 +134,7 @@ export default function MySalesDashboardPage() {
             </div>
             {data.leads.needFollowUp > 0 && (
               <button onClick={() => router.push('/sales/leads')}
-                className="mt-4 w-full rounded-lg bg-amber-50 px-3 py-2 text-left text-xs text-amber-800 hover:bg-amber-100">
+                className="mt-4 w-full rounded-lg bg-warning-bg px-3 py-2 text-left text-xs text-warning-text hover:bg-warning-bg/70">
                 {data.leads.needFollowUp} 条线索需要跟进
                 {data.leads.overdueFollowUp > 0 ? `，其中 ${data.leads.overdueFollowUp} 条已逾期` : ''}
               </button>
@@ -140,7 +142,7 @@ export default function MySalesDashboardPage() {
           </section>
 
           {/* 跟进任务 */}
-          <section className="rounded-xl border border-border bg-white p-5">
+          <section className="rounded-xl border border-border bg-surface-2 p-5">
             <h2 className="mb-4 font-semibold text-foreground">跟进任务</h2>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Stat label="待完成" value={data.tasks.pending} />
@@ -154,7 +156,7 @@ export default function MySalesDashboardPage() {
           </section>
 
           {/* 最近复盘 */}
-          <section className="rounded-xl border border-border bg-white p-5">
+          <section className="rounded-xl border border-border bg-surface-2 p-5">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="font-semibold text-foreground">最近复盘</h2>
               <button onClick={() => router.push('/sales/reviews')}
@@ -204,10 +206,10 @@ function Kpi({
   onClick?: () => void;
 }) {
   const toneCls = tone === 'red'
-    ? 'border-red-200 bg-red-50'
+    ? 'border-danger/30 bg-danger-bg'
     : tone === 'amber'
-      ? 'border-amber-200 bg-amber-50'
-      : 'border-border bg-white';
+      ? 'border-warning-text/30 bg-warning-bg'
+      : 'border-border bg-surface-2';
   return (
     <button type="button" onClick={onClick}
       className={`rounded-xl border p-4 text-left transition-colors hover:opacity-90 ${toneCls}`}>
@@ -222,7 +224,7 @@ function Stat({ label, value, tone }: { label: string; value: number; tone?: 're
   return (
     <div className="flex items-center justify-between rounded-lg bg-surface-2 px-3 py-2">
       <span className="text-muted-foreground">{label}</span>
-      <span className={`font-semibold tabular-nums ${tone === 'red' ? 'text-red-600' : 'text-foreground'}`}>
+      <span className={`font-semibold tabular-nums ${tone === 'red' ? 'text-danger' : 'text-foreground'}`}>
         {value}
       </span>
     </div>

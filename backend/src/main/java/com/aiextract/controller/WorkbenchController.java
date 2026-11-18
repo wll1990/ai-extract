@@ -1,10 +1,11 @@
 package com.aiextract.controller;
 
+import com.aiextract.config.CurrentUser;
+
 import com.aiextract.common.ApiResponse;
 import com.aiextract.model.Skill;
 import com.aiextract.repository.ConversationStatsRepository;
 import com.aiextract.repository.SkillRepository;
-import com.aiextract.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,20 +23,14 @@ import java.util.*;
 @RequiredArgsConstructor
 public class WorkbenchController {
 
-    private final JwtUtil jwtUtil;
     private final ConversationStatsRepository convStatsRepository;
     private final SkillRepository skillRepository;
 
     /** 当前用户 ID；匿名/凭证缺失时明确 401，而不是 NPE 后 500 */
     private UUID currentUserId() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder
-                .getContext().getAuthentication();
-        if (auth == null || !(auth.getCredentials() instanceof String token) || token.isBlank()) {
-            throw new com.aiextract.exception.BusinessException(401, "未登录");
-        }
-        UUID userId = jwtUtil.getUserIdFromToken(token);
+        UUID userId = CurrentUser.id();
         if (userId == null) {
-            throw new com.aiextract.exception.BusinessException(401, "登录已失效，请重新登录");
+            throw new com.aiextract.exception.BusinessException(401, "未登录");
         }
         return userId;
     }

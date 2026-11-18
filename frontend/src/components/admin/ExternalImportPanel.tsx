@@ -109,7 +109,7 @@ export function ExternalImportPanel({ kind, onImported }: {
         <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
           <li>复制下面的提示词，到你常用的模型（DeepSeek / ChatGPT 等）里，替换书本章节或资料正文。</li>
           <li>模型输出一段 JSON 数组；把它粘回下面，或上传 .json 文件。</li>
-          <li>先「校验预览」看哪些能导入、哪些缺字段，再「确认导入」。导入后仍需在库内审批生效。</li>
+          <li>先「校验预览」看哪些能导入、哪些缺字段，再「确认导入」。导入后仍需在库内通过并生效。</li>
         </ol>
       </div>
 
@@ -280,8 +280,8 @@ export function ExternalImportPanel({ kind, onImported }: {
           {!result.dryRun && (
             <p className="mt-2 text-xs text-muted-foreground">
               {kind === 'case'
-                ? '已导入的案例进入「待审核/草稿」，需要补齐字段并审批后才会被分身检索。'
-                : '已导入的知识进入「待审核」，审批生效后才会被分身检索。'}
+                ? '已导入的案例进入「待审核/草稿」，需要补齐字段并通过后才会被分身检索。'
+                : '已导入的知识进入「待审核」，通过并生效后才会被分身检索。'}
             </p>
           )}
         </div>

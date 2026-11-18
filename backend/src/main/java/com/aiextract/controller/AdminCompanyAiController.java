@@ -52,10 +52,22 @@ public class AdminCompanyAiController {
         return ApiResponse.success(null);
     }
 
+    @PostMapping("/enable")
+    public ApiResponse<Void> enable() {
+        service.enable(companyId());
+        return ApiResponse.success(null);
+    }
+
     @PostMapping("/disable")
     public ApiResponse<Void> disable() {
         service.disable(companyId());
         return ApiResponse.success(null);
+    }
+
+    /** 最近 20 条配置变更：谁在什么时候启用/停用/改模型/换 Key。 */
+    @GetMapping("/history")
+    public ApiResponse<java.util.List<com.aiextract.dto.CompanyAiConfigHistoryView>> history() {
+        return ApiResponse.success(service.history(companyId()));
     }
 
     /** 支持的厂商目录：前端据此渲染下拉与默认 Base URL/模型 */

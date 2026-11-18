@@ -28,7 +28,7 @@ import java.util.UUID;
  * AI 草稿审核台 —— 知识 / 案例 / 考题统一入口。
  *
  * <p>只列带 generation_job_id 的草稿，行内带证据与生成任务摘要；
- * 通过/丢弃复用原有审批链路，审核人/时间/结论落在各实体 reviewed_* 字段。</p>
+ * 通过/丢弃复用原有审核链路，审核人/时间/结论落在各实体 reviewed_* 字段。</p>
  */
 @Service
 @RequiredArgsConstructor

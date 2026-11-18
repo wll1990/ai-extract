@@ -99,6 +99,7 @@ export default function SharePage() {
     setModeSelected: noop,
     onResetPracticeRef: noopRef,
     authToken,
+    guestMode: true,
     onLimit: handleLimit,
   });
 
@@ -121,6 +122,8 @@ export default function SharePage() {
   // ---- 凭证失效（401/403）→ 弹抽屉 ----
   useEffect(() => {
     const onAuthRequired = () => {
+      // 落地页不弹抽屉：背景请求 401 不应遮挡名片内容，登录入口仍在页面底部
+      if (view !== 'chat') return;
       setSheetMode(guest.session?.user.status === 'registered' ? 'login' : 'register');
       setSheetReason('expired');
       setSheetError('');
@@ -128,7 +131,7 @@ export default function SharePage() {
     };
     window.addEventListener('guest:auth-required', onAuthRequired);
     return () => window.removeEventListener('guest:auth-required', onAuthRequired);
-  }, [guest.session?.user.status]);
+  }, [guest.session?.user.status, view]);
 
   // ---- 注册/登录成功且 token 更新后：自动重发被拦消息（qa/talk） ----
   useEffect(() => {

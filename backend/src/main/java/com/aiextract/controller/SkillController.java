@@ -125,6 +125,14 @@ public class SkillController extends BaseController {
     @PostMapping("/{skillId}/practice/start")
     public ApiResponse<PracticeStartResponse> startPractice(
             @PathVariable String skillId, @RequestBody PracticeStartRequest request) {
+        String sceneErr = queryGate.auditAuxiliaryField("场景", request.getScene(), 2000, false);
+        if (sceneErr != null) {
+            return ApiResponse.error(400, sceneErr);
+        }
+        String customErr = queryGate.auditAuxiliaryField("自定义场景", request.getCustomScene(), 2000, true);
+        if (customErr != null) {
+            return ApiResponse.error(400, customErr);
+        }
         companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         return ApiResponse.success(skillService.startPractice(skillId, request, extractUserId()));
     }
@@ -141,6 +149,17 @@ public class SkillController extends BaseController {
         if (blocked != null)
             return SseAdapter.fromFlux(blocked);
 
+        String auxErr = queryGate.auditAuxiliaryField("场景描述", request.getSceneContext(), 2000, true);
+        if (auxErr == null) {
+            auxErr = queryGate.auditAuxiliaryField("对练角度", request.getPracticeAngles(), 2000, true);
+        }
+        if (auxErr == null) {
+            auxErr = queryGate.auditAuxiliaryField("历史对话", request.getHistory(), 8000, false);
+        }
+        if (auxErr != null) {
+            return SseAdapter.fromFlux(queryGate.blocked(auxErr));
+        }
+
         return SseAdapter.fromFlux(
                 chatStreamService.respondPractice(UUID.fromString(skillId), request, extractUserId(), extractRole()));
     }
@@ -149,7 +168,8 @@ public class SkillController extends BaseController {
     @PostMapping("/{skillId}/practice/evaluate-round")
     public ApiResponse<Map<String, Object>> evaluatePracticeRound(
             @PathVariable String skillId,
-            @RequestBody Map<String, Object> body) {
+            @RequestBody Map<String, Object> body,
+            HttpServletRequest httpRequest) {
         String sceneTag = (String) body.getOrDefault("sceneTag", "");
         String customerMessage = (String) body.getOrDefault("customerMessage", "");
         String myResponse = (String) body.getOrDefault("myResponse", "");
@@ -158,10 +178,27 @@ public class SkillController extends BaseController {
         if (customerMessage.isBlank() || myResponse.isBlank()) {
             return ApiResponse.error(400, "客户消息和你的回答不能为空");
         }
+
+        var rateBlocked = queryGate.auditRateOnly(extractUserId(), extractRole(), getClientIp(httpRequest));
+        if (rateBlocked != null) {
+            return ApiResponse.error(429, "发送太频繁，请稍后再试");
+        }
+
+        String auxErr = queryGate.auditAuxiliaryField("客户消息", customerMessage, 2000, true);
+        if (auxErr == null) {
+            auxErr = queryGate.auditAuxiliaryField("你的回答", myResponse, 4000, true);
+        }
+        if (auxErr == null) {
+            auxErr = queryGate.auditAuxiliaryField("参考回答", previousChampionAnswer, 4000, true);
+        }
+        if (auxErr != null) {
+            return ApiResponse.error(400, auxErr);
+        }
+
         companyScopeService.requireSkillReadable(UUID.fromString(skillId));
         try {
             return ApiResponse.success(
-                    practiceDemoService.evaluatePracticeResponse(
+                    skillService.evaluatePracticeRound(
                             UUID.fromString(skillId), sceneTag, customerMessage, myResponse, previousChampionAnswer,
                             retryCount));
         } catch (Exception e) {
@@ -171,7 +208,17 @@ public class SkillController extends BaseController {
     }
 
     @PostMapping(value = "/enterprise/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter enterpriseChat(@Valid @RequestBody SkillChatRequest request) {
+    public SseEmitter enterpriseChat(@Valid @RequestBody SkillChatRequest request,
+                                     HttpServletRequest httpRequest) {
+        var blocked = queryGate.audit(request.getMessage(), extractUserId(), extractRole(),
+                getClientIp(httpRequest));
+        if (blocked != null) {
+            return SseAdapter.fromFlux(blocked);
+        }
+        String auxErr = queryGate.auditAuxiliaryField("历史对话", request.getHistory(), 8000, false);
+        if (auxErr != null) {
+            return SseAdapter.fromFlux(queryGate.blocked(auxErr));
+        }
         UUID companyId = TokenContext.getCompanyId();
         return SseAdapter.fromFlux(chatStreamService.enterpriseChat(request, companyId));
     }
@@ -218,7 +265,7 @@ public class SkillController extends BaseController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(required = false) String status) {
-        UUID userId = jwtUtil.getUserIdFromToken(getToken());
+        UUID userId = extractUserId();
         return ApiResponse.success(skillService.listMySkills(page, size, status, userId));
     }
 
@@ -269,8 +316,7 @@ public class SkillController extends BaseController {
             if (!"published".equals(newStatus)) {
                 throw new BusinessException(400, "只能发布");
             }
-            // C 端不得绕过管理端的发布门槛（颗粒/场景/画像）
-            skillService.assertPublishable(UUID.fromString(skillId));
+            // 发布门槛统一在 SkillService.updateSkillStatus 校验（颗粒/场景/画像/向量化）
         }
         skillService.updateSkillStatus(skillId, newStatus);
 
@@ -390,8 +436,23 @@ public class SkillController extends BaseController {
     @PostMapping(value = "/{skillId}/practice/evaluate", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter evaluatePractice(
             @PathVariable String skillId,
-            @RequestBody Map<String, String> body) {
+            @RequestBody Map<String, String> body,
+            HttpServletRequest httpRequest) {
         companyScopeService.requireSkillReadable(UUID.fromString(skillId));
+
+        var rateBlocked = queryGate.auditRateOnly(extractUserId(), extractRole(), getClientIp(httpRequest));
+        if (rateBlocked != null) {
+            return SseAdapter.fromFlux(rateBlocked);
+        }
+
+        String auxErr = queryGate.auditAuxiliaryField(
+                "对练记录", body.getOrDefault("conversation", ""), 20000, false);
+        if (auxErr == null) {
+            auxErr = queryGate.auditAuxiliaryField("场景", body.getOrDefault("scene", ""), 2000, true);
+        }
+        if (auxErr != null) {
+            return SseAdapter.fromFlux(queryGate.blocked(auxErr));
+        }
         return SseAdapter.fromFlux(
                 chatStreamService.evaluatePractice(skillId,
                         body.getOrDefault("conversation", ""),

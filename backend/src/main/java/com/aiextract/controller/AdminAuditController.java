@@ -30,7 +30,7 @@ public class AdminAuditController {
     private final SkillProfileRepository profileRepository;
     private final SkillMaterialRepository materialRepository;
     private final SkillEvaluationRepository evaluationRepository;
-    private final com.aiextract.repository.ReportHistoryRepository historyRepository;
+    private final ReportHistoryRepository historyRepository;
     private final com.aiextract.config.DomainConfigLoader domainConfigLoader;
     private final ExtractionReportService extractionReportService;
     private final ExperienceGrainRepository grainRepository;
@@ -41,8 +41,10 @@ public class AdminAuditController {
     private final ShareService shareService;
     private final com.aiextract.service.OrganizationSkillService orgSkillService;
     private final com.aiextract.scheduler.SkillStatsScheduler skillStatsScheduler;
-    private final com.aiextract.repository.ReportRepository reportRepository;
+    private final ReportRepository reportRepository;
     private final com.aiextract.service.ReportStorageService reportStorageService;
+    private final SkillTrialSessionRepository trialSessionRepository;
+    private final GrainRefineDraftRepository refineDraftRepository;
 
     /** 审核仪表盘 — 聚合返回分身发布前的所有关键数据 */
     @GetMapping("/admin/skills/{skillId}/audit-dashboard")
@@ -102,6 +104,14 @@ public class AdminAuditController {
             .filter(g -> g.getWeight() != null)
             .mapToDouble(ExperienceGrain::getWeight).average().orElse(1.0);
         summary.put("avgWeight", Math.round(avgWeight * 100.0) / 100.0);
+
+        // 试问/纠偏概况：审核面板据此提示「发布前先自己问几句」
+        summary.put("trialCount", trialSessionRepository.countBySkillId(skillId));
+        summary.put("refinedGrainCount", refineDraftRepository
+                .countDistinctGrainsBySkillIdAndStatus(
+                        skillId, GrainRefineDraft.STATUS_APPLIED));
+        java.time.LocalDateTime lastTrialAt = trialSessionRepository.findLastTrialAt(skillId);
+        summary.put("lastTrialAt", lastTrialAt != null ? lastTrialAt.toString() : null);
 
         // 五维均分 + 质量分布
         double sumS = 0, sumR = 0, sumC = 0, sumD = 0, sumF = 0;
@@ -292,7 +302,7 @@ public class AdminAuditController {
     @GetMapping("/admin/skills/{skillId}/report-history")
     public ApiResponse<List<Map<String, Object>>> getReportHistory(@PathVariable UUID skillId) {
         companyScopeService.assertSkillOwnership(skillId);
-        List<com.aiextract.model.ReportHistory> list = historyRepository.findBySkillIdOrderByGeneratedAtDesc(skillId);
+        List<ReportHistory> list = historyRepository.findBySkillIdOrderByGeneratedAtDesc(skillId);
         List<Map<String, Object>> result = new ArrayList<>();
         for (var h : list) {
             Map<String, Object> item = new LinkedHashMap<>();
@@ -373,10 +383,14 @@ public class AdminAuditController {
             .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         String action = body.getOrDefault("action", "publish");
         if (!"publish".equals(action) && !"unpublish".equals(action) && !"discard".equals(action)) {
-            throw new com.aiextract.exception.BusinessException(400, "未知操作：" + action);
+            throw new BusinessException(400, "未知操作：" + action);
         }
 
         if ("publish".equals(action)) {
+            if ("published".equals(skill.getStatus())) {
+                // 已发布：幂等返回，避免重复触发开场白/推荐问题/对练开场白生成
+                return ApiResponse.success(Map.of("passed", true, "alreadyPublished", true));
+            }
             // 发布前校验 — 与 C 端自助发布共用 SkillService 的同一份规则
             List<String> blockers = skillService.publishBlockers(skill);
 
@@ -472,7 +486,7 @@ public class AdminAuditController {
                 .orElseThrow(() -> new BusinessException(404, "分身不存在"));
         ExperienceGrain grain = grainRepository.findById(grainId).orElse(null);
         // 颗粒必须属于该分身所在空间，防止按任意 grainId 读取他分身/他企业的原文
-        if (grain != null && !java.util.Objects.equals(grain.getSpaceId(), skill.getSpaceId())) {
+        if (grain != null && !Objects.equals(grain.getSpaceId(), skill.getSpaceId())) {
             throw new BusinessException(403, "颗粒不属于该分身");
         }
         if (grain == null || grain.getSourceMaterialId() == null)
@@ -562,9 +576,9 @@ public class AdminAuditController {
             result.put("matchLevel", match.level.name());
 
             // 批量取素材文件名，避免逐条 findById
-            java.util.Set<UUID> materialIds = match.grains.stream()
+            Set<UUID> materialIds = match.grains.stream()
                     .map(ExperienceGrain::getSourceMaterialId)
-                    .filter(java.util.Objects::nonNull)
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toSet());
             Map<UUID, String> materialNames = materialIds.isEmpty() ? Map.of()
                     : materialRepository.findAllById(materialIds).stream()
@@ -691,7 +705,7 @@ public class AdminAuditController {
     /** 管理员手动重新生成萃取报告 HTML */
     @PostMapping("/admin/reports/{reportId}/regenerate")
     public ApiResponse<Map<String, Object>> regenerateReport(@PathVariable UUID reportId) {
-        com.aiextract.model.Report report = reportRepository.findById(reportId)
+        Report report = reportRepository.findById(reportId)
                 .orElseThrow(() -> new BusinessException(404, "报告不存在"));
         UUID spaceId = report.getSpaceId();
         if (spaceId == null) throw new BusinessException(400, "报告未关联空间");

@@ -106,7 +106,7 @@ public class DatasetService {
         if (drafts > 0) {
             // 先提示未审草稿：否则 active=0 时只会看到「无题目」，用户不知道草稿挡着
             throw new BusinessException(400,
-                    "还有 " + drafts + " 道 AI 草稿题未审核；通过或丢弃后再提交审核");
+                    "还有 " + drafts + " 道 AI 草稿题未处理；请先在题集详情逐题点「通过」或「丢弃」，再提交审核");
         }
         List<EvaluationItem> items = itemRepository.findByDatasetIdAndVersionAndStatus(
                 id, ds.getCurrentVersion(), EvaluationItem.STATUS_ACTIVE);

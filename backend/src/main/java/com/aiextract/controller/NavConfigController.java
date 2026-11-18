@@ -59,6 +59,8 @@ public class NavConfigController {
         NavItem.all("/workbench", "我的工作台", Permission.SKILL_USE, DAILY),
         NavItem.all("/explore", "经验广场", Permission.SKILL_USE, DAILY),
         NavItem.all("/interview/create", "销冠访谈", Permission.SKILL_USE, DAILY),
+        // 属主管理自己的分身（含未发布），也是试问台的入口
+        NavItem.all("/my/skills", "我的分身", Permission.SPACE_OWN, DAILY),
         NavItem.all("/space/me", "我的空间", Permission.SPACE_OWN, DAILY),
         // 员工只有素材权限，给一个直达入口，不暴露整组「分身生产」
         NavItem.only("/admin/materials", "上传素材", Permission.MATERIAL_MANAGE, DAILY, "employee", "c_user", "c_partner"),
@@ -96,8 +98,8 @@ public class NavConfigController {
         NavItem.all("/admin/coverage", "场景地图", Permission.SCENE_COVERAGE, KNOWLEDGE),
         NavItem.all("/admin/insights", "数据看板", Permission.DASHBOARD_VIEW, KNOWLEDGE),
         NavItem.all("/admin/evaluations", "评测中心", Permission.EVAL_MANAGE, KNOWLEDGE),
-        NavItem.all("/admin/content", "内容智能", Permission.KNOWLEDGE_MANAGE, KNOWLEDGE),
-        NavItem.all("/admin/content/review", "AI 草稿审核", Permission.KNOWLEDGE_MANAGE, KNOWLEDGE),
+        // AI 草稿审核是内容工厂的筛选视图，不单独占一级菜单；页面仍可从内容工厂进入
+        NavItem.all("/admin/content", "内容工厂", Permission.KNOWLEDGE_MANAGE, KNOWLEDGE),
 
         // ── 组织与设置 ──
         NavItem.all("/admin", "运营总览", Permission.DASHBOARD_VIEW, MANAGE),
