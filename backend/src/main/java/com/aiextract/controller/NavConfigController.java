@@ -108,6 +108,7 @@ public class NavConfigController {
         NavItem.all("/admin/conversations", "对话历史", Permission.CONVERSATION_VIEW, MANAGE),
         NavItem.all("/admin/token-usage", "Token 统计", Permission.TOKEN_VIEW_COMPANY, MANAGE),
         NavItem.all("/admin/settings/ai-model", "AI 模型配置", Permission.AI_MODEL_MANAGE, MANAGE),
+        NavItem.all("/admin/settings/skills", "模型技能", Permission.SKILL_MANAGE, MANAGE),
 
         // ── 平台（仅超管） ──
         NavItem.all("/admin/partners", "合作方管理", Permission.PARTNER_MANAGE, PLATFORM),

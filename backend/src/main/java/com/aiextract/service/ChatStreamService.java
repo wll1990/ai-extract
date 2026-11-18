@@ -83,6 +83,8 @@ public class ChatStreamService {
     private final RagPipelineService ragPipelineService;
     private final ConversationPersistenceService convPersistence;
     private final PromptAssemblyService promptAssembly;
+    private final com.aiextract.service.skill.AgentSkillPromptInjector agentSkillPromptInjector;
+    private final com.aiextract.service.skill.AgentSkillSettingService agentSkillSettingService;
     private final GrainRecommendationService grainRec;
     private final com.aiextract.repository.SkillEvaluationRepository skillEvaluationRepository;
     private final OrganizationSkillService orgSkillService;
@@ -202,14 +204,18 @@ public class ChatStreamService {
         String systemPrompt = promptAssembly.buildSkillSystemPrompt(
             skill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel())
             + kcContext;
-        log.info("③ SystemPrompt构建完成 {}chars", systemPrompt.length());
+        boolean skillsEnabled = agentSkillSettingService.isEnabled(
+                com.aiextract.config.TokenContext.getCompanyId());
+        systemPrompt = agentSkillPromptInjector.append(systemPrompt,
+                com.aiextract.config.TokenContext.getCompanyId(), skillsEnabled);
+        log.info("③ SystemPrompt构建完成 {}chars skillsEnabled={}", systemPrompt.length(), skillsEnabled);
         // 试问通道的历史在 skill_trial_message，不在 skill_message，必须显式注入
         List<Map<String, String>> messages = request.getTrialHistory() != null
             ? promptAssembly.buildChatMessagesWithHistory(
                 systemPrompt, request.getMessage(), request.getTrialHistory())
             : promptAssembly.buildChatMessages(systemPrompt, request.getMessage(), convId, request.getHistory());
         Map<String, Object> context = Map.of("mode", mode, "skillId", skillId.toString(),
-            "conversationId", convId.toString());
+            "conversationId", convId.toString(), "agentSkills", skillsEnabled);
 
         // ── Phase 2 & 3: Stream + Post-stream（Flux 管道） ──
 
@@ -388,11 +394,15 @@ public class ChatStreamService {
         String systemPrompt = promptAssembly.buildOrgSkillSystemPrompt(
                 orgSkill, grains.grains(), grains.tiers(), grains.similarities(), mode, request.getChannel())
                 + kcContext;
-        log.info("③ 组织分身SystemPrompt构建完成 {}chars", systemPrompt.length());
+        boolean skillsEnabled = agentSkillSettingService.isEnabled(
+                com.aiextract.config.TokenContext.getCompanyId());
+        systemPrompt = agentSkillPromptInjector.append(systemPrompt,
+                com.aiextract.config.TokenContext.getCompanyId(), skillsEnabled);
+        log.info("③ 组织分身SystemPrompt构建完成 {}chars skillsEnabled={}", systemPrompt.length(), skillsEnabled);
         List<Map<String, String>> messages = promptAssembly.buildChatMessages(systemPrompt, request.getMessage(),
                 convId, request.getHistory());
         Map<String, Object> context = Map.of("mode", mode, "skillId", orgSkillId.toString(),
-                "conversationId", convId.toString());
+                "conversationId", convId.toString(), "agentSkills", skillsEnabled);
 
         // ── Phase 2 & 3 ──
         final UUID finalConvId = convId;
@@ -651,12 +661,15 @@ public class ChatStreamService {
         String systemPrompt = promptAssembly.buildEnterpriseSystemPromptV2(
                 ragQuery, grains.grains(), grains.tiers(), grains.similarities(), companySpaceIds, domain)
                 + kcContext;
+        boolean skillsEnabled = agentSkillSettingService.isEnabled(companyId);
+        systemPrompt = agentSkillPromptInjector.append(systemPrompt, companyId, skillsEnabled);
         List<Map<String, String>> messages = List.of(
                 Map.of("role", "system", "content", systemPrompt),
                 Map.of("role", "user", "content", query)
         );
 
-        Flux<ChatChunk> aiStream = chatStreamAdapter.chatStream(messages, Map.of("mode", "enterprise"))
+        Flux<ChatChunk> aiStream = chatStreamAdapter.chatStream(messages,
+                        Map.of("mode", "enterprise", "agentSkills", skillsEnabled))
                 .map(event -> {
                     ChatChunk chunk = ChatChunk.fromEventMap(event);
                     if ("content".equals(chunk.getType()) && chunk.getContent() != null) {

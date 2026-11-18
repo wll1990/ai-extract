@@ -7,24 +7,32 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
  * 极简 ToolCallback：手写 JSON Schema + 显式 handler。
  *
- * <p>不使用反射式 schema 生成，避免工具模块把 victools/Jackson 版本拖进运行时。</p>
- *
- * <p>工具可能在任何模型回调线程执行，那里没有请求 ThreadLocal；
- * 因此优先从 {@link ToolContext} 还原租户上下文，缺失时才回退当前线程。</p>
+ * <p>两种 handler：单参用于只需要入参的工具（自动还原租户上下文）；
+ * 双参用于需要读取 {@link ToolContext} 的工具（技能预算、模式开关等）。</p>
  */
 public final class SimpleToolCallback implements ToolCallback {
 
     private final ToolDefinition definition;
     private final Function<String, String> handler;
+    private final BiFunction<String, ToolContext, String> contextHandler;
 
     public SimpleToolCallback(ToolDefinition definition, Function<String, String> handler) {
         this.definition = definition;
         this.handler = handler;
+        this.contextHandler = null;
+    }
+
+    public SimpleToolCallback(ToolDefinition definition,
+                              BiFunction<String, ToolContext, String> contextHandler) {
+        this.definition = definition;
+        this.handler = null;
+        this.contextHandler = contextHandler;
     }
 
     @Override
@@ -34,11 +42,17 @@ public final class SimpleToolCallback implements ToolCallback {
 
     @Override
     public String call(String toolInput) {
-        return handler.apply(toolInput);
+        if (handler != null) {
+            return handler.apply(toolInput);
+        }
+        return contextHandler.apply(toolInput, null);
     }
 
     @Override
     public String call(String toolInput, ToolContext toolContext) {
+        if (contextHandler != null) {
+            return contextHandler.apply(toolInput, toolContext);
+        }
         Map<String, Object> context = toolContext == null ? Map.of() : toolContext.getContext();
         UUID userId = uuid(context.get("userId"));
         if (userId == null) {

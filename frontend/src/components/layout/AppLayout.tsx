@@ -90,6 +90,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: '/admin/conversations', label: '对话历史', permission: Permission.CONVERSATION_VIEW, domain: 'manage' },
   { path: '/admin/token-usage', label: 'Token 统计', permission: Permission.TOKEN_VIEW_COMPANY, domain: 'manage' },
   { path: '/admin/settings/ai-model', label: 'AI 模型配置', permission: Permission.AI_MODEL_MANAGE, domain: 'manage' },
+  { path: '/admin/settings/skills', label: '模型技能', permission: Permission.SKILL_MANAGE, domain: 'manage' },
 
   { path: '/admin/partners', label: '合作方管理', permission: Permission.PARTNER_MANAGE, domain: 'platform' },
   { path: '/admin/companies', label: '企业合作', permission: Permission.COMPANY_MANAGE, domain: 'platform' },

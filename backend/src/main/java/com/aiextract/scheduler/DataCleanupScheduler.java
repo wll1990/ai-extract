@@ -38,6 +38,7 @@ public class DataCleanupScheduler {
     private final com.aiextract.repository.SkillTrialMessageRepository trialMessageRepository;
     private final com.aiextract.repository.GrainRefineDraftRepository refineDraftRepository;
     private final com.aiextract.repository.AuthSessionRepository authSessionRepository;
+    private final com.aiextract.repository.AgentSkillRepository agentSkillRepository;
 
     @org.springframework.beans.factory.annotation.Value("${app.auth.session.cleanup-retention-days:7}")
     private int authSessionRetentionDays;
@@ -150,6 +151,22 @@ public class DataCleanupScheduler {
             }
         } catch (Exception e) {
             log.error("清理过期会话失败", e);
+        }
+    }
+
+    /**
+     * 每天凌晨 3:55 清理技能历史版本：每个 key 只保留最近 10 个 archived。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    @Scheduled(cron = "0 55 3 * * ?")
+    public void cleanupAgentSkillVersions() {
+        try {
+            int deleted = agentSkillRepository.deleteOldArchivedVersions();
+            if (deleted > 0) {
+                log.info("清理技能历史版本完成, {}行", deleted);
+            }
+        } catch (Exception e) {
+            log.error("清理技能历史版本失败", e);
         }
     }
 

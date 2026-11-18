@@ -6,7 +6,9 @@ import com.aiextract.model.Company;
 import com.aiextract.model.CompanyRegisterCode;
 import com.aiextract.repository.CompanyRegisterCodeRepository;
 import com.aiextract.repository.CompanyRepository;
+import com.aiextract.repository.UserRepository;
 import com.aiextract.service.CompanyRegisterCodeService;
+import com.aiextract.service.session.SessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,6 +32,8 @@ public class AdminCompanyController {
     private final CompanyRepository companyRepository;
     private final CompanyRegisterCodeRepository registerCodeRepository;
     private final CompanyRegisterCodeService registerCodeService;
+    private final UserRepository userRepository;
+    private final SessionService sessionService;
 
     // ═══════════════════════════════════════════════════════════
     // 企业 CRUD
@@ -126,6 +130,11 @@ public class AdminCompanyController {
         c.setStatus(status);
         c.setUpdatedAt(LocalDateTime.now());
         companyRepository.save(c);
+        // 归档企业后立即撤销该企业全部用户会话，避免已登录用户继续使用企业数据/技能
+        if ("archived".equals(status)) {
+            userRepository.findByCompanyId(id)
+                    .forEach(user -> sessionService.revokeAll(user.getId()));
+        }
         return ApiResponse.success();
     }
 

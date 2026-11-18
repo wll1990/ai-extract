@@ -1,6 +1,8 @@
 package com.aiextract.service;
 
 import com.aiextract.config.TokenContext;
+import com.aiextract.service.skill.AgentSkillToolCallbacks;
+import com.aiextract.service.skill.SkillBudget;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -31,9 +33,11 @@ import java.util.concurrent.atomic.AtomicLong;
 public class ChatStreamAdapter {
 
     private final ChatClient chatClient;
+    private final AgentSkillToolCallbacks agentSkillToolCallbacks;
 
-    public ChatStreamAdapter(ChatClient chatClient) {
+    public ChatStreamAdapter(ChatClient chatClient, AgentSkillToolCallbacks agentSkillToolCallbacks) {
         this.chatClient = chatClient;
+        this.agentSkillToolCallbacks = agentSkillToolCallbacks;
     }
 
     /**
@@ -157,9 +161,15 @@ public class ChatStreamAdapter {
         AtomicLong totalChars = new AtomicLong(0);
         StringBuilder fullResponse = new StringBuilder();
 
-        return chatClient.prompt()
+        Map<String, Object> toolContext = buildToolContext(context);
+        var chatRequest = chatClient.prompt()
             .messages(chatMessages)
-            .toolContext(toolContext())
+            .toolContext(toolContext);
+        // 技能工具按请求注册：未标记的链路（评测/访谈/训练等）既看不到工具也调不到
+        if (Boolean.TRUE.equals(toolContext.get("agentSkills"))) {
+            chatRequest.toolCallbacks(agentSkillToolCallbacks.getToolCallbacks());
+        }
+        return chatRequest
             .stream()
             .chatResponse()
             // 注意：Reactor 的 map 不允许返回 null —— 映射函数一旦返回 null 就直接抛 NPE，
@@ -198,11 +208,16 @@ public class ChatStreamAdapter {
     }
 
     /**
-     * 工具上下文：工具在模型回调线程执行，那里没有请求 ThreadLocal。
-     * 在请求线程捕获租户信息，显式传给 ToolContext（由 {@code SimpleToolCallback} 还原）。
+     * 工具上下文：先复制调用方 context（**不修改传入的不可变 Map**），
+     * 再用请求线程的 TokenContext 权威覆盖身份键，防止调用方伪造租户。
      */
-    private static Map<String, Object> toolContext() {
-        Map<String, Object> context = new HashMap<>(2);
+    private static Map<String, Object> buildToolContext(Map<String, Object> callerContext) {
+        Map<String, Object> context = new HashMap<>();
+        if (callerContext != null) {
+            context.putAll(callerContext);
+        }
+        context.remove("userId");
+        context.remove("companyId");
         UUID userId = TokenContext.get();
         UUID companyId = TokenContext.getCompanyId();
         if (userId != null) {
@@ -210,6 +225,9 @@ public class ChatStreamAdapter {
         }
         if (companyId != null) {
             context.put("companyId", companyId.toString());
+        }
+        if (Boolean.TRUE.equals(context.get("agentSkills"))) {
+            context.put("skillBudget", new SkillBudget());
         }
         return context;
     }

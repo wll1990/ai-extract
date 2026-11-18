@@ -128,6 +128,9 @@ public class SecurityConfig {
                         // 对练知识/案例检索开关：企业管理员可改（保存后实时生效）
                         .requestMatchers("/admin/company/practice-kc/**").hasAuthority(Permission.SKILL_MANAGE)
                         .requestMatchers("/admin/company/practice-kc").hasAuthority(Permission.SKILL_MANAGE)
+                        // 模型技能管理：必须在 /admin/** 的 DASHBOARD_VIEW 通配之前
+                        .requestMatchers("/admin/agent-skills/**").hasAuthority(Permission.SKILL_MANAGE)
+                        .requestMatchers("/admin/agent-skills").hasAuthority(Permission.SKILL_MANAGE)
                         // 企业管理员自助生成员工注册码（仅本企业、仅员工角色）
                         .requestMatchers("/admin/company/register-codes/**").hasAuthority(Permission.USER_MANAGE)
                         // 销售复盘：细粒度规则必须先于 /sales/** 通配

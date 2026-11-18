@@ -83,6 +83,7 @@ Company → User(company_id) → Space(user_id) → Skill(space_id) → Experien
 - [PromptLoader](backend/src/main/java/com/aiextract/config/PromptLoader.java)：40+ .md 模板，领域感知 + L1 本地/L2 Redis 双层缓存
 - [DomainConfigLoader](backend/src/main/java/com/aiextract/config/DomainConfigLoader.java)：领域 YAML 层级继承（`sales.b2b_enterprise` 继承 `sales`）
 - [ToolConfig](backend/src/main/java/com/aiextract/config/ToolConfig.java) + `PlatformTools`：显式 `ToolCallback`（手写 schema），已挂到平台/租户 ChatClient
+- 模型技能（Agent Skills）：`agent_skill` 表存平台/企业技能，`AgentSkillPromptInjector` 只注入目录，`AgentSkillToolCallbacks` 的 3 个工具**按请求注册**（`agentSkills=true`），正文不进系统提示；管理端 `/admin/settings/skills`
 - `spring-ai-starter-mcp-client`：默认关闭（`MCP_CLIENT_ENABLED=false`），配置外部 MCP server 后开启
 - [WorkflowEngine](backend/src/main/java/com/aiextract/service/workflow/WorkflowEngine.java) / [WorkflowRunStore](backend/src/main/java/com/aiextract/service/workflow/WorkflowRunStore.java)：轻量状态机，`FOR UPDATE SKIP LOCKED` + 租约 + 指数退避
 

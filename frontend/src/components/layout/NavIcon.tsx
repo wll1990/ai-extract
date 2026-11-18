@@ -29,6 +29,7 @@ import {
   Plugs,
   Signpost,
   SlidersHorizontal,
+  Sparkle,
   SquaresFour,
   UploadSimple,
   User,
@@ -78,6 +79,7 @@ const ICONS: Record<string, Icon> = {
   对话历史: Chats,
   'Token 统计': Coins,
   'AI 模型配置': GearSix,
+  模型技能: Sparkle,
 
   'IM 渠道配置': Plugs,
   合作方管理: Handshake,
