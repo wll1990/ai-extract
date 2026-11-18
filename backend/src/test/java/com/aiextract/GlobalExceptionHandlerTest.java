@@ -1,13 +1,17 @@
 package com.aiextract;
 
 import com.aiextract.common.ApiResponse;
+import com.aiextract.exception.BusinessException;
 import com.aiextract.exception.GlobalExceptionHandler;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -17,6 +21,7 @@ import java.lang.reflect.Method;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -27,7 +32,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 class GlobalExceptionHandlerTest {
 
-    private final GlobalExceptionHandler handler = new GlobalExceptionHandler();
+    private final GlobalExceptionHandler handler = new GlobalExceptionHandler(new ObjectMapper());
+
+    /** SSE 端点只接受 text/event-stream 时，业务异常仍必须回可读 JSON，不能被协商成 406。 */
+    @Test
+    void businessException_sseAccept_writesJsonDirectly() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Accept", "text/event-stream");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        ResponseEntity<ApiResponse<Void>> resp = handler.handleBusinessException(
+                new BusinessException(403, "无权试问该分身"), request, response);
+
+        assertNull(resp);
+        assertEquals(403, response.getStatus());
+        assertTrue(response.getContentAsString().contains("无权试问该分身"));
+    }
 
     @Test
     void messageNotReadable_returns400() {

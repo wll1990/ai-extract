@@ -2,6 +2,10 @@ package com.aiextract.exception;
 
 import com.aiextract.common.AiErrorMapper;
 import com.aiextract.common.ApiResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +28,35 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @RestControllerAdvice
+@RequiredArgsConstructor
 public class GlobalExceptionHandler {
+
+    private final ObjectMapper objectMapper;
+
+    /**
+     * SSE 端点的请求头是 {@code Accept: text/event-stream}，同步抛出的业务异常
+     * 如果走普通 ResponseEntity，会被内容协商判成 406，客户端最终只看到一条
+     * 无关的 401。这里在客户端不接受 JSON 时直接写响应体，绕开协商。
+     *
+     * @return true 表示已直接写回响应，调用方应返回 null
+     */
+    private boolean writeJsonIfNotAcceptable(HttpServletRequest request, HttpServletResponse response,
+                                            int status, ApiResponse<?> body) {
+        String accept = request.getHeader("Accept");
+        boolean acceptsJson = accept == null || accept.isBlank()
+                || accept.contains("*/*") || accept.contains("application/json");
+        if (acceptsJson) {
+            return false;
+        }
+        try {
+            response.setStatus(status);
+            response.setContentType("application/json;charset=UTF-8");
+            response.getWriter().write(objectMapper.writeValueAsString(body));
+        } catch (Exception writeError) {
+            log.warn("SSE 错误响应写回失败: {}", writeError.getMessage());
+        }
+        return true;
+    }
 
     /**
      * 处理业务异常
@@ -35,17 +67,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PartnerException.class)
     public ResponseEntity<ApiResponse<Map<String, String>>> handlePartnerException(PartnerException e) {
         log.warn("合作方对接异常, errorCode: {}, message: {}", e.getPartnerErrorCode(), e.getMessage());
-        Map<String, String> data = new java.util.LinkedHashMap<>();
+        Map<String, String> data = new LinkedHashMap<>();
         data.put("errorCode", e.getPartnerErrorCode());
         data.put("message", e.getMessage());
         return ResponseEntity.status(e.getErrorCode()).body(ApiResponse.error(e.getErrorCode(), data));
     }
 
     @ExceptionHandler(BusinessException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e) {
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException e,
+            HttpServletRequest request, HttpServletResponse response) {
         log.warn("业务异常, code: {}, subCode: {}, message: {}", e.getErrorCode(), e.getSubCode(), e.getMessage());
-        ApiResponse<Void> response = ApiResponse.error(e.getErrorCode(), e.getSubCode(), e.getMessage());
-        return ResponseEntity.status(e.getErrorCode()).body(response);
+        ApiResponse<Void> body = ApiResponse.error(e.getErrorCode(), e.getSubCode(), e.getMessage());
+        if (writeJsonIfNotAcceptable(request, response, e.getErrorCode(), body)) {
+            return null;
+        }
+        return ResponseEntity.status(e.getErrorCode()).body(body);
     }
 
     /**
@@ -55,13 +91,17 @@ public class GlobalExceptionHandler {
      * @return 错误响应
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e) {
+    public ResponseEntity<ApiResponse<Void>> handleValidationException(MethodArgumentNotValidException e,
+            HttpServletRequest request, HttpServletResponse response) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
         log.warn("参数校验失败: {}", message);
-        ApiResponse<Void> response = ApiResponse.error(HttpStatus.BAD_REQUEST.value(), message);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        ApiResponse<Void> body = ApiResponse.error(HttpStatus.BAD_REQUEST.value(), message);
+        if (writeJsonIfNotAcceptable(request, response, HttpStatus.BAD_REQUEST.value(), body)) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(body);
     }
 
     /**
